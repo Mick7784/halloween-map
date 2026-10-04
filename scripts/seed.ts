@@ -3,6 +3,7 @@ import { db, transaction } from "../lib/db";
 import { hashPassword } from "../lib/auth";
 import { DateTime } from "luxon";
 import type { Activity } from "../lib/domain";
+import { ensureBootstrap, exchangeBootstrap } from "../lib/bootstrap";
 export async function seed(mode = "on") {
   let i = await instance();
   if (mode === "off") {
@@ -23,32 +24,38 @@ export async function seed(mode = "on") {
   if (!password || password.length < 12)
     throw new Error("DEMO_PASSWORD (12 caractères minimum) est requis.");
   if (!i) {
+    const link = await ensureBootstrap(true);
+    const setupSession = await exchangeBootstrap(
+      new URL(link!).searchParams.get("bootstrap")!,
+    );
     const year = DateTime.now().setZone("Europe/Paris").year;
-    await setup({
-      token: process.env.SETUP_TOKEN,
-      instance: {
-        public_name: "Halloween · Démonstration",
-        territory: "Commune de démonstration",
-        postal_code: "00000",
-        country: "France",
-        timezone: "Europe/Paris",
-        latitude: 48.1,
-        longitude: -1.67,
-        zoom: 14,
+    await setup(
+      {
+        instance: {
+          public_name: "Halloween · Démonstration",
+          territory: "Commune de démonstration",
+          postal_code: "00000",
+          country: "France",
+          timezone: "Europe/Paris",
+          latitude: 48.1,
+          longitude: -1.67,
+          zoom: 14,
+        },
+        admin: {
+          display_name: "Équipe démo",
+          email: "admin@example.invalid",
+          password,
+        },
+        season: {
+          year,
+          opens_at: `${year}-10-31T12:00`,
+          closes_at: `${year}-11-01T00:00`,
+          registrations_open: true,
+          activated: false,
+        },
       },
-      admin: {
-        display_name: "Équipe démo",
-        email: "admin@example.invalid",
-        password,
-      },
-      season: {
-        year,
-        opens_at: `${year}-10-31T12:00`,
-        closes_at: `${year}-11-01T00:00`,
-        registrations_open: true,
-        activated: false,
-      },
-    });
+      setupSession,
+    );
     i = (await instance())!;
   }
   const s = await activeSeason(i);

@@ -1,3 +1,5 @@
+import { setupAuthorized, finishBootstrap } from "./bootstrap";
+import { realTime, type TimeContext } from "./time";
 import { timingSafeEqual } from "node:crypto";
 import { db, transaction, type Database } from "./db";
 import {
@@ -74,15 +76,22 @@ export function verifySetupToken(value: string) {
   if (a.length !== b.length || !timingSafeEqual(a, b))
     throw new HttpError(403, "Clé de configuration invalide");
 }
-export async function setup(input: unknown) {
+export async function setup(input: unknown, setupSession?: string) {
   const data = setupSchema.parse(input);
-  verifySetupToken(data.token);
+  if (data.token) verifySetupToken(data.token);
+  else if (!(await setupAuthorized(setupSession)))
+    throw new HttpError(
+      403,
+      "Ouvrez le lien de configuration affiché dans les logs",
+    );
   await rateLimit("setup", 15);
   const password = await hashPassword(data.admin.password);
   return transaction(async (c) => {
     await c.query("SELECT pg_advisory_xact_lock(710031)");
     if ((await c.query("SELECT id FROM instances LIMIT 1")).rows.length)
       throw new HttpError(409, "Configuration déjà terminée");
+    if (!data.token && !(await setupAuthorized(setupSession, c)))
+      throw new HttpError(403, "Session de configuration expirée");
     const v = data.instance;
     const { rows: ii } = await c.query(
       "INSERT INTO instances(public_name,territory,postal_code,country,timezone,latitude,longitude,zoom) VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *",
@@ -115,6 +124,7 @@ export async function setup(input: unknown) {
       s.id,
       i.id,
     ]);
+    await finishBootstrap(c);
     await audit(c, i.id, null, "setup.completed");
     return { token: await createSession(String(u[0].id), c) };
   });
@@ -124,15 +134,45 @@ async function insertSeason(
   i: Instance,
   data: z.infer<typeof seasonSchema>,
 ) {
-  const opens = localISO(data.opens_at, i.timezone),
-    closes = localISO(data.closes_at, i.timezone);
-  if (+new Date(closes) <= +new Date(opens))
-    throw new HttpError(400, "La fermeture doit suivre l’ouverture");
+  const { opens, closes, registrations, purge } = seasonDates(data, i.timezone);
   const { rows } = await c.query(
-    "INSERT INTO seasons(instance_id,year,opens_at,closes_at,registrations_open,activated) VALUES($1,$2,$3,$4,$5,$6) RETURNING *",
-    [i.id, data.year, opens, closes, data.registrations_open, data.activated],
+    "INSERT INTO seasons(instance_id,year,opens_at,closes_at,registrations_open,activated,registrations_open_at,purge_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *",
+    [
+      i.id,
+      data.year,
+      opens,
+      closes,
+      data.registrations_open,
+      data.activated,
+      registrations,
+      purge,
+    ],
   );
   return rows[0] as unknown as Season;
+}
+function seasonDates(data: z.infer<typeof seasonSchema>, zone: string) {
+  try {
+    const opens = localISO(data.opens_at, zone),
+      closes = localISO(data.closes_at, zone);
+    const registrations = data.registrations_open_at
+      ? localISO(data.registrations_open_at, zone)
+      : new Date(+new Date(opens) - 30 * 86400000).toISOString();
+    const purge = data.purge_at
+      ? localISO(data.purge_at, zone)
+      : new Date(+new Date(closes) + 36 * 3600000).toISOString();
+    if (
+      +new Date(registrations) > +new Date(opens) ||
+      +new Date(opens) >= +new Date(closes) ||
+      +new Date(closes) > +new Date(purge)
+    )
+      throw new Error("Ordre des dates invalide");
+    return { opens, closes, registrations, purge };
+  } catch {
+    throw new HttpError(
+      400,
+      "Dates invalides : inscriptions ≤ ouverture < fermeture ≤ purge, avec une heure locale non ambiguë",
+    );
+  }
 }
 export async function purgeSeason(
   seasonId: string,
@@ -149,7 +189,7 @@ export async function purgeSeason(
     const s = rows[0] as unknown as Season;
     if (!s) throw new HttpError(404, "Saison introuvable");
     if (s.purged_at) return { purged: false };
-    if (!manual && +new Date(s.closes_at) > +now) return { purged: false };
+    if (!manual && +new Date(s.purge_at) > +now) return { purged: false };
     const { rows: totals } = await c.query(
       `SELECT count(*)::int houses,count(*) FILTER(WHERE status='APPROVED')::int approved,
       count(*) FILTER(WHERE 'DECORATION'=ANY(activities))::int decoration,count(*) FILTER(WHERE 'CANDY'=ANY(activities))::int candy,
@@ -176,7 +216,7 @@ export async function purgeSeason(
       [instanceId],
     );
     await c.query(
-      "UPDATE seasons SET stats=$1,purged_at=$2,registrations_open=false,activated=false WHERE id=$3",
+      "UPDATE seasons SET stats=$1,purged_at=$2,registrations_open=false,activated=false,reminder_enabled=false,reminder_subject='',reminder_body='' WHERE id=$3",
       [JSON.stringify(stats), now, s.id],
     );
     await audit(
@@ -191,16 +231,19 @@ export async function purgeSeason(
 }
 export async function tick(now = new Date()) {
   const { rows } = await db().query(
-    "SELECT id,instance_id FROM seasons WHERE purged_at IS NULL AND closes_at<=$1",
+    "SELECT id,instance_id FROM seasons WHERE purged_at IS NULL AND purge_at<=$1",
     [now],
   );
   for (const s of rows)
     await purgeSeason(String(s.id), String(s.instance_id), null, false, now);
   await db().query("DELETE FROM sessions WHERE expires_at<=now()");
+  await db().query("DELETE FROM setup_sessions WHERE expires_at<=now()");
   await db().query("DELETE FROM rate_limits WHERE reset_at<now()");
 }
-export async function publicState(now = new Date()) {
-  await tick(now);
+export async function publicState(context: TimeContext | Date = realTime()) {
+  const { now, preview } =
+    context instanceof Date ? { now: context, preview: false } : context;
+  if (!preview) await tick(now);
   const i = await instance();
   if (!i) return { setupRequired: true };
   const s = await activeSeason(i),
@@ -225,6 +268,7 @@ export async function publicState(now = new Date()) {
   }
   return {
     setupRequired: false,
+    preview,
     instance: {
       public_name: i.public_name,
       territory: i.territory,
@@ -244,6 +288,7 @@ export async function publicState(now = new Date()) {
           registrations_open:
             s.registrations_open &&
             !s.purged_at &&
+            +now >= +new Date(s.registrations_open_at) &&
             +now < +new Date(s.closes_at),
         }
       : null,
@@ -305,6 +350,7 @@ export async function register(input: unknown) {
       !s ||
       s.purged_at ||
       !s.registrations_open ||
+      +new Date() < +new Date(s.registrations_open_at) ||
       +new Date() >= +new Date(s.closes_at)
     )
       throw new HttpError(403, "Inscriptions fermées");
@@ -454,7 +500,10 @@ export async function participantAction(user: User | null, input: unknown) {
     return { ok: true };
   });
 }
-export async function route(userInput: unknown) {
+export async function route(
+  userInput: unknown,
+  context: TimeContext = realTime(),
+) {
   const input = routeSchema.parse(userInput);
   const i = await instance();
   if (!i) throw new HttpError(404, "Instance manquante");
@@ -464,17 +513,18 @@ export async function route(userInput: unknown) {
       [i.active_season_id, i.id],
     );
     const s = ss[0] as unknown as Season;
-    if (!s || seasonState(s) !== "MAP_OPEN")
+    if (!s || seasonState(s, context.now) !== "MAP_OPEN")
       throw new HttpError(403, "La carte est fermée");
     const { rows } = await c.query(
-      "SELECT * FROM houses WHERE instance_id=$1 AND season_id=$2 AND status='APPROVED' AND activity='ACTIVE' AND starts_at<=now() AND ends_at>now()",
-      [i.id, s.id],
+      "SELECT * FROM houses WHERE instance_id=$1 AND season_id=$2 AND status='APPROVED' AND activity='ACTIVE' AND starts_at<=$3 AND ends_at>$3",
+      [i.id, s.id, context.now],
     );
-    const result = planRoute(rows as unknown as House[], s, input);
-    await c.query(
-      "UPDATE seasons SET routes_count=routes_count+1 WHERE id=$1",
-      [s.id],
-    );
+    const result = planRoute(rows as unknown as House[], s, input, context.now);
+    if (!context.preview)
+      await c.query(
+        "UPDATE seasons SET routes_count=routes_count+1 WHERE id=$1",
+        [s.id],
+      );
     return result;
   });
 }
@@ -510,10 +560,10 @@ export async function adminRead(user: User | null, section: string) {
     case "stats":
       return (
         await db().query(
-          "SELECT * FROM seasons WHERE instance_id=$1 ORDER BY year DESC",
+          "SELECT s.*,(SELECT count(DISTINCT u.id)::int FROM houses h JOIN users u ON u.id=h.user_id WHERE h.season_id=s.id AND u.kind='PARTICIPANT' AND u.demo=false) reminder_recipient_estimate FROM seasons s WHERE s.instance_id=$1 ORDER BY s.year DESC",
           [u.instance_id],
         )
-      ).rows;
+      ).rows.map((s) => redactSeason(s, u));
     case "settings":
       return await instance();
     case "roles":
@@ -546,10 +596,16 @@ export async function adminRead(user: User | null, section: string) {
         users: users[0].total,
         routes: s?.routes_count ?? 0,
         state: seasonState(s),
-        season: s,
+        season: s
+          ? redactSeason(s as unknown as Record<string, unknown>, u)
+          : null,
       };
     }
   }
+}
+function redactSeason(s: Record<string, unknown>, user: User) {
+  if (user.permissions.includes("season.manage")) return s;
+  return { ...s, reminder_subject: "", reminder_body: "" };
 }
 export async function adminAction(user: User | null, input: unknown) {
   if (!user) throw new HttpError(401, "Connexion requise");
@@ -656,10 +712,19 @@ export async function adminAction(user: User | null, input: unknown) {
             400,
             "Une saison purgée ne peut pas être réouverte",
           );
-        const opens = localISO(p.opens_at, i.timezone),
-          closes = localISO(p.closes_at, i.timezone);
-        if (+new Date(closes) <= +new Date(opens))
-          throw new HttpError(400, "Dates invalides");
+        const { opens, closes, registrations, purge } = seasonDates(
+          p,
+          i.timezone,
+        );
+        if (
+          (
+            await c.query(
+              "SELECT id FROM seasons WHERE id=$1 AND reminder_enabled=true AND reminder_at>=$2",
+              [s.id, purge],
+            )
+          ).rows.length
+        )
+          throw new HttpError(400, "La purge doit suivre le rappel programmé");
         const { rows: invalid } = await c.query(
           "SELECT id FROM houses WHERE season_id=$1 AND (starts_at<$2 OR ends_at>$3) LIMIT 1",
           [s.id, opens, closes],
@@ -670,8 +735,17 @@ export async function adminAction(user: User | null, input: unknown) {
             "Les nouveaux horaires excluent des maisons inscrites",
           );
         await c.query(
-          "UPDATE seasons SET year=$1,opens_at=$2,closes_at=$3,registrations_open=$4,activated=$5 WHERE id=$6",
-          [p.year, opens, closes, p.registrations_open, p.activated, s.id],
+          "UPDATE seasons SET year=$1,opens_at=$2,closes_at=$3,registrations_open=$4,activated=$5,registrations_open_at=$7,purge_at=$8 WHERE id=$6",
+          [
+            p.year,
+            opens,
+            closes,
+            p.registrations_open,
+            p.activated,
+            s.id,
+            registrations,
+            purge,
+          ],
         );
       } else {
         const old = await activeSeason(i, c);

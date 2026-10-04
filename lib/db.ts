@@ -9,6 +9,7 @@ const globalDb = globalThis as unknown as {
   halloweenPool?: Pool;
   testDb?: Database;
 };
+let testTransactionTail: Promise<unknown> = Promise.resolve();
 export function db(): Database {
   if (globalDb.testDb) return globalDb.testDb;
   globalDb.halloweenPool ??= new Pool({
@@ -20,7 +21,13 @@ export function db(): Database {
 export async function transaction<T>(
   fn: (client: Database) => Promise<T>,
 ): Promise<T> {
-  if (globalDb.testDb) {
+  if (globalDb.testDb && !(globalDb.testDb instanceof Pool)) {
+    const previous = testTransactionTail;
+    let unlock!: () => void;
+    testTransactionTail = new Promise<void>((resolve) => {
+      unlock = resolve;
+    });
+    await previous;
     await db().query("BEGIN");
     try {
       const result = await fn(db());
@@ -29,10 +36,14 @@ export async function transaction<T>(
     } catch (e) {
       await db().query("ROLLBACK");
       throw e;
+    } finally {
+      unlock();
     }
   }
   db();
-  const client = await globalDb.halloweenPool!.connect();
+  const client = await (
+    globalDb.testDb instanceof Pool ? globalDb.testDb : globalDb.halloweenPool!
+  ).connect();
   try {
     await client.query("BEGIN");
     const result = await fn(client);

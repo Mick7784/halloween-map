@@ -1,4 +1,6 @@
 import { readdir, readFile } from "node:fs/promises";
+import { ensureBootstrap } from "../lib/bootstrap";
+import { db } from "../lib/db";
 import { Pool } from "pg";
 export async function migrate(pool: Pool) {
   const c = await pool.connect();
@@ -33,8 +35,13 @@ export async function migrate(pool: Pool) {
 }
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 migrate(pool)
-  .then(() => pool.end())
+  .then(async () => {
+    const link = await ensureBootstrap();
+    if (link) console.log("Configuration initiale (usage unique):", link);
+    await (db() as Pool).end();
+    await pool.end();
+  })
   .catch((e) => {
-    console.error(e.message);
+    console.error("Échec de migration", e.code ?? "unknown");
     process.exit(1);
   });

@@ -1,4 +1,6 @@
 "use client";
+import { useDialogFocus } from "./useDialogFocus";
+import ManorMark from "./ManorMark";
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { DateTime } from "luxon";
@@ -15,6 +17,11 @@ import {
   LogOut,
   Navigation,
   CheckCircle2,
+  Candy,
+  Pause,
+  Play,
+  Power,
+  Trash2,
 } from "lucide-react";
 import type { House, User, Activity } from "../lib/domain";
 import {
@@ -45,6 +52,7 @@ export default function Application({
   version: string;
   mapStyle: string;
 }) {
+  useDialogFocus();
   const [state, setState] = useState<PublicState | null>(null),
     [user, setUser] = useState<User | null>(null),
     [error, setError] = useState(""),
@@ -52,13 +60,13 @@ export default function Application({
     [now, setNow] = useState(() => Date.now());
   const refresh = useCallback(async () => {
     const [s, u] = await Promise.all([
-      api<PublicState>("public"),
+      api<PublicState>(view === "preview" ? "public?preview=1" : "public"),
       api<User | null>("me"),
     ]);
     setState(s);
     setUser(u);
     setError("");
-  }, []);
+  }, [view]);
   useEffect(() => {
     void refresh().catch((e) => setError(e.message));
     const poll = setInterval(
@@ -71,7 +79,9 @@ export default function Application({
       clearInterval(clock);
     };
   }, [refresh]);
-  const closed = !!state?.season && now >= +new Date(state.season.closes_at);
+  const effectiveNow = state?.preview ? +new Date(state.serverTime!) : now;
+  const closed =
+    !!state?.season && effectiveNow >= +new Date(state.season.closes_at);
   const liveState = state
     ? {
         ...state,
@@ -80,7 +90,8 @@ export default function Application({
           ? []
           : (state.houses ?? []).filter(
               (h) =>
-                now >= +new Date(h.starts_at) && now < +new Date(h.ends_at),
+                effectiveNow >= +new Date(h.starts_at) &&
+                effectiveNow < +new Date(h.ends_at),
             ),
       }
     : null;
@@ -93,7 +104,7 @@ export default function Application({
         {error && <AsyncButton onClick={refresh}>Réessayer</AsyncButton>}
       </main>
     );
-  else if (state.setupRequired) content = <Setup />;
+  else if (state.setupRequired) content = <SetupGate />;
   else if (view === "setup")
     content = (
       <main className="narrow">
@@ -151,7 +162,12 @@ export default function Application({
   else if (view === "admin")
     content =
       user?.kind === "STAFF" ? (
-        <Admin user={user} state={liveState!} refresh={refresh} />
+        <Admin
+          user={user}
+          state={liveState!}
+          refresh={refresh}
+          mapStyle={mapStyle}
+        />
       ) : (
         <main className="narrow">
           <h1>Accès à l’administration</h1>
@@ -174,7 +190,7 @@ export default function Application({
           </p>
           <p>
             Les adresses sont publiées uniquement après validation, pendant les
-            horaires d’accueil. À la fermeture de la saison, les comptes
+            horaires d’accueil. À la purge programmée de la saison, les comptes
             participants et leurs données sont supprimés. Les administrateurs et
             les statistiques anonymes sont conservés.
           </p>
@@ -193,13 +209,20 @@ export default function Application({
         </section>
       </main>
     );
-  else content = <PublicMap state={liveState!} mapStyle={mapStyle} now={now} />;
+  else
+    content = (
+      <PublicMap state={liveState!} mapStyle={mapStyle} now={effectiveNow} />
+    );
   return (
     <>
-      <header className="site-header">
+      <header
+        className={
+          view === "admin" ? "site-header admin-header" : "site-header"
+        }
+      >
         <Link href="/" className="brand">
           <span className="brand-mark">
-            <HouseIcon size={29} />
+            <ManorMark />
           </span>
           <span>
             <strong>Halloween</strong>
@@ -262,6 +285,16 @@ export default function Application({
           </button>
         </div>
       )}
+      {state?.preview && (
+        <div className="demo-banner" role="status">
+          <Ghost /> MODE DÉMONSTRATION — heure simulée :{" "}
+          {DateTime.fromISO(state.serverTime!)
+            .setZone(state.instance!.timezone)
+            .setLocale("fr")
+            .toFormat("dd LLLL yyyy · HH:mm")}{" "}
+          <Link href="/admin">Retour à l’administration</Link>
+        </div>
+      )}
       {content}
       <footer>
         <span>Halloween Map · {version}</span>
@@ -274,6 +307,37 @@ export default function Application({
         </span>
       </footer>
     </>
+  );
+}
+function SetupGate() {
+  const [authorized, setAuthorized] = useState<boolean | null>(null);
+  useEffect(() => {
+    void api<{ authorized: boolean }>("setup-access")
+      .then((r) => setAuthorized(r.authorized))
+      .catch(() => setAuthorized(false));
+  }, []);
+  if (authorized) return <Setup />;
+  return (
+    <main className="narrow setup-intro">
+      <div className="eyebrow">VOTRE PREMIÈRE NUIT COMMENCE ICI</div>
+      <h1>Bienvenue dans votre commune.</h1>
+      <section className="panel">
+        <h2>
+          {authorized === null
+            ? "Vérification du lien…"
+            : "Ouvrez votre lien de bienvenue"}
+        </h2>
+        <p>
+          Le lien personnel de configuration se trouve dans les logs du service
+          migrate. Il ouvre directement les quatre étapes de préparation de
+          votre événement.
+        </p>
+        <p className="muted">
+          Ce lien est à usage unique. Une fois ouvert, vous disposez de deux
+          heures pour terminer la configuration.
+        </p>
+      </section>
+    </main>
   );
 }
 function Login() {
@@ -351,7 +415,11 @@ function PublicMap({
   const safeRoute = route
     ? {
         ...route,
-        stops: route.stops.filter((s) => +new Date(s.house.ends_at) > now),
+        stops: route.stops.filter(
+          (s) =>
+            (state.houses ?? []).some((h) => h.id === s.house.id) &&
+            +new Date(s.house.ends_at) > now,
+        ),
       }
     : null;
   const routeHouses = safeRoute?.stops.map((s) => s.house) ?? [];
@@ -396,11 +464,14 @@ function PublicMap({
           {!closed && (
             <p className="house-count">
               <HouseIcon />
-              <strong>{state.count ?? 0} maisons</strong>
+              <strong>
+                {state.count ?? 0}{" "}
+                {(state.count ?? 0) > 1 ? "maisons" : "maison"}
+              </strong>
               <span>déjà inscrites</span>
             </p>
           )}
-          {!closed && s?.registrations_open && (
+          {!closed && s?.registrations_open && !state.preview && (
             <Link href="/register" className="button primary">
               Inscrire ma maison
               <ArrowRight size={18} />
@@ -549,7 +620,9 @@ function PublicMap({
         {safeRoute && (
           <div className="route-result">
             <h3>
-              {safeRoute.stops.length} étapes · {safeRoute.durationMinutes} min
+              {safeRoute.stops.length}{" "}
+              {safeRoute.stops.length > 1 ? "étapes" : "étape"} ·{" "}
+              {safeRoute.durationMinutes} min
             </h3>
             <p>
               {(safeRoute.distanceMeters / 1000).toFixed(1)} km estimés · fin{" "}
@@ -656,7 +729,13 @@ function PublicMap({
                 setSelected(null);
                 document
                   .getElementById("parcours")
-                  ?.scrollIntoView({ behavior: "smooth" });
+                  ?.scrollIntoView({
+                    behavior: window.matchMedia(
+                      "(prefers-reduced-motion: reduce)",
+                    ).matches
+                      ? "instant"
+                      : "smooth",
+                  });
               }}
             >
               Choisir comme point de départ
@@ -735,7 +814,9 @@ function RouteForm({
   const [error, setError] = useState(""),
     [busy, setBusy] = useState(false);
   const zone = state.instance!.timezone;
-  const now = DateTime.now().setZone(zone),
+  const now = (
+      state.preview ? DateTime.fromISO(state.serverTime!) : DateTime.now()
+    ).setZone(zone),
     end = DateTime.fromISO(state.season!.closes_at).setZone(zone);
   return (
     <form
@@ -746,7 +827,7 @@ function RouteForm({
         setError("");
         try {
           onResult(
-            await api("route", {
+            await api(state.preview ? "route?preview=1" : "route", {
               start: DateTime.fromISO(v.start, { zone }).toUTC().toISO(),
               end: DateTime.fromISO(v.end, { zone }).toUTC().toISO(),
               origin: { latitude: origin[1], longitude: origin[0] },
@@ -891,6 +972,7 @@ function Participant({
                 await action("candy", { available: !house.candy_available });
               }}
             >
+              <Candy size={18} />
               {house.candy_available
                 ? "Je n’ai plus de bonbons"
                 : "J’ai de nouveau des bonbons"}
@@ -911,6 +993,11 @@ function Participant({
                 action(house.activity === "PAUSED" ? "resume" : "pause")
               }
             >
+              {house.activity === "PAUSED" ? (
+                <Play size={18} />
+              ) : (
+                <Pause size={18} />
+              )}
               {house.activity === "PAUSED"
                 ? "Reprendre mon accueil"
                 : "Mettre en pause"}
@@ -925,6 +1012,7 @@ function Participant({
                   await action("end");
               }}
             >
+              <Power size={18} />
               Terminer mon activité
             </AsyncButton>
           </div>
@@ -946,6 +1034,7 @@ function Participant({
             }
           }}
         >
+          <Trash2 size={18} />
           Supprimer ma participation
         </AsyncButton>
       </section>

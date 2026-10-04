@@ -26,13 +26,15 @@ export const instanceSchema = z.object({
 });
 export const seasonSchema = z.object({
   year: z.number().int().min(2020).max(2200),
+  registrations_open_at: text(40).optional(),
+  purge_at: text(40).optional(),
   opens_at: text(40),
   closes_at: text(40),
   registrations_open: z.boolean(),
   activated: z.boolean().default(false),
 });
 export const setupSchema = z.object({
-  token: text(200),
+  token: text(200).optional(),
   instance: instanceSchema,
   admin: credentials.extend({ display_name: text(80) }),
   season: seasonSchema,

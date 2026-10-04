@@ -10,6 +10,11 @@
   --purple: #b6a1d7;
   --orange: #ff8c32;
   --red: #f37979;
+  --font-body: "Inter", sans-serif;
+  --font-editorial: "Cormorant Garamond", Georgia, serif;
+  --radius: 14px;
+  --space: clamp(20px, 2vw, 40px);
+  --shadow: 0 18px 60px #0004;
 }
 * {
   box-sizing: border-box;
@@ -22,7 +27,7 @@ body {
   background:
     radial-gradient(ellipse at 70% 0, #2c2535 0, transparent 46%), var(--bg);
   color: var(--text);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-body);
   font-size: 15px;
   line-height: 1.6;
 }
@@ -1451,5 +1456,936 @@ footer {
   }
   .status-line {
     margin-bottom: 15px;
+  }
+}
+/* V0.2 — editorial public experience and compact staff workspace */
+body {
+  font-size: clamp(14px, 0.9vw, 17px);
+  background:
+    radial-gradient(ellipse at 70% 0, #292131 0, transparent 42%), #0e1016;
+}
+h1 {
+  font-family: var(--font-editorial);
+  font-weight: 500;
+  font-size: clamp(38px, 3.8vw, 72px);
+  line-height: 1.05;
+  letter-spacing: -0.025em;
+}
+h2 {
+  font-size: clamp(18px, 1.25vw, 24px);
+}
+button,
+.button {
+  min-height: 44px;
+  transition:
+    background 0.15s,
+    border-color 0.15s;
+}
+.field,
+.check,
+legend {
+  font-size: clamp(13px, 0.85vw, 16px);
+}
+.field input,
+.field textarea,
+.field select {
+  min-height: 46px;
+  font-size: 16px;
+  background: linear-gradient(#1b1d27, #181b23);
+  border-color: #3c3d4e;
+}
+.panel {
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  background: linear-gradient(140deg, #20222cdf, #14171ff5);
+}
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+}
+.eyebrow {
+  font-size: clamp(11px, 0.75vw, 14px);
+  color: #c9b4ee;
+}
+.site-header {
+  min-height: 146px;
+  padding: 24px clamp(24px, 3vw, 72px);
+  gap: clamp(24px, 3vw, 64px);
+  background:
+    linear-gradient(90deg, #0e0f18ee, #0f101acf),
+    url("/art/halloween-village-v2.png") 65% 42% / cover;
+}
+.brand {
+  min-width: 290px;
+  gap: 18px;
+}
+.brand strong {
+  font: 500 clamp(42px, 3vw, 66px)/0.95 var(--font-editorial);
+}
+.brand small {
+  font-size: clamp(11px, 0.8vw, 16px);
+  letter-spacing: 0.23em;
+  color: #ee9b96;
+}
+.brand em {
+  font-size: clamp(12px, 0.85vw, 16px);
+}
+.brand-mark {
+  width: 64px;
+  height: 64px;
+  flex-shrink: 0;
+  background: linear-gradient(140deg, #e48182, #f5b174);
+}
+.brand-mark svg {
+  width: 40px;
+  height: 44px;
+  stroke-width: 1.7;
+}
+.brand-note {
+  font-size: clamp(10px, 0.7vw, 13px);
+  padding-left: 26px;
+}
+.site-header nav {
+  gap: clamp(18px, 2vw, 44px);
+}
+.site-header nav > a {
+  font-size: clamp(11px, 0.8vw, 15px);
+}
+.site-header nav > a svg {
+  width: 29px;
+  height: 29px;
+}
+.site-header nav > a span {
+  font-size: clamp(10px, 0.7vw, 13px);
+}
+.site-header nav .nav-login {
+  font-size: 12px;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.site-header nav button {
+  margin: 0;
+  font-size: 12px;
+}
+.narrow {
+  max-width: 960px;
+  padding: clamp(35px, 4vw, 70px) 28px 70px;
+}
+.narrow > h1 {
+  max-width: 850px;
+}
+.narrow.login {
+  max-width: 650px;
+}
+.setup-intro {
+  min-height: 70vh;
+}
+.countdown {
+  min-height: calc(100svh - 228px);
+  place-items: unset;
+  align-items: center;
+}
+.village-scene {
+  background: url("/art/halloween-village-v2.png") 70% 55% / cover;
+  opacity: 1;
+}
+.countdown:after {
+  background:
+    linear-gradient(
+      90deg,
+      #090c15ef 0%,
+      #0d0e16c9 32%,
+      #0d0f1733 62%,
+      #10121800 80%
+    ),
+    linear-gradient(0deg, #0d1018, transparent 22%);
+}
+.countdown-content {
+  max-width: min(56vw, 900px);
+  padding: clamp(50px, 5vw, 100px) clamp(32px, 6vw, 140px);
+  text-align: left;
+  text-shadow: 0 3px 25px #000a;
+}
+.countdown h1 {
+  font: 500 clamp(46px, 4.7vw, 94px)/1.02 var(--font-editorial);
+  margin: 28px 0;
+}
+.countdown-content > p:not(.house-count) {
+  font-size: clamp(15px, 1.05vw, 20px);
+}
+.countdown-boxes {
+  justify-content: flex-start;
+  gap: clamp(10px, 1vw, 20px);
+  margin: 34px 0;
+}
+.countdown-boxes > div {
+  min-width: clamp(76px, 6vw, 125px);
+  padding: 15px 18px;
+  border-color: #514957;
+  background: linear-gradient(140deg, #252230dd, #151820de);
+  box-shadow: 0 12px 36px #0003;
+  backdrop-filter: blur(8px);
+}
+.countdown-boxes strong {
+  font: 500 clamp(34px, 3vw, 58px)/1.1 var(--font-editorial);
+}
+.countdown-boxes small {
+  font-size: clamp(11px, 0.7vw, 14px);
+}
+.house-count {
+  justify-content: start;
+  font-size: clamp(20px, 1.5vw, 29px);
+}
+.house-count span {
+  font-size: 14px;
+}
+.countdown .tagline {
+  color: #c8b5e3;
+  letter-spacing: 0.04em;
+  font-size: clamp(14px, 1vw, 19px);
+}
+.countdown-content .primary {
+  padding: 15px 25px;
+  font-size: 16px;
+}
+.public-layout {
+  max-width: 2200px;
+  padding: clamp(22px, 2vw, 45px);
+  grid-template-columns: minmax(0, 1fr) clamp(315px, 23vw, 430px);
+  gap: 26px;
+}
+.map-heading h1 {
+  font-size: clamp(34px, 2.8vw, 54px);
+}
+.map-canvas {
+  min-height: 560px;
+  height: calc(100svh - 320px);
+  border-color: #3c394b;
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 16px 46px #0006;
+}
+.map-filters button,
+.map-filters select {
+  min-height: 44px;
+}
+.maplibregl-ctrl-group {
+  background: #191c26 !important;
+  border: 1px solid #454555 !important;
+  border-radius: 10px !important;
+}
+.maplibregl-ctrl-group button {
+  width: 40px !important;
+  height: 42px !important;
+}
+.maplibregl-ctrl-group button span {
+  filter: invert(1);
+}
+.maplibregl-ctrl-attrib {
+  font-size: 10px !important;
+  background: #13161dd9 !important;
+  color: #d4cddd !important;
+}
+.maplibregl-ctrl-attrib a {
+  color: inherit !important;
+}
+.map-marker {
+  filter: drop-shadow(0 3px 6px #000a);
+}
+.house-detail {
+  background: linear-gradient(145deg, #191b25, #0f131b);
+  border-color: #4b425a;
+  max-width: 560px;
+  box-shadow: 0 20px 90px #000b;
+}
+.house-detail h2 {
+  font-family: var(--font-editorial);
+  font-size: clamp(26px, 2vw, 34px);
+}
+.house-detail .badge {
+  background: #242431;
+  border-color: #434050;
+}
+.fear-static {
+  margin: 20px 0 48px;
+}
+.fear-labels {
+  font-size: 11px;
+}
+.adapt {
+  padding: 17px;
+  background: linear-gradient(110deg, #28212d, #181c27);
+  font-size: 14px;
+  box-shadow: inset 0 0 25px #ff8c3208;
+}
+.adapt input {
+  appearance: none;
+  width: 42px;
+  height: 24px;
+  border-radius: 14px;
+  background: #444252;
+  cursor: pointer;
+  position: relative;
+  flex-shrink: 0;
+}
+.adapt input:before {
+  content: "";
+  position: absolute;
+  left: 3px;
+  top: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #f2eafa;
+  transition: transform 0.15s;
+}
+.adapt input:checked {
+  background: var(--orange);
+}
+.adapt input:checked:before {
+  transform: translateX(18px);
+}
+.fear input {
+  height: 28px;
+}
+.choices .check:has(input:checked) {
+  border-color: #b87844;
+  background: #332a28;
+}
+.participant {
+  max-width: 1100px;
+}
+.participant .panel {
+  padding: clamp(20px, 3vw, 45px);
+}
+.participant .choices {
+  gap: 12px;
+}
+.participant .choices .check {
+  min-height: 46px;
+  padding: 10px 16px;
+}
+.admin-layout {
+  max-width: 2300px;
+  grid-template-columns: 230px minmax(0, 1fr);
+  padding: 28px clamp(20px, 2.5vw, 60px) 50px;
+  gap: 28px;
+}
+.admin-content {
+  min-width: 0;
+}
+.admin-title h1 {
+  font-family: var(--font-body);
+  font-size: clamp(25px, 1.8vw, 34px);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+.admin-content .panel {
+  padding: 22px;
+  box-shadow: 0 8px 28px #0002;
+}
+.admin-content h2 {
+  font-size: 18px;
+}
+.admin-sidebar {
+  background: linear-gradient(#181a22, #11151c);
+  border: 1px solid #343440;
+  border-radius: 14px;
+  padding: 20px 14px;
+}
+.admin-sidebar nav button {
+  font-size: 13px;
+  min-height: 46px;
+}
+.admin-sidebar nav button.active {
+  background: #382a25 !important;
+  color: #ff9f53 !important;
+  border-color: #795135 !important;
+}
+.metrics {
+  gap: 16px;
+}
+.metric strong {
+  font-size: clamp(27px, 2vw, 40px);
+  font-weight: 500;
+}
+.metric svg {
+  width: 34px;
+  height: 34px;
+  color: #ff9850;
+}
+.metric:nth-child(n + 3) svg {
+  color: #ba95ed;
+}
+.metric span {
+  font-size: 12px;
+}
+.dashboard-visuals {
+  margin: 22px 0;
+  grid-template-columns: 1.35fr 1fr;
+}
+.dashboard-map .map-canvas {
+  height: 340px;
+  min-height: 340px;
+  border-radius: 10px;
+}
+.dashboard-map > .small {
+  margin-top: 14px;
+  margin-bottom: 0;
+}
+.activity-chart {
+  display: grid;
+  gap: 25px;
+  margin: 35px 0;
+}
+.activity-chart > div > div:first-child {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  margin-bottom: 10px;
+}
+.chart-track {
+  height: 10px;
+  border-radius: 8px;
+  background: #2d2c3a;
+  overflow: hidden;
+}
+.chart-track span {
+  height: 100%;
+  display: block;
+  border-radius: 8px;
+  background: linear-gradient(90deg, #ff8934, #ffb061);
+}
+.chart-track .violet {
+  background: linear-gradient(90deg, #8c66c6, #bd9be9);
+}
+.moderation-summary {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  border-top: 1px solid var(--line);
+  padding-top: 20px;
+}
+.moderation-summary > strong {
+  font-size: 48px;
+  font-weight: 500;
+  color: var(--purple);
+}
+.moderation-summary > span {
+  font-size: 13px;
+}
+.admin-message {
+  background:
+    linear-gradient(90deg, #11141bed, #11141b88),
+    url("/art/halloween-village-v2.png") 80% 40% / cover;
+}
+.section-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: center;
+  margin-bottom: 20px;
+}
+.section-heading h2 {
+  margin: 0;
+}
+.season-manager > div {
+  margin-bottom: 24px;
+}
+.season-manager .grid {
+  margin-top: 20px;
+}
+.season-timeline {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 24px;
+}
+.timeline-step {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.timeline-step > .field {
+  flex: 1;
+  min-width: 0;
+}
+.timeline-step > span {
+  border: 1px solid #655170;
+  border-radius: 50%;
+  height: 30px;
+  width: 30px;
+  display: grid;
+  place-items: center;
+  color: var(--purple);
+  flex-shrink: 0;
+  margin-top: 6px;
+}
+.timeline-step:last-child > span {
+  border-color: #af7146;
+  color: var(--orange);
+}
+.reminder-panel,
+.demo-panel {
+  min-width: 0;
+}
+.demo-panel {
+  border-color: #655077;
+  background: linear-gradient(130deg, #272030, #161923) !important;
+}
+.demo-banner {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  justify-content: center;
+  padding: 15px 24px;
+  background: #352445;
+  border-bottom: 1px solid #856b9d;
+  color: #f0ddff;
+  font-size: 14px;
+  flex-wrap: wrap;
+}
+.demo-banner a {
+  border-bottom: 1px solid #c7ade0;
+  font-size: 12px;
+}
+.mail-preview {
+  position: relative;
+  margin-top: 20px;
+  padding-top: 40px !important;
+}
+.purge-block {
+  margin-top: 20px;
+  border-color: #70464b;
+}
+.purge-block h3 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+footer {
+  padding: 26px clamp(24px, 3vw, 72px);
+  font-size: 12px;
+  border-top: 1px solid #302d3a;
+  background: #0c0f15;
+}
+@media (min-width: 2000px) {
+  .countdown-content {
+    padding-left: max(80px, calc((100vw - 2200px) / 2));
+    max-width: 50vw;
+  }
+  .site-header {
+    padding-inline: max(60px, calc((100vw - 2400px) / 2));
+  }
+  .admin-layout {
+    padding-top: 40px;
+  }
+  .dashboard-map .map-canvas {
+    height: 430px;
+  }
+}
+@media (max-width: 1500px) {
+  .brand-note {
+    display: none;
+  }
+  .site-header {
+    gap: 22px;
+  }
+  .site-header nav {
+    gap: 24px;
+  }
+  .brand {
+    min-width: 260px;
+  }
+  .site-header nav > a span {
+    display: none;
+  }
+  .countdown-content {
+    max-width: 63vw;
+  }
+}
+@media (max-width: 1100px) {
+  .admin-layout {
+    grid-template-columns: 180px minmax(0, 1fr);
+    gap: 18px;
+    padding: 20px;
+  }
+  .admin-sidebar nav button {
+    font-size: 12px;
+  }
+  .metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .dashboard-visuals {
+    grid-template-columns: 1fr;
+  }
+  .season-manager > .grid,
+  .season-manager .grid.two {
+    grid-template-columns: 1fr;
+  }
+  .site-header nav {
+    gap: 15px;
+  }
+  .countdown-content {
+    max-width: 70vw;
+    padding-left: 40px;
+  }
+  .public-layout {
+    grid-template-columns: minmax(0, 1fr) 300px;
+    padding: 22px;
+    gap: 20px;
+  }
+}
+@media (max-width: 900px) {
+  .site-header {
+    min-height: 118px;
+    padding: 20px 24px;
+  }
+  .brand {
+    min-width: 0;
+  }
+  .brand strong {
+    font-size: 44px;
+  }
+  .brand small {
+    font-size: 11px;
+  }
+  .brand-mark {
+    width: 52px;
+    height: 52px;
+  }
+  .brand-mark svg {
+    width: 32px;
+    height: 36px;
+  }
+  .site-header nav {
+    background: #151720;
+  }
+  .site-header nav > a {
+    font-size: 13px;
+  }
+  .countdown-content {
+    max-width: 80vw;
+    padding-left: 30px;
+  }
+  .countdown h1 {
+    font-size: 64px;
+  }
+  .public-layout {
+    grid-template-columns: 1fr;
+  }
+  .map-canvas {
+    height: 60svh;
+    min-height: 460px;
+  }
+  .route-panel {
+    position: static;
+    width: 100%;
+  }
+  .admin-layout {
+    grid-template-columns: 1fr;
+  }
+  .admin-sidebar {
+    padding: 12px;
+  }
+  .admin-sidebar nav {
+    display: flex;
+    overflow-x: auto;
+    gap: 6px;
+  }
+  .admin-sidebar nav button {
+    white-space: nowrap;
+    width: auto;
+    flex-shrink: 0;
+  }
+  .admin-sidebar > p {
+    display: none;
+  }
+  .admin-sidebar > h2 {
+    display: none;
+  }
+  .season-timeline {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+@media (max-width: 650px) {
+  body {
+    font-size: 14px;
+  }
+  .site-header {
+    min-height: 100px;
+    padding: 17px 20px;
+  }
+  .brand {
+    gap: 12px;
+  }
+  .brand strong {
+    font-size: 39px;
+  }
+  .brand-mark {
+    width: 46px;
+    height: 46px;
+  }
+  .brand small {
+    font-size: 10px;
+  }
+  .brand em {
+    font-size: 11px;
+  }
+  .site-header nav > a span {
+    display: block;
+  }
+  .site-header nav.open {
+    top: 100%;
+  }
+  .countdown {
+    min-height: calc(100svh - 100px);
+    align-items: start;
+  }
+  .village-scene {
+    background-position: 77% 50%;
+    opacity: 0.85;
+  }
+  .countdown:after {
+    background: linear-gradient(
+      #090d17bb 0%,
+      #090d1750 24%,
+      #101019ce 58%,
+      #0d1018ef 100%
+    );
+  }
+  .countdown-content {
+    max-width: 100%;
+    padding: 230px 24px 40px;
+    text-align: center;
+    width: 100%;
+  }
+  .countdown h1 {
+    font-size: 45px;
+    margin: 18px 0;
+  }
+  .countdown-content .eyebrow {
+    font-size: 10px;
+    letter-spacing: 0.15em;
+  }
+  .countdown-content > p:not(.house-count) {
+    font-size: 14px;
+  }
+  .countdown-boxes {
+    justify-content: center;
+    gap: 8px;
+    margin: 25px 0;
+  }
+  .countdown-boxes > div {
+    min-width: 0;
+    flex: 1;
+    max-width: 82px;
+    padding: 13px 7px;
+  }
+  .countdown-boxes strong {
+    font-size: 35px;
+  }
+  .countdown-boxes small {
+    font-size: 10px;
+  }
+  .house-count {
+    justify-content: center;
+    font-size: 22px;
+    margin: 25px 0;
+  }
+  .countdown .tagline {
+    font-size: 13px;
+  }
+  .narrow {
+    padding: 30px 20px 45px;
+  }
+  .narrow > h1 {
+    font-size: 42px;
+  }
+  .panel {
+    padding: 20px;
+  }
+  .public-layout {
+    padding: 22px 14px;
+    gap: 20px;
+  }
+  .map-heading {
+    gap: 12px;
+  }
+  .map-heading h1 {
+    font-size: 34px;
+  }
+  .map-heading .eyebrow {
+    font-size: 10px;
+  }
+  .map-filters {
+    gap: 7px;
+  }
+  .map-filters button {
+    font-size: 12px;
+    padding: 9px 12px;
+  }
+  .map-canvas {
+    height: 58svh;
+    min-height: 400px;
+    border-radius: 12px;
+  }
+  .modal-backdrop {
+    align-items: end;
+    padding: 0;
+  }
+  .house-detail {
+    width: 100%;
+    max-height: 90svh;
+    margin: 0;
+    border-radius: 20px 20px 0 0;
+    padding: 28px 22px;
+  }
+  .house-detail:before {
+    content: "";
+    display: block;
+    width: 44px;
+    height: 4px;
+    border-radius: 4px;
+    background: #716581;
+    margin: 0 auto 22px;
+  }
+  .house-detail h2 {
+    font-size: 28px;
+    padding-right: 20px;
+  }
+  .fear-labels {
+    font-size: 10px;
+  }
+  .participant .panel {
+    padding: 18px;
+  }
+  .participant .choices {
+    gap: 8px;
+  }
+  .participant .choices .check {
+    font-size: 12px;
+    padding: 8px;
+  }
+  .admin-layout {
+    padding: 16px 12px;
+  }
+  .admin-content .panel {
+    padding: 18px;
+  }
+  .admin-title h1 {
+    font-size: 24px;
+  }
+  .admin-title p {
+    font-size: 11px;
+  }
+  .metrics {
+    gap: 10px;
+  }
+  .metric {
+    padding: 15px !important;
+    gap: 12px;
+  }
+  .metric svg {
+    width: 25px;
+    height: 25px;
+  }
+  .metric span {
+    font-size: 10px;
+  }
+  .metric strong {
+    font-size: 29px;
+  }
+  .dashboard-map .map-canvas {
+    height: 280px;
+    min-height: 280px;
+  }
+  .season-timeline {
+    grid-template-columns: 1fr;
+  }
+  .section-heading {
+    align-items: start;
+  }
+  .section-heading h2 {
+    font-size: 17px;
+  }
+  .demo-banner {
+    font-size: 11px;
+    padding: 12px;
+  }
+  .demo-banner svg {
+    width: 18px;
+  }
+  footer {
+    font-size: 10px;
+    padding: 24px 20px;
+    gap: 12px;
+  }
+  .adapt {
+    font-size: 12px;
+    gap: 10px;
+  }
+  .adapt input {
+    width: 42px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *:before,
+  *:after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}
+.village-scene {
+  background-position: 70% 0;
+  width: 100%;
+  left: 0;
+}
+.admin-header {
+  min-height: 100px;
+  padding-block: 18px;
+  background: linear-gradient(105deg, #14151d, #10141ce8);
+}
+.admin-header .brand strong {
+  font-size: 42px;
+}
+.admin-header .brand-mark {
+  width: 46px;
+  height: 46px;
+}
+.admin-header .brand small {
+  font-size: 11px;
+}
+.admin-header .brand em {
+  font-size: 11px;
+}
+.admin-header .brand-note {
+  font-size: 10px;
+}
+.admin-header nav > a {
+  font-size: 11px;
+}
+.admin-header nav > a svg {
+  width: 23px;
+  height: 23px;
+  margin-bottom: 3px;
+}
+@media (max-width: 650px) {
+  .village-scene {
+    background-position: 90% 0;
+  }
+  .admin-header .brand strong {
+    font-size: 35px;
+  }
+  .admin-header .brand small {
+    font-size: 10px;
+  }
+  .admin-header .brand-mark {
+    width: 42px;
+    height: 42px;
   }
 }

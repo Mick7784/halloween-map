@@ -6,7 +6,13 @@ x-app: &app
     DATABASE_URL: postgresql://halloween:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@db:5432/halloween
     APP_ORIGIN: ${APP_ORIGIN:-http://localhost:3000}
     COOKIE_SECURE: ${COOKIE_SECURE:-false}
-    SETUP_TOKEN: ${SETUP_TOKEN:?Set SETUP_TOKEN in .env}
+    SETUP_TOKEN: ${SETUP_TOKEN:-}
+    SMTP_HOST: ${SMTP_HOST:-}
+    SMTP_PORT: ${SMTP_PORT:-587}
+    SMTP_USER: ${SMTP_USER:-}
+    SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+    SMTP_FROM: ${SMTP_FROM:-}
+    SMTP_SECURE: ${SMTP_SECURE:-false}
     MAP_STYLE_URL: ${MAP_STYLE_URL:-https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json}
     DEMO_PASSWORD: ${DEMO_PASSWORD:-}
   init: true

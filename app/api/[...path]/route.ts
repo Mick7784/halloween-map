@@ -1,8 +1,12 @@
+import { setupCookie, setupAuthorized } from "../../../lib/bootstrap";
+import { effectiveTime } from "../../../lib/time";
+import { configureReminder, smtpAvailable } from "../../../lib/reminders";
+import { localISO } from "../../../lib/domain";
 import { NextRequest, NextResponse } from "next/server";
 import { getUser, HttpError, hashToken, rateLimit } from "../../../lib/auth";
 import { db } from "../../../lib/db";
 import * as service from "../../../lib/service";
-import { ZodError } from "zod";
+import { z, ZodError } from "zod";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 const cookie = "halloween_session";
@@ -33,13 +37,49 @@ async function handle(
         await db().query("SELECT 1");
         return response({ status: "ok" });
       }
-      if (path === "public") return response(await service.publicState());
+      if (path === "setup-access")
+        return response({
+          authorized: await setupAuthorized(
+            req.cookies.get(setupCookie)?.value,
+          ),
+        });
+      if (path === "public")
+        return response(
+          await service.publicState(
+            await effectiveTime(
+              req.nextUrl.searchParams.get("preview") === "1",
+              await getUser(req.cookies.get(cookie)?.value),
+              req.cookies.get(cookie)?.value,
+            ),
+          ),
+        );
       if (path === "me")
         return response(await getUser(req.cookies.get(cookie)?.value));
       if (path === "house")
         return response(
           await service.ownHouse(await getUser(req.cookies.get(cookie)?.value)),
         );
+      if (path === "admin/mail") {
+        const u = await getUser(req.cookies.get(cookie)?.value);
+        if (!u?.permissions.includes("season.manage"))
+          throw new HttpError(403, "Accès interdit");
+        return response({ smtpAvailable: smtpAvailable() });
+      }
+      if (path === "admin/preview") {
+        const u = await getUser(req.cookies.get(cookie)?.value);
+        if (!u?.permissions.includes("season.preview") || u.kind !== "STAFF")
+          throw new HttpError(403, "Accès interdit");
+        const row = (
+          await db().query(
+            "SELECT preview_at FROM sessions WHERE token_hash=$1",
+            [hashToken(req.cookies.get(cookie)!.value)],
+          )
+        ).rows[0];
+        return response({
+          at: row?.preview_at ?? null,
+          smtpAvailable: smtpAvailable(),
+        });
+      }
       if (path.startsWith("admin/")) {
         await service.tick();
         return response(
@@ -67,8 +107,13 @@ async function handle(
     // Global persistent ceilings do not trust spoofable forwarded IP headers.
     if (["login", "register", "setup"].includes(path))
       await rateLimit("auth-global", 150);
-    if (path === "setup")
-      return withSession((await service.setup(input)).token);
+    if (path === "setup") {
+      const r = withSession(
+        (await service.setup(input, req.cookies.get(setupCookie)?.value)).token,
+      );
+      r.cookies.delete(setupCookie);
+      return r;
+    }
     if (path === "login")
       return withSession((await service.login(input)).token);
     if (path === "register")
@@ -76,8 +121,13 @@ async function handle(
     if (path === "geocode") {
       const configured = await service.instance();
       const user = await getUser(req.cookies.get(cookie)?.value);
-      if (!configured) service.verifySetupToken(String(input.token ?? ""));
-      else if (!user?.permissions.includes("settings.manage"))
+      if (
+        !configured &&
+        !(await setupAuthorized(req.cookies.get(setupCookie)?.value))
+      ) {
+        if (input.token) service.verifySetupToken(String(input.token));
+        else throw new HttpError(403, "Session de configuration requise");
+      } else if (!user?.permissions.includes("settings.manage"))
         throw new HttpError(403, "Accès interdit");
       await rateLimit("geocode", 30);
       const query = String(input.query ?? "").trim();
@@ -133,10 +183,51 @@ async function handle(
     }
     if (path === "route") {
       await rateLimit("routes-global", 300);
-      await service.tick();
-      return response(await service.route(input));
+      const context = await effectiveTime(
+        req.nextUrl.searchParams.get("preview") === "1",
+        user,
+        req.cookies.get(cookie)?.value,
+      );
+      if (!context.preview) await service.tick();
+      return response(await service.route(input, context));
     }
     if (path === "admin") {
+      if (input.action === "reminder")
+        return response(
+          await configureReminder(user, String(input.id), input.payload),
+        );
+      if (input.action === "preview") {
+        if (
+          user?.kind !== "STAFF" ||
+          !user.permissions.includes("season.preview")
+        )
+          throw new HttpError(403, "Accès interdit");
+        const previewInput = z
+          .object({ enabled: z.boolean(), at: z.string().max(40).optional() })
+          .parse(input.payload);
+        const configured = await service.instance();
+        let at: string | null = null;
+        if (previewInput.enabled) {
+          if (typeof previewInput.at !== "string")
+            throw new HttpError(400, "Date requise");
+          try {
+            at = localISO(previewInput.at, configured!.timezone);
+          } catch {
+            throw new HttpError(400, "Date invalide ou ambiguë");
+          }
+        }
+        await db().query(
+          "UPDATE sessions SET preview_at=$1 WHERE token_hash=$2 AND user_id=$3",
+          [at, hashToken(req.cookies.get(cookie)!.value), user.id],
+        );
+        await service.audit(
+          db(),
+          user.instance_id,
+          user,
+          at ? "preview.enabled" : "preview.disabled",
+        );
+        return response({ ok: true });
+      }
       await service.tick();
       return response(await service.adminAction(user, input));
     }
@@ -160,7 +251,10 @@ async function handle(
         { error: "Cet email, rôle ou année existe déjà" },
         { status: 409 },
       );
-    console.error("Request failed", e instanceof Error ? e.message : "unknown");
+    console.error(
+      "Request failed",
+      (e as { code?: string })?.code ?? "unknown",
+    );
     return NextResponse.json(
       { error: "Service temporairement indisponible" },
       { status: 500 },

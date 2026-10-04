@@ -6,6 +6,8 @@ export type Season = {
   year: number;
   activated: boolean;
   registrations_open: boolean;
+  registrations_open_at: Date | string;
+  purge_at: Date | string;
   opens_at: Date | string;
   closes_at: Date | string;
   archived: boolean;
@@ -67,6 +69,7 @@ export const permissions = [
   "users.manage",
   "season.read",
   "season.manage",
+  "season.preview",
   "settings.read",
   "settings.manage",
   "stats.read",
@@ -117,7 +120,16 @@ export function visible(h: House, s: Season, now = new Date()) {
 }
 export function localISO(value: string, zone: string) {
   const d = DateTime.fromISO(value, { zone });
-  if (!d.isValid) throw new Error("Date ou fuseau horaire invalide");
+  const explicitOffset = /[zZ]|[+-]\d{2}:\d{2}$/.test(value);
+  if (
+    !d.isValid ||
+    (!explicitOffset &&
+      (d.toFormat("yyyy-MM-dd'T'HH:mm") !== value.slice(0, 16) ||
+        d.getPossibleOffsets().length > 1))
+  )
+    throw new Error(
+      "Date locale invalide ou ambiguë ; précisez un décalage UTC",
+    );
   return d.toUTC().toISO()!;
 }
 export function publicHouse(h: House) {

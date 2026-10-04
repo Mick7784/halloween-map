@@ -1,4 +1,6 @@
 "use client";
+import SeasonManager from "./SeasonManager";
+import DashboardVisuals from "./DashboardVisuals";
 import { useCallback, useEffect, useState, useRef } from "react";
 import {
   LayoutDashboard,
@@ -86,10 +88,12 @@ export default function Admin({
   user,
   state,
   refresh,
+  mapStyle,
 }: {
   user: User;
   state: PublicState;
   refresh: () => Promise<void>;
+  mapStyle: string;
 }) {
   const available = sections.filter((s) => has(user, s.p));
   const [section, setSection] = useState(available[0]?.id ?? ""),
@@ -221,6 +225,12 @@ export default function Admin({
                     );
                   })}
                 </div>
+                <DashboardVisuals
+                  user={user}
+                  center={[i.longitude, i.latitude]}
+                  zoom={i.zoom}
+                  mapStyle={mapStyle}
+                />
                 <div className="grid two">
                   <section className="panel">
                     <h2>Cette saison</h2>
@@ -230,7 +240,7 @@ export default function Admin({
                     </p>
                     <p>
                       Les adresses restent masquées avant l’ouverture. À la
-                      fermeture, le traitement automatique conserve les totaux
+                      purge programmée, le traitement conserve les totaux
                       anonymes et supprime les données participantes.
                     </p>
                     {has(user, "season.read") && (
@@ -467,151 +477,12 @@ export default function Admin({
               </>
             )}
             {section === "seasons" && (
-              <>
-                {(data as Season[]).map((season) => (
-                  <section className="panel" key={season.id}>
-                    <h2>
-                      Saison {season.year}{" "}
-                      {season.purged_at && (
-                        <span className="badge">Purgée</span>
-                      )}
-                      {season.archived && (
-                        <span className="badge">Archivée</span>
-                      )}
-                    </h2>
-                    {!season.purged_at &&
-                    !season.archived &&
-                    has(user, "season.manage") ? (
-                      <AdminForm
-                        onSave={(v) =>
-                          act(
-                            "season",
-                            {
-                              year: Number(v.year),
-                              opens_at: v.opens_at,
-                              closes_at: v.closes_at,
-                              activated: v.activated === "on",
-                              registrations_open: v.registrations_open === "on",
-                            },
-                            season.id,
-                          )
-                        }
-                      >
-                        <div className="grid three">
-                          <Field
-                            label="Année"
-                            name="year"
-                            type="number"
-                            value={season.year}
-                          />
-                          <Field
-                            label={`Ouverture (${i.timezone})`}
-                            name="opens_at"
-                            type="datetime-local"
-                            value={localDate(season.opens_at, i.timezone)}
-                          />
-                          <Field
-                            label="Fermeture et purge"
-                            name="closes_at"
-                            type="datetime-local"
-                            value={localDate(season.closes_at, i.timezone)}
-                          />
-                        </div>
-                        <div className="choices">
-                          <Check
-                            name="registrations_open"
-                            label="Inscriptions ouvertes"
-                            checked={season.registrations_open}
-                          />
-                          <Check
-                            name="activated"
-                            label="Activer cette saison"
-                            checked={season.activated}
-                          />
-                        </div>
-                        <p className="muted small">
-                          L’activation est explicite. La carte s’ouvre ensuite à
-                          la date prévue et se ferme automatiquement à la date
-                          de fin.
-                        </p>
-                      </AdminForm>
-                    ) : (
-                      <p>
-                        {localDate(season.opens_at, i.timezone).replace(
-                          "T",
-                          " ",
-                        )}{" "}
-                        →{" "}
-                        {localDate(season.closes_at, i.timezone).replace(
-                          "T",
-                          " ",
-                        )}
-                      </p>
-                    )}
-                    {!season.purged_at && user.role_name === "SUPER_ADMIN" && (
-                      <div className="purge-block">
-                        <AsyncButton
-                          danger
-                          onClick={async () => {
-                            if (
-                              window.confirm(
-                                "Fermer cette saison et supprimer définitivement tous ses comptes participants, maisons, adresses et textes ? Cette action est irréversible.",
-                              )
-                            )
-                              await act("purge", "PURGER", season.id);
-                          }}
-                        >
-                          Fermer et purger maintenant
-                        </AsyncButton>
-                      </div>
-                    )}
-                  </section>
-                ))}
-                {has(user, "season.manage") &&
-                  (data as Season[]).every((s) => !!s.purged_at) && (
-                    <section className="panel">
-                      <h2>Préparer une nouvelle saison</h2>
-                      <AdminForm
-                        onSave={(v) =>
-                          act("season", {
-                            year: Number(v.year),
-                            opens_at: v.opens_at,
-                            closes_at: v.closes_at,
-                            activated: false,
-                            registrations_open: v.registrations_open === "on",
-                          })
-                        }
-                      >
-                        <Field
-                          label="Année"
-                          name="year"
-                          type="number"
-                          value={
-                            Math.max(...(data as Season[]).map((s) => s.year)) +
-                            1
-                          }
-                        />
-                        <Field
-                          label="Ouverture"
-                          name="opens_at"
-                          type="datetime-local"
-                          value={`${Math.max(...(data as Season[]).map((s) => s.year)) + 1}-${i.defaultOpen}`}
-                        />
-                        <Field
-                          label="Fermeture"
-                          name="closes_at"
-                          type="datetime-local"
-                          value={`${Math.max(...(data as Season[]).map((s) => s.year)) + 1}-${i.defaultClose}`}
-                        />
-                        <Check
-                          name="registrations_open"
-                          label="Ouvrir les inscriptions"
-                          checked
-                        />
-                      </AdminForm>
-                    </section>
-                  )}
-              </>
+              <SeasonManager
+                seasons={data as Season[]}
+                user={user}
+                zone={i.timezone}
+                act={act}
+              />
             )}
             {section === "stats" && (
               <>
@@ -641,7 +512,7 @@ export default function Admin({
                     {!Object.keys(season.stats).length && (
                       <p>
                         {season.routes_count} parcours créés. Le bilan est
-                        agrégé à la fermeture.
+                        agrégé à la purge.
                       </p>
                     )}
                   </section>

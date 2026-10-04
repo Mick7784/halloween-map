@@ -10,7 +10,6 @@ import {
 } from "lucide-react";
 import { api, Field, Check, Notice, values, numeric } from "./common";
 type Wizard = {
-  token: string;
   instance: {
     public_name: string;
     territory: string;
@@ -24,6 +23,8 @@ type Wizard = {
   admin: { display_name: string; email: string; password: string };
   season: {
     year: number;
+    registrations_open_at: string;
+    purge_at: string;
     opens_at: string;
     closes_at: string;
     registrations_open: boolean;
@@ -36,7 +37,6 @@ export default function Setup() {
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false);
   const [data, setData] = useState<Wizard>({
-    token: "",
     instance: {
       public_name: "Halloween · Carte des maisons",
       territory: "",
@@ -50,6 +50,8 @@ export default function Setup() {
     admin: { display_name: "", email: "", password: "" },
     season: {
       year,
+      registrations_open_at: `${year}-10-01T00:00`,
+      purge_at: `${year}-11-02T12:00`,
       opens_at: `${year}-10-31T12:00`,
       closes_at: `${year}-11-01T00:00`,
       registrations_open: true,
@@ -81,10 +83,9 @@ export default function Setup() {
         };
         if (v.auto === "on")
           center = await api("geocode", {
-            token: v.token,
             query: `${v.territory} ${v.postal_code} ${v.country}`,
           });
-        setData({ ...data, token: v.token, instance: { ...i, ...center } });
+        setData({ ...data, instance: { ...i, ...center } });
         setStep(1);
       } else if (step === 1) {
         setData({ ...data, admin: v as Wizard["admin"] });
@@ -94,6 +95,8 @@ export default function Setup() {
           ...data,
           season: {
             year: Number(v.year),
+            registrations_open_at: v.registrations_open_at,
+            purge_at: v.purge_at,
             opens_at: v.opens_at,
             closes_at: v.closes_at,
             registrations_open: v.registrations_open === "on",
@@ -149,12 +152,6 @@ export default function Setup() {
         >
           {step === 0 && (
             <>
-              <Field
-                label="Clé de configuration (SETUP_TOKEN du .env)"
-                name="token"
-                type="password"
-                value={data.token}
-              />
               <Field
                 label="Nom public de l’événement"
                 name="public_name"
@@ -254,13 +251,25 @@ export default function Setup() {
                 value={data.season.year}
               />
               <Field
+                label="Ouverture des inscriptions"
+                name="registrations_open_at"
+                type="datetime-local"
+                value={data.season.registrations_open_at}
+              />
+              <Field
+                label="Purge définitive"
+                name="purge_at"
+                type="datetime-local"
+                value={data.season.purge_at}
+              />
+              <Field
                 label={`Ouverture carte (${data.instance.timezone})`}
                 name="opens_at"
                 type="datetime-local"
                 value={data.season.opens_at}
               />
               <Field
-                label="Fermeture et purge automatique"
+                label="Fermeture publique de la carte"
                 name="closes_at"
                 type="datetime-local"
                 value={data.season.closes_at}
@@ -301,7 +310,7 @@ export default function Setup() {
                 </dd>
               </dl>
               <p className="muted">
-                Le wizard sera verrouillé après la création. La fermeture
+                Le wizard sera verrouillé après la création. La purge programmée
                 supprimera les comptes participants et leurs maisons ; seules
                 les statistiques anonymes seront conservées.
               </p>

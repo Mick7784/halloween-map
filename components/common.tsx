@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { Sparkles, Candy, Drama } from "lucide-react";
 import { DateTime } from "luxon";
 import type { Activity, Instance, Season, User } from "../lib/domain";
 export type PublicHouse = {
@@ -18,6 +19,7 @@ export type PublicHouse = {
 };
 export type PublicState = {
   setupRequired: boolean;
+  preview?: boolean;
   instance?: Pick<
     Instance,
     "public_name" | "territory" | "timezone" | "latitude" | "longitude" | "zoom"
@@ -124,6 +126,7 @@ export function Field({
   min,
   max,
   placeholder,
+  maxLength,
 }: {
   label: string;
   name: string;
@@ -133,6 +136,7 @@ export function Field({
   min?: string | number;
   max?: string | number;
   placeholder?: string;
+  maxLength?: number;
 }) {
   return (
     <label className="field">
@@ -149,6 +153,7 @@ export function Field({
         max={max}
         step={type === "number" ? "any" : undefined}
         placeholder={placeholder}
+        maxLength={maxLength}
       />
     </label>
   );
@@ -207,6 +212,13 @@ export function Check({
   return (
     <label className="check">
       <input type="checkbox" name={name} defaultChecked={checked} />
+      {name === "DECORATION" ? (
+        <Sparkles size={16} />
+      ) : name === "CANDY" ? (
+        <Candy size={16} />
+      ) : name === "ACTING" ? (
+        <Drama size={16} />
+      ) : null}
       <span>{label}</span>
     </label>
   );
@@ -216,7 +228,14 @@ export function Badges({ activities }: { activities: Activity[] }) {
     <div className="badges">
       {activities.map((a) => (
         <span key={a} className="badge">
-          {a === "DECORATION" ? "✦" : a === "CANDY" ? "◆" : "◈"} {labels[a]}
+          {a === "DECORATION" ? (
+            <Sparkles size={15} />
+          ) : a === "CANDY" ? (
+            <Candy size={15} />
+          ) : (
+            <Drama size={15} />
+          )}{" "}
+          {labels[a]}
         </span>
       ))}
     </div>

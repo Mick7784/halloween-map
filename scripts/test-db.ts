@@ -1,9 +1,14 @@
 // Local browser verification only. Production always uses PostgreSQL via Compose.
 import { PGlite } from "@electric-sql/pglite";
 import { PGLiteSocketServer } from "@electric-sql/pglite-socket";
-import { readFile } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 const db = await PGlite.create();
-await db.exec(await readFile("migrations/001_initial.sql", "utf8"));
+for (const file of (await readdir("migrations"))
+  .filter((f) => f.endsWith(".sql"))
+  .sort()) {
+  await db.exec(await readFile("migrations/" + file, "utf8"));
+  await db.query("INSERT INTO schema_migrations(name) VALUES($1)", [file]);
+}
 const server = new PGLiteSocketServer({
   db,
   host: "127.0.0.1",

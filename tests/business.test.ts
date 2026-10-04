@@ -31,6 +31,13 @@ import {
 import { planRoute } from "../lib/routing";
 import { nextVersion } from "../scripts/version.mjs";
 import { seed } from "../scripts/seed";
+import {
+  ensureBootstrap,
+  exchangeBootstrap,
+  setupAuthorized,
+} from "../lib/bootstrap";
+import { effectiveTime } from "../lib/time";
+import { configureReminder, dispatchReminders } from "../lib/reminders";
 const globalDb = globalThis as unknown as { testDb?: Database };
 let engine: PGlite | Pool;
 const setupData = () => ({
@@ -82,10 +89,16 @@ beforeAll(async () => {
     globalDb.testDb = pool;
     await pool.query("DROP SCHEMA public CASCADE; CREATE SCHEMA public");
     await pool.query(await readFile("migrations/001_initial.sql", "utf8"));
+    await pool.query(
+      await readFile("migrations/002_season_bootstrap.sql", "utf8"),
+    );
   } else {
     const pg = new PGlite();
     engine = pg;
     await pg.exec(await readFile("migrations/001_initial.sql", "utf8"));
+    await pg.exec(
+      await readFile("migrations/002_season_bootstrap.sql", "utf8"),
+    );
     globalDb.testDb = {
       async query(sql, values) {
         const q = sql.includes("pg_advisory_xact_lock") ? "SELECT 1" : sql;
@@ -97,7 +110,7 @@ beforeAll(async () => {
 });
 beforeEach(async () => {
   await db().query(
-    "TRUNCATE instances,roles,users,seasons,houses,sessions,audit_logs,rate_limits RESTART IDENTITY CASCADE",
+    "TRUNCATE bootstrap,setup_sessions,instances,roles,users,seasons,houses,sessions,audit_logs,rate_limits RESTART IDENTITY CASCADE",
   );
   const first = await service.setup(setupData());
   admin = (await getUser(first.token))!;
@@ -332,7 +345,7 @@ describe("Seasons, privacy and participant activity", () => {
       (await db().query("SELECT * FROM users WHERE id=$1", [admin.id])).rows,
     ).toHaveLength(1);
   });
-  it("automatically closes and purges idempotently, retaining only anonymous totals", async () => {
+  it("closes publicly, retains admin data, then purges idempotently at the separate deadline", async () => {
     await service.adminAction(admin, {
       action: "moderate",
       id: house.id,
@@ -346,6 +359,23 @@ describe("Seasons, privacy and participant activity", () => {
     expect(result.state).toBe("CLOSED");
     expect(result.houses).toEqual([]);
     expect(result.season?.registrations_open).toBe(false);
+    expect(
+      (await service.adminRead(admin, "houses")) as unknown[],
+    ).toHaveLength(1);
+    expect(
+      (await db().query("SELECT id FROM users WHERE kind='PARTICIPANT'")).rows,
+    ).toHaveLength(1);
+    expect(
+      await service.purgeSeason(
+        season.id,
+        admin.instance_id,
+        null,
+        false,
+        new Date(season.closes_at),
+      ),
+    ).toEqual({ purged: false });
+    await service.tick(new Date(season.purge_at));
+    await service.tick(new Date(+new Date(season.purge_at) + 60000));
     expect(
       (await db().query("SELECT * FROM users WHERE kind='PARTICIPANT'")).rows,
     ).toEqual([]);
@@ -544,5 +574,481 @@ describe("Routing, demo and canonical versions", () => {
     expect(workflow).toContain("steps.version.outputs.value");
     expect(workflow).toContain('git rev-parse "$version"');
     expect(workflow).toContain("< VERSION");
+  });
+});
+describe("V0.2 bootstrap, dates, preview and reminders", () => {
+  it("generates a persistent hash-only bootstrap, exchanges it once and completes setup without a token field", async () => {
+    await db().query("TRUNCATE instances,bootstrap,setup_sessions CASCADE");
+    const override = process.env.SETUP_TOKEN;
+    delete process.env.SETUP_TOKEN;
+    try {
+      const link = await ensureBootstrap();
+      expect(link).toMatch(/\/setup\?bootstrap=/);
+      const secret = new URL(link!).searchParams.get("bootstrap")!;
+      expect(secret.length).toBeGreaterThan(40);
+      const stored = (await db().query("SELECT * FROM bootstrap")).rows[0];
+      expect(JSON.stringify(stored)).not.toContain(secret);
+      expect(await ensureBootstrap()).toBeNull();
+      const outcomes = await Promise.allSettled([
+        exchangeBootstrap(secret),
+        exchangeBootstrap(secret),
+      ]);
+      expect(outcomes.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+      const session = (
+        outcomes.find(
+          (r) => r.status === "fulfilled",
+        ) as PromiseFulfilledResult<string>
+      ).value;
+      expect(await setupAuthorized(session)).toBe(true);
+      await expect(exchangeBootstrap(secret)).rejects.toMatchObject({
+        status: 403,
+      });
+      const data = setupData();
+      const withoutToken = {
+        instance: data.instance,
+        admin: data.admin,
+        season: data.season,
+      };
+      await expect(service.setup(withoutToken)).rejects.toMatchObject({
+        status: 403,
+      });
+      const setups = await Promise.allSettled([
+        service.setup(withoutToken, session),
+        service.setup(withoutToken, session),
+      ]);
+      expect(setups.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+      expect((await db().query("SELECT id FROM instances")).rows).toHaveLength(
+        1,
+      );
+      expect(await setupAuthorized(session)).toBe(false);
+      expect(await ensureBootstrap(true)).toBeNull();
+      await expect(exchangeBootstrap(secret)).rejects.toMatchObject({
+        status: 409,
+      });
+    } finally {
+      process.env.SETUP_TOKEN = override;
+    }
+  });
+  it("expires setup sessions and rotates a lost link only before installation", async () => {
+    await db().query("TRUNCATE instances,bootstrap,setup_sessions CASCADE");
+    const first = await ensureBootstrap();
+    const token = await exchangeBootstrap(
+      new URL(first!).searchParams.get("bootstrap")!,
+    );
+    await db().query(
+      "UPDATE setup_sessions SET expires_at=now()-interval '1 second'",
+    );
+    expect(await setupAuthorized(token)).toBe(false);
+    const next = await ensureBootstrap(true);
+    expect(next).toBeTruthy();
+    expect(
+      (await db().query("SELECT * FROM setup_sessions")).rows,
+    ).toHaveLength(0);
+  });
+  it("validates four ordered dates and scheduled registration opening", async () => {
+    await service.adminAction(admin, {
+      action: "season",
+      id: season.id,
+      payload: {
+        ...setupData().season,
+        registrations_open_at: "2026-10-20T09:00",
+        purge_at: "2026-11-02T12:00",
+      },
+    });
+    expect((await service.publicState()).season?.registrations_open).toBe(
+      false,
+    );
+    await expect(
+      service.register({
+        account: {
+          email: "later@example.invalid",
+          password: "valid-password-1234",
+        },
+        house: houseData(),
+      }),
+    ).rejects.toMatchObject({ status: 403 });
+    for (const dates of [
+      { registrations_open_at: "2026-11-02T12:00" },
+      { purge_at: "2026-10-31T12:00" },
+    ])
+      await expect(
+        service.adminAction(admin, {
+          action: "season",
+          id: season.id,
+          payload: { ...setupData().season, ...dates },
+        }),
+      ).rejects.toMatchObject({ status: 400 });
+  });
+  it("rejects nonexistent and ambiguous local DST hours, accepts an explicit UTC offset", () => {
+    expect(() => localISO("2026-03-29T02:30", "Europe/Paris")).toThrow();
+    expect(() => localISO("2026-10-25T02:30", "Europe/Paris")).toThrow();
+    expect(localISO("2026-10-25T02:30+02:00", "Europe/Paris")).toBe(
+      "2026-10-25T00:30:00.000Z",
+    );
+  });
+  it("authorizes preview per session and never exposes a public time bypass", async () => {
+    await expect(effectiveTime(true, null)).rejects.toMatchObject({
+      status: 401,
+    });
+    await expect(
+      effectiveTime(true, participant, "anything"),
+    ).rejects.toMatchObject({ status: 403 });
+    await expect(
+      effectiveTime(true, { ...admin, permissions: [] }, "anything"),
+    ).rejects.toMatchObject({ status: 403 });
+    const session = (await service.login(setupData().admin)).token;
+    await expect(effectiveTime(true, admin, session)).rejects.toMatchObject({
+      status: 403,
+    });
+    const { hashToken } = await import("../lib/auth");
+    await db().query("UPDATE sessions SET preview_at=$1 WHERE token_hash=$2", [
+      "2026-10-31T18:00Z",
+      hashToken(session),
+    ]);
+    const context = await effectiveTime(true, admin, session);
+    expect(context.preview).toBe(true);
+    expect(context.now.toISOString()).toBe("2026-10-31T18:00:00.000Z");
+    expect((await effectiveTime(false, admin, session)).preview).toBe(false);
+  });
+  it("shows preview countdown/open/closed states and computes routes without changing dates, counters or purging", async () => {
+    await db().query("UPDATE seasons SET activated=true WHERE id=$1", [
+      season.id,
+    ]);
+    await service.adminAction(admin, {
+      action: "moderate",
+      id: house.id,
+      payload: "APPROVED",
+    });
+    expect(
+      (
+        await service.publicState({
+          now: new Date("2026-10-30T18:00Z"),
+          preview: true,
+        })
+      ).state,
+    ).toBe("COUNTDOWN");
+    const context = { now: new Date("2026-10-31T18:00Z"), preview: true };
+    const open = await service.publicState(context);
+    expect(open.houses).toHaveLength(1);
+    expect(open.preview).toBe(true);
+    const result = await service.route(
+      {
+        start: "2026-10-31T18:02Z",
+        end: "2026-10-31T20:00Z",
+        origin: { latitude: house.latitude, longitude: house.longitude },
+        activities: [],
+        maxFear: 5,
+      },
+      context,
+    );
+    expect(result.stops).toHaveLength(1);
+    expect(
+      (await service.activeSeason((await service.instance())!))?.routes_count,
+    ).toBe(0);
+    expect((await service.publicState()).state).toBe("COUNTDOWN");
+    expect(
+      (
+        await service.publicState({
+          now: new Date("2030-01-01T00:00Z"),
+          preview: true,
+        })
+      ).state,
+    ).toBe("CLOSED");
+    expect(
+      (await service.adminRead(admin, "houses")) as unknown[],
+    ).toHaveLength(1);
+    expect(
+      (await service.activeSeason((await service.instance())!))?.purged_at,
+    ).toBeNull();
+  });
+  it("schedules, edits, cancels and sends a reminder once only to actual season participants", async () => {
+    const payload = {
+      enabled: true,
+      at: "2026-10-04T12:00",
+      subject: "Bienvenue",
+      body: "Merci de préparer votre accueil.",
+    };
+    await configureReminder(admin, season.id, payload);
+    await configureReminder(admin, season.id, { ...payload, enabled: false });
+    expect(
+      (await db().query("SELECT reminder_status FROM seasons")).rows[0]
+        .reminder_status,
+    ).toBe("NONE");
+    await configureReminder(admin, season.id, {
+      ...payload,
+      subject: "À ce soir",
+    });
+    const sent: unknown[] = [];
+    const sender = async (mail: unknown) => {
+      sent.push(mail);
+    };
+    await dispatchReminders(new Date("2026-10-04T12:00Z"), sender);
+    await dispatchReminders(new Date("2026-10-04T12:00Z"), sender);
+    expect(sent).toHaveLength(1);
+    expect(sent[0]).toMatchObject({
+      to: participant.email,
+      subject: "À ce soir",
+    });
+    const s = (await db().query("SELECT * FROM seasons")).rows[0];
+    expect(s.reminder_status).toBe("SENT");
+    expect(s.reminder_sent).toBe(1);
+    expect(s.reminder_recipients).toBe(1);
+    await expect(
+      configureReminder(admin, season.id, payload),
+    ).rejects.toMatchObject({ status: 409 });
+    const audit = JSON.stringify(
+      (await db().query("SELECT * FROM audit_logs")).rows,
+    );
+    expect(audit).not.toContain(participant.email);
+    expect(audit).not.toContain(payload.body);
+  });
+  it("skips synthetic participants, handles SMTP absence without errors, and preserves a pending schedule", async () => {
+    await configureReminder(admin, season.id, {
+      enabled: true,
+      at: "2026-10-04T12:00",
+      subject: "Test",
+      body: "Test",
+    });
+    const host = process.env.SMTP_HOST,
+      from = process.env.SMTP_FROM;
+    delete process.env.SMTP_HOST;
+    delete process.env.SMTP_FROM;
+    try {
+      await dispatchReminders(new Date("2026-10-04T12:00Z"));
+      await dispatchReminders(new Date("2026-10-04T12:00Z"));
+      expect(
+        (await db().query("SELECT reminder_status FROM seasons")).rows[0]
+          .reminder_status,
+      ).toBe("SCHEDULED");
+    } finally {
+      if (host) process.env.SMTP_HOST = host;
+      if (from) process.env.SMTP_FROM = from;
+    }
+    await db().query("UPDATE users SET demo=true WHERE id=$1", [
+      participant.id,
+    ]);
+    const sender = vi.fn(async () => {});
+    await dispatchReminders(new Date("2026-10-04T12:00Z"), sender);
+    expect(sender).not.toHaveBeenCalled();
+  });
+  it("does not retry ambiguous SMTP failures and purges messages and delivery identifiers", async () => {
+    await configureReminder(admin, season.id, {
+      enabled: true,
+      at: "2026-10-04T12:00",
+      subject: "Private subject",
+      body: "Private message",
+    });
+    const sender = vi.fn(async () => {
+      throw new Error("sensitive transport details");
+    });
+    await dispatchReminders(new Date("2026-10-04T12:00Z"), sender);
+    await dispatchReminders(new Date("2026-10-04T12:00Z"), sender);
+    expect(sender).toHaveBeenCalledTimes(1);
+    expect(
+      (await db().query("SELECT reminder_status FROM seasons")).rows[0]
+        .reminder_status,
+    ).toBe("ERROR");
+    await service.adminAction(admin, {
+      action: "purge",
+      id: season.id,
+      payload: "PURGER",
+    });
+    const s = (
+      await db().query(
+        "SELECT reminder_subject,reminder_body,reminder_recipients FROM seasons",
+      )
+    ).rows[0];
+    expect(s).toEqual({
+      reminder_subject: "",
+      reminder_body: "",
+      reminder_recipients: 1,
+    });
+    expect(
+      (await db().query("SELECT * FROM reminder_deliveries")).rows,
+    ).toHaveLength(0);
+  });
+  it("protects reminder configuration with RBAC", async () => {
+    await expect(
+      configureReminder(participant, season.id, {
+        enabled: false,
+        subject: "",
+        body: "",
+      }),
+    ).rejects.toMatchObject({ status: 403 });
+    await expect(
+      configureReminder({ ...admin, permissions: ["season.read"] }, season.id, {
+        enabled: false,
+        subject: "",
+        body: "",
+      }),
+    ).rejects.toMatchObject({ status: 403 });
+  });
+  it("migrates an existing V0.1 database without data loss and records migrations idempotently", async () => {
+    const legacy = new PGlite();
+    try {
+      const first = await readFile("migrations/001_initial.sql", "utf8");
+      const second = await readFile(
+        "migrations/002_season_bootstrap.sql",
+        "utf8",
+      );
+      await legacy.exec(first);
+      await legacy.query(
+        "INSERT INTO schema_migrations(name) VALUES('001_initial.sql')",
+      );
+      const i = (
+        await legacy.query<{ id: string }>(
+          "INSERT INTO instances(public_name,territory,postal_code,country,latitude,longitude) VALUES('Legacy','Legacy','00000','France',48,-1) RETURNING id",
+        )
+      ).rows[0];
+      const s = (
+        await legacy.query<{ id: string }>(
+          "INSERT INTO seasons(instance_id,year,opens_at,closes_at,routes_count) VALUES($1,2026,'2026-10-31T11:00Z','2026-10-31T23:00Z',42) RETURNING id",
+          [i.id],
+        )
+      ).rows[0];
+      const u = (
+        await legacy.query<{ id: string }>(
+          "INSERT INTO users(instance_id,email,display_name,password_hash,kind) VALUES($1,'legacy@example.invalid','Participant','preserved-hash','PARTICIPANT') RETURNING id",
+          [i.id],
+        )
+      ).rows[0];
+      await legacy.query(
+        "INSERT INTO houses(instance_id,season_id,user_id,name,address,latitude,longitude,activities,starts_at,ends_at,fear) VALUES($1,$2,$3,'Legacy house','Legacy address',48,-1,ARRAY['CANDY'],'2026-10-31T17:00Z','2026-10-31T20:00Z',2)",
+        [i.id, s.id, u.id],
+      );
+      for (let run = 0; run < 2; run++) {
+        await legacy.exec("BEGIN");
+        if (
+          !(
+            await legacy.query(
+              "SELECT name FROM schema_migrations WHERE name='002_season_bootstrap.sql'",
+            )
+          ).rows.length
+        ) {
+          await legacy.exec(second);
+          await legacy.query(
+            "INSERT INTO schema_migrations(name) VALUES('002_season_bootstrap.sql')",
+          );
+        }
+        await legacy.exec("COMMIT");
+      }
+      expect(
+        (await legacy.query("SELECT address FROM houses")).rows[0],
+      ).toEqual({ address: "Legacy address" });
+      expect(
+        (await legacy.query("SELECT password_hash FROM users")).rows[0],
+      ).toEqual({ password_hash: "preserved-hash" });
+      const migrated = (
+        await legacy.query<{ routes_count: number; purge_at: Date }>(
+          "SELECT routes_count,purge_at FROM seasons",
+        )
+      ).rows[0];
+      expect(migrated.routes_count).toBe(42);
+      expect(new Date(migrated.purge_at).toISOString()).toBe(
+        "2026-11-02T11:00:00.000Z",
+      );
+      expect(
+        (await legacy.query("SELECT name FROM schema_migrations")).rows,
+      ).toHaveLength(2);
+    } finally {
+      await legacy.close();
+    }
+  });
+});
+describe("V0.2 worker recovery and minimal staff access", () => {
+  it("concurrent reminder workers reserve the same participant only once", async () => {
+    await configureReminder(admin, season.id, {
+      enabled: true,
+      at: "2026-10-04T12:00",
+      subject: "Rendez-vous",
+      body: "À ce soir",
+    });
+    const sender = vi.fn(async () => {});
+    await Promise.all([
+      dispatchReminders(new Date("2026-10-04T12:00Z"), sender),
+      dispatchReminders(new Date("2026-10-04T12:00Z"), sender),
+    ]);
+    expect(sender).toHaveBeenCalledTimes(1);
+    expect(
+      (await db().query("SELECT reminder_status FROM seasons")).rows[0]
+        .reminder_status,
+    ).toBe("SENT");
+  });
+  it("recovers abandoned SMTP reservations as errors instead of sending a duplicate", async () => {
+    await configureReminder(admin, season.id, {
+      enabled: true,
+      at: "2026-10-04T12:00",
+      subject: "Rendez-vous",
+      body: "À ce soir",
+    });
+    await db().query(
+      "UPDATE seasons SET reminder_status='SENDING',reminder_recipients=1 WHERE id=$1",
+      [season.id],
+    );
+    await db().query(
+      "INSERT INTO reminder_deliveries(season_id,user_id,status,claimed_at) VALUES($1,$2,'CLAIMED','2026-10-04T11:55Z')",
+      [season.id, participant.id],
+    );
+    const sender = vi.fn(async () => {});
+    await dispatchReminders(new Date("2026-10-04T12:00Z"), sender);
+    expect(
+      (await db().query("SELECT reminder_status FROM seasons")).rows[0]
+        .reminder_status,
+    ).toBe("SENDING");
+    await dispatchReminders(new Date("2026-10-04T12:10Z"), sender);
+    expect(sender).not.toHaveBeenCalled();
+    expect(
+      (await db().query("SELECT reminder_status FROM seasons")).rows[0]
+        .reminder_status,
+    ).toBe("ERROR");
+  });
+  it("hides reminder content from staff with read-only permissions", async () => {
+    await configureReminder(admin, season.id, {
+      enabled: true,
+      at: "2026-10-04T12:00",
+      subject: "Private subject",
+      body: "Private body",
+    });
+    const reader = { ...admin, permissions: ["season.read", "stats.read"] };
+    for (const section of ["seasons", "stats", "dashboard"]) {
+      const result = JSON.stringify(await service.adminRead(reader, section));
+      expect(result).not.toContain("Private subject");
+      expect(result).not.toContain("Private body");
+    }
+  });
+  it("preserves date coherence when an existing reminder is scheduled", async () => {
+    await configureReminder(admin, season.id, {
+      enabled: true,
+      at: "2026-11-01T18:00",
+      subject: "Merci",
+      body: "Merci pour cette soirée",
+    });
+    await expect(
+      service.adminAction(admin, {
+        action: "season",
+        id: season.id,
+        payload: { ...setupData().season, purge_at: "2026-11-01T12:00" },
+      }),
+    ).rejects.toMatchObject({ status: 400 });
+  });
+  it("creates a fresh synthetic instance without a SETUP_TOKEN override", async () => {
+    await db().query("TRUNCATE instances,bootstrap,setup_sessions CASCADE");
+    const override = process.env.SETUP_TOKEN;
+    delete process.env.SETUP_TOKEN;
+    process.env.DEMO_PASSWORD = "synthetic-password-1234";
+    try {
+      await seed();
+      expect((await db().query("SELECT id FROM instances")).rows).toHaveLength(
+        1,
+      );
+      expect(
+        (await db().query("SELECT id FROM houses WHERE demo=true")).rows,
+      ).toHaveLength(12);
+      expect(
+        (await db().query("SELECT * FROM setup_sessions")).rows,
+      ).toHaveLength(0);
+    } finally {
+      process.env.SETUP_TOKEN = override;
+    }
   });
 });
