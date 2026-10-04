@@ -1,9 +1,9 @@
 import { tick } from "../lib/service";
-import { dispatchReminders } from "../lib/reminders";
+import { dispatchEmails } from "../lib/mail";
 async function run() {
   try {
     await tick();
-    await dispatchReminders();
+    await dispatchEmails();
   } catch {
     console.error(
       "Season worker: opération interrompue ; reprise au prochain passage",

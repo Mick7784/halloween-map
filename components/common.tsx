@@ -1,4 +1,5 @@
 "use client";
+import FrenchDate from "./FrenchDate";
 import { useState } from "react";
 import { Sparkles, Candy, Drama } from "lucide-react";
 import { DateTime } from "luxon";
@@ -19,6 +20,11 @@ export type PublicHouse = {
 };
 export type PublicState = {
   setupRequired: boolean;
+  contents?: Record<string, string>;
+  documents?: Record<
+    import("../lib/content").LegalKind,
+    import("../lib/content").LegalDocument
+  >;
   preview?: boolean;
   instance?: Pick<
     Instance,
@@ -28,6 +34,7 @@ export type PublicState = {
     | (Pick<Season, "year" | "registrations_open"> & {
         opens_at: string;
         closes_at: string;
+        purge_at: string;
       })
     | null;
   state?: string;
@@ -64,6 +71,10 @@ export const labels: Record<string, string> = {
   MAP_OPEN: "Carte ouverte",
   CLOSED: "Saison terminée",
   ARCHIVED: "Archivée",
+  PARTICIPANT: "Participant",
+  VERIFIED: "Vérifié",
+  UNVERIFIED: "Non vérifié",
+  PENDING_ACTIVATION: "Invitation en attente",
   SUPER_ADMIN: "Super Admin",
   LOCAL_ADMIN: "Administrateur local",
   MODERATOR: "Modérateur",
@@ -138,6 +149,17 @@ export function Field({
   placeholder?: string;
   maxLength?: number;
 }) {
+  if (type === "datetime-local")
+    return (
+      <FrenchDate
+        label={label}
+        name={name}
+        value={value}
+        required={required}
+        min={min}
+        max={max}
+      />
+    );
   return (
     <label className="field">
       <span>

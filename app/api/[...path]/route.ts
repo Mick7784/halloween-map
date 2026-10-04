@@ -1,6 +1,16 @@
 import { setupCookie, setupAuthorized } from "../../../lib/bootstrap";
 import { effectiveTime } from "../../../lib/time";
-import { configureReminder, smtpAvailable } from "../../../lib/reminders";
+import {
+  smtpAvailable,
+  campaignAction,
+  campaignAdmin,
+} from "../../../lib/mail";
+import {
+  accountAction,
+  adminUserAction,
+  activateAccount,
+} from "../../../lib/accounts";
+import { contentAction, contentAdmin } from "../../../lib/content";
 import { localISO } from "../../../lib/domain";
 import { NextRequest, NextResponse } from "next/server";
 import { getUser, HttpError, hashToken, rateLimit } from "../../../lib/auth";
@@ -59,15 +69,29 @@ async function handle(
         return response(
           await service.ownHouse(await getUser(req.cookies.get(cookie)?.value)),
         );
+      if (path === "admin/content")
+        return response(
+          await contentAdmin(await getUser(req.cookies.get(cookie)?.value)),
+        );
+      if (path === "admin/communications")
+        return response(
+          await campaignAdmin(await getUser(req.cookies.get(cookie)?.value)),
+        );
       if (path === "admin/mail") {
         const u = await getUser(req.cookies.get(cookie)?.value);
-        if (!u?.permissions.includes("season.manage"))
+        if (
+          !u?.permissions.includes("communications.manage") ||
+          !u.permissions.includes("admin.access")
+        )
           throw new HttpError(403, "Accès interdit");
         return response({ smtpAvailable: smtpAvailable() });
       }
       if (path === "admin/preview") {
         const u = await getUser(req.cookies.get(cookie)?.value);
-        if (!u?.permissions.includes("season.preview") || u.kind !== "STAFF")
+        if (
+          !u?.permissions.includes("season.preview") ||
+          !u.permissions.includes("admin.access")
+        )
           throw new HttpError(403, "Accès interdit");
         const row = (
           await db().query(
@@ -105,7 +129,7 @@ async function handle(
       throw new HttpError(413, "Requête trop volumineuse");
     const input = JSON.parse(raw);
     // Global persistent ceilings do not trust spoofable forwarded IP headers.
-    if (["login", "register", "setup"].includes(path))
+    if (["login", "register", "setup", "activation"].includes(path))
       await rateLimit("auth-global", 150);
     if (path === "setup") {
       const r = withSession(
@@ -118,6 +142,18 @@ async function handle(
       return withSession((await service.login(input)).token);
     if (path === "register")
       return withSession((await service.register(input)).token);
+    if (path === "activation") {
+      const r = withSession(
+        (
+          await activateAccount(
+            req.cookies.get("halloween_activation")?.value,
+            input,
+          )
+        ).token,
+      );
+      r.cookies.delete("halloween_activation");
+      return r;
+    }
     if (path === "geocode") {
       const configured = await service.instance();
       const user = await getUser(req.cookies.get(cookie)?.value);
@@ -134,7 +170,7 @@ async function handle(
       if (query.length < 3 || query.length > 200)
         throw new HttpError(400, "Territoire invalide");
       const res = await fetch(
-        "https://nominatim.openstreetmap.org/search?format=json&limit=1&q=" +
+        "https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=1&q=" +
           encodeURIComponent(query),
         {
           headers: {
@@ -158,9 +194,36 @@ async function handle(
         latitude: Number(data[0].lat),
         longitude: Number(data[0].lon),
         zoom: 13,
+        place: String(data[0].display_name),
+        timezone:
+          (
+            {
+              fr: "Europe/Paris",
+              be: "Europe/Brussels",
+              ch: "Europe/Zurich",
+              lu: "Europe/Luxembourg",
+              gb: "Europe/London",
+              de: "Europe/Berlin",
+            } as Record<string, string>
+          )[data[0].address?.country_code] ?? null,
       });
     }
     const user = await getUser(req.cookies.get(cookie)?.value);
+    if (path === "account") {
+      const result = await accountAction(user, input);
+      if ("token" in result && result.token) return withSession(result.token);
+      const r = response(result);
+      if ("deleted" in result) r.cookies.delete(cookie);
+      return r;
+    }
+    if (path === "participation")
+      return response(await service.createParticipation(user, input));
+    if (path === "admin/users")
+      return response(await adminUserAction(user, input));
+    if (path === "admin/content")
+      return response(await contentAction(user, input));
+    if (path === "admin/communications")
+      return response(await campaignAction(user, input));
     if (path === "logout") {
       if (req.cookies.has(cookie))
         await db().query("DELETE FROM sessions WHERE token_hash=$1", [
@@ -178,7 +241,7 @@ async function handle(
     if (path === "participant") {
       const data = await service.participantAction(user, input);
       const r = response(data);
-      if ("deleted" in data) r.cookies.delete(cookie);
+
       return r;
     }
     if (path === "route") {
@@ -192,13 +255,9 @@ async function handle(
       return response(await service.route(input, context));
     }
     if (path === "admin") {
-      if (input.action === "reminder")
-        return response(
-          await configureReminder(user, String(input.id), input.payload),
-        );
       if (input.action === "preview") {
         if (
-          user?.kind !== "STAFF" ||
+          !user?.permissions.includes("admin.access") ||
           !user.permissions.includes("season.preview")
         )
           throw new HttpError(403, "Accès interdit");

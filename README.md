@@ -1,105 +1,99 @@
 # Halloween Map · Beta
 
-Une carte des maisons accueillantes pour les communes et associations. Une expérience DomotiK Studio. La version publiée est définie exclusivement dans `VERSION`.
-
-## Architecture
-
-Next.js / React / TypeScript, MapLibre GL JS, PostgreSQL 17. Stack Compose : **app + worker + migrate + db**, avec volume PostgreSQL persistant, healthchecks et migrations avant démarrage. Mono-instance ; rôles et données rattachés à l’instance par clés étrangères composites. Plans COMMUNITY/PRO préparés, sans paiement ; toutes les fonctions sont disponibles en COMMUNITY.
-
-SQL paramétré, Zod, scrypt, sessions opaques dont seuls les hash sont stockés, cookies HttpOnly/SameSite/Secure, CSRF par contrôle strict d’`APP_ORIGIN`, rate limiting persistant et RBAC serveur. Aucun email, adresse ou message dans les logs métier ou l’audit. Le seul secret affiché volontairement est le lien initial à usage unique, dans les logs de migration : protégez leur accès.
+Carte des maisons accueillantes pour les communes et associations. Une expérience DomotiK Studio. `VERSION` est l’unique source de vérité. La direction artistique V0.2 est conservée.
 
 ## Installation
+
+Next.js / React / TypeScript, MapLibre, PostgreSQL 17. Compose comprend **app, worker, migrate et db**, avec volume persistant et migrations avant démarrage.
 
 ```sh
 git clone https://github.com/Mick7784/halloween-map.git
 cd halloween-map
 cp .env.example .env
-# Renseigner POSTGRES_PASSWORD et APP_ORIGIN ; COOKIE_SECURE=true avec HTTPS.
+# Renseigner POSTGRES_PASSWORD et APP_ORIGIN ; COOKIE_SECURE=true en HTTPS.
 docker compose up -d --build
-docker compose ps
 docker compose logs migrate
 ```
 
-Ouvrir **le lien de configuration affiché dans les logs de migrate**. Aucun token à recopier dans l’interface. `SETUP_TOKEN` est un override avancé facultatif, normalement vide. Le secret automatique contient 32 octets aléatoires ; seul son hash persiste. L’ouverture du lien le consomme atomiquement et crée une session de setup de deux heures, HttpOnly/SameSite, puis redirige immédiatement vers `/setup/wizard`, sans secret. Le wizard commence par territoire/événement, puis Super Admin, quatre dates de saison et confirmation.
-
-La création invalide toutes les sessions de setup et verrouille définitivement le premier lancement. Deux créations concurrentes ne peuvent pas produire deux instances. Le bootstrap ne régénère pas son lien à chaque redémarrage : garder les logs initiaux jusqu’au setup. En cas de lien perdu ou de session expirée, **avant configuration seulement** :
+Ouvrir le lien initial à usage unique affiché par `migrate`. Son empreinte seule est stockée ; le lien est consommé puis remplacé par une session temporaire de configuration. Le wizard crée territoire, Super Admin et première saison inactive. L’installation terminée ne peut pas être réouverte. `SETUP_TOKEN` reste un override facultatif. Avant configuration seulement, régénérer un lien perdu avec :
 
 ```sh
 docker compose run --rm app node node_modules/tsx/dist/cli.mjs scripts/bootstrap.ts --rotate
 ```
 
-Le nouveau lien invalide les précédentes sessions de setup. Sur installation déjà configurée, cette commande ne recrée rien. Les logs doivent rester privés et leur rétention limitée. `APP_ORIGIN` doit être l’URL publique exacte avant le premier lancement. Nominatim reçoit uniquement le territoire pour rechercher le centre ; les coordonnées peuvent être saisies manuellement.
+Protéger l’accès aux logs initiaux. `APP_ORIGIN` doit correspondre à l’origine publique exacte. SQL paramétré, validation Zod, scrypt, cookies HttpOnly/SameSite/Secure, CSRF strict, rate limiting persistant et permissions vérifiées côté serveur. Les logs métier/audits ne contiennent ni emails, adresses, messages, ni liens de vérification.
 
-## Saisons et données
+## Comptes et participations
 
-Dans **Admin → Saison**, gérer séparément :
+Un **user** conserve son nom/pseudo, email, vérification, empreinte du mot de passe, profil, exceptions de permissions et informations techniques minimales. Il peut exister sans maison et revenir l’année suivante. Une **participation** appartient à une saison et porte maison, adresse/GPS, horaires, activités, descriptions, modération et preuves d’acceptation. Une participation par compte et saison.
 
-1. Ouverture des inscriptions.
-2. Ouverture publique de la carte.
-3. Fermeture publique de la carte.
-4. Purge définitive.
+La création libre ouvre un compte `UNVERIFIED` et programme un email. Le lien expire après 48 heures, à usage unique et hashé en base. Un renvoi invalide les anciens liens et applique un cooldown de 15 minutes. Seul un email `VERIFIED` peut finaliser une nouvelle participation. `BOUNCED` et `INVALID` sont prévus ; le SMTP générique ne fournit pas systématiquement de retour automatique de rebond.
 
-Ordre requis : inscriptions ≤ ouverture < fermeture ≤ purge. Dates stockées UTC et présentées dans le fuseau de l’instance. Les heures locales inexistantes ou ambiguës lors d’un changement d’heure sont refusées ; choisir une heure non ambiguë, ou utiliser un décalage UTC explicite via l’API.
+**Mon compte** permet de changer nom, email et mot de passe, de consulter sa participation et la confidentialité, ou de supprimer définitivement le compte. Changement d’email/mot de passe et suppression demandent le mot de passe actuel ; les sessions sont révoquées. Le nouvel email doit être vérifié. La suppression d’une participation garde le compte ; celle du compte efface aussi ses participations et données associées. Le dernier Super Admin actif est protégé.
 
-Exemple par défaut : inscriptions le 1er octobre, carte le 31 octobre à 12 h, fermeture le 1er novembre à 0 h, purge le 2 novembre à 12 h. **Activation de saison explicite**, jamais automatique. Avant ouverture : compte à rebours et nombre de maisons validées, aucune adresse ni position. Pendant ouverture : seulement les maisons validées, actives, dans leurs horaires, avec une activité disponible. Après fermeture : aucune carte publique ni parcours ; les admins conservent l’accès aux données selon leurs permissions jusqu’à la purge.
+**Admin → Utilisateurs** : recherche, filtres, identité, participation, états des communications, profils et exceptions. Créer un utilisateur envoie une invitation : pas de mot de passe généré ni envoyé. Le clic vérifie l’email puis ouvre une session d’activation de 30 minutes pour choisir son mot de passe.
 
-Le worker traite les dates réelles toutes les 30 secondes, sans chevaucher ses passages, et rattrape les purges manquées après redémarrage. Les requêtes publiques/admin rattrapent également la purge. Chaque purge verrouille la saison et conserve des totaux anonymes avant de supprimer comptes participants, sessions, maisons, adresses, coordonnées, descriptions, données d’envoi et audits ciblés. Messages de rappel effacés ; compteurs agrégés conservés. Les admins, rôles, paramètres et saisons minimales restent. La purge est idempotente. **Super Admin → Purger maintenant** après confirmation. Impossible de réouvrir une saison purgée ; la suivante archive la précédente et nécessite une activation.
+## Profils et permissions
 
-La désinscription supprime immédiatement compte, maison, sessions et données associées. Modifier nom, adresse, coordonnées ou textes repasse en modération. Pause/reprise conserve l’inscription ; fin d’activité définitive ; rupture de bonbons retire uniquement cette activité. Une maison proposant seulement des bonbons devient invisible s’ils sont épuisés. La frayeur adaptable ignore le niveau fixe.
+Participant, Lecture seule, Modérateur, Administrateur et Super Admin réutilisent les rôles existants. Chaque utilisateur peut recevoir des ajouts/retraits individuels ; STAFF/PARTICIPANT n’accorde plus d’accès. `admin.access` est nécessaire à l’administration, puis chaque section/action exige sa permission : `participants.read/validate/edit/delete`, `users.read/manage`, `season.read/manage/preview`, `communications.read/manage`, `content.manage`, `settings.read/manage`, `stats.read`, `audit.read`, `roles.manage`. Les droits attribués ne peuvent pas dépasser ceux de l’opérateur ; profils Super Admin et accès de son propre compte sont protégés.
 
-## Rappels email
+## Saison, dates et purge
 
-Configurer l’environnement, puis **Admin → Saison → Rappel aux participants** : activer, choisir l’heure, saisir sujet/message, prévisualiser, enregistrer ou désactiver. Le nombre actuel de destinataires est affiché avant envoi, puis le total au lancement et les messages envoyés. États : non programmé / programmé / en cours / envoyé / erreur.
+Quatre dates : **inscriptions ≤ ouverture < fermeture ≤ purge**. Calendrier français et heures 24 h dans le fuseau de l’instance ; stockage UTC. Heures locales inexistantes/ambiguës refusées. Préremplissage : 1 octobre, 31 octobre à 12 h, 1 novembre à 0 h, 2 novembre à 12 h. Activation explicite.
 
-| Variable                     | Usage                                                                                  |
-| ---------------------------- | -------------------------------------------------------------------------------------- |
-| `SMTP_HOST`                  | Serveur SMTP, vide = désactivé                                                         |
-| `SMTP_PORT`                  | 587 par défaut                                                                         |
-| `SMTP_USER`, `SMTP_PASSWORD` | Authentification facultative selon le serveur                                          |
-| `SMTP_FROM`                  | Expéditeur autorisé par le fournisseur                                                 |
-| `SMTP_SECURE`                | `true` : TLS implicite, généralement 465 ; `false` : STARTTLS requis, généralement 587 |
+Avant ouverture, aucune position ni adresse n’est publique. Pendant ouverture, uniquement les maisons approuvées, actives, dans leurs horaires et avec une activité disponible. Fermeture : carte/parcours masqués, accès de l’équipe conservé jusqu’à purge. Modifier identité/adresse/textes remet en modération ; pause, reprise, fin définitive et rupture de bonbons restent disponibles.
 
-Sans SMTP, l’app fonctionne et le back-office indique l’indisponibilité. Le worker laisse les rappels programmés en attente, sans boucle d’erreur. Une configuration ajoutée ultérieurement permet le rattrapage avant purge.
+La purge transactionnelle/idempotente supprime réellement participations, adresse/GPS, textes, états et acceptations, détails d’envoi et audits saisonniers ciblés. **Les comptes et permissions restent.** Seuls les totaux anonymes des saisons/campagnes subsistent ; aucun historique des adresses, aucune réutilisation commerciale. Le worker utilise les dates réelles toutes les 30 secondes ; les accès public/admin rattrapent les purges échues. Une saison purgée ne se rouvre pas.
 
-Le worker prépare une file persistante limitée aux participants de la saison, hors seed synthétique, et réserve chaque destinataire avant transmission. Plusieurs workers ne transmettent pas deux fois le même message. Sujet/message restent modifiables ou annulables tant que l’envoi n’a pas commencé ; une transmission commencée est verrouillée pour éviter les doublons. Les adresses ne sont pas copiées dans la file. Aucun suivi d’ouverture.
+Politique de comptes inactifs : aucun nettoyage automatique implicite. L’exploitant doit définir/publier un délai justifié, informer les utilisateurs avant suppression puis utiliser la suppression de compte, avec rétention limitée des sauvegardes. Les jetons expirés sont supprimés ; les états d’emails d’identité terminés sont effacés après 30 jours.
 
-**Limite SMTP :** aucun protocole SMTP générique ne garantit une livraison exactement une fois après une coupure au moment de l’acceptation. Une réservation sans résultat après dix minutes devient une erreur ; les échecs ou résultats incertains ne sont jamais réessayés automatiquement. Le statut agrégé signale ces cas. Cette politique privilégie l’absence de doublons, sans prétendre garantir la réception de chaque message.
+**Mode démonstration** : `admin.access` + `season.preview`, temps propre à la session et bandeau visible. Carte/fiches/parcours réels au temps simulé ; aucun compteur réel ni purge simulée. Le public conserve les dates réelles. Seed synthétique facultatif avec `DEMO_PASSWORD`, `scripts/seed.ts on/off`, exclu des campagnes.
 
-## Démonstration réservée au staff
+## SMTP et communications
 
-Dans **Admin → Saison → Mode démonstration**, choisir une heure simulée, activer pour sa session, puis **Ouvrir la prévisualisation**. Permission distincte `season.preview`, attribuée par défaut aux Super Admins et admins locaux ; les rôles personnalisés peuvent la recevoir explicitement. Le bandeau indique clairement l’heure simulée.
+SMTP est nécessaire pour vérifier les nouveaux comptes et activer les invitations. Sans SMTP, l’interface indique l’attente ; aucune participation nouvelle ne peut être finalisée. Paramètres existants, aucune nouvelle variable :
 
-Le serveur centralise le temps effectif : la preview autorisée utilise le temps de la session ; toute requête normale utilise le temps réel. Ni paramètre public de date ni simple cookie forgé ne permet de contourner l’autorisation. La carte, les fiches, filtres, disponibilités et parcours utilisent ce temps simulé. Les parcours de preview n’incrémentent aucun compteur réel. Aucune purge ni mutation admin n’utilise le temps simulé ; le public voit toujours les dates réelles. La preview ne ressuscite pas les données purgées. Désactiver le mode ou se déconnecter ferme l’accès de cette session.
+| Variable                     | Usage                                                                 |
+| ---------------------------- | --------------------------------------------------------------------- |
+| `SMTP_HOST`, `SMTP_FROM`     | Serveur et expéditeur autorisé ; vides = envoi désactivé              |
+| `SMTP_PORT`                  | 587 par défaut                                                        |
+| `SMTP_USER`, `SMTP_PASSWORD` | Authentification selon le fournisseur                                 |
+| `SMTP_SECURE`                | `true` : TLS implicite (souvent 465) ; `false` : STARTTLS obligatoire |
 
-Seed synthétique facultatif, distinct de la preview : définir `DEMO_PASSWORD` (12 caractères minimum), puis `docker compose run --rm app node node_modules/tsx/dist/cli.mjs scripts/seed.ts on`. Crée 12 maisons variées autour du centre, sans données réelles. `off` supprime uniquement ces participants. Sur base vide, crée une instance clairement marquée démo avec `admin@example.invalid`, saison inactive. Sur instance existante, conserve instance/admins. Seed idempotent.
+**Admin → Saison → Communications** permet plusieurs campagnes : audience tous/approuvés/en attente/actifs, activation, date fixe ou décalage en jours autour d’une date de saison, aperçu et test à son propre email vérifié. Les campagnes relatives non commencées sont recalculées dans le fuseau local après changement des dates ; le formulaire affiche leur nombre. Variables explicitement listées près de l’éditeur : nom, territoire, événement, année, dates et maison/horaires. Les messages sont en texte, sans HTML arbitraire.
 
-## Variables et proxy
+`email_campaigns` et `email_outbox` : contraintes d’idempotence, claim atomique avant SMTP, compteurs, aucun email recopié si l’ID utilisateur suffit. Maximum 20 jobs par passage, espacés de 250 ms en production. Démo, comptes désactivés et emails non vérifiés/invalides/rebondis exclus au lancement et vérifiés de nouveau au claim. `SENT` n’est jamais renvoyé. Connexion refusée/DNS avant acceptation : réessais limités, espacés de cinq minutes ; résultat ambigu ou claim abandonné après dix minutes : erreur sans réessai automatique. Aucun suivi d’ouverture. Le test est séparé des compteurs réels.
 
-| Variable            | Usage                                                                   |
-| ------------------- | ----------------------------------------------------------------------- |
-| `POSTGRES_PASSWORD` | Secret DB requis ; conserver celui de l’installation existante          |
-| `DATABASE_URL`      | Hors Compose ; Compose utilise le service db                            |
-| `APP_PORT`          | Port publié, 3000 par défaut ; DB sans port public                      |
-| `APP_ORIGIN`        | Origine exacte vue par le navigateur, CSRF et lien initial              |
-| `COOKIE_SECURE`     | `true` en HTTPS, `false` uniquement en HTTP local                       |
-| `SETUP_TOKEN`       | Override de bootstrap facultatif                                        |
-| `DEMO_PASSWORD`     | Seed synthétique facultatif                                             |
-| `MAP_STYLE_URL`     | CARTO Dark Matter par défaut ; adapter la CSP pour un autre fournisseur |
-| `HALLOWEEN_IMAGE`   | Image Compose, locale par défaut ou GHCR                                |
+SMTP ne garantit pas une livraison exactement une fois après coupure lors de l’acceptation. La politique évite les doublons volontaires et privilégie une erreur explicite en cas d’incertitude. Configurer chez le fournisseur les DNS **SPF** (serveurs autorisés), **DKIM** (signature) et **DMARC** (alignement/politique et rapports) ; vérifier l’expéditeur et la délivrabilité avec ses outils.
 
-Ne jamais committer `.env`. Utiliser des secrets aléatoires longs compatibles URL, par exemple `openssl rand -hex 32`. Changer `.env` ne change pas le mot de passe d’un rôle PostgreSQL déjà créé. Via Dockhand, conserver les quatre services et les conditions de dépendance de Compose ; migrate doit réussir avant app/worker. Si vous configurez vous-même Pangolin ou un proxy HTTPS, diriger le trafic vers APP_PORT, régler APP_ORIGIN et COOKIE_SECURE. Ce dépôt ne configure aucun proxy, domaine, DNS, certificat ou VPS.
+## Contenus et documents
 
-## Upgrade V0.1 → V0.2
+**Admin → Contenus** : clés stables, défauts dans l’app, seules personnalisations en base, reset et aperçu. Accueil, compte, participation, confidentialité, libellés et signature footer. Variables autorisées par champ. Markdown limité : paragraphes, titres, gras/italique, liens sûrs et listes. Aucune injection HTML/JS.
 
-La migration **002_season_bootstrap.sql** est additive et s’applique dans la même transaction/verrou que les migrations existantes. Aucun volume ni table existante n’est recréé. Instances, comptes, mots de passe, maisons, rôles, paramètres et compteurs sont conservés. Les saisons existantes reçoivent une ouverture d’inscriptions 30 jours avant la carte et une purge 36 heures après la fermeture. Vérifier/ajuster ces dates après upgrade. Les données déjà purgées par V0.1 ne peuvent pas être restaurées par une migration.
+CGU, Bonnes pratiques, Confidentialité et Mentions légales ont des versions publiées, dates et historique. Les brouillons peuvent être modifiés/prévisualisés puis publiés ; le corps d’une version publiée est immuable. Un changement important des CGU/bonnes pratiques peut imposer réacceptation : les participations concernées sont masquées jusqu’à validation des nouveaux textes. La preuve conserve versions/dates sur la participation, sans IP ; elle disparaît à la purge. La confidentialité est informative et liée dans le formulaire, sans faux consentement RGPD global.
 
-Avant mise à jour, sauvegarder et arrêter **app et worker V0.1** : l’ancien worker appliquerait encore la purge à la fermeture. Exemple générique, à exécuter vous-même :
+Le formulaire de participation présente les bonnes pratiques et exige l’autorisation d’inscrire cette adresse et l’acceptation des CGU, contrôlées aussi sur le serveur. L’exploitant doit personnaliser les documents et mentions, son identité/contact et ses obligations ; ces fonctions ne constituent pas une garantie juridique de conformité.
+
+## Paramètres et PWA
+
+**Paramètres** : événement, territoire/CP/pays, géocodage du territoire (Nominatim), résultat lisible et mini-carte, fuseau inféré pour pays connus seulement, centre/zoom. Repli manuel dans Réglages avancés. Aucune adresse participante n’est envoyée au géocodeur. Les dates récurrentes utilisent un calendrier sans année visible. Signature footer déplacée dans Contenus.
+
+Manifest standalone, icônes communes dérivées du manoir officiel V0.2, Apple/192/512/maskable. CTA sur accueil, menu et compte après inscription. Prompt natif Android/Chrome si disponible ; iOS : Partager → Ajouter à l’écran d’accueil. Masqué en mode installé. HTTPS requis hors localhost.
+
+Le service worker ne conserve que ressources statiques et un écran générique hors connexion. **Jamais API, HTML de compte/participation, adresses, tuiles ni routes privées en cache.** La carte nécessite une connexion. Les polices/worker MapLibre sont locaux.
+
+## Upgrade V0.2 → V0.3
+
+Migration **003_durable_accounts.sql**, transactionnelle et rejouable, plus initialisation des versions légales dans le même transaction du runner. Renomme houses en participations, adapte l’unicité par saison, préserve IDs, FK, mots de passe, profils/droits, saisons/dates, maisons et états. Les comptes legacy ne sont pas faussement marqués vérifiés : leurs participations déjà finalisées sont conservées pour l’édition en cours, mais toute nouvelle participation/campagne nécessite vérification. Les changements d’email retirent cette exception.
+
+Un ancien rappel non envoyé devient une campagne ; claims et résultats sont conservés sans doublon. Un rappel envoyé reste uniquement agrégé et ne repart jamais. Les anciennes colonnes de rappel sont retirées de l’usage actif ; le worker V0.2 ne doit plus tourner.
+
+À exécuter uniquement par l’exploitant, avec **db et postgres_data conservés** :
 
 ```sh
 docker compose exec -T db pg_dump -U halloween -d halloween --clean --if-exists > halloween-backup.sql
 docker compose stop app worker
-git pull --ff-only origin main
-# HALLOWEEN_IMAGE=ghcr.io/mick7784/halloween-map:V0.2 (ou latest choisi par l’exploitant)
+# Mettre à jour le dépôt/Compose et HALLOWEEN_IMAGE=ghcr.io/mick7784/halloween-map:V0.3
 docker compose pull app worker migrate
 docker compose run --rm --no-deps migrate
 docker compose up -d --no-build --force-recreate app worker
@@ -107,44 +101,28 @@ docker compose ps
 curl --fail http://localhost:3000/api/health
 ```
 
-Garder `db` et `postgres_data`, les secrets DB, et utiliser la même image pour app/worker/migrate. **Ne jamais lancer down -v.** L’échec de migration interdit le nouveau démarrage. Un retour à V0.1 ferait reprendre l’ancienne politique de purge : un retour arrière nécessite une restauration compatible. Limiter/chiffrer la rétention des sauvegardes contenant des données participantes ; après restauration, rattraper les purges échues.
+Même image pour app/worker/migrate, mêmes secrets DB. **Ne jamais utiliser down -v.** Si migration échoue, ne pas démarrer la nouvelle app. Retour V0.2 nécessite restauration compatible : l’ancien worker supprimerait encore les comptes. Limiter/chiffrer la rétention des sauvegardes et rattraper les purges après restauration. Aucun accès/déploiement VPS, Dockhand ou Pangolin n’est effectué par ce dépôt ou sa CI.
 
-## RBAC et audit
+## Environnement et vérification
 
-Super Admin : tous les droits et purge. Admin local : gestion locale sans modification des rôles. Modérateur : maisons, saison en lecture et audit. Lecture seule : consultation selon permissions. Permissions indépendantes `participants.read/validate/edit/delete`, `users.read/manage`, `season.read/manage/preview`, `settings.read/manage`, `stats.read`, `audit.read`, `roles.manage`. Aucun admin local ne peut attribuer plus de droits que les siens ; comptes Super Admin protégés. Les messages de rappel sont masqués aux lecteurs sans `season.manage`.
-
-Audit minimal : acteur staff, action, cible technique et heure réelle. Jamais email, adresse, mot de passe ou contenu de message. Compteurs de parcours anonymes, aucun itinéraire individuel stocké.
-
-## Développement et vérification
-
-Node.js 24, PostgreSQL 17. Next charge `.env` ; les scripts utilisent l’environnement ou `--env-file`.
+Autres variables existantes : `POSTGRES_PASSWORD` requis, `DATABASE_URL` hors Compose, `APP_PORT` (3000), `APP_ORIGIN`, `COOKIE_SECURE`, `SETUP_TOKEN` facultatif, `DEMO_PASSWORD` facultatif, `MAP_STYLE_URL`, `HALLOWEEN_IMAGE`. Ne jamais committer `.env`. Changer .env ne change pas le mot de passe d’un PostgreSQL déjà créé. La DB n’a pas de port public dans Compose ; le proxy est configuré par l’exploitant.
 
 ```sh
 npm ci
-node --env-file=.env node_modules/tsx/dist/cli.mjs scripts/migrate.ts
+npm run migrate
+npm run migrate # idempotence
 npm run lint
 npm test
 npm run build
 npx playwright install --with-deps chromium
-# DB JETABLE uniquement : la suite efface les données !
-# DATABASE_URL, APP_ORIGIN=http://localhost:3000
+# DATABASE_URL doit cibler une DB JETABLE : les tests effacent les données !
 npm run test:e2e
 ```
 
-PGlite localement, PostgreSQL 17 en CI via TEST_DATABASE_URL. Couverture : migration legacy/fresh et idempotence, bootstrap hash/session/expiration/concurrence, auth/RBAC/CSRF, quatre dates/timezone, ouverture/fermeture/purge différée/manuelle, rappels/doublons/SMTP absent/erreurs, demo autorisée/interdite sans statistiques ni purge simulée, modération/activité/seed/routage/version. Playwright capture wizard, participant, dashboard, saison, countdown et carte sur mobile, tablette, 1920×1080 et 2560×1440 ; vérifie débordements, focus des modales et Escape. Les tests cartographiques utilisent un style déterministe pour faire fonctionner le vrai canvas MapLibre, worker local, marqueurs et tracé sans dépendre du DNS du fournisseur. Les captures sont disponibles dans l’artefact `browser-report` de CI.
+Métier : PGlite local, PostgreSQL 17 en CI (`TEST_DATABASE_URL`). Migrations fresh/V0.2/replay, identité, permissions, participations, purge, campagnes, concurrence, incertitude SMTP, CMS/documents et PWA. Playwright : wizard, inscription/vérification/CGU, invitation, accès, publication CMS et campagne/purge ; quelques captures représentatives dans browser-report. Base locale jetable : `scripts/test-db.ts`, port 54329. Le job Docker démarre la vraie stack et vérifie santé/version.
 
-Sans PostgreSQL local : `node node_modules/tsx/dist/cli.mjs scripts/test-db.ts`, base jetable à `postgresql://postgres:postgres@127.0.0.1:54329/postgres`, développement uniquement. Le job Docker CI construit et démarre app/worker/migrate/db et vérifie santé/version.
+Production : `npm audit --omit=dev`. L’avis GHSA-vfj7-8cjw-p6xm concerne le transitif de développement `braces`, exclu du runtime ; ne pas forcer une rétrogradation du lint.
 
-L’audit de production est vérifié avec `npm audit --omit=dev`. L’avis GHSA-vfj7-8cjw-p6xm concerne le transitif de développement `braces`, exclu du runtime. Ne pas forcer une rétrogradation du lint avec `npm audit fix --force` ; suivre le correctif upstream.
+La CI publie après verify et Docker verts seulement : tag **V0.3**, release **Halloween Map V0.3 Beta**, `ghcr.io/mick7784/halloween-map:V0.3` et `:latest`, labels OCI version/commit. Aucun numéro parallèle dans package.json, aucun déploiement externe.
 
-## Version et publication
-
-`VERSION` est l’unique source de vérité : application/footer/admin, image/label OCI, tag Git et release. Aucune version parallèle package.json. `npm run version:next` donne V0.201 après le jalon V0.2 ; `npm run version:next -- V0.2` choisit explicitement ce jalon. Compléter CHANGELOG, vérifier puis pousser main. La CI publie uniquement après verify + Docker verts et uniquement si le tag manque ; aucune boucle de commit automatique.
-
-Registry : `ghcr.io/mick7784/halloween-map:V0.2` et `:latest`, tag **V0.2**, release **Halloween Map V0.2 Beta**. Dépôt/package privé : accès GHCR autorisé et `docker login ghcr.io` si nécessaire. La version publiée s’installe exclusivement par l’exploitant ; aucun déploiement externe n’est déclenché par cette CI.
-
-## Limites de la beta
-
-Parcours estimés à 4,2 km/h et cinq minutes par maison, segments géodésiques à vol d’oiseau, sans instructions de voirie ni optimisation globale. Fournisseurs externes de tuiles et géocodage du territoire. Une maison par compte ; coordonnées manuelles ou géolocalisation facultative. Pas de reset par email, paiement ou multi-instance actif. Recalculer un parcours si les disponibilités évoluent.
-
-Direction artistique et provenance du décor : [docs/visual-assets.md](docs/visual-assets.md).
+Limites : mono-instance active, aucune récupération de mot de passe par email V0.3 ; parcours estimés à 4,2 km/h, cinq minutes par maison, segments à vol d’oiseau sans instructions de voirie. Vérifier les voies publiques et recalculer si les disponibilités changent. Provenance du décor : [docs/visual-assets.md](docs/visual-assets.md).

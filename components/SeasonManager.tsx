@@ -1,8 +1,9 @@
 "use client";
 import { useEffect, useState } from "react";
+import Campaigns from "./Campaigns";
 import Link from "next/link";
 import { DateTime } from "luxon";
-import { CalendarDays, Mail, Ghost, Eye, ShieldAlert } from "lucide-react";
+import { CalendarDays, Ghost, Eye, ShieldAlert } from "lucide-react";
 import type { Season, User } from "../lib/domain";
 import {
   api,
@@ -14,16 +15,6 @@ import {
   has,
   AsyncButton,
 } from "./common";
-type ReminderSeason = Season & {
-  reminder_enabled: boolean;
-  reminder_at: string | null;
-  reminder_subject: string;
-  reminder_body: string;
-  reminder_status: string;
-  reminder_recipients: number;
-  reminder_recipient_estimate: number;
-  reminder_sent: number;
-};
 type Action = (
   action: string,
   payload: unknown,
@@ -42,6 +33,24 @@ function SeasonForm({
 }) {
   const [error, setError] = useState(""),
     [busy, setBusy] = useState(false);
+  const [valid, setValid] = useState(true),
+    [impacted, setImpacted] = useState(0);
+  useEffect(() => {
+    const load = () =>
+      void api<(Season & { relative_campaign_count: number })[]>(
+        "admin/seasons",
+      )
+        .then((rows) =>
+          setImpacted(
+            rows.find((row) => row.id === season?.id)
+              ?.relative_campaign_count ?? 0,
+          ),
+        )
+        .catch(() => {});
+    load();
+    window.addEventListener("campaigns-changed", load);
+    return () => window.removeEventListener("campaigns-changed", load);
+  }, [season?.id]);
   const dates = [
     [
       "registrations_open_at",
@@ -54,6 +63,14 @@ function SeasonForm({
   ] as const;
   return (
     <form
+      onInput={(e) => {
+        const v = values(e.currentTarget);
+        const ordered =
+          v.registrations_open_at <= v.opens_at &&
+          v.opens_at < v.closes_at &&
+          v.closes_at <= v.purge_at;
+        setValid(ordered);
+      }}
       onSubmit={async (e) => {
         e.preventDefault();
         const v = values(e.currentTarget);
@@ -109,169 +126,25 @@ function SeasonForm({
           />
         )}
       </div>
-      <Notice error={error} />
-      <button className="primary" disabled={busy}>
+      <Notice
+        error={
+          !valid
+            ? "Dates invalides : inscriptions ≤ ouverture < fermeture ≤ purge"
+            : error
+        }
+      />
+      {impacted > 0 && (
+        <p className="notice info">
+          {impacted}{" "}
+          {impacted === 1
+            ? "communication programmée sera recalculée."
+            : "communications programmées seront recalculées."}
+        </p>
+      )}
+      <button className="primary" disabled={busy || !valid}>
         {busy ? "Enregistrement…" : "Enregistrer la saison"}
       </button>
     </form>
-  );
-}
-function Reminder({
-  season,
-  zone,
-  act,
-}: {
-  season: ReminderSeason;
-  zone: string;
-  act: Action;
-}) {
-  const [error, setError] = useState(""),
-    [busy, setBusy] = useState(false),
-    [preview, setPreview] = useState<{ subject: string; body: string } | null>(
-      null,
-    );
-  const [available, setAvailable] = useState<boolean | null>(null);
-  useEffect(() => {
-    void api<{ smtpAvailable: boolean }>("admin/mail")
-      .then((r) => setAvailable(r.smtpAvailable))
-      .catch(() => setAvailable(false));
-  }, []);
-  const locked = ["SENDING", "SENT", "ERROR"].includes(season.reminder_status);
-  return (
-    <section className="panel reminder-panel">
-      <div className="section-heading">
-        <h2>
-          <Mail /> Rappel aux participants
-        </h2>
-        <span className="badge">
-          {
-            {
-              NONE: "Non programmé",
-              SCHEDULED: "Programmé",
-              SENDING: "En cours",
-              SENT: "Envoyé",
-              ERROR: "Erreur",
-            }[season.reminder_status]
-          }
-        </span>
-      </div>
-      <p className="muted">
-        Un message à chaque compte participant de cette saison. Les maisons de
-        démonstration sont exclues.
-      </p>
-      {available === false && (
-        <p className="notice info">
-          Envoi email indisponible : configurez SMTP pour permettre au worker
-          d’envoyer les rappels. L’application reste utilisable.
-        </p>
-      )}
-      <p className="small">
-        {["NONE", "SCHEDULED"].includes(season.reminder_status)
-          ? season.reminder_recipient_estimate
-          : season.reminder_recipients}{" "}
-        destinataires {locked ? "lors du lancement" : "actuellement"} ·{" "}
-        {season.reminder_sent} messages envoyés
-      </p>
-      {season.reminder_status === "ERROR" && (
-        <p className="notice">
-          Un ou plusieurs envois ont échoué ou leur résultat est incertain.
-          Aucun nouvel envoi automatique, afin d’éviter les doublons.
-        </p>
-      )}
-      <form
-        onSubmit={async (e) => {
-          e.preventDefault();
-          const v = values(e.currentTarget);
-          setBusy(true);
-          setError("");
-          try {
-            await act(
-              "reminder",
-              {
-                enabled: v.enabled === "on",
-                at: v.at,
-                subject: v.subject,
-                body: v.body,
-              },
-              season.id,
-            );
-          } catch (e) {
-            setError((e as Error).message);
-          } finally {
-            setBusy(false);
-          }
-        }}
-      >
-        <fieldset disabled={locked || busy}>
-          <Check
-            name="enabled"
-            label="Activer le rappel"
-            checked={season.reminder_enabled}
-          />
-          <div className="grid two">
-            <Field
-              label={`Date d’envoi (${zone})`}
-              name="at"
-              type="datetime-local"
-              value={
-                season.reminder_at
-                  ? localDate(season.reminder_at, zone)
-                  : localDate(season.opens_at, zone)
-              }
-            />
-            <Field
-              label="Sujet"
-              name="subject"
-              value={
-                season.reminder_subject || "Votre maison fête Halloween ce soir"
-              }
-              maxLength={150}
-            />
-          </div>
-          <label className="field">
-            <span>Message *</span>
-            <textarea
-              name="body"
-              required
-              maxLength={5000}
-              rows={5}
-              defaultValue={
-                season.reminder_body ||
-                "Merci de faire vivre Halloween dans notre commune ! Pensez à vérifier vos horaires et vos informations pratiques avant l’accueil des visiteurs."
-              }
-            />
-          </label>
-          <div className="actions">
-            <button className="primary">Enregistrer le rappel</button>
-            <button
-              type="button"
-              onClick={(e) => {
-                const v = values(e.currentTarget.form!);
-                setPreview({ subject: v.subject, body: v.body });
-              }}
-            >
-              <Eye size={18} /> Prévisualiser le message
-            </button>
-          </div>
-        </fieldset>
-        <Notice error={error} />
-      </form>
-      {preview && (
-        <div className="mail-preview panel">
-          <button
-            className="close"
-            aria-label="Fermer la prévisualisation email"
-            onClick={() => setPreview(null)}
-          >
-            ×
-          </button>
-          <div className="eyebrow">APERÇU DU MESSAGE</div>
-          <h3>{preview.subject}</h3>
-          <p style={{ whiteSpace: "pre-wrap" }}>{preview.body}</p>
-          <small>Texte brut · aucun suivi d’ouverture</small>
-        </div>
-      )}
-    </section>
   );
 }
 function Demo({ season, zone }: { season: Season; zone: string }) {
@@ -357,7 +230,9 @@ export default function SeasonManager({
   zone: string;
   act: Action;
 }) {
-  const year = Math.max(DateTime.now().year, ...seasons.map((s) => s.year)) + 1;
+  const year =
+    Math.max(DateTime.now().setZone(zone).year, ...seasons.map((s) => s.year)) +
+    1;
   return (
     <div className="season-manager">
       {seasons.map((s) => (
@@ -381,15 +256,27 @@ export default function SeasonManager({
               <SeasonForm season={s} zone={zone} year={s.year} act={act} />
             ) : (
               <p>
-                {localDate(s.opens_at, zone)} → {localDate(s.closes_at, zone)} ·
-                purge : {localDate(s.purge_at, zone)}
+                {DateTime.fromJSDate(new Date(s.opens_at))
+                  .setZone(zone)
+                  .setLocale("fr")
+                  .toFormat("dd LLLL yyyy à HH:mm")}{" "}
+                →{" "}
+                {DateTime.fromJSDate(new Date(s.closes_at))
+                  .setZone(zone)
+                  .setLocale("fr")
+                  .toFormat("dd LLLL yyyy à HH:mm")}{" "}
+                · purge :{" "}
+                {DateTime.fromJSDate(new Date(s.purge_at))
+                  .setZone(zone)
+                  .setLocale("fr")
+                  .toFormat("dd LLLL yyyy à HH:mm")}
               </p>
             )}
           </section>
           {!s.purged_at && !s.archived && (
             <div className="grid two">
-              {has(user, "season.manage") && (
-                <Reminder season={s as ReminderSeason} zone={zone} act={act} />
+              {has(user, "communications.read") && (
+                <Campaigns season={s} zone={zone} user={user} />
               )}{" "}
               {has(user, "season.preview") && <Demo season={s} zone={zone} />}
             </div>
@@ -400,9 +287,9 @@ export default function SeasonManager({
                 <ShieldAlert /> Purge manuelle
               </h3>
               <p className="muted small">
-                Suppression définitive des comptes participants, maisons,
-                adresses et messages. Seuls les totaux anonymes restent
-                conservés.
+                Suppression définitive des participations, maisons, adresses et
+                messages. Seuls les totaux anonymes restent conservés. Les
+                comptes restent disponibles pour les prochaines éditions.
               </p>
               <AsyncButton
                 danger

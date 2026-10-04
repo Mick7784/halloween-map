@@ -1,4 +1,7 @@
 "use client";
+import Account, { Signup, Activation } from "./Account";
+import InstallApp from "./InstallApp";
+import Editorial from "./Editorial";
 import { useDialogFocus } from "./useDialogFocus";
 import ManorMark from "./ManorMark";
 import { useCallback, useEffect, useState } from "react";
@@ -8,6 +11,7 @@ import {
   House as HouseIcon,
   Route,
   Users,
+  CircleUserRound,
   Menu,
   X,
   ArrowRight,
@@ -119,35 +123,42 @@ export default function Application({
       </main>
     );
   else if (view === "login") content = <Login />;
-  else if (view === "register")
+  else if (view === "register") content = <Signup state={state} />;
+  else if (view === "activation") content = <Activation state={state} />;
+  else if (view === "account")
+    content = user ? (
+      <Account user={user} state={state} refresh={refresh} />
+    ) : (
+      <Login />
+    );
+  else if (["terms", "privacy", "guidelines", "legal"].includes(view)) {
+    const kind = (
+      {
+        terms: "TERMS",
+        privacy: "PRIVACY",
+        guidelines: "GUIDELINES",
+        legal: "NOTICE",
+      } as const
+    )[view as "terms" | "privacy" | "guidelines" | "legal"];
+    const d = state.documents?.[kind];
     content = (
       <main className="narrow">
-        <div className="eyebrow">PARTAGER UN MOMENT MAGIQUE</div>
-        <h1>Votre maison entre dans la fête.</h1>
-        <p className="muted">
-          Une décoration, quelques bonbons, une mise en scène : à vous de
-          choisir. Votre inscription sera vérifiée par l’équipe.
-        </p>
-        {state.season?.registrations_open && !closed ? (
-          <section className="panel">
-            <HouseForm
-              registration
-              zone={state.instance!.timezone}
-              opens={state.season.opens_at}
-              closes={state.season.closes_at}
-              center={[state.instance!.longitude, state.instance!.latitude]}
-              onSave={async (p) => {
-                await api("register", p);
-                window.location.href = "/participant";
-              }}
-            />
-          </section>
-        ) : (
-          <p className="panel">Les inscriptions sont fermées.</p>
-        )}
+        <h1>{d?.title}</h1>
+        <section className="panel">
+          <p className="muted small">
+            Version {d?.version}
+            {d?.published_at
+              ? " · publiée le " +
+                DateTime.fromISO(d.published_at)
+                  .setLocale("fr")
+                  .toFormat("dd LLLL yyyy")
+              : ""}
+          </p>
+          <Editorial text={d?.body ?? ""} />
+        </section>
       </main>
     );
-  else if (view === "participant")
+  } else if (view === "participant")
     content = user ? (
       <Participant user={user} state={liveState!} refresh={refresh} />
     ) : (
@@ -160,23 +171,22 @@ export default function Application({
       </main>
     );
   else if (view === "admin")
-    content =
-      user?.kind === "STAFF" ? (
-        <Admin
-          user={user}
-          state={liveState!}
-          refresh={refresh}
-          mapStyle={mapStyle}
-        />
-      ) : (
-        <main className="narrow">
-          <h1>Accès à l’administration</h1>
-          <p>Un compte disposant des permissions nécessaires est requis.</p>
-          <Link className="button primary" href="/login">
-            Me connecter
-          </Link>
-        </main>
-      );
+    content = user?.permissions.includes("admin.access") ? (
+      <Admin
+        user={user}
+        state={liveState!}
+        refresh={refresh}
+        mapStyle={mapStyle}
+      />
+    ) : (
+      <main className="narrow">
+        <h1>Accès à l’administration</h1>
+        <p>Un compte disposant des permissions nécessaires est requis.</p>
+        <Link className="button primary" href="/login">
+          Me connecter
+        </Link>
+      </main>
+    );
   else if (view === "about")
     content = (
       <main className="narrow">
@@ -190,9 +200,9 @@ export default function Application({
           </p>
           <p>
             Les adresses sont publiées uniquement après validation, pendant les
-            horaires d’accueil. À la purge programmée de la saison, les comptes
-            participants et leurs données sont supprimés. Les administrateurs et
-            les statistiques anonymes sont conservés.
+            horaires d’accueil. À la purge programmée de la saison, les données
+            de participation sont supprimées. Les comptes durables et les
+            statistiques anonymes sont conservés.
           </p>
           <h2>En toute sécurité</h2>
           <p>
@@ -235,6 +245,13 @@ export default function Application({
           <br />
           UN HALLOWEEN À PARTAGER
         </p>
+        <Link
+          className="account-icon"
+          href={user ? "/account" : "/login"}
+          aria-label="Mon compte"
+        >
+          <CircleUserRound size={22} />
+        </Link>
         <button
           className="menu-toggle"
           aria-label="Menu"
@@ -252,13 +269,22 @@ export default function Application({
             <Route />
             Préparer<span>son parcours</span>
           </Link>
-          <Link
-            href={user?.kind === "PARTICIPANT" ? "/participant" : "/register"}
-          >
+          <Link href={!!user ? "/participant" : "/register"}>
             <Users />
             Partager<span>ma participation</span>
           </Link>
-          {user?.kind === "STAFF" && <Link href="/admin">Administration</Link>}
+          {user?.permissions.includes("admin.access") && (
+            <Link href="/admin">Administration</Link>
+          )}
+          <Link
+            className="account-avatar"
+            href={user ? "/account" : "/login"}
+            aria-label="Mon compte"
+          >
+            <CircleUserRound size={22} />
+            {user ? "Mon compte" : "Compte"}
+          </Link>
+          <InstallApp />
           {user ? (
             <AsyncButton
               onClick={async () => {
@@ -269,8 +295,8 @@ export default function Application({
               <LogOut size={16} /> Déconnexion
             </AsyncButton>
           ) : (
-            <Link className="nav-login" href="/login">
-              Connexion
+            <Link className="nav-login" href="/login" aria-label="Compte">
+              Mon compte
             </Link>
           )}
         </nav>
@@ -299,9 +325,13 @@ export default function Application({
       <footer>
         <span>Halloween Map · {version}</span>
         <span>
-          {state?.instance?.footer ?? "Une expérience DomotiK Studio"}
+          {state?.contents?.["footer.signature"] ??
+            "Une expérience DomotiK Studio"}
         </span>
-        <Link href="/about">À propos & confidentialité</Link>
+        <Link href="/terms">Conditions d’utilisation</Link>
+        <Link href="/privacy">Politique de confidentialité</Link>
+        <Link href="/guidelines">Bonnes pratiques</Link>
+        <Link href="/legal">Mentions légales</Link>
         <span>
           © {DateTime.now().setZone("Europe/Paris").year} DomotiK Studio
         </span>
@@ -356,8 +386,9 @@ function Login() {
             try {
               await api("login", values(e.currentTarget));
               const u = await api<User>("me");
-              window.location.href =
-                u.kind === "STAFF" ? "/admin" : "/participant";
+              window.location.href = u.permissions.includes("admin.access")
+                ? "/admin"
+                : "/participant";
             } catch (e) {
               setError((e as Error).message);
             } finally {
@@ -436,21 +467,22 @@ function PublicMap({
       <main className="countdown">
         <Scene />
         <div className="countdown-content">
-          <span className="eyebrow">{i.public_name}</span>
+          <span className="eyebrow">{state.contents?.["home.eyebrow"]}</span>
           <h1>
             {closed
-              ? "C’est fini pour cette année."
-              : "Les portes s’ouvriront bientôt."}
+              ? state.contents?.["home.closed"]
+              : state.contents?.["home.title"]}
           </h1>
           <p>
             {closed
-              ? "Merci d’avoir fait vivre Halloween dans votre commune. Rendez-vous à la prochaine saison !"
+              ? state.contents?.["home.closedBody"]
               : state.state === "PREPARATION"
-                ? "L’équipe prépare votre prochaine nuit d’Halloween."
+                ? state.contents?.["home.preparation"]
                 : s
                   ? `La carte ouvre le ${DateTime.fromISO(s.opens_at).setZone(i.timezone).setLocale("fr").toFormat("d MMMM à HH:mm")}`
                   : "La première saison est en préparation."}
           </p>
+          <InstallApp />
           {!closed && state.state === "COUNTDOWN" && (
             <div className="countdown-boxes">
               {countdown.map((n, k) => (
@@ -466,22 +498,20 @@ function PublicMap({
               <HouseIcon />
               <strong>
                 {state.count ?? 0}{" "}
-                {(state.count ?? 0) > 1 ? "maisons" : "maison"}
+                {(state.count ?? 0) > 1
+                  ? state.contents?.["home.houses"]
+                  : state.contents?.["home.house"]}
               </strong>
-              <span>déjà inscrites</span>
+              <span>{state.contents?.["home.count"]}</span>
             </p>
           )}
           {!closed && s?.registrations_open && !state.preview && (
             <Link href="/register" className="button primary">
-              Inscrire ma maison
+              {state.contents?.["home.register"]}
               <ArrowRight size={18} />
             </Link>
           )}
-          <p className="tagline">
-            Une commune plus vivante,
-            <br />
-            un Halloween inoubliable.
-          </p>
+          <p className="tagline">{state.contents?.["home.final"]}</p>
         </div>
       </main>
     );
@@ -492,10 +522,8 @@ function PublicMap({
         <div className="map-heading">
           <div>
             <div className="eyebrow">DÉCOUVRIR · {i.territory}</div>
-            <h1>La nuit vous appartient.</h1>
-            <p className="muted">
-              {houses.length} maisons accueillantes en ce moment
-            </p>
+            <h1>{state.contents?.["home.open"]}</h1>
+            <p className="muted">{state.contents?.["home.subtitle"]}</p>
           </div>
           <div className="view-tabs">
             <button
@@ -589,10 +617,7 @@ function PublicMap({
           </div>
         )}
         {!houses.length && (
-          <p className="empty">
-            Aucune maison ne correspond à ces filtres en ce moment. Revenez
-            pendant les horaires d’accueil.
-          </p>
+          <p className="empty">{state.contents?.["home.empty"]}</p>
         )}
         <p className="muted small">
           Les maisons en pause ou hors horaires sont masquées. Actualisation
@@ -727,15 +752,13 @@ function PublicMap({
               onClick={() => {
                 setOrigin([selectedLive.longitude, selectedLive.latitude]);
                 setSelected(null);
-                document
-                  .getElementById("parcours")
-                  ?.scrollIntoView({
-                    behavior: window.matchMedia(
-                      "(prefers-reduced-motion: reduce)",
-                    ).matches
-                      ? "instant"
-                      : "smooth",
-                  });
+                document.getElementById("parcours")?.scrollIntoView({
+                  behavior: window.matchMedia(
+                    "(prefers-reduced-motion: reduce)",
+                  ).matches
+                    ? "instant"
+                    : "smooth",
+                });
               }}
             >
               Choisir comme point de départ
@@ -919,11 +942,36 @@ function Participant({
       <main className="narrow">
         <h1>Ma participation</h1>
         <Notice error={error} />
-        <p>
-          {state.state === "CLOSED"
-            ? "La saison est fermée et vos données participantes ont été supprimées."
-            : "Chargement de votre maison…"}
-        </p>
+        {!s?.registrations_open ? (
+          <p>
+            Les inscriptions sont fermées. Votre compte reste disponible pour la
+            prochaine édition.
+          </p>
+        ) : user.email_status !== "VERIFIED" ? (
+          <section className="panel">
+            <p>{state.contents?.["account.verify"]}</p>
+            <Link href="/account" className="button primary">
+              Vérifier mon email
+            </Link>
+          </section>
+        ) : (
+          <section className="panel">
+            <h2>{state.contents?.["participation.title"]}</h2>
+            <Editorial text={state.contents?.["participation.intro"] ?? ""} />
+            <HouseForm
+              zone={i.timezone}
+              opens={s.opens_at}
+              closes={s.closes_at}
+              center={[i.longitude, i.latitude]}
+              documents={state.documents}
+              onSave={async (p) => {
+                await api("participation", p);
+                setSaved(true);
+                await reload();
+              }}
+            />
+          </section>
+        )}
       </main>
     );
   async function action(a: string, extra: Record<string, unknown> = {}) {
@@ -940,8 +988,11 @@ function Participant({
       </div>
       {house.status === "PENDING" && (
         <p className="notice info">
-          Votre maison attend la validation de l’équipe. Elle n’est pas encore
-          publique.
+          {
+            state.contents?.[
+              saved ? "participation.confirmation" : "participation.pending"
+            ]
+          }
         </p>
       )}
       {saved && (
@@ -1023,7 +1074,7 @@ function Participant({
           onClick={async () => {
             if (
               window.confirm(
-                "Supprimer définitivement votre participation, votre compte et toutes les données de votre maison ?",
+                "Supprimer définitivement votre participation et les données de votre maison ? Votre compte reste disponible.",
               )
             ) {
               await api("participant", {

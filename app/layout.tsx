@@ -1,11 +1,20 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "@fontsource/inter/400.css";
 import "@fontsource/inter/500.css";
 import "@fontsource/inter/600.css";
 import "@fontsource/cormorant-garamond/500.css";
 import "@fontsource/cormorant-garamond/600.css";
 import "./globals.css";
+export const viewport: Viewport = { themeColor: "#17171e" };
 export const metadata: Metadata = {
+  applicationName: "Halloween Map",
+  manifest: "/manifest.webmanifest",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "Halloween Map",
+  },
+  icons: { icon: "/favicon.svg", apple: "/pwa/apple-touch-icon.png" },
   title: "Halloween · Carte des maisons",
   description:
     "Découvrez les maisons participantes et préparez votre parcours Halloween.",

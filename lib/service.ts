@@ -1,3 +1,12 @@
+import {
+  initializeLegalDocuments,
+  contentState,
+  legalState,
+  validateAcceptance,
+  interpolate,
+} from "./content";
+import { recomputeCampaigns } from "./mail";
+import { createAccount, adminUsers } from "./accounts";
 import { setupAuthorized, finishBootstrap } from "./bootstrap";
 import { realTime, type TimeContext } from "./time";
 import { timingSafeEqual } from "node:crypto";
@@ -24,7 +33,6 @@ import {
 } from "./domain";
 import {
   setupSchema,
-  registrationSchema,
   houseSchema,
   seasonSchema,
   instanceSchema,
@@ -44,14 +52,16 @@ export async function audit(
     "INSERT INTO audit_logs(instance_id,actor_id,action,target_id) VALUES($1,$2,$3,$4)",
     [
       instanceId,
-      actor?.kind === "STAFF" ? actor.id : null,
+      actor?.permissions.includes("admin.access") ? actor.id : null,
       action,
       target ?? null,
     ],
   );
 }
-export async function instance(): Promise<Instance | null> {
-  const { rows } = await db().query("SELECT * FROM instances LIMIT 1");
+export async function instance(
+  client: Database = db(),
+): Promise<Instance | null> {
+  const { rows } = await client.query("SELECT * FROM instances LIMIT 1");
   return (rows[0] as unknown as Instance) ?? null;
 }
 export async function activeSeason(
@@ -107,6 +117,7 @@ export async function setup(input: unknown, setupSession?: string) {
       ],
     );
     const i = ii[0] as unknown as Instance;
+    await initializeLegalDocuments(i.id, c);
     let roleId = "";
     for (const [name, perms] of Object.entries(defaultRoles)) {
       const { rows } = await c.query(
@@ -193,27 +204,24 @@ export async function purgeSeason(
     const { rows: totals } = await c.query(
       `SELECT count(*)::int houses,count(*) FILTER(WHERE status='APPROVED')::int approved,
       count(*) FILTER(WHERE 'DECORATION'=ANY(activities))::int decoration,count(*) FILTER(WHERE 'CANDY'=ANY(activities))::int candy,
-      count(*) FILTER(WHERE 'ACTING'=ANY(activities))::int acting FROM houses WHERE season_id=$1 AND instance_id=$2`,
+      count(*) FILTER(WHERE 'ACTING'=ANY(activities))::int acting FROM participations WHERE season_id=$1 AND instance_id=$2`,
       [s.id, instanceId],
     );
     const stats = { ...totals[0], routes: s.routes_count };
     // No addresses, text, precise coordinates, owner IDs or routes survive the purge.
     await c.query(
-      "DELETE FROM audit_logs WHERE instance_id=$1 AND (target_id IN (SELECT id FROM houses WHERE season_id=$2) OR target_id IN (SELECT user_id FROM houses WHERE season_id=$2))",
+      "DELETE FROM audit_logs WHERE instance_id=$1 AND (target_id IN (SELECT id FROM participations WHERE season_id=$2) OR target_id IN (SELECT user_id FROM participations WHERE season_id=$2))",
       [instanceId, s.id],
     );
     await c.query(
-      "DELETE FROM users WHERE instance_id=$1 AND kind='PARTICIPANT' AND id IN (SELECT user_id FROM houses WHERE season_id=$2)",
-      [instanceId, s.id],
+      "DELETE FROM participations WHERE season_id=$1 AND instance_id=$2",
+      [s.id, instanceId],
     );
-    await c.query("DELETE FROM houses WHERE season_id=$1 AND instance_id=$2", [
-      s.id,
-      instanceId,
-    ]);
-    // Remove orphan participants too; V0.1 allows only one live season per instance.
+    await c.query("DELETE FROM email_outbox WHERE season_id=$1", [s.id]);
+    await c.query("DELETE FROM reminder_deliveries WHERE season_id=$1", [s.id]);
     await c.query(
-      "DELETE FROM users WHERE instance_id=$1 AND kind='PARTICIPANT' AND NOT EXISTS(SELECT 1 FROM houses h WHERE h.user_id=users.id)",
-      [instanceId],
+      "UPDATE email_campaigns SET subject='',body='',active=false,status=CASE WHEN status IN('DRAFT','SCHEDULED','SENDING') THEN 'CANCELLED' ELSE status END WHERE season_id=$1",
+      [s.id],
     );
     await c.query(
       "UPDATE seasons SET stats=$1,purged_at=$2,registrations_open=false,activated=false,reminder_enabled=false,reminder_subject='',reminder_body='' WHERE id=$3",
@@ -239,6 +247,23 @@ export async function tick(now = new Date()) {
   await db().query("DELETE FROM sessions WHERE expires_at<=now()");
   await db().query("DELETE FROM setup_sessions WHERE expires_at<=now()");
   await db().query("DELETE FROM rate_limits WHERE reset_at<now()");
+  await db().query("DELETE FROM email_tokens WHERE expires_at<=now()");
+  await db().query(
+    "DELETE FROM email_outbox WHERE season_id IS NULL AND status IN('SENT','FAILED','CANCELLED') AND created_at<now()-interval '30 days'",
+  );
+}
+function formatDate(value: Date | string | undefined, zone: string) {
+  return value
+    ? new Intl.DateTimeFormat("fr-FR", {
+        timeZone: zone,
+        day: "numeric",
+        month: "long",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        hourCycle: "h23",
+      }).format(new Date(value))
+    : "";
 }
 export async function publicState(context: TimeContext | Date = realTime()) {
   const { now, preview } =
@@ -252,13 +277,13 @@ export async function publicState(context: TimeContext | Date = realTime()) {
     houses: ReturnType<typeof publicHouse>[] = [];
   if (s && state !== "CLOSED" && state !== "ARCHIVED") {
     const { rows } = await db().query(
-      "SELECT count(*)::int n FROM houses WHERE instance_id=$1 AND season_id=$2 AND status=$3",
+      "SELECT count(*)::int n FROM participations WHERE instance_id=$1 AND season_id=$2 AND status=$3 AND EXISTS(SELECT 1 FROM users u WHERE u.id=participations.user_id AND u.account_status='ACTIVE' AND (u.email_status='VERIFIED' OR participations.legacy_imported)) AND NOT EXISTS(SELECT 1 FROM legal_documents d WHERE d.instance_id=participations.instance_id AND d.active AND d.requires_reaccept AND ((d.kind='TERMS' AND participations.terms_version IS DISTINCT FROM d.version) OR (d.kind='GUIDELINES' AND participations.guidelines_version IS DISTINCT FROM d.version)))",
       [i.id, s.id, "APPROVED"],
     );
     count = Number(rows[0].n);
     if (state === "MAP_OPEN") {
       const { rows } = await db().query(
-        "SELECT * FROM houses WHERE instance_id=$1 AND season_id=$2 AND status='APPROVED' AND activity='ACTIVE' AND starts_at<=$3 AND ends_at>$3",
+        "SELECT * FROM participations WHERE instance_id=$1 AND season_id=$2 AND status='APPROVED' AND activity='ACTIVE' AND EXISTS(SELECT 1 FROM users u WHERE u.id=participations.user_id AND u.account_status='ACTIVE' AND (u.email_status='VERIFIED' OR participations.legacy_imported)) AND NOT EXISTS(SELECT 1 FROM legal_documents d WHERE d.instance_id=participations.instance_id AND d.active AND d.requires_reaccept AND ((d.kind='TERMS' AND participations.terms_version IS DISTINCT FROM d.version) OR (d.kind='GUIDELINES' AND participations.guidelines_version IS DISTINCT FROM d.version))) AND starts_at<=$3 AND ends_at>$3",
         [i.id, s.id, now],
       );
       houses = (rows as unknown as House[])
@@ -268,6 +293,22 @@ export async function publicState(context: TimeContext | Date = realTime()) {
   }
   return {
     setupRequired: false,
+    contents: Object.fromEntries(
+      Object.entries(await contentState(i.id)).map(([k, v]) => [
+        k,
+        interpolate(v, {
+          territory: i.territory,
+          event_name: i.public_name,
+          season_year: s?.year ?? "",
+          house_count: state === "MAP_OPEN" ? houses.length : count,
+          registration_date: formatDate(s?.registrations_open_at, i.timezone),
+          map_open_date: formatDate(s?.opens_at, i.timezone),
+          map_close_date: formatDate(s?.closes_at, i.timezone),
+          purge_date: formatDate(s?.purge_at, i.timezone),
+        }),
+      ]),
+    ),
+    documents: await legalState(i.id),
     preview,
     instance: {
       public_name: i.public_name,
@@ -283,6 +324,7 @@ export async function publicState(context: TimeContext | Date = realTime()) {
     season: s
       ? {
           year: s.year,
+          purge_at: s.purge_at,
           opens_at: s.opens_at,
           closes_at: s.closes_at,
           registrations_open:
@@ -302,7 +344,7 @@ export async function login(input: unknown) {
   const data = credentials.parse(input);
   await rateLimit("login:" + data.email);
   const { rows } = await db().query(
-    "SELECT id,password_hash FROM users WHERE email=$1",
+    "SELECT id,password_hash FROM users WHERE email=$1 AND account_status='ACTIVE'",
     [data.email],
   );
   // Run the same expensive derivation for unknown accounts.
@@ -315,6 +357,9 @@ export async function login(input: unknown) {
     !rows[0]
   )
     throw new HttpError(401, "Email ou mot de passe incorrect");
+  await db().query("UPDATE users SET last_login_at=now() WHERE id=$1", [
+    rows[0].id,
+  ]);
   return { token: await createSession(String(rows[0].id)) };
 }
 function houseDates(data: z.infer<typeof houseSchema>, i: Instance, s: Season) {
@@ -331,41 +376,48 @@ function houseDates(data: z.infer<typeof houseSchema>, i: Instance, s: Season) {
     );
   return [starts, ends];
 }
-export async function register(input: unknown) {
-  const data = registrationSchema.parse(input);
-  await rateLimit("register:" + data.account.email, 5);
-  const hash = await hashPassword(data.account.password);
+export const register = createAccount;
+export async function createParticipation(user: User | null, input: unknown) {
+  if (!user) throw new HttpError(401, "Connexion requise");
+  const raw = z
+    .object({ house: houseSchema, acceptance: z.unknown() })
+    .parse(input);
   return transaction(async (c) => {
-    const { rows } = await c.query(
-      "SELECT * FROM instances LIMIT 1 FOR UPDATE",
-    );
-    const i = rows[0] as unknown as Instance;
-    if (!i) throw new HttpError(409, "Instance non configurée");
-    const { rows: seasons } = await c.query(
-      "SELECT * FROM seasons WHERE id=$1 AND instance_id=$2 FOR UPDATE",
-      [i.active_season_id, i.id],
-    );
-    const s = seasons[0] as unknown as Season;
+    const u = (
+      await c.query(
+        "SELECT email_status,account_status FROM users WHERE id=$1 FOR UPDATE",
+        [user.id],
+      )
+    ).rows[0];
+    if (u.email_status !== "VERIFIED" || u.account_status !== "ACTIVE")
+      throw new HttpError(403, "Vérifiez votre email avant de participer");
+    const i = (
+      await c.query("SELECT * FROM instances WHERE id=$1 FOR UPDATE", [
+        user.instance_id,
+      ])
+    ).rows[0] as unknown as Instance;
+    const ss = (
+      await c.query("SELECT * FROM seasons WHERE id=$1 FOR UPDATE", [
+        i.active_season_id,
+      ])
+    ).rows[0] as unknown as Season;
     if (
-      !s ||
-      s.purged_at ||
-      !s.registrations_open ||
-      +new Date() < +new Date(s.registrations_open_at) ||
-      +new Date() >= +new Date(s.closes_at)
+      !ss ||
+      ss.purged_at ||
+      !ss.registrations_open ||
+      +new Date() < +new Date(ss.registrations_open_at) ||
+      +new Date() >= +new Date(ss.closes_at)
     )
       throw new HttpError(403, "Inscriptions fermées");
-    const [starts, ends] = houseDates(data.house, i, s);
-    const { rows: u } = await c.query(
-      "INSERT INTO users(instance_id,email,display_name,password_hash,kind) VALUES($1,$2,'Participant',$3,'PARTICIPANT') RETURNING id",
-      [i.id, data.account.email, hash],
-    );
-    const h = data.house;
+    const a = await validateAcceptance(c, i.id, raw.acceptance);
+    const h = raw.house;
+    const [starts, ends] = houseDates(h, i, ss);
     await c.query(
-      "INSERT INTO houses(instance_id,season_id,user_id,name,address,latitude,longitude,activities,starts_at,ends_at,fear,adaptable,rp,practical) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)",
+      "INSERT INTO participations(instance_id,season_id,user_id,name,address,latitude,longitude,activities,starts_at,ends_at,fear,adaptable,rp,practical,terms_version,terms_accepted_at,guidelines_version,guidelines_accepted_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,now(),$16,now())",
       [
         i.id,
-        s.id,
-        u[0].id,
+        ss.id,
+        user.id,
         h.name,
         h.address,
         h.latitude,
@@ -377,16 +429,18 @@ export async function register(input: unknown) {
         h.adaptable,
         h.rp,
         h.practical,
+        a.terms_version,
+        a.guidelines_version,
       ],
     );
-    await audit(c, i.id, null, "participant.registered");
-    return { token: await createSession(String(u[0].id), c) };
+    await audit(c, i.id, user, "participation.created");
+    return { ok: true };
   });
 }
 export async function ownHouse(user: User | null) {
   if (!user) throw new HttpError(401, "Connexion requise");
   const { rows } = await db().query(
-    "SELECT * FROM houses WHERE user_id=$1 AND instance_id=$2",
+    "SELECT p.* FROM participations p JOIN instances i ON i.active_season_id=p.season_id WHERE p.user_id=$1 AND p.instance_id=$2",
     [user.id, user.instance_id],
   );
   return rows[0] ?? null;
@@ -402,16 +456,45 @@ export async function updateHouse(
   const data = houseSchema.parse(input);
   return transaction(async (c) => {
     const { rows } = await c.query(
-      "SELECT * FROM houses WHERE id=$1 AND instance_id=$2 FOR UPDATE",
+      "SELECT * FROM participations WHERE id=$1 AND instance_id=$2 FOR UPDATE",
       [id, user.instance_id],
     );
     const old = rows[0] as unknown as House;
     if (!old || (!admin && old.user_id !== user.id))
       throw new HttpError(404, "Maison introuvable");
-    const i = (await instance())!,
+    const i = (await instance(c))!,
       s = await activeSeason(i, c);
     if (!s || s.purged_at || +new Date() >= +new Date(s.closes_at))
       throw new HttpError(403, "Saison fermée");
+    if (!admin) {
+      const owner = (
+        await c.query("SELECT email_status FROM users WHERE id=$1", [user.id])
+      ).rows[0];
+      if (owner.email_status !== "VERIFIED")
+        throw new HttpError(
+          403,
+          "Vérifiez votre email avant de modifier votre participation",
+        );
+      const docs = await legalState(i.id, c);
+      if (
+        (docs.TERMS.requires_reaccept &&
+          (old as House & { terms_version?: string }).terms_version !==
+            docs.TERMS.version) ||
+        (docs.GUIDELINES.requires_reaccept &&
+          (old as House & { guidelines_version?: string })
+            .guidelines_version !== docs.GUIDELINES.version)
+      ) {
+        const acceptance = await validateAcceptance(
+          c,
+          i.id,
+          (input as { acceptance?: unknown }).acceptance,
+        );
+        await c.query(
+          "UPDATE participations SET terms_version=$1,terms_accepted_at=now(),guidelines_version=$2,guidelines_accepted_at=now() WHERE id=$3",
+          [acceptance.terms_version, acceptance.guidelines_version, id],
+        );
+      }
+    }
     const [starts, ends] = houseDates(data, i, s);
     const changed = [
       "name",
@@ -423,7 +506,7 @@ export async function updateHouse(
     ].some((key) => old[key as keyof House] !== data[key as keyof typeof data]);
     const status = !admin && changed ? "PENDING" : old.status;
     await c.query(
-      "UPDATE houses SET name=$1,address=$2,latitude=$3,longitude=$4,activities=$5,starts_at=$6,ends_at=$7,fear=$8,adaptable=$9,rp=$10,practical=$11,status=$12 WHERE id=$13 AND instance_id=$14",
+      "UPDATE participations SET name=$1,address=$2,latitude=$3,longitude=$4,activities=$5,starts_at=$6,ends_at=$7,fear=$8,adaptable=$9,rp=$10,practical=$11,status=$12 WHERE id=$13 AND instance_id=$14",
       [
         data.name,
         data.address,
@@ -446,8 +529,7 @@ export async function updateHouse(
   });
 }
 export async function participantAction(user: User | null, input: unknown) {
-  if (!user || user.kind !== "PARTICIPANT")
-    throw new HttpError(403, "Compte participant requis");
+  if (!user) throw new HttpError(403, "Compte participant requis");
   const data = z
     .object({
       action: z.enum(["pause", "resume", "end", "candy", "delete"]),
@@ -457,7 +539,7 @@ export async function participantAction(user: User | null, input: unknown) {
     .parse(input);
   return transaction(async (c) => {
     const { rows } = await c.query(
-      "SELECT h.*,s.purged_at,s.closes_at FROM houses h JOIN seasons s ON s.id=h.season_id WHERE user_id=$1 AND h.instance_id=$2 FOR UPDATE OF h,s",
+      "SELECT h.*,s.purged_at,s.closes_at FROM participations h JOIN seasons s ON s.id=h.season_id WHERE user_id=$1 AND h.instance_id=$2 FOR UPDATE OF h,s",
       [user.id, user.instance_id],
     );
     const h = rows[0] as unknown as House & {
@@ -472,10 +554,10 @@ export async function participantAction(user: User | null, input: unknown) {
         "DELETE FROM audit_logs WHERE instance_id=$1 AND target_id IN ($2,$3)",
         [user.instance_id, h.id, user.id],
       );
-      await c.query("DELETE FROM users WHERE id=$1 AND instance_id=$2", [
-        user.id,
-        user.instance_id,
-      ]);
+      await c.query(
+        "DELETE FROM participations WHERE user_id=$1 AND instance_id=$2",
+        [user.id, user.instance_id],
+      );
       await audit(c, user.instance_id, null, "participant.deleted");
       return { deleted: true };
     }
@@ -484,14 +566,14 @@ export async function participantAction(user: User | null, input: unknown) {
     if (data.action === "candy") {
       if (typeof data.available !== "boolean")
         throw new HttpError(400, "Disponibilité requise");
-      await c.query("UPDATE houses SET candy_available=$1 WHERE id=$2", [
-        data.available,
-        h.id,
-      ]);
+      await c.query(
+        "UPDATE participations SET candy_available=$1 WHERE id=$2",
+        [data.available, h.id],
+      );
     } else {
       if (h.activity === "ENDED" && data.action === "resume")
         throw new HttpError(400, "Cette activité est terminée");
-      await c.query("UPDATE houses SET activity=$1 WHERE id=$2", [
+      await c.query("UPDATE participations SET activity=$1 WHERE id=$2", [
         { pause: "PAUSED", resume: "ACTIVE", end: "ENDED" }[data.action],
         h.id,
       ]);
@@ -516,7 +598,7 @@ export async function route(
     if (!s || seasonState(s, context.now) !== "MAP_OPEN")
       throw new HttpError(403, "La carte est fermée");
     const { rows } = await c.query(
-      "SELECT * FROM houses WHERE instance_id=$1 AND season_id=$2 AND status='APPROVED' AND activity='ACTIVE' AND starts_at<=$3 AND ends_at>$3",
+      "SELECT * FROM participations WHERE instance_id=$1 AND season_id=$2 AND status='APPROVED' AND activity='ACTIVE' AND EXISTS(SELECT 1 FROM users u WHERE u.id=participations.user_id AND u.account_status='ACTIVE' AND (u.email_status='VERIFIED' OR participations.legacy_imported)) AND NOT EXISTS(SELECT 1 FROM legal_documents d WHERE d.instance_id=participations.instance_id AND d.active AND d.requires_reaccept AND ((d.kind='TERMS' AND participations.terms_version IS DISTINCT FROM d.version) OR (d.kind='GUIDELINES' AND participations.guidelines_version IS DISTINCT FROM d.version))) AND starts_at<=$3 AND ends_at>$3",
       [i.id, s.id, context.now],
     );
     const result = planRoute(rows as unknown as House[], s, input, context.now);
@@ -540,27 +622,23 @@ export async function adminRead(user: User | null, section: string) {
     audit: "audit.read",
   };
   if (!permission[section]) throw new HttpError(404, "Section inconnue");
+  requirePermission(user, "admin.access");
   const u = requirePermission(user, permission[section]);
   switch (section) {
     case "houses":
       return (
         await db().query(
-          "SELECT h.*,u.email FROM houses h JOIN users u ON u.id=h.user_id WHERE h.instance_id=$1 ORDER BY h.status,h.name",
+          "SELECT h.*,u.email FROM participations h JOIN users u ON u.id=h.user_id WHERE h.instance_id=$1 ORDER BY h.status,h.name",
           [u.instance_id],
         )
       ).rows;
     case "users":
-      return (
-        await db().query(
-          "SELECT u.id,u.email,u.display_name,u.kind,u.role_id,r.name role_name FROM users u LEFT JOIN roles r ON r.id=u.role_id WHERE u.instance_id=$1 ORDER BY u.created_at",
-          [u.instance_id],
-        )
-      ).rows;
+      return adminUsers(u);
     case "seasons":
     case "stats":
       return (
         await db().query(
-          "SELECT s.*,(SELECT count(DISTINCT u.id)::int FROM houses h JOIN users u ON u.id=h.user_id WHERE h.season_id=s.id AND u.kind='PARTICIPANT' AND u.demo=false) reminder_recipient_estimate FROM seasons s WHERE s.instance_id=$1 ORDER BY s.year DESC",
+          "SELECT s.*,(SELECT count(*)::int FROM email_campaigns ec WHERE ec.season_id=s.id AND ec.schedule_mode='RELATIVE' AND ec.active AND ec.status='SCHEDULED') relative_campaign_count,(SELECT count(DISTINCT u.id)::int FROM participations h JOIN users u ON u.id=h.user_id WHERE h.season_id=s.id AND u.demo=false AND u.account_status='ACTIVE' AND u.email_status='VERIFIED') reminder_recipient_estimate FROM seasons s WHERE s.instance_id=$1 ORDER BY s.year DESC",
           [u.instance_id],
         )
       ).rows.map((s) => redactSeason(s, u));
@@ -584,7 +662,7 @@ export async function adminRead(user: User | null, section: string) {
       const i = (await instance())!,
         s = await activeSeason(i);
       const { rows } = await db().query(
-        "SELECT count(*)::int total,count(*) FILTER(WHERE status='APPROVED')::int approved,count(*) FILTER(WHERE status='PENDING')::int pending FROM houses WHERE instance_id=$1 AND season_id=$2",
+        "SELECT count(*)::int total,count(*) FILTER(WHERE status='APPROVED')::int approved,count(*) FILTER(WHERE status='PENDING')::int pending FROM participations WHERE instance_id=$1 AND season_id=$2",
         [i.id, s?.id ?? null],
       );
       const { rows: users } = await db().query(
@@ -608,6 +686,7 @@ function redactSeason(s: Record<string, unknown>, user: User) {
   return { ...s, reminder_subject: "", reminder_body: "" };
 }
 export async function adminAction(user: User | null, input: unknown) {
+  requirePermission(user, "admin.access");
   if (!user) throw new HttpError(401, "Connexion requise");
   const data = z
     .object({
@@ -623,7 +702,7 @@ export async function adminAction(user: User | null, input: unknown) {
       .enum(["APPROVED", "REJECTED", "DISABLED"])
       .parse(data.payload);
     const result = await db().query(
-      "UPDATE houses SET status=$1 WHERE id=$2 AND instance_id=$3 RETURNING id",
+      "UPDATE participations SET status=$1 WHERE id=$2 AND instance_id=$3 RETURNING id",
       [status, data.id, u.instance_id],
     );
     if (!result.rows.length) throw new HttpError(404, "Maison introuvable");
@@ -644,11 +723,11 @@ export async function adminAction(user: User | null, input: unknown) {
       throw new HttpError(400, "Confirmation requise");
     return transaction(async (c) => {
       await c.query(
-        "DELETE FROM audit_logs WHERE instance_id=$1 AND (target_id=$2 OR target_id IN(SELECT id FROM houses WHERE user_id=$2))",
+        "DELETE FROM audit_logs WHERE instance_id=$1 AND (target_id=$2 OR target_id IN(SELECT id FROM participations WHERE user_id=$2))",
         [u.instance_id, data.id],
       );
       const { rows } = await c.query(
-        "DELETE FROM users WHERE id=$1 AND instance_id=$2 AND kind='PARTICIPANT' RETURNING id",
+        "DELETE FROM participations WHERE user_id=$1 AND instance_id=$2 RETURNING id",
         [data.id, u.instance_id],
       );
       if (!rows.length) throw new HttpError(404, "Participant introuvable");
@@ -660,7 +739,6 @@ export async function adminAction(user: User | null, input: unknown) {
     requirePermission(u, "settings.manage");
     const p = instanceSchema
       .extend({
-        footer: z.string().max(150),
         defaultOpen: z.string().regex(/^\d{2}-\d{2}T\d{2}:\d{2}$/),
         defaultClose: z.string().regex(/^\d{2}-\d{2}T\d{2}:\d{2}$/),
       })
@@ -677,7 +755,6 @@ export async function adminAction(user: User | null, input: unknown) {
         p.longitude,
         p.zoom,
         JSON.stringify({
-          footer: p.footer,
           defaultOpen: p.defaultOpen,
           defaultClose: p.defaultClose,
         }),
@@ -726,7 +803,7 @@ export async function adminAction(user: User | null, input: unknown) {
         )
           throw new HttpError(400, "La purge doit suivre le rappel programmé");
         const { rows: invalid } = await c.query(
-          "SELECT id FROM houses WHERE season_id=$1 AND (starts_at<$2 OR ends_at>$3) LIMIT 1",
+          "SELECT id FROM participations WHERE season_id=$1 AND (starts_at<$2 OR ends_at>$3) LIMIT 1",
           [s.id, opens, closes],
         );
         if (invalid.length)
@@ -765,71 +842,22 @@ export async function adminAction(user: User | null, input: unknown) {
           i.id,
         ]);
       }
+      await recomputeCampaigns(c, s.id);
+      if (
+        (
+          await c.query(
+            "SELECT ec.id FROM email_campaigns ec JOIN seasons s ON s.id=ec.season_id WHERE ec.season_id=$1 AND ec.active AND ec.status IN('DRAFT','SCHEDULED') AND ec.scheduled_at>=s.purge_at LIMIT 1",
+            [s.id],
+          )
+        ).rows.length
+      )
+        throw new HttpError(
+          400,
+          "La purge doit suivre toutes les communications programmées",
+        );
       await audit(c, i.id, u, "season.updated", s.id);
       return { ok: true };
     });
-  }
-  if (data.action === "createStaff" || data.action === "userRole") {
-    requirePermission(u, "users.manage");
-    const p =
-      data.action === "createStaff"
-        ? credentials
-            .extend({
-              display_name: z.string().trim().min(1).max(80),
-              role_id: z.uuid(),
-            })
-            .parse(data.payload)
-        : z.object({ role_id: z.uuid() }).parse(data.payload);
-    const { rows } = await db().query(
-      "SELECT * FROM roles WHERE id=$1 AND instance_id=$2",
-      [p.role_id, u.instance_id],
-    );
-    if (!rows.length) throw new HttpError(400, "Rôle invalide");
-    const target = rows[0];
-    if (
-      u.role_name !== "SUPER_ADMIN" &&
-      (target.name === "SUPER_ADMIN" ||
-        (target.permissions as string[]).some(
-          (p) => !u.permissions.includes(p),
-        ))
-    )
-      throw new HttpError(403, "Attribution de droits interdite");
-    if (data.action === "createStaff") {
-      const p2 = p as z.infer<typeof credentials> & {
-        display_name: string;
-        role_id: string;
-      };
-      await db().query(
-        "INSERT INTO users(instance_id,email,display_name,password_hash,role_id,kind) VALUES($1,$2,$3,$4,$5,'STAFF')",
-        [
-          u.instance_id,
-          p2.email,
-          p2.display_name,
-          await hashPassword(p2.password),
-          p2.role_id,
-        ],
-      );
-    } else {
-      if (data.id === u.id)
-        throw new HttpError(
-          400,
-          "Vous ne pouvez pas changer votre propre rôle",
-        );
-      const old = (
-        await db().query(
-          "SELECT r.name FROM users x JOIN roles r ON r.id=x.role_id WHERE x.id=$1 AND x.instance_id=$2",
-          [data.id, u.instance_id],
-        )
-      ).rows[0];
-      if (!old || old.name === "SUPER_ADMIN")
-        throw new HttpError(403, "Ce compte est protégé");
-      await db().query(
-        "UPDATE users SET role_id=$1 WHERE id=$2 AND instance_id=$3 AND kind='STAFF'",
-        [p.role_id, data.id, u.instance_id],
-      );
-    }
-    await audit(db(), u.instance_id, u, "user.role.updated");
-    return { ok: true };
   }
   if (data.action === "role") {
     requirePermission(u, "roles.manage");
@@ -839,6 +867,8 @@ export async function adminAction(user: User | null, input: unknown) {
         permissions: z.array(z.enum(permissions)).max(permissions.length),
       })
       .parse(data.payload);
+    if (p.permissions.some((v) => !u.permissions.includes(v)))
+      throw new HttpError(403, "Attribution de droits interdite");
     if (p.name === "SUPER_ADMIN")
       throw new HttpError(400, "Le rôle Super Admin est protégé");
     await db().query(

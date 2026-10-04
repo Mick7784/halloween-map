@@ -2,8 +2,8 @@
   "name": "halloween-map",
   "private": true,
   "scripts": {
-    "predev": "node scripts/map-assets.mjs",
-    "prebuild": "node scripts/map-assets.mjs",
+    "predev": "node scripts/map-assets.mjs && node scripts/pwa-assets.mjs",
+    "prebuild": "node scripts/map-assets.mjs && node scripts/pwa-assets.mjs",
     "dev": "next dev --hostname 0.0.0.0",
     "build": "next build",
     "start": "next start --hostname 0.0.0.0",

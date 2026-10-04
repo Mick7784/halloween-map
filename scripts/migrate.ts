@@ -1,3 +1,4 @@
+import { initializeLegalDocuments } from "../lib/content";
 import { readdir, readFile } from "node:fs/promises";
 import { ensureBootstrap } from "../lib/bootstrap";
 import { db } from "../lib/db";
@@ -25,6 +26,8 @@ export async function migrate(pool: Pool) {
       await c.query("INSERT INTO schema_migrations(name) VALUES($1)", [name]);
       console.log("Migration:", name);
     }
+    for (const i of (await c.query("SELECT id FROM instances")).rows)
+      await initializeLegalDocuments(String(i.id), c);
     await c.query("COMMIT");
   } catch (e) {
     await c.query("ROLLBACK");

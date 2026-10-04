@@ -1,5 +1,16 @@
 # Changelog
 
+## V0.3 — Halloween Map V0.3 Beta
+
+- Comptes durables et participations saisonnières séparées. Migration 003 transactionnelle et rejouable, conservation des mots de passe, profils, maisons et états V0.2 ; purge sans suppression des comptes.
+- Email obligatoire pour les nouvelles participations, liens hashés à usage unique, invitations sans mot de passe, gestion du compte et utilisateurs avec profils et exceptions individuelles.
+- Communications multiples, dates absolues/relatives dans le fuseau de la saison, recalcul automatique, variables limitées et outbox atomique. Aucun nouvel envoi automatique sur résultat SMTP incertain.
+- CMS avec défauts et personnalisations, Markdown limité, documents légaux immuables et versionnés, validations avant participation et réacceptation des changements importants.
+- PWA installable, icônes officielles dérivées du manoir V0.2, parcours iOS/Android et cache limité aux ressources statiques, sans API ni adresses hors ligne.
+- Paramètres événement/localisation, géocodage avec repli manuel, calendriers français et heures 24 h ; direction artistique V0.2 conservée.
+- Tests métier et parcours navigateur essentiels, migrations fresh/legacy et idempotence. SMTP existant, aucune nouvelle variable d’environnement.
+- Upgrade : arrêter app/worker V0.2 avant la migration, conserver PostgreSQL et son volume, puis redémarrer les trois services applicatifs avec la même image V0.3.
+
 ## V0.2 — Halloween Map V0.2 Beta
 
 - Bootstrap automatique par lien à usage unique, hash persistant, session temporaire et wizard sans clé technique visible. Override SETUP_TOKEN facultatif.

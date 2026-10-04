@@ -1,4 +1,7 @@
 "use client";
+import AdminUsers, { type ManagedUser } from "./AdminUsers";
+import ContentAdmin from "./ContentAdmin";
+import EventSettings from "./EventSettings";
 import SeasonManager from "./SeasonManager";
 import DashboardVisuals from "./DashboardVisuals";
 import { useCallback, useEffect, useState, useRef } from "react";
@@ -31,14 +34,6 @@ import {
 } from "./common";
 import HouseForm from "./HouseForm";
 type Role = { id: string; name: string; permissions: string[] };
-type Staff = {
-  id: string;
-  email: string;
-  display_name: string;
-  kind: string;
-  role_id: string;
-  role_name: string;
-};
 type Dashboard = {
   approved: number;
   pending: number;
@@ -71,6 +66,7 @@ const sections = [
     Icon: ChartNoAxesCombined,
   },
   { id: "settings", name: "Paramètres", p: "settings.read", Icon: Settings },
+  { id: "content", name: "Contenus", p: "content.manage", Icon: ScrollText },
   {
     id: "roles",
     name: "Rôles & permissions",
@@ -377,104 +373,18 @@ export default function Admin({
               </section>
             )}
             {section === "users" && (
-              <>
-                <section className="panel">
-                  <h2>Comptes de l’instance</h2>
-                  <div className="table-wrap">
-                    <table>
-                      <thead>
-                        <tr>
-                          <th>Nom privé</th>
-                          <th>Email privé</th>
-                          <th>Rôle</th>
-                          <th>Gestion</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {(data as Staff[]).map((u) => (
-                          <tr key={u.id}>
-                            <td>{u.display_name}</td>
-                            <td>{u.email}</td>
-                            <td>
-                              {u.kind === "PARTICIPANT"
-                                ? "Participant"
-                                : (labels[u.role_name] ?? u.role_name)}
-                            </td>
-                            <td>
-                              {has(user, "users.manage") &&
-                                u.kind === "STAFF" &&
-                                u.id !== user.id &&
-                                u.role_name !== "SUPER_ADMIN" && (
-                                  <select
-                                    aria-label={"Rôle de " + u.display_name}
-                                    value={u.role_id}
-                                    onChange={(e) =>
-                                      void act(
-                                        "userRole",
-                                        { role_id: e.target.value },
-                                        u.id,
-                                      ).catch((e) => setError(e.message))
-                                    }
-                                  >
-                                    {roles
-                                      .filter(
-                                        (r) =>
-                                          user.role_name === "SUPER_ADMIN" ||
-                                          (r.name !== "SUPER_ADMIN" &&
-                                            r.permissions.every((p) =>
-                                              user.permissions.includes(p),
-                                            )),
-                                      )
-                                      .map((r) => (
-                                        <option key={r.id} value={r.id}>
-                                          {labels[r.name] ?? r.name}
-                                        </option>
-                                      ))}
-                                  </select>
-                                )}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </section>
-                {has(user, "users.manage") && (
-                  <section className="panel">
-                    <h2>Créer un compte d’équipe</h2>
-                    <AdminForm onSave={(v) => act("createStaff", v)}>
-                      <div className="grid two">
-                        <Field name="display_name" label="Nom d’affichage" />
-                        <Field name="email" label="Email" type="email" />
-                        <Field
-                          name="password"
-                          label="Mot de passe (12 caractères minimum)"
-                          type="password"
-                        />
-                        <label className="field">
-                          <span>Rôle *</span>
-                          <select name="role_id" required>
-                            {roles
-                              .filter(
-                                (r) =>
-                                  user.role_name === "SUPER_ADMIN" ||
-                                  (r.name !== "SUPER_ADMIN" &&
-                                    r.permissions.every((p) =>
-                                      user.permissions.includes(p),
-                                    )),
-                              )
-                              .map((r) => (
-                                <option key={r.id} value={r.id}>
-                                  {labels[r.name] ?? r.name}
-                                </option>
-                              ))}
-                          </select>
-                        </label>
-                      </div>
-                    </AdminForm>
-                  </section>
-                )}
-              </>
+              <AdminUsers
+                users={data as ManagedUser[]}
+                roles={roles}
+                user={user}
+                reload={reload}
+              />
+            )}
+            {section === "content" && (
+              <ContentAdmin
+                data={data as Parameters<typeof ContentAdmin>[0]["data"]}
+                reload={reload}
+              />
             )}
             {section === "seasons" && (
               <SeasonManager
@@ -519,87 +429,22 @@ export default function Admin({
                 ))}
               </>
             )}
-            {section === "settings" && (
-              <section className="panel">
-                <h2>Votre événement · Community</h2>
-                <AdminForm
-                  disabled={!has(user, "settings.manage")}
-                  onSave={(v) =>
-                    act("settings", {
-                      ...v,
-                      latitude: Number(v.latitude),
-                      longitude: Number(v.longitude),
-                      zoom: Number(v.zoom),
-                    })
-                  }
-                >
-                  <div className="grid two">
-                    <Field
-                      label="Nom public"
-                      name="public_name"
-                      value={(data as Instance).public_name}
-                    />
-                    <Field
-                      label="Territoire"
-                      name="territory"
-                      value={(data as Instance).territory}
-                    />
-                    <Field
-                      label="Code postal"
-                      name="postal_code"
-                      value={(data as Instance).postal_code}
-                    />
-                    <Field
-                      label="Pays"
-                      name="country"
-                      value={(data as Instance).country}
-                    />
-                    <Field
-                      label="Fuseau horaire"
-                      name="timezone"
-                      value={(data as Instance).timezone}
-                    />
-                    <Field
-                      label="Zoom"
-                      name="zoom"
-                      type="number"
-                      value={(data as Instance).zoom}
-                    />
-                    <Field
-                      label="Latitude centre"
-                      name="latitude"
-                      type="number"
-                      value={(data as Instance).latitude}
-                    />
-                    <Field
-                      label="Longitude centre"
-                      name="longitude"
-                      type="number"
-                      value={(data as Instance).longitude}
-                    />
-                    <Field
-                      label="Ouverture par défaut (MM-DDTHH:mm)"
-                      name="defaultOpen"
-                      value={String((data as Instance).config.defaultOpen)}
-                    />
-                    <Field
-                      label="Fermeture par défaut (MM-DDTHH:mm)"
-                      name="defaultClose"
-                      value={String((data as Instance).config.defaultClose)}
-                    />
-                  </div>
-                  <Field
-                    label="Signature en pied de page"
-                    name="footer"
-                    value={String((data as Instance).config.footer)}
-                  />
-                  <p className="muted small">
-                    Les dates par défaut concernent les prochaines saisons. Les
-                    dates de la saison actuelle sont gérées séparément.
+            {section === "settings" &&
+              (has(user, "settings.manage") ? (
+                <EventSettings
+                  instance={data as Instance}
+                  mapStyle={mapStyle}
+                  save={(p) => act("settings", p)}
+                />
+              ) : (
+                <section className="panel">
+                  <h2>{(data as Instance).public_name}</h2>
+                  <p>
+                    {(data as Instance).territory} ·{" "}
+                    {(data as Instance).timezone}
                   </p>
-                </AdminForm>
-              </section>
-            )}
+                </section>
+              ))}
             {section === "roles" && (
               <>
                 <div className="grid two">

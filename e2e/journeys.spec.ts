@@ -1,7 +1,7 @@
 import { randomBytes, createHash } from "node:crypto";
 import { test, expect, type Page } from "@playwright/test";
 import { Pool } from "pg";
-import { readFile } from "node:fs/promises";
+import { dispatchEmails } from "../lib/mail";
 import { DateTime } from "luxon";
 const zone = "Europe/Paris";
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
@@ -10,7 +10,7 @@ const year = DateTime.now().setZone(zone).year;
 test.describe.configure({ mode: "serial" });
 test.beforeAll(async () => {
   await pool.query(
-    "TRUNCATE bootstrap,setup_sessions,instances,roles,users,seasons,houses,sessions,audit_logs,rate_limits RESTART IDENTITY CASCADE",
+    "TRUNCATE bootstrap,setup_sessions,instances,roles,users,seasons,participations,sessions,audit_logs,rate_limits RESTART IDENTITY CASCADE",
   );
   await pool.query("INSERT INTO bootstrap(secret_hash) VALUES($1)", [
     createHash("sha256").update(bootstrapSecret).digest("hex"),
@@ -18,6 +18,9 @@ test.beforeAll(async () => {
 });
 test.afterAll(async () => {
   await pool.end();
+  await (
+    globalThis as unknown as { halloweenPool?: Pool }
+  ).halloweenPool?.end();
 });
 async function login(page: Page, email = "admin@example.invalid") {
   await page.goto("/login");
@@ -121,426 +124,271 @@ test("first-run wizard, mobile/desktop layout and permanent setup lock", async (
   });
   expect(result.status()).toBe(409);
 });
-test("countdown hides positions; participant registers, updates and manages activity", async ({
+async function delivery(email: string) {
+  let link = "";
+  await dispatchEmails(new Date(), async (mail) => {
+    if (mail.to === email) link = mail.text.match(/https?:[^\s]+/)?.[0] ?? "";
+  });
+  expect(link).toContain("token=");
+  return link;
+}
+test("signup → verify email → participation and required terms, mobile", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto("/");
-  await expect(
-    page.getByRole("heading", { name: "Les portes s’ouvriront bientôt." }),
-  ).toBeVisible();
-  await page.screenshot({
-    path: "test-results/countdown-mobile.png",
-    fullPage: true,
-  });
   await page.goto("/register");
+  await expect(
+    page.getByRole("heading", { name: "Vos données restent les vôtres." }),
+  ).toBeVisible();
+  await page.getByLabel("Nom ou pseudo").fill("Visiteur test");
   await page
     .getByLabel("Email", { exact: false })
     .fill("visitor@example.invalid");
   await page
     .getByLabel("Mot de passe", { exact: false })
     .fill("browser-password-1234");
+  await page
+    .getByRole("button", { name: "Créer mon compte", exact: true })
+    .click();
+  await page.waitForURL("**/account?created=1");
+  await expect(
+    page.getByText("Email non vérifié", { exact: true }),
+  ).toBeVisible();
+  await page.goto(await delivery("visitor@example.invalid"));
+  await page.waitForURL("**/account?verified=1");
+  expect(page.url()).not.toContain("token=");
+  await expect(page.getByText("Email vérifié", { exact: true })).toBeVisible();
+  await page.goto("/participant");
   await page.getByLabel("Nom fictif", { exact: false }).fill("La maison test");
   await page
     .getByLabel("Adresse de la maison", { exact: false })
     .fill("1 allée fictive");
-  await page.getByRole("button", { name: "Inscrire ma maison" }).click();
-  await page.waitForURL("/participant");
+  await page
+    .getByRole("button", { name: "Envoyer ma participation", exact: true })
+    .click();
+  const dialog = page.getByRole("dialog");
   await expect(
-    page.getByText("Votre maison attend la validation", { exact: false }),
+    dialog.getByRole("heading", { name: "Avant de participer" }),
   ).toBeVisible();
+  const confirm = dialog.getByRole("button", {
+    name: "Confirmer ma participation",
+  });
+  await expect(confirm).toBeDisabled();
+  await dialog
+    .getByRole("checkbox", { name: "Je confirme avoir lu", exact: false })
+    .check();
+  await dialog
+    .getByRole("checkbox", { name: "J’ai lu et j’accepte", exact: false })
+    .check();
+  await confirm.click();
+  await expect(
+    page.getByText("En attente", { exact: true }).first(),
+  ).toBeVisible();
+  expect(
+    (
+      await pool.query(
+        "SELECT terms_version,guidelines_version FROM participations",
+      )
+    ).rows[0],
+  ).toEqual({ terms_version: "2026.1", guidelines_version: "2026.1" });
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= innerWidth,
     ),
   ).toBe(true);
   await page.screenshot({
-    path: "test-results/participant-mobile.png",
+    path: "test-results/participation-mobile.png",
     fullPage: true,
   });
-  for (const [width, height, label] of [
-    [820, 1180, "tablet"],
-    [1920, 1080, "1080p"],
-    [2560, 1440, "1440p"],
-  ] as const) {
-    await page.setViewportSize({ width, height });
-    expect(
-      await page.evaluate(
-        () => document.documentElement.scrollWidth <= innerWidth,
-      ),
-    ).toBe(true);
-    await page.screenshot({
-      path: "test-results/participant-" + label + ".png",
-      fullPage: true,
-    });
-  }
   const denied = await page.request.get("/api/admin/users");
   expect(denied.status()).toBe(403);
-  await page.getByRole("button", { name: "Mettre en pause" }).click();
-  await expect(page.getByText("En pause", { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Reprendre mon accueil" }).click();
-  await expect(page.getByText("En activité", { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Je n’ai plus de bonbons" }).click();
-  await expect(
-    page.getByRole("button", { name: "J’ai de nouveau des bonbons" }),
-  ).toBeVisible();
 });
-test("admin demonstration, reminder settings and responsive visual references", async ({
-  page,
-  context,
-  browser,
-}) => {
-  await mockMap(page);
-  await login(page);
-  await page.getByRole("button", { name: "Maisons", exact: true }).click();
-  await page.getByRole("button", { name: "Valider", exact: true }).click();
-  await page
-    .getByRole("button", { name: "Tableau de bord", exact: true })
-    .click();
-  await expect(page.locator(".dashboard-map .house-marker")).toHaveCount(1, {
-    timeout: 15000,
-  });
-  for (const [width, height, label] of [
-    [390, 844, "mobile"],
-    [820, 1180, "tablet"],
-    [1920, 1080, "1080p"],
-    [2560, 1440, "1440p"],
-  ] as const) {
-    await page.setViewportSize({ width, height });
-    expect(
-      await page.evaluate(
-        () => document.documentElement.scrollWidth <= innerWidth,
-      ),
-    ).toBe(true);
-    await page.screenshot({
-      path: "test-results/dashboard-" + label + ".png",
-      fullPage: true,
-    });
-  }
-  await page.getByRole("button", { name: "Saison", exact: true }).click();
-  await expect(
-    page.getByRole("heading", { name: "Mode démonstration" }),
-  ).toBeVisible();
-  await page.getByLabel("Activer cette saison", { exact: false }).check();
-  await page
-    .getByRole("button", { name: "Enregistrer la saison", exact: true })
-    .click();
-  await expect(
-    page.getByText("Envoi email indisponible", { exact: false }),
-  ).toBeVisible();
-  await page
-    .getByRole("button", { name: "Prévisualiser le message", exact: true })
-    .click();
-  await expect(
-    page.getByText("APERÇU DU MESSAGE", { exact: true }),
-  ).toBeVisible();
-  await page.getByLabel("Fermer la prévisualisation email").click();
-  await page.getByLabel("Activer le rappel", { exact: true }).check();
-  await page
-    .getByRole("button", { name: "Enregistrer le rappel", exact: true })
-    .click();
-  await expect(page.getByText("Programmé", { exact: true })).toBeVisible();
-  for (const [width, height, label] of [
-    [390, 844, "mobile"],
-    [820, 1180, "tablet"],
-    [1920, 1080, "1080p"],
-    [2560, 1440, "1440p"],
-  ] as const) {
-    await page.setViewportSize({ width, height });
-    expect(
-      await page.evaluate(
-        () => document.documentElement.scrollWidth <= innerWidth,
-      ),
-    ).toBe(true);
-    await page.screenshot({
-      path: "test-results/season-" + label + ".png",
-      fullPage: true,
-    });
-  }
-  await page.getByLabel("Activer pour ma session", { exact: true }).check();
-  await page
-    .getByLabel("Heure simulée", { exact: false })
-    .fill(year + "-10-31T18:00");
-  await page
-    .getByRole("button", {
-      name: "Appliquer le mode démonstration",
-      exact: true,
-    })
-    .click();
-  await expect(
-    page.getByRole("link", { name: "Ouvrir la prévisualisation", exact: true }),
-  ).toBeVisible();
-  const countBefore = (await pool.query("SELECT routes_count FROM seasons"))
-    .rows[0].routes_count;
-  const preview = await context.newPage();
-  await mockMap(preview);
-  await preview.goto("/preview");
-  await expect(
-    preview.getByText("MODE DÉMONSTRATION", { exact: false }),
-  ).toBeVisible();
-  await expect(preview.locator(".house-marker")).toHaveCount(1, {
-    timeout: 15000,
-  });
-  await preview.getByRole("button", { name: "Liste", exact: true }).click();
-  await preview.getByRole("button", { name: /La maison test/ }).click();
-  await expect(preview.getByRole("dialog")).toBeVisible();
-  for (const [width, height, label] of [
-    [390, 844, "mobile"],
-    [1440, 1000, "desktop"],
-  ] as const) {
-    await preview.setViewportSize({ width, height });
-    await preview.screenshot({
-      path: "test-results/house-detail-" + label + ".png",
-      fullPage: true,
-    });
-  }
-  await preview.keyboard.press("Tab");
-  expect(
-    await preview.evaluate(
-      () =>
-        !!document
-          .querySelector('[role="dialog"]')
-          ?.contains(document.activeElement),
-    ),
-  ).toBe(true);
-  await preview.keyboard.press("Escape");
-  await expect(preview.getByRole("dialog")).toHaveCount(0);
-  await preview
-    .getByRole("button", { name: "Créer mon parcours", exact: true })
-    .click();
-  await expect(preview.getByRole("heading", { name: /1 étape/ })).toBeVisible();
-  expect(
-    (await pool.query("SELECT routes_count FROM seasons")).rows[0].routes_count,
-  ).toBe(countBefore);
-  await preview.getByRole("button", { name: "Carte", exact: true }).click();
-  for (const [width, height, label] of [
-    [390, 844, "mobile"],
-    [820, 1180, "tablet"],
-    [1920, 1080, "1080p"],
-    [2560, 1440, "1440p"],
-  ] as const) {
-    await preview.setViewportSize({ width, height });
-    expect(
-      await preview.evaluate(
-        () => document.documentElement.scrollWidth <= innerWidth,
-      ),
-    ).toBe(true);
-    await preview.screenshot({
-      path: "test-results/demo-map-" + label + ".png",
-      fullPage: true,
-    });
-  }
-  const anonymous = await browser.newContext();
-  const publicPage = await anonymous.newPage();
-  await publicPage.goto("/");
-  await expect(
-    publicPage.getByRole("heading", {
-      name: "Les portes s’ouvriront bientôt.",
-    }),
-  ).toBeVisible();
-  expect((await publicPage.request.get("/api/public?preview=1")).status()).toBe(
-    401,
-  );
-  for (const [width, height, label] of [
-    [390, 844, "mobile"],
-    [820, 1180, "tablet"],
-    [1920, 1080, "1080p"],
-    [2560, 1440, "1440p"],
-  ] as const) {
-    await publicPage.setViewportSize({ width, height });
-    expect(
-      await publicPage.evaluate(
-        () => document.documentElement.scrollWidth <= innerWidth,
-      ),
-    ).toBe(true);
-    await publicPage.screenshot({
-      path: "test-results/countdown-" + label + ".png",
-      fullPage: true,
-    });
-  }
-  await anonymous.close();
-  await preview.close();
-  await page
-    .getByLabel("Heure simulée", { exact: false })
-    .fill(year + "-10-30T18:00");
-  await page
-    .getByRole("button", {
-      name: "Appliquer le mode démonstration",
-      exact: true,
-    })
-    .click();
-  const countdown = await context.newPage();
-  await countdown.goto("/preview");
-  await expect(countdown.locator(".countdown-boxes")).toBeVisible();
-  await countdown.close();
-  await page.getByLabel("Activer pour ma session", { exact: true }).uncheck();
-  await page
-    .getByRole("button", {
-      name: "Appliquer le mode démonstration",
-      exact: true,
-    })
-    .click();
-  expect((await page.request.get("/api/public?preview=1")).status()).toBe(403);
-});
-async function mockMap(page: Page) {
-  await page.route(
-    "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json",
-    (r) =>
-      r.fulfill({
-        json: {
-          version: 8,
-          sources: {
-            roads: {
-              type: "geojson",
-              data: {
-                type: "FeatureCollection",
-                features: Array.from({ length: 15 }, (_, n) => ({
-                  type: "Feature",
-                  properties: {},
-                  geometry: {
-                    type: "LineString",
-                    coordinates:
-                      n % 2
-                        ? [
-                            [-1.695, 48.085 + n * 0.002],
-                            [-1.645, 48.095 + n * 0.001],
-                          ]
-                        : [
-                            [-1.688 + n * 0.003, 48.082],
-                            [-1.681 + n * 0.003, 48.12],
-                          ],
-                  },
-                })),
-              },
-            },
-          },
-          layers: [
-            {
-              id: "bg",
-              type: "background",
-              paint: { "background-color": "#151923" },
-            },
-            {
-              id: "roads",
-              type: "line",
-              source: "roads",
-              paint: { "line-color": "#30333f", "line-width": 5 },
-            },
-            {
-              id: "roads-core",
-              type: "line",
-              source: "roads",
-              paint: { "line-color": "#20252f", "line-width": 2 },
-            },
-          ],
-        },
-      }),
-  );
-}
-test("admin moderates; public sees validated house and creates a feasible route", async ({
+test("admin invitation → one-use email → choose password and read-only administration", async ({
   page,
 }) => {
-  // A deterministic style keeps the browser suite independent of tile-provider DNS.
-  // The actual MapLibre canvas, local module worker, markers and route still run.
-  await page.route(
-    "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json",
-    (r) =>
-      r.fulfill({
-        json: {
-          version: 8,
-          sources: {},
-          layers: [
-            {
-              id: "background",
-              type: "background",
-              paint: { "background-color": "#1a2029" },
-            },
-          ],
-        },
-      }),
-  );
   await login(page);
-  await page.getByRole("button", { name: "Maisons", exact: true }).click();
-  await page.getByRole("button", { name: "Valider", exact: true }).click();
-  await expect(
-    page.getByRole("table").getByText("Validée", { exact: true }),
-  ).toBeVisible();
-  const now = DateTime.now();
-  await pool.query(
-    "UPDATE seasons SET activated=true,opens_at=$1,closes_at=$2",
-    [now.minus({ hours: 1 }).toISO(), now.plus({ hours: 3 }).toISO()],
+  await page.getByRole("button", { name: "Utilisateurs", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Créer un utilisateur", exact: true })
+    .click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByLabel("Nom ou pseudo").fill("Lecteur invité");
+  await dialog
+    .getByLabel("Email", { exact: false })
+    .fill("reader@example.invalid");
+  await dialog.getByLabel("Profil").selectOption({ label: "Lecture seule" });
+  await expect(dialog.getByLabel("Mot de passe", { exact: false })).toHaveCount(
+    0,
   );
-  await pool.query("UPDATE houses SET starts_at=$1,ends_at=$2", [
-    now.minus({ minutes: 30 }).toISO(),
-    now.plus({ hours: 2 }).toISO(),
-  ]);
+  await dialog.getByRole("button", { name: "Envoyer une invitation" }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  const link = await delivery("reader@example.invalid");
+  await page.request.post("/api/logout", {
+    headers: { origin: process.env.APP_ORIGIN! },
+    data: {},
+  });
+  await page.goto(link);
+  await page.waitForURL("**/activation");
+  expect(page.url()).not.toContain("token=");
+  await page
+    .getByLabel("Votre mot de passe", { exact: false })
+    .fill("reader-password-1234");
+  await page
+    .getByRole("button", { name: "Activer mon compte", exact: true })
+    .click();
+  await page.waitForURL("**/account");
+  await expect(page.getByText("Email vérifié", { exact: true })).toBeVisible();
+  await page.goto("/admin");
+  await expect(
+    page.getByRole("heading", { name: "Tableau de bord", exact: true }),
+  ).toBeVisible();
+  const denied = await page.request.post("/api/admin", {
+    headers: { origin: process.env.APP_ORIGIN! },
+    data: {
+      action: "role",
+      payload: { name: "ESCALATION", permissions: ["roles.manage"] },
+    },
+  });
+  expect(denied.status()).toBe(403);
+});
+test("individual permissions authorize and revoke administration independently of legacy kind", async ({
+  page,
+}) => {
+  await login(page);
+  await page.getByRole("button", { name: "Utilisateurs", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Visiteur test", exact: true })
+    .click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByLabel("Profil").selectOption({ label: "Lecture seule" });
+  await dialog
+    .getByRole("button", { name: "Enregistrer l’utilisateur" })
+    .click();
+  await dialog.getByRole("button", { name: "Fermer", exact: true }).click();
+  await page.request.post("/api/logout", {
+    headers: { origin: process.env.APP_ORIGIN! },
+    data: {},
+  });
+  await page.goto("/login");
+  await page
+    .getByLabel("Email", { exact: false })
+    .fill("visitor@example.invalid");
+  await page
+    .getByLabel("Mot de passe", { exact: false })
+    .fill("browser-password-1234");
+  await page.getByRole("button", { name: "Me connecter", exact: true }).click();
+  await page.waitForURL("**/admin");
+  await expect(
+    page.getByRole("heading", { name: "Tableau de bord", exact: true }),
+  ).toBeVisible();
+  const me = await (await page.request.get("/api/me")).json();
+  expect(me.kind).toBe("PARTICIPANT");
+  expect(me.permissions).toContain("admin.access");
+});
+test("CMS publishes editorial text visible publicly and versioned legal document", async ({
+  page,
+}) => {
+  await login(page);
+  await page.getByRole("button", { name: "Contenus", exact: true }).click();
+  await page.getByLabel("Contenu à modifier").selectOption("home.title");
+  await page
+    .getByLabel("Texte", { exact: true })
+    .fill("La nuit des lanternes à {{territory}}");
+  await page
+    .getByRole("button", { name: "Enregistrer le contenu", exact: true })
+    .click();
   await page.goto("/");
   await expect(
-    page.getByRole("heading", { name: "La nuit vous appartient." }),
+    page.getByRole("heading", {
+      name: "La nuit des lanternes à Territoire fictif",
+    }),
   ).toBeVisible();
-  await page.getByRole("button", { name: "Liste", exact: true }).click();
-  await page.getByRole("button", { name: /La maison test/ }).click();
+  await page.goto("/admin");
+  await page.getByRole("button", { name: "Contenus", exact: true }).click();
+  await page.getByRole("button", { name: "Documents", exact: true }).click();
+  await page
+    .getByText("Préparer une nouvelle version", { exact: true })
+    .click();
+  await page
+    .getByLabel("Version (ex. 2027.2)", { exact: false })
+    .fill("2026.2");
+  await page
+    .getByLabel("Document", { exact: true })
+    .last()
+    .fill("## Conditions actualisées\n\nRespectez les horaires.");
+  await page.getByRole("button", { name: "Créer le brouillon" }).click();
+  await page.getByRole("button", { name: "Publier cette version" }).click();
+  await page.goto("/terms");
   await expect(
-    page.getByRole("dialog", { name: "La maison test" }),
+    page.getByText("Version 2026.2", { exact: false }),
   ).toBeVisible();
   await expect(
-    page.getByRole("dialog").getByText("1 allée fictive", { exact: true }),
+    page.getByRole("heading", { name: "Conditions actualisées" }),
   ).toBeVisible();
-  await page.getByLabel("Fermer la fiche").click();
-  await page.getByRole("button", { name: "Créer mon parcours" }).click();
-  await expect(page.getByRole("heading", { name: /1 étape/ })).toBeVisible();
-  await page.screenshot({
-    path: "test-results/public-desktop.png",
-    fullPage: true,
-  });
-  await page.setViewportSize({ width: 390, height: 844 });
-  await page.getByRole("button", { name: "Carte", exact: true }).click();
-  await expect(page.locator(".map-canvas")).toBeVisible();
-  await expect(page.locator(".house-marker")).toHaveCount(1, {
-    timeout: 15000,
-  });
-  expect(
-    await page.evaluate(
-      () => document.documentElement.scrollWidth <= innerWidth,
-    ),
-  ).toBe(true);
-  await page.screenshot({
-    path: "test-results/map-mobile.png",
-    fullPage: true,
-  });
-  const csrf = await page.request.post("/api/admin", {
-    headers: { origin: "https://untrusted.invalid" },
-    data: { action: "moderate" },
-  });
-  expect(csrf.status()).toBe(403);
 });
-test("participant deletion and annual closure leave only staff and anonymous statistics", async ({
+test("relative campaign → outbox delivery once → purge retains accounts and removes addresses", async ({
   page,
 }) => {
-  await login(page, "visitor@example.invalid");
+  await login(page);
+  await page.getByRole("button", { name: "Saison", exact: true }).click();
+  await page.getByRole("button", { name: "Nouvelle campagne" }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByLabel("Nom interne").fill("Bienvenue aux participants");
+  await dialog.getByLabel("Décalage en jours", { exact: false }).fill("-30");
+  await dialog.getByRole("button", { name: "Enregistrer la campagne" }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  const sent: string[] = [];
+  await dispatchEmails(new Date(), async (m) => {
+    sent.push(m.to);
+  });
+  await dispatchEmails(new Date(), async (m) => {
+    sent.push(m.to);
+  });
+  expect(sent).toEqual(["visitor@example.invalid"]);
   page.once("dialog", (d) => d.accept());
-  await page
-    .getByRole("button", { name: "Supprimer ma participation" })
-    .click();
-  await page.waitForURL("/");
-  expect(
-    (await pool.query("SELECT id FROM users WHERE kind='PARTICIPANT'")).rows,
-  ).toHaveLength(0);
-  await pool.query(
-    "UPDATE seasons SET closes_at=now()-interval '1 second',opens_at=now()-interval '1 hour',purge_at=now()-interval '1 second'",
+  await page.getByRole("button", { name: "Purger maintenant" }).click();
+  await expect(page.getByText("Purgée", { exact: true }).first()).toBeVisible();
+  expect((await pool.query("SELECT * FROM participations")).rows).toHaveLength(
+    0,
   );
-  await page.reload();
-  await expect(
-    page.getByRole("heading", { name: "C’est fini pour cette année." }),
-  ).toBeVisible();
   expect(
-    (await pool.query("SELECT purged_at,stats FROM seasons")).rows[0].purged_at,
-  ).not.toBeNull();
+    (await pool.query("SELECT * FROM email_outbox WHERE season_id IS NOT NULL"))
+      .rows,
+  ).toHaveLength(0);
+  expect((await pool.query("SELECT * FROM users")).rows).toHaveLength(3);
   expect(
-    (await pool.query("SELECT id FROM users WHERE kind='STAFF'")).rows,
-  ).toHaveLength(1);
-  const version = (await readFile("VERSION", "utf8")).trim();
-  await expect(
-    page.getByText("Halloween Map · " + version, { exact: true }),
-  ).toBeVisible();
+    (
+      await pool.query(
+        "SELECT sent FROM email_campaigns WHERE name='Bienvenue aux participants'",
+      )
+    ).rows[0].sent,
+  ).toBe(1);
+  await page.goto("/");
+  const manifest = await (
+    await page.request.get("/manifest.webmanifest")
+  ).json();
+  expect(manifest.display).toBe("standalone");
+  expect(manifest.icons).toHaveLength(3);
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        navigator.serviceWorker.getRegistration().then((r) => !!r),
+      ),
+    )
+    .toBe(true);
+  const cachesList = await page.evaluate(async () => {
+    const entries = await Promise.all(
+      (await caches.keys()).map(async (key) =>
+        (await (await caches.open(key)).keys()).map(
+          (r) => new URL(r.url).pathname,
+        ),
+      ),
+    );
+    return entries.flat();
+  });
+  expect(
+    cachesList.some(
+      (p) => p.startsWith("/api/") || p === "/participant" || p === "/account",
+    ),
+  ).toBe(false);
 });

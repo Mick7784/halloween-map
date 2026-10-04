@@ -12,7 +12,7 @@ export async function effectiveTime(
 ): Promise<TimeContext> {
   if (!preview) return realTime();
   requirePermission(user, "season.preview");
-  if (user?.kind !== "STAFF" || !session)
+  if (!user?.permissions.includes("admin.access") || !session)
     throw new HttpError(403, "Prévisualisation réservée au staff");
   const row = (
     await db().query(

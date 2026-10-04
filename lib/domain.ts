@@ -56,11 +56,19 @@ export type User = {
   email: string;
   display_name: string;
   kind: string;
+  email_status: string;
+  email_verified_at: string | null;
+  account_status: string;
   role_name: string | null;
   role_id: string | null;
   permissions: string[];
 };
+export type Participation = House;
 export const permissions = [
+  "admin.access",
+  "communications.read",
+  "communications.manage",
+  "content.manage",
   "participants.read",
   "participants.validate",
   "participants.edit",
@@ -77,9 +85,11 @@ export const permissions = [
   "roles.manage",
 ] as const;
 export const defaultRoles: Record<string, readonly string[]> = {
+  PARTICIPANT: [],
   SUPER_ADMIN: permissions,
   LOCAL_ADMIN: permissions.filter((p) => p !== "roles.manage"),
   MODERATOR: [
+    "admin.access",
     "participants.read",
     "participants.validate",
     "participants.edit",
@@ -87,6 +97,7 @@ export const defaultRoles: Record<string, readonly string[]> = {
     "audit.read",
   ],
   READ_ONLY: [
+    "admin.access",
     "participants.read",
     "users.read",
     "season.read",

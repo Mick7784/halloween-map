@@ -2,6 +2,9 @@
 import { useState } from "react";
 import { Ghost, MapPin } from "lucide-react";
 import { Field, Check, Notice, values, localDate, fears } from "./common";
+import Editorial from "./Editorial";
+import Link from "next/link";
+import type { LegalDocument, LegalKind } from "../lib/content";
 import type { House } from "../lib/domain";
 export default function HouseForm({
   house,
@@ -11,8 +14,10 @@ export default function HouseForm({
   onSave,
   registration = false,
   center,
+  documents,
 }: {
   house?: House;
+  documents?: Record<LegalKind, LegalDocument>;
   zone: string;
   opens: string;
   closes: string;
@@ -20,6 +25,9 @@ export default function HouseForm({
   registration?: boolean;
   center: [number, number];
 }) {
+  const [pending, setPending] = useState<unknown>(null),
+    [terms, setTerms] = useState(false),
+    [guidelines, setGuidelines] = useState(false);
   const [adapt, setAdapt] = useState(house?.adaptable ?? false),
     [fear, setFear] = useState(house?.fear ?? 2),
     [error, setError] = useState(""),
@@ -50,6 +58,12 @@ export default function HouseForm({
             rp: v.rp,
             practical: v.practical,
           };
+          if (documents) {
+            setTerms(false);
+            setGuidelines(false);
+            setPending(h);
+            return;
+          }
           await onSave(
             registration
               ? { account: { email: v.email, password: v.password }, house: h }
@@ -238,13 +252,90 @@ export default function HouseForm({
           placeholder="Portail blanc au fond de la cour. Passez par l’allée à droite."
         />
       </label>
+      {pending !== null && documents && (
+        <div className="modal-backdrop">
+          <section
+            className="dialog panel consent-sheet"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="consent-title"
+          >
+            <button
+              type="button"
+              className="close"
+              onClick={() => setPending(null)}
+              aria-label="Fermer"
+            >
+              ×
+            </button>
+            <h2 id="consent-title">Avant de participer</h2>
+            <Editorial text={documents.GUIDELINES.body} />
+            <label className="acceptance">
+              <input
+                type="checkbox"
+                checked={guidelines}
+                onChange={(e) => setGuidelines(e.target.checked)}
+              />
+              Je confirme avoir lu les bonnes pratiques et disposer de
+              l’autorisation nécessaire pour inscrire cette adresse.
+            </label>
+            <label className="acceptance">
+              <input
+                type="checkbox"
+                checked={terms}
+                onChange={(e) => setTerms(e.target.checked)}
+              />
+              J’ai lu et j’accepte les{" "}
+              <Link href="/terms" target="_blank">
+                Conditions d’utilisation
+              </Link>
+              .
+            </label>
+            <Link href="/privacy" target="_blank">
+              Politique de confidentialité
+            </Link>
+            <Notice error={error} />
+            <button
+              type="button"
+              className="primary wide"
+              disabled={!terms || !guidelines || busy}
+              onClick={async () => {
+                setBusy(true);
+                setError("");
+                try {
+                  const acceptance = {
+                    terms,
+                    guidelines,
+                    terms_version: documents.TERMS.version,
+                    guidelines_version: documents.GUIDELINES.version,
+                  };
+                  await onSave(
+                    house
+                      ? { ...(pending as Record<string, unknown>), acceptance }
+                      : { house: pending, acceptance },
+                  );
+                  setPending(null);
+                } catch (e) {
+                  setError((e as Error).message);
+                } finally {
+                  setBusy(false);
+                }
+              }}
+            >
+              Confirmer ma participation
+            </button>
+          </section>
+        </div>
+      )}
       <Notice error={error} />
       <button className="primary wide" disabled={busy}>
         {busy
           ? "Enregistrement…"
           : registration
             ? "Inscrire ma maison"
-            : "Enregistrer les modifications"}
+            : house
+              ? "Enregistrer les modifications"
+              : "Envoyer ma participation"}
       </button>
     </form>
   );

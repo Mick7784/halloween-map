@@ -1,0 +1,137 @@
+"use client";
+import { useState } from "react";
+import { DateTime } from "luxon";
+export default function FrenchDate({
+  label,
+  name,
+  value,
+  required = true,
+  min,
+  max,
+  recurring = false,
+}: {
+  label: string;
+  name: string;
+  value?: string | number;
+  required?: boolean;
+  min?: string | number;
+  max?: string | number;
+  recurring?: boolean;
+}) {
+  const initial = String(value ?? "");
+  const [date, setDate] = useState(initial.slice(0, 10)),
+    [clock, setClock] = useState(initial.slice(11, 16) || "00:00"),
+    [open, setOpen] = useState(false),
+    [month, setMonth] = useState(() =>
+      DateTime.fromISO(initial.slice(0, 10) || "2000-10-01").startOf("month"),
+    );
+  const parsed = DateTime.fromISO(date + "T" + clock).setLocale("fr");
+  function update(
+    nextDate: string,
+    nextClock: string,
+    form: HTMLFormElement | null,
+  ) {
+    const field = form?.elements.namedItem(name) as HTMLInputElement | null;
+    if (field) {
+      field.value = nextDate + "T" + nextClock;
+      field.dispatchEvent(new Event("input", { bubbles: true }));
+    }
+    setDate(nextDate);
+    setClock(nextClock);
+  }
+  const count = month.daysInMonth ?? 31,
+    leading = month.weekday - 1;
+  return (
+    <div className="field french-date">
+      <span>
+        {label}
+        {required && <b className="required"> *</b>}
+      </span>
+      <input type="hidden" name={name} value={date + "T" + clock} />
+      <div className="date-controls">
+        <button
+          type="button"
+          aria-label={label + " : choisir la date"}
+          aria-expanded={open}
+          onClick={() => setOpen(!open)}
+        >
+          {parsed.isValid
+            ? parsed.toFormat(recurring ? "dd LLLL" : "dd LLLL yyyy")
+            : "Choisir une date"}
+        </button>
+        <label>
+          <span className="sr-only">{label + " : heure"}</span>
+          <input
+            aria-label={label + " : heure"}
+            type="time"
+            lang="fr"
+            required={required}
+            value={clock}
+            onChange={(e) => update(date, e.target.value, e.currentTarget.form)}
+          />
+        </label>
+      </div>
+      {open && (
+        <div className="calendar-popover">
+          <div className="calendar-heading">
+            <button
+              type="button"
+              aria-label="Mois précédent"
+              onClick={() => setMonth(month.minus({ months: 1 }))}
+            >
+              ‹
+            </button>
+            <strong>
+              {month.setLocale("fr").toFormat(recurring ? "LLLL" : "LLLL yyyy")}
+            </strong>
+            <button
+              type="button"
+              aria-label="Mois suivant"
+              onClick={() => setMonth(month.plus({ months: 1 }))}
+            >
+              ›
+            </button>
+          </div>
+          <div className="calendar-grid">
+            {["L", "M", "M", "J", "V", "S", "D"].map((d, i) => (
+              <span key={"day" + i}>{d}</span>
+            ))}
+            {Array.from({ length: leading }, (_, i) => (
+              <span key={"empty" + i} />
+            ))}
+            {Array.from({ length: count }, (_, i) => {
+              const d = month.set({ day: i + 1 }).toISODate()!;
+              return (
+                <button
+                  type="button"
+                  className={d === date ? "selected" : ""}
+                  key={d}
+                  disabled={
+                    (!!min && d < String(min).slice(0, 10)) ||
+                    (!!max && d > String(max).slice(0, 10))
+                  }
+                  aria-label={DateTime.fromISO(d)
+                    .setLocale("fr")
+                    .toFormat("dd LLLL yyyy")}
+                  onClick={(e) => {
+                    update(d, clock, e.currentTarget.form);
+                    setOpen(false);
+                  }}
+                >
+                  {i + 1}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+      <small>
+        {parsed.isValid
+          ? parsed.toFormat(
+              recurring ? "dd LLLL à HH:mm" : "dd LLLL yyyy à HH:mm",
+            )
+          : ""}
+      </small>
+    </div>
+  );
+}

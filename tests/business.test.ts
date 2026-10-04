@@ -1,3 +1,5 @@
+import manifest from "../app/manifest";
+import { runInNewContext } from "node:vm";
 import {
   beforeAll,
   beforeEach,
@@ -37,7 +39,21 @@ import {
   setupAuthorized,
 } from "../lib/bootstrap";
 import { effectiveTime } from "../lib/time";
-import { configureReminder, dispatchReminders } from "../lib/reminders";
+import { dispatchEmails, campaignAction, campaignAdmin } from "../lib/mail";
+import {
+  consumeIdentity,
+  adminUserAction,
+  accountAction,
+  resendIdentity,
+  activateAccount,
+} from "../lib/accounts";
+import {
+  contentAction,
+  contentState,
+  legalState,
+  sanitizeContent,
+} from "../lib/content";
+import { hashToken } from "../lib/auth";
 const globalDb = globalThis as unknown as { testDb?: Database };
 let engine: PGlite | Pool;
 const setupData = () => ({
@@ -92,12 +108,18 @@ beforeAll(async () => {
     await pool.query(
       await readFile("migrations/002_season_bootstrap.sql", "utf8"),
     );
+    await pool.query(
+      await readFile("migrations/003_durable_accounts.sql", "utf8"),
+    );
   } else {
     const pg = new PGlite();
     engine = pg;
     await pg.exec(await readFile("migrations/001_initial.sql", "utf8"));
     await pg.exec(
       await readFile("migrations/002_season_bootstrap.sql", "utf8"),
+    );
+    await pg.exec(
+      await readFile("migrations/003_durable_accounts.sql", "utf8"),
     );
     globalDb.testDb = {
       async query(sql, values) {
@@ -108,20 +130,47 @@ beforeAll(async () => {
     };
   }
 });
+const acceptance = () => ({
+  terms: true,
+  guidelines: true,
+  terms_version: "2026.1",
+  guidelines_version: "2026.1",
+});
+async function verifyQueued(
+  email: string,
+  kind: "VERIFY" | "INVITE" = "VERIFY",
+) {
+  await db().query(
+    "UPDATE email_outbox SET scheduled_at='2026-10-04T12:00Z' WHERE status='PENDING'",
+  );
+  let token = "";
+  await dispatchEmails(new Date("2026-10-04T12:00Z"), async (mail) => {
+    if (mail.to === email)
+      token = new URL(mail.text.match(/https?:[^\s]+/)![0]).searchParams.get(
+        "token",
+      )!;
+  });
+  expect(token).toHaveLength(64);
+  return { linkToken: token, ...(await consumeIdentity(token, kind)) };
+}
 beforeEach(async () => {
   await db().query(
-    "TRUNCATE bootstrap,setup_sessions,instances,roles,users,seasons,houses,sessions,audit_logs,rate_limits RESTART IDENTITY CASCADE",
+    "TRUNCATE bootstrap,setup_sessions,instances,roles,users,seasons,participations,sessions,audit_logs,rate_limits RESTART IDENTITY CASCADE",
   );
   const first = await service.setup(setupData());
   admin = (await getUser(first.token))!;
   const registration = await service.register({
-    account: {
-      email: "visitor@example.invalid",
-      password: "valid-password-1234",
-    },
-    house: houseData(),
+    display_name: "Visiteur",
+    email: "visitor@example.invalid",
+    password: "valid-password-1234",
   });
   participant = (await getUser(registration.token))!;
+  await verifyQueued(participant.email);
+  participant = (await getUser(registration.token))!;
+  await service.createParticipation(participant, {
+    house: houseData(),
+    acceptance: acceptance(),
+  });
   house = (await service.ownHouse(participant)) as unknown as House;
   season = (await service.activeSeason((await service.instance())!))!;
 });
@@ -132,10 +181,10 @@ afterAll(async () => {
   else await engine.close();
 });
 describe("Setup, authentication and RBAC", () => {
-  it("creates an instance, admin, four roles and inactive first season", async () => {
+  it("creates an instance, admin, five profiles and inactive first season", async () => {
     expect(admin.role_name).toBe("SUPER_ADMIN");
     expect(season.activated).toBe(false);
-    expect((await db().query("SELECT * FROM roles")).rows).toHaveLength(4);
+    expect((await db().query("SELECT * FROM roles")).rows).toHaveLength(5);
     expect((await service.instance())?.territory).toBe("Territoire fictif");
   });
   it("locks setup after creation and rejects an invalid key", async () => {
@@ -204,14 +253,12 @@ describe("Setup, authentication and RBAC", () => {
       await db().query("SELECT id FROM roles WHERE name='SUPER_ADMIN'")
     ).rows[0];
     await expect(
-      service.adminAction(local, {
-        action: "createStaff",
-        payload: {
-          email: "staff@example.invalid",
-          password: "valid-password-1234",
-          display_name: "Staff",
-          role_id: superRole.id,
-        },
+      adminUserAction(local, {
+        action: "invite",
+        email: "staff@example.invalid",
+        password: "valid-password-1234",
+        display_name: "Staff",
+        role_id: superRole.id,
       }),
     ).rejects.toMatchObject({ status: 403 });
   });
@@ -321,7 +368,7 @@ describe("Seasons, privacy and participant activity", () => {
       service.updateHouse(foreign, house.id, houseData()),
     ).rejects.toMatchObject({ status: 404 });
   });
-  it("requires confirmation and deletes the participant and all linked data", async () => {
+  it("requires confirmation and deletes participation and retains durable account and sessions", async () => {
     await expect(
       service.participantAction(participant, { action: "delete" }),
     ).rejects.toThrow("Confirmation");
@@ -332,15 +379,15 @@ describe("Seasons, privacy and participant activity", () => {
     expect(
       (await db().query("SELECT * FROM users WHERE id=$1", [participant.id]))
         .rows,
-    ).toEqual([]);
-    expect((await db().query("SELECT * FROM houses")).rows).toEqual([]);
+    ).toHaveLength(1);
+    expect((await db().query("SELECT * FROM participations")).rows).toEqual([]);
     expect(
       (
         await db().query("SELECT * FROM sessions WHERE user_id=$1", [
           participant.id,
         ])
       ).rows,
-    ).toEqual([]);
+    ).toHaveLength(2);
     expect(
       (await db().query("SELECT * FROM users WHERE id=$1", [admin.id])).rows,
     ).toHaveLength(1);
@@ -378,7 +425,8 @@ describe("Seasons, privacy and participant activity", () => {
     await service.tick(new Date(+new Date(season.purge_at) + 60000));
     expect(
       (await db().query("SELECT * FROM users WHERE kind='PARTICIPANT'")).rows,
-    ).toEqual([]);
+    ).toHaveLength(1);
+    expect((await db().query("SELECT * FROM participations")).rows).toEqual([]);
     const s = await service.activeSeason((await service.instance())!);
     expect(s?.stats).toMatchObject({ houses: 1, approved: 1, routes: 3 });
     expect(JSON.stringify(s?.stats)).not.toContain(house.address);
@@ -392,7 +440,7 @@ describe("Seasons, privacy and participant activity", () => {
         )
       ).rows,
     ).toHaveLength(1);
-    expect((await db().query("SELECT * FROM roles")).rows).toHaveLength(4);
+    expect((await db().query("SELECT * FROM roles")).rows).toHaveLength(5);
   });
   it("restricts manual purge to Super Admin, refuses revival and starts new seasons inactive", async () => {
     await expect(
@@ -530,7 +578,7 @@ describe("Routing, demo and canonical versions", () => {
       [season.id],
     );
     await db().query(
-      "UPDATE houses SET status='APPROVED',starts_at=now()+interval '1 hour',ends_at=now()+interval '3 hours' WHERE id=$1",
+      "UPDATE participations SET status='APPROVED',starts_at=now()+interval '1 hour',ends_at=now()+interval '3 hours' WHERE id=$1",
       [house.id],
     );
     const result = await service.route({
@@ -548,11 +596,11 @@ describe("Routing, demo and canonical versions", () => {
     await seed();
     await seed();
     expect(
-      (await db().query("SELECT * FROM houses WHERE demo=true")).rows,
+      (await db().query("SELECT * FROM participations WHERE demo=true")).rows,
     ).toHaveLength(12);
     await seed("off");
     expect(
-      (await db().query("SELECT * FROM houses WHERE demo=true")).rows,
+      (await db().query("SELECT * FROM participations WHERE demo=true")).rows,
     ).toEqual([]);
     expect(await service.ownHouse(participant)).not.toBeNull();
   });
@@ -659,12 +707,9 @@ describe("V0.2 bootstrap, dates, preview and reminders", () => {
       false,
     );
     await expect(
-      service.register({
-        account: {
-          email: "later@example.invalid",
-          password: "valid-password-1234",
-        },
+      service.createParticipation(participant, {
         house: houseData(),
+        acceptance: acceptance(),
       }),
     ).rejects.toMatchObject({ status: 403 });
     for (const dates of [
@@ -761,128 +806,7 @@ describe("V0.2 bootstrap, dates, preview and reminders", () => {
       (await service.activeSeason((await service.instance())!))?.purged_at,
     ).toBeNull();
   });
-  it("schedules, edits, cancels and sends a reminder once only to actual season participants", async () => {
-    const payload = {
-      enabled: true,
-      at: "2026-10-04T12:00",
-      subject: "Bienvenue",
-      body: "Merci de préparer votre accueil.",
-    };
-    await configureReminder(admin, season.id, payload);
-    await configureReminder(admin, season.id, { ...payload, enabled: false });
-    expect(
-      (await db().query("SELECT reminder_status FROM seasons")).rows[0]
-        .reminder_status,
-    ).toBe("NONE");
-    await configureReminder(admin, season.id, {
-      ...payload,
-      subject: "À ce soir",
-    });
-    const sent: unknown[] = [];
-    const sender = async (mail: unknown) => {
-      sent.push(mail);
-    };
-    await dispatchReminders(new Date("2026-10-04T12:00Z"), sender);
-    await dispatchReminders(new Date("2026-10-04T12:00Z"), sender);
-    expect(sent).toHaveLength(1);
-    expect(sent[0]).toMatchObject({
-      to: participant.email,
-      subject: "À ce soir",
-    });
-    const s = (await db().query("SELECT * FROM seasons")).rows[0];
-    expect(s.reminder_status).toBe("SENT");
-    expect(s.reminder_sent).toBe(1);
-    expect(s.reminder_recipients).toBe(1);
-    await expect(
-      configureReminder(admin, season.id, payload),
-    ).rejects.toMatchObject({ status: 409 });
-    const audit = JSON.stringify(
-      (await db().query("SELECT * FROM audit_logs")).rows,
-    );
-    expect(audit).not.toContain(participant.email);
-    expect(audit).not.toContain(payload.body);
-  });
-  it("skips synthetic participants, handles SMTP absence without errors, and preserves a pending schedule", async () => {
-    await configureReminder(admin, season.id, {
-      enabled: true,
-      at: "2026-10-04T12:00",
-      subject: "Test",
-      body: "Test",
-    });
-    const host = process.env.SMTP_HOST,
-      from = process.env.SMTP_FROM;
-    delete process.env.SMTP_HOST;
-    delete process.env.SMTP_FROM;
-    try {
-      await dispatchReminders(new Date("2026-10-04T12:00Z"));
-      await dispatchReminders(new Date("2026-10-04T12:00Z"));
-      expect(
-        (await db().query("SELECT reminder_status FROM seasons")).rows[0]
-          .reminder_status,
-      ).toBe("SCHEDULED");
-    } finally {
-      if (host) process.env.SMTP_HOST = host;
-      if (from) process.env.SMTP_FROM = from;
-    }
-    await db().query("UPDATE users SET demo=true WHERE id=$1", [
-      participant.id,
-    ]);
-    const sender = vi.fn(async () => {});
-    await dispatchReminders(new Date("2026-10-04T12:00Z"), sender);
-    expect(sender).not.toHaveBeenCalled();
-  });
-  it("does not retry ambiguous SMTP failures and purges messages and delivery identifiers", async () => {
-    await configureReminder(admin, season.id, {
-      enabled: true,
-      at: "2026-10-04T12:00",
-      subject: "Private subject",
-      body: "Private message",
-    });
-    const sender = vi.fn(async () => {
-      throw new Error("sensitive transport details");
-    });
-    await dispatchReminders(new Date("2026-10-04T12:00Z"), sender);
-    await dispatchReminders(new Date("2026-10-04T12:00Z"), sender);
-    expect(sender).toHaveBeenCalledTimes(1);
-    expect(
-      (await db().query("SELECT reminder_status FROM seasons")).rows[0]
-        .reminder_status,
-    ).toBe("ERROR");
-    await service.adminAction(admin, {
-      action: "purge",
-      id: season.id,
-      payload: "PURGER",
-    });
-    const s = (
-      await db().query(
-        "SELECT reminder_subject,reminder_body,reminder_recipients FROM seasons",
-      )
-    ).rows[0];
-    expect(s).toEqual({
-      reminder_subject: "",
-      reminder_body: "",
-      reminder_recipients: 1,
-    });
-    expect(
-      (await db().query("SELECT * FROM reminder_deliveries")).rows,
-    ).toHaveLength(0);
-  });
-  it("protects reminder configuration with RBAC", async () => {
-    await expect(
-      configureReminder(participant, season.id, {
-        enabled: false,
-        subject: "",
-        body: "",
-      }),
-    ).rejects.toMatchObject({ status: 403 });
-    await expect(
-      configureReminder({ ...admin, permissions: ["season.read"] }, season.id, {
-        enabled: false,
-        subject: "",
-        body: "",
-      }),
-    ).rejects.toMatchObject({ status: 403 });
-  });
+
   it("migrates an existing V0.1 database without data loss and records migrations idempotently", async () => {
     const legacy = new PGlite();
     try {
@@ -955,82 +879,7 @@ describe("V0.2 bootstrap, dates, preview and reminders", () => {
     }
   });
 });
-describe("V0.2 worker recovery and minimal staff access", () => {
-  it("concurrent reminder workers reserve the same participant only once", async () => {
-    await configureReminder(admin, season.id, {
-      enabled: true,
-      at: "2026-10-04T12:00",
-      subject: "Rendez-vous",
-      body: "À ce soir",
-    });
-    const sender = vi.fn(async () => {});
-    await Promise.all([
-      dispatchReminders(new Date("2026-10-04T12:00Z"), sender),
-      dispatchReminders(new Date("2026-10-04T12:00Z"), sender),
-    ]);
-    expect(sender).toHaveBeenCalledTimes(1);
-    expect(
-      (await db().query("SELECT reminder_status FROM seasons")).rows[0]
-        .reminder_status,
-    ).toBe("SENT");
-  });
-  it("recovers abandoned SMTP reservations as errors instead of sending a duplicate", async () => {
-    await configureReminder(admin, season.id, {
-      enabled: true,
-      at: "2026-10-04T12:00",
-      subject: "Rendez-vous",
-      body: "À ce soir",
-    });
-    await db().query(
-      "UPDATE seasons SET reminder_status='SENDING',reminder_recipients=1 WHERE id=$1",
-      [season.id],
-    );
-    await db().query(
-      "INSERT INTO reminder_deliveries(season_id,user_id,status,claimed_at) VALUES($1,$2,'CLAIMED','2026-10-04T11:55Z')",
-      [season.id, participant.id],
-    );
-    const sender = vi.fn(async () => {});
-    await dispatchReminders(new Date("2026-10-04T12:00Z"), sender);
-    expect(
-      (await db().query("SELECT reminder_status FROM seasons")).rows[0]
-        .reminder_status,
-    ).toBe("SENDING");
-    await dispatchReminders(new Date("2026-10-04T12:10Z"), sender);
-    expect(sender).not.toHaveBeenCalled();
-    expect(
-      (await db().query("SELECT reminder_status FROM seasons")).rows[0]
-        .reminder_status,
-    ).toBe("ERROR");
-  });
-  it("hides reminder content from staff with read-only permissions", async () => {
-    await configureReminder(admin, season.id, {
-      enabled: true,
-      at: "2026-10-04T12:00",
-      subject: "Private subject",
-      body: "Private body",
-    });
-    const reader = { ...admin, permissions: ["season.read", "stats.read"] };
-    for (const section of ["seasons", "stats", "dashboard"]) {
-      const result = JSON.stringify(await service.adminRead(reader, section));
-      expect(result).not.toContain("Private subject");
-      expect(result).not.toContain("Private body");
-    }
-  });
-  it("preserves date coherence when an existing reminder is scheduled", async () => {
-    await configureReminder(admin, season.id, {
-      enabled: true,
-      at: "2026-11-01T18:00",
-      subject: "Merci",
-      body: "Merci pour cette soirée",
-    });
-    await expect(
-      service.adminAction(admin, {
-        action: "season",
-        id: season.id,
-        payload: { ...setupData().season, purge_at: "2026-11-01T12:00" },
-      }),
-    ).rejects.toMatchObject({ status: 400 });
-  });
+describe("Synthetic bootstrap", () => {
   it("creates a fresh synthetic instance without a SETUP_TOKEN override", async () => {
     await db().query("TRUNCATE instances,bootstrap,setup_sessions CASCADE");
     const override = process.env.SETUP_TOKEN;
@@ -1042,13 +891,630 @@ describe("V0.2 worker recovery and minimal staff access", () => {
         1,
       );
       expect(
-        (await db().query("SELECT id FROM houses WHERE demo=true")).rows,
+        (await db().query("SELECT id FROM participations WHERE demo=true"))
+          .rows,
       ).toHaveLength(12);
       expect(
         (await db().query("SELECT * FROM setup_sessions")).rows,
       ).toHaveLength(0);
     } finally {
       process.env.SETUP_TOKEN = override;
+    }
+  });
+});
+const campaignData = () => ({
+  season_id: season.id,
+  name: "J−14",
+  subject: "Bonjour {{name}}",
+  body: "{{event_name}} à {{territory}} : {{house_name}}",
+  audience: "ALL",
+  active: true,
+  schedule_mode: "ABSOLUTE",
+  anchor: "opens_at",
+  offset_days: -14,
+  scheduled_at: "2026-10-04T12:00",
+});
+async function newCampaign(overrides: Record<string, unknown> = {}) {
+  await campaignAction(admin, {
+    action: "save",
+    campaign: { ...campaignData(), ...overrides },
+  });
+  return (
+    await db().query("SELECT * FROM email_campaigns WHERE name=$1", [
+      overrides.name ?? campaignData().name,
+    ])
+  ).rows[0];
+}
+describe("V0.3 durable accounts, identity and permissions", () => {
+  it("creates a durable account without participation and requires email verification before participation", async () => {
+    const result = await service.register({
+      display_name: "Nouveau",
+      email: "new@example.invalid",
+      password: "safe-password-1234",
+    });
+    let u = (await getUser(result.token))!;
+    expect(u.email_status).toBe("UNVERIFIED");
+    expect(await service.ownHouse(u)).toBeNull();
+    await expect(
+      service.createParticipation(u, {
+        house: houseData(),
+        acceptance: acceptance(),
+      }),
+    ).rejects.toMatchObject({ status: 403 });
+    const link = await verifyQueued(u.email);
+    u = (await getUser(result.token))!;
+    expect(u.email_status).toBe("VERIFIED");
+    expect(u.email_verified_at).toBeTruthy();
+    await expect(
+      consumeIdentity(link.linkToken, "VERIFY"),
+    ).rejects.toMatchObject({ status: 400 });
+    await expect(
+      service.createParticipation(u, {
+        house: houseData(),
+        acceptance: { ...acceptance(), terms: false },
+      }),
+    ).rejects.toThrow();
+    await service.createParticipation(u, {
+      house: houseData(),
+      acceptance: acceptance(),
+    });
+    expect(await service.ownHouse(u)).toMatchObject({
+      terms_version: "2026.1",
+      guidelines_version: "2026.1",
+      legacy_imported: false,
+    });
+  });
+  it("expires and invalidates verification tokens, rate limits resend and never stores raw tokens", async () => {
+    const result = await service.register({
+      display_name: "Nouveau",
+      email: "token@example.invalid",
+      password: "safe-password-1234",
+    });
+    const u = (await getUser(result.token))!;
+    await db().query(
+      "UPDATE email_outbox SET scheduled_at='2026-10-04T12:00Z' WHERE user_id=$1",
+      [u.id],
+    );
+    let token = "";
+    await dispatchEmails(new Date("2026-10-04T12:00Z"), async (m) => {
+      token = new URL(m.text.match(/https?:[^\s]+/)![0]).searchParams.get(
+        "token",
+      )!;
+    });
+    expect(
+      JSON.stringify((await db().query("SELECT * FROM email_tokens")).rows),
+    ).not.toContain(token);
+    await resendIdentity(u);
+    await expect(consumeIdentity(token, "VERIFY")).rejects.toMatchObject({
+      status: 400,
+    });
+    await expect(resendIdentity(u)).rejects.toMatchObject({ status: 429 });
+    await db().query(
+      "INSERT INTO email_tokens(token_hash,user_id,kind,email_hash,expires_at) VALUES($1,$2,'VERIFY',$3,now()-interval '1 second')",
+      [hashToken(token), u.id, hashToken(u.email)],
+    );
+    await expect(consumeIdentity(token, "VERIFY")).rejects.toMatchObject({
+      status: 400,
+    });
+  });
+  it("invites without a plaintext password and activates once with chosen password", async () => {
+    const role = (
+      await db().query("SELECT id FROM roles WHERE name='READ_ONLY'")
+    ).rows[0];
+    await adminUserAction(admin, {
+      action: "invite",
+      display_name: "Lecture",
+      email: "invite@example.invalid",
+      role_id: role.id,
+    });
+    const old = (
+      await db().query(
+        "SELECT * FROM users WHERE email='invite@example.invalid'",
+      )
+    ).rows[0];
+    expect(old.password_hash).toBeNull();
+    expect(old.account_status).toBe("PENDING_ACTIVATION");
+    const invitation = await verifyQueued("invite@example.invalid", "INVITE");
+    await expect(
+      consumeIdentity(invitation.linkToken, "INVITE"),
+    ).rejects.toThrow();
+    const result = await activateAccount(invitation.token, {
+      password: "chosen-password-1234",
+    });
+    const u = (await getUser(result.token))!;
+    expect(u.email_status).toBe("VERIFIED");
+    expect(u.permissions).toContain("admin.access");
+    await expect(
+      activateAccount(invitation.token, { password: "chosen-password-1234" }),
+    ).rejects.toThrow();
+  });
+  it("applies role defaults and individual exceptions to any user, protects privileges and disabled login", async () => {
+    const role = (
+      await db().query("SELECT id FROM roles WHERE name='READ_ONLY'")
+    ).rows[0];
+    await adminUserAction(admin, {
+      action: "edit",
+      id: participant.id,
+      role_id: role.id,
+      permission_grants: ["content.manage"],
+      permission_revocations: ["users.read"],
+    });
+    const session = await service.login({
+      email: participant.email,
+      password: "valid-password-1234",
+    });
+    const u = (await getUser(session.token))!;
+    expect(u.kind).toBe("PARTICIPANT");
+    expect(u.permissions).toContain("admin.access");
+    expect(u.permissions).toContain("content.manage");
+    expect(u.permissions).not.toContain("users.read");
+    await expect(service.adminRead(u, "users")).rejects.toMatchObject({
+      status: 403,
+    });
+    await expect(
+      adminUserAction(
+        {
+          ...admin,
+          role_name: "LOCAL_ADMIN",
+          permissions: ["admin.access", "users.manage"],
+        },
+        {
+          action: "edit",
+          id: participant.id,
+          permission_grants: ["roles.manage"],
+        },
+      ),
+    ).rejects.toMatchObject({ status: 403 });
+    await adminUserAction(admin, { action: "disable", id: participant.id });
+    expect(await getUser(session.token)).toBeNull();
+    await expect(
+      service.login({
+        email: participant.email,
+        password: "valid-password-1234",
+      }),
+    ).rejects.toMatchObject({ status: 401 });
+  });
+  it("requires the current password for email change, reverifies and revokes sessions", async () => {
+    await expect(
+      accountAction(participant, {
+        action: "email",
+        email: "changed@example.invalid",
+        current_password: "bad",
+      }),
+    ).rejects.toMatchObject({ status: 403 });
+    const r = await accountAction(participant, {
+      action: "email",
+      email: "changed@example.invalid",
+      current_password: "valid-password-1234",
+    });
+    const u = (await getUser("token" in r ? r.token : undefined))!;
+    expect(u.email_status).toBe("UNVERIFIED");
+    expect(u.email_verified_at).toBeNull();
+  });
+  it("withdraws participation but retains account; voluntary account deletion cascades everything", async () => {
+    await service.participantAction(participant, {
+      action: "delete",
+      confirm: "SUPPRIMER",
+    });
+    expect(await service.ownHouse(participant)).toBeNull();
+    expect(
+      (await db().query("SELECT id FROM users WHERE id=$1", [participant.id]))
+        .rows,
+    ).toHaveLength(1);
+    await service.createParticipation(participant, {
+      house: houseData(),
+      acceptance: acceptance(),
+    });
+    await accountAction(participant, {
+      action: "delete",
+      current_password: "valid-password-1234",
+      confirm: "SUPPRIMER MON COMPTE",
+    });
+    expect(
+      (await db().query("SELECT * FROM participations")).rows,
+    ).toHaveLength(0);
+    expect(
+      (await db().query("SELECT * FROM users WHERE id=$1", [participant.id]))
+        .rows,
+    ).toHaveLength(0);
+    expect(
+      (
+        await db().query("SELECT * FROM email_outbox WHERE user_id=$1", [
+          participant.id,
+        ])
+      ).rows,
+    ).toHaveLength(0);
+  });
+});
+describe("V0.3 campaigns and outbox", () => {
+  it("supports absolute/relative schedules, recomputes dates and protects communications permissions", async () => {
+    const c = await newCampaign({ schedule_mode: "RELATIVE" });
+    expect(new Date(String(c.scheduled_at)).toISOString()).toBe(
+      "2026-10-17T10:00:00.000Z",
+    );
+    await service.adminAction(admin, {
+      action: "season",
+      id: season.id,
+      payload: { ...setupData().season, opens_at: "2026-10-31T13:00" },
+    });
+    expect(
+      new Date(
+        String(
+          (
+            await db().query(
+              "SELECT scheduled_at FROM email_campaigns WHERE id=$1",
+              [c.id],
+            )
+          ).rows[0].scheduled_at,
+        ),
+      ).toISOString(),
+    ).toBe("2026-10-17T11:00:00.000Z");
+    await expect(campaignAdmin(participant)).rejects.toMatchObject({
+      status: 403,
+    });
+    await expect(
+      campaignAction(participant, { action: "save", campaign: campaignData() }),
+    ).rejects.toMatchObject({ status: 403 });
+  });
+  it("claims atomically across concurrent workers, renders allowed variables and sends SENT only once", async () => {
+    const c = await newCampaign();
+    const sender = vi.fn(async () => {});
+    await Promise.all([
+      dispatchEmails(new Date("2026-10-04T12:00Z"), sender),
+      dispatchEmails(new Date("2026-10-04T12:00Z"), sender),
+    ]);
+    await dispatchEmails(new Date("2026-10-04T12:10Z"), sender);
+    expect(sender).toHaveBeenCalledTimes(1);
+    expect(
+      (
+        await db().query(
+          "SELECT sent,status FROM email_campaigns WHERE id=$1",
+          [c.id],
+        )
+      ).rows[0],
+    ).toEqual({ sent: 1, status: "SENT" });
+    expect(
+      JSON.stringify((await db().query("SELECT * FROM audit_logs")).rows),
+    ).not.toContain(participant.email);
+  });
+  it("never retries uncertain SMTP or abandoned claims; safely retries known connection failure", async () => {
+    const c = await newCampaign();
+    const sender = vi.fn(async () => {
+      throw new Error("private SMTP content");
+    });
+    await dispatchEmails(new Date("2026-10-04T12:00Z"), sender);
+    await dispatchEmails(new Date("2026-10-04T12:20Z"), sender);
+    expect(sender).toHaveBeenCalledTimes(1);
+    expect(
+      (
+        await db().query(
+          "SELECT last_error,retry_safe FROM email_outbox WHERE campaign_id=$1",
+          [c.id],
+        )
+      ).rows[0],
+    ).toEqual({ last_error: "SMTP_UNCERTAIN", retry_safe: false });
+    const safe = await newCampaign({ name: "Known failure" });
+    const refused = vi.fn(async () => {
+      throw Object.assign(new Error("connect"), { code: "ECONNREFUSED" });
+    });
+    await dispatchEmails(new Date("2026-10-04T12:00Z"), refused);
+    await dispatchEmails(new Date("2026-10-04T12:06Z"), async () => {});
+    expect(
+      (
+        await db().query(
+          "SELECT status,attempts FROM email_outbox WHERE campaign_id=$1",
+          [safe.id],
+        )
+      ).rows[0],
+    ).toEqual({ status: "SENT", attempts: 2 });
+    const third = await newCampaign({ name: "Abandoned" });
+    await db().query(
+      "UPDATE email_campaigns SET status='SENDING',recipients=1 WHERE id=$1",
+      [third.id],
+    );
+    await db().query(
+      "INSERT INTO email_outbox(user_id,campaign_id,season_id,kind,status,claimed_at,idempotency_key) VALUES($1,$2,$3,'CAMPAIGN','CLAIMED','2026-10-04T11:00Z','abandoned')",
+      [participant.id, third.id, season.id],
+    );
+    await dispatchEmails(new Date("2026-10-04T12:00Z"), async () => {
+      throw new Error("must not send");
+    });
+    expect(
+      (
+        await db().query(
+          "SELECT status FROM email_outbox WHERE idempotency_key='abandoned'",
+        )
+      ).rows[0].status,
+    ).toBe("FAILED");
+  });
+  it.each(["UNVERIFIED", "BOUNCED", "INVALID", "DEMO", "DISABLED"])(
+    "excludes %s recipients",
+    async (status) => {
+      await newCampaign();
+      if (status === "DEMO")
+        await db().query("UPDATE users SET demo=true WHERE id=$1", [
+          participant.id,
+        ]);
+      else if (status === "DISABLED")
+        await db().query(
+          "UPDATE users SET account_status='DISABLED' WHERE id=$1",
+          [participant.id],
+        );
+      else
+        await db().query("UPDATE users SET email_status=$1 WHERE id=$2", [
+          status,
+          participant.id,
+        ]);
+      const sender = vi.fn(async () => {});
+      await dispatchEmails(new Date("2026-10-04T12:00Z"), sender);
+      expect(sender).not.toHaveBeenCalled();
+    },
+  );
+  it("purges seasonal delivery identifiers and content while keeping durable users and anonymous totals", async () => {
+    await newCampaign();
+    await dispatchEmails(new Date("2026-10-04T12:00Z"), async () => {});
+    await service.purgeSeason(season.id, admin.instance_id, admin, true);
+    expect((await db().query("SELECT * FROM participations")).rows).toEqual([]);
+    expect(
+      (
+        await db().query("SELECT * FROM email_outbox WHERE season_id=$1", [
+          season.id,
+        ])
+      ).rows,
+    ).toEqual([]);
+    expect(
+      (await db().query("SELECT * FROM users WHERE id=$1", [participant.id]))
+        .rows,
+    ).toHaveLength(1);
+    expect(
+      (await db().query("SELECT subject,body,sent FROM email_campaigns"))
+        .rows[0],
+    ).toEqual({ subject: "", body: "", sent: 1 });
+  });
+});
+describe("V0.3 content, legal versions and installation", () => {
+  it("edits, defaults, resets and rejects unsafe HTML, URLs and variables", async () => {
+    const id = admin.instance_id;
+    const initial = await contentState(id);
+    await contentAction(admin, {
+      action: "save",
+      key: "home.title",
+      value: "Bienvenue à {{territory}}",
+    });
+    expect((await contentState(id))["home.title"]).toBe(
+      "Bienvenue à {{territory}}",
+    );
+    await contentAction(admin, { action: "reset", key: "home.title" });
+    expect((await contentState(id))["home.title"]).toBe(initial["home.title"]);
+    expect(
+      (await db().query("SELECT * FROM content_overrides")).rows,
+    ).toHaveLength(0);
+    for (const value of [
+      "<script>alert(1)</script>",
+      "[x](javascript:alert(1))",
+      "{{password_hash}}",
+    ])
+      await expect(
+        contentAction(admin, { action: "save", key: "home.title", value }),
+      ).rejects.toMatchObject({ status: 400 });
+    expect(sanitizeContent("**Titre**\n\n- [Lien](/privacy)")).toContain(
+      "**Titre**",
+    );
+  });
+  it("publishes immutable documents and requires current acceptance for significant changes", async () => {
+    await contentAction(admin, {
+      action: "draft",
+      document: {
+        kind: "TERMS",
+        version: "2026.2",
+        title: "Nouvelles conditions",
+        body: "Respectez les horaires.",
+        requires_reaccept: true,
+      },
+    });
+    const d = (
+      await db().query("SELECT id FROM legal_documents WHERE version='2026.2'")
+    ).rows[0];
+    await contentAction(admin, { action: "publish", id: d.id });
+    expect((await legalState(admin.instance_id)).TERMS.version).toBe("2026.2");
+    await expect(
+      db().query("UPDATE legal_documents SET body=$1 WHERE id=$2", [
+        "overwritten",
+        d.id,
+      ]),
+    ).rejects.toThrow();
+    await expect(
+      service.updateHouse(participant, house.id, houseData()),
+    ).rejects.toThrow();
+    await service.updateHouse(participant, house.id, {
+      ...houseData(),
+      acceptance: { ...acceptance(), terms_version: "2026.2" },
+    });
+    expect((await service.ownHouse(participant))?.terms_version).toBe("2026.2");
+    expect(
+      (
+        await db().query(
+          "SELECT body FROM legal_documents WHERE version='2026.1' AND kind='TERMS'",
+        )
+      ).rows,
+    ).toHaveLength(1);
+  });
+  it("uses installable manifest/icons and never caches private API or navigation", async () => {
+    const m = manifest();
+    expect(m.display).toBe("standalone");
+    expect(m.start_url).toBe("/");
+    expect(m.icons?.some((i) => i.purpose === "maskable")).toBe(true);
+    for (const size of [192, 512]) {
+      const png = await readFile("public/pwa/icon-" + size + ".png");
+      expect(png.readUInt32BE(16)).toBe(size);
+      expect(png.readUInt32BE(20)).toBe(size);
+    }
+    const handlers: Record<string, (event: unknown) => void> = {};
+    const put = vi.fn(async () => {});
+    const offline = { offline: true };
+    let connected = true;
+    const fetcher = vi.fn(async () => {
+      if (!connected) throw Error("offline");
+      return { ok: true, clone: () => ({ static: true }) };
+    });
+    runInNewContext(await readFile("public/sw.js", "utf8"), {
+      URL,
+      self: {
+        location: { origin: "https://example.invalid" },
+        addEventListener: (name: string, fn: (event: unknown) => void) =>
+          (handlers[name] = fn),
+      },
+      caches: {
+        match: async (path: unknown) =>
+          path === "/offline.html" ? offline : undefined,
+        open: async () => ({ put }),
+      },
+      fetch: fetcher,
+    });
+    const respondWith = vi.fn();
+    handlers.fetch({
+      request: {
+        method: "GET",
+        url: "https://example.invalid/api/me",
+        mode: "cors",
+      },
+      respondWith,
+    });
+    expect(respondWith).not.toHaveBeenCalled();
+    expect(put).not.toHaveBeenCalled();
+    handlers.fetch({
+      request: {
+        method: "GET",
+        url: "https://example.invalid/account",
+        mode: "navigate",
+      },
+      respondWith,
+    });
+    await respondWith.mock.calls.at(-1)![0];
+    expect(put).not.toHaveBeenCalled();
+    connected = false;
+    handlers.fetch({
+      request: {
+        method: "GET",
+        url: "https://example.invalid/participant",
+        mode: "navigate",
+      },
+      respondWith,
+    });
+    expect(await respondWith.mock.calls.at(-1)![0]).toEqual(offline);
+    expect(put).not.toHaveBeenCalled();
+  });
+  it("preserves realistic V0.2 hashes, privileges, state, data, dates and reminder delivery across replay", async () => {
+    const legacy = new PGlite();
+    try {
+      await legacy.exec(await readFile("migrations/001_initial.sql", "utf8"));
+      await legacy.exec(
+        await readFile("migrations/002_season_bootstrap.sql", "utf8"),
+      );
+      const i = (
+        await legacy.query<{ id: string }>(
+          "INSERT INTO instances(public_name,territory,postal_code,country,latitude,longitude) VALUES('Legacy','Legacy','00000','France',48,-1) RETURNING id",
+        )
+      ).rows[0];
+      const role = (
+        await legacy.query<{ id: string }>(
+          "INSERT INTO roles(instance_id,name,permissions) VALUES($1,'SUPER_ADMIN',ARRAY['users.manage','roles.manage','season.preview']) RETURNING id",
+          [i.id],
+        )
+      ).rows[0];
+      const adminId = (
+        await legacy.query<{ id: string }>(
+          "INSERT INTO users(instance_id,email,display_name,password_hash,role_id,kind) VALUES($1,'admin@legacy.invalid','Admin','preserved-admin-hash',$2,'STAFF') RETURNING id",
+          [i.id, role.id],
+        )
+      ).rows[0];
+      const u = (
+        await legacy.query<{ id: string }>(
+          "INSERT INTO users(instance_id,email,display_name,password_hash,kind) VALUES($1,'visitor@legacy.invalid','Visitor','preserved-user-hash','PARTICIPANT') RETURNING id",
+          [i.id],
+        )
+      ).rows[0];
+      const s = (
+        await legacy.query<{ id: string }>(
+          "INSERT INTO seasons(instance_id,year,opens_at,closes_at,registrations_open_at,purge_at,reminder_enabled,reminder_at,reminder_subject,reminder_body,reminder_status,reminder_recipients) VALUES($1,2026,'2026-10-31T11:00Z','2026-10-31T23:00Z','2026-10-01T00:00Z','2026-11-02T12:00Z',true,'2026-10-30T12:00Z','Reminder','Body','SENDING',1) RETURNING id",
+          [i.id],
+        )
+      ).rows[0];
+      await legacy.query(
+        "UPDATE instances SET active_season_id=$1 WHERE id=$2",
+        [s.id, i.id],
+      );
+      await legacy.query(
+        "INSERT INTO houses(instance_id,season_id,user_id,name,address,latitude,longitude,activities,starts_at,ends_at,fear,status,activity) VALUES($1,$2,$3,'House','Legacy address',48,-1,ARRAY['CANDY'],'2026-10-31T17:00Z','2026-10-31T20:00Z',2,'APPROVED','PAUSED')",
+        [i.id, s.id, u.id],
+      );
+      await legacy.query(
+        "INSERT INTO reminder_deliveries(season_id,user_id,status,claimed_at) VALUES($1,$2,'CLAIMED','2026-10-30T12:00Z')",
+        [s.id, u.id],
+      );
+      const migration = await readFile(
+        "migrations/003_durable_accounts.sql",
+        "utf8",
+      );
+      for (let pass = 0; pass < 2; pass++) {
+        await legacy.exec("BEGIN");
+        await legacy.exec(migration);
+        await legacy.exec("COMMIT");
+      }
+      expect(
+        (
+          await legacy.query(
+            "SELECT address,status,activity,legacy_imported FROM participations",
+          )
+        ).rows[0],
+      ).toEqual({
+        address: "Legacy address",
+        status: "APPROVED",
+        activity: "PAUSED",
+        legacy_imported: true,
+      });
+      expect(
+        (
+          await legacy.query("SELECT password_hash FROM users WHERE id=$1", [
+            adminId.id,
+          ])
+        ).rows[0],
+      ).toEqual({ password_hash: "preserved-admin-hash" });
+      expect(
+        (
+          await legacy.query("SELECT password_hash FROM users WHERE id=$1", [
+            u.id,
+          ])
+        ).rows[0],
+      ).toEqual({ password_hash: "preserved-user-hash" });
+      expect(
+        (
+          await legacy.query("SELECT permissions FROM roles WHERE id=$1", [
+            role.id,
+          ])
+        ).rows[0],
+      ).toMatchObject({
+        permissions: expect.arrayContaining([
+          "users.manage",
+          "roles.manage",
+          "admin.access",
+        ]),
+      });
+      expect(
+        (await legacy.query("SELECT * FROM email_campaigns")).rows,
+      ).toHaveLength(1);
+      expect(
+        (await legacy.query("SELECT status FROM email_outbox")).rows,
+      ).toEqual([{ status: "CLAIMED" }]);
+      expect(
+        (
+          await legacy.query("SELECT email_status FROM users WHERE id=$1", [
+            u.id,
+          ])
+        ).rows[0],
+      ).toEqual({ email_status: "UNVERIFIED" });
+    } finally {
+      await legacy.close();
     }
   });
 });

@@ -43,9 +43,9 @@ export async function createSession(userId: string, client: Database = db()) {
 export async function getUser(token?: string): Promise<User | null> {
   if (!token) return null;
   const { rows } = await db().query(
-    `SELECT u.id,u.instance_id,u.email,u.display_name,u.kind,u.role_id,r.name role_name,COALESCE(r.permissions,ARRAY[]::text[]) permissions
+    `SELECT u.id,u.instance_id,u.email,u.display_name,u.kind,u.role_id,u.email_status,u.email_verified_at,u.account_status,r.name role_name,ARRAY(SELECT DISTINCT p FROM unnest(COALESCE(r.permissions,ARRAY[]::text[]) || u.permission_grants) p WHERE NOT(p=ANY(u.permission_revocations))) permissions
     FROM sessions s JOIN users u ON u.id=s.user_id LEFT JOIN roles r ON r.id=u.role_id AND r.instance_id=u.instance_id
-    WHERE s.token_hash=$1 AND s.expires_at>now()`,
+    WHERE s.token_hash=$1 AND s.expires_at>now() AND u.account_status='ACTIVE'`,
     [hashToken(token)],
   );
   return (rows[0] as unknown as User) ?? null;

@@ -10,7 +10,7 @@ export async function seed(mode = "on") {
     if (i)
       await transaction(async (c) => {
         await c.query(
-          "DELETE FROM audit_logs WHERE instance_id=$1 AND target_id IN(SELECT id FROM houses WHERE demo=true)",
+          "DELETE FROM audit_logs WHERE instance_id=$1 AND target_id IN(SELECT id FROM participations WHERE demo=true)",
           [i!.id],
         );
         await c.query("DELETE FROM users WHERE instance_id=$1 AND demo=true", [
@@ -90,7 +90,7 @@ export async function seed(mode = "on") {
   await transaction(async (c) => {
     for (let n = 0; n < 12; n++) {
       const { rows } = await c.query(
-        "INSERT INTO users(instance_id,email,display_name,password_hash,kind,demo) VALUES($1,$2,'Participant démo',$3,'PARTICIPANT',true) RETURNING id",
+        "INSERT INTO users(instance_id,email,display_name,password_hash,kind,demo,email_status) VALUES($1,$2,'Participant démo',$3,'PARTICIPANT',true,'VERIFIED') RETURNING id",
         [i!.id, `maison${n + 1}@example.invalid`, hash],
       );
       const combos: Activity[][] = [
@@ -108,7 +108,7 @@ export async function seed(mode = "on") {
         minutes: (n % 3) * 30,
       });
       await c.query(
-        "INSERT INTO houses(instance_id,season_id,user_id,name,address,latitude,longitude,activities,starts_at,ends_at,fear,adaptable,rp,practical,status,activity,candy_available,demo) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,true)",
+        "INSERT INTO participations(instance_id,season_id,user_id,name,address,latitude,longitude,activities,starts_at,ends_at,fear,adaptable,rp,practical,status,activity,candy_available,demo) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,true)",
         [
           i!.id,
           s.id,
