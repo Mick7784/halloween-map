@@ -1,0 +1,63 @@
+name: halloween-map
+x-app: &app
+  image: ${HALLOWEEN_IMAGE:-halloween-map:local}
+  build: .
+  environment: &env
+    DATABASE_URL: postgresql://halloween:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@db:5432/halloween
+    APP_ORIGIN: ${APP_ORIGIN:-http://localhost:3000}
+    COOKIE_SECURE: ${COOKIE_SECURE:-false}
+    SETUP_TOKEN: ${SETUP_TOKEN:?Set SETUP_TOKEN in .env}
+    MAP_STYLE_URL: ${MAP_STYLE_URL:-https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json}
+    DEMO_PASSWORD: ${DEMO_PASSWORD:-}
+  init: true
+services:
+  db:
+    image: postgres:17-bookworm
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: halloween
+      POSTGRES_USER: halloween
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U halloween -d halloween"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+  migrate:
+    <<: *app
+    command: [node, node_modules/tsx/dist/cli.mjs, scripts/migrate.ts]
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      disable: true
+  app:
+    <<: *app
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-3000}:3000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+  worker:
+    <<: *app
+    restart: unless-stopped
+    command: [node, node_modules/tsx/dist/cli.mjs, scripts/worker.ts]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        [
+          CMD,
+          node,
+          -e,
+          "const{Pool}=require('pg');const p=new Pool({connectionString:process.env.DATABASE_URL});p.query('SELECT 1').then(()=>p.end()).catch(()=>process.exit(1));",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+volumes:
+  postgres_data:

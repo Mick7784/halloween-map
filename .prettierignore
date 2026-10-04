@@ -1,0 +1,7 @@
+node_modules
+.next
+public/maplibre
+test-results
+playwright-report
+package-lock.json
+*.tsbuildinfo
