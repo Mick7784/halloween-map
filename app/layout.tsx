@@ -5,6 +5,7 @@ import "@fontsource/inter/600.css";
 import "@fontsource/cormorant-garamond/500.css";
 import "@fontsource/cormorant-garamond/600.css";
 import "./globals.css";
+import { InstallAppProvider } from "../components/InstallApp";
 export const viewport: Viewport = {
   themeColor: "#17171e",
   width: "device-width",
@@ -30,7 +31,9 @@ export const metadata: Metadata = {
 export default function Layout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="fr">
-      <body>{children}</body>
+      <body>
+        <InstallAppProvider>{children}</InstallAppProvider>
+      </body>
     </html>
   );
 }

@@ -1,5 +1,12 @@
 # Changelog
 
+## V0.5.5 — installation PWA depuis le menu
+
+- Action secondaire « Ajouter l’application » dans le menu de l’accueil, pour les visiteurs et tous les rôles connectés.
+- Conservation de l’offre native lorsque le menu est fermé ; masquage en standalone, après installation ou sans méthode disponible.
+- Aide iOS intégrée au panneau ; aucun CTA supplémentaire ni scroll global.
+- Documentation du support PWA existant et tests navigateur ciblés.
+
 ## V0.5.4 — accueil premium
 
 - Nouvel accueil cinématique : village et lune, compteur dynamique, maisons inscrites, CTA contextuel et scène basse chat/portail/lanterne.

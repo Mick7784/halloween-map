@@ -16,6 +16,7 @@ import {
   UserRound,
 } from "lucide-react";
 import ManorMark from "./ManorMark";
+import InstallApp from "./InstallApp";
 import { api, AsyncButton, Notice, type PublicState } from "./common";
 import type { House as Participation, User } from "../lib/domain";
 import "./PremiumHome.css";
@@ -243,6 +244,12 @@ export default function PremiumHome({
               <div className="home-drawer-login">
                 <h2>Se connecter</h2>
                 {login}
+                <nav
+                  className="home-drawer-links home-menu-group home-install-guest"
+                  aria-label="Actions secondaires"
+                >
+                  <InstallApp />
+                </nav>
               </div>
             ) : (
               <>
@@ -288,6 +295,7 @@ export default function PremiumHome({
                     </div>
                   )}
                   <div className="home-menu-group">
+                    <InstallApp />
                     {entry("/account", "Mon compte", <Settings />)}
                     <AsyncButton
                       onClick={async () => {

@@ -232,3 +232,119 @@ test("configured date, ticking seconds, zero count and safe unconfigured state",
     page.getByRole("link", { name: "Créer un compte", exact: true }),
   ).toBeVisible();
 });
+
+for (const mode of ["guest", "member", "house", "admin"]) {
+  test(`native install offer survives a closed drawer: ${mode}`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await arrange(page, mode);
+    await page.evaluate(() => {
+      const event = new Event("beforeinstallprompt", { cancelable: true });
+      Object.assign(event, {
+        prompt: async () => {
+          document.body.dataset.nativeInstallCalls = "1";
+        },
+        userChoice: Promise.resolve({ outcome: "accepted" }),
+      });
+      window.dispatchEvent(event);
+    });
+    await page
+      .getByRole("button", { name: "Menu utilisateur", exact: true })
+      .click();
+    await page
+      .getByRole("button", { name: "Ajouter l’application", exact: true })
+      .click();
+    await expect(page.locator("body")).toHaveAttribute(
+      "data-native-install-calls",
+      "1",
+    );
+    await expect(
+      page.getByRole("button", { name: "Ajouter l’application", exact: true }),
+    ).toHaveCount(0);
+    expect(
+      await page.evaluate(
+        () =>
+          document.documentElement.scrollHeight <= innerHeight && scrollY === 0,
+      ),
+    ).toBe(true);
+  });
+}
+
+test("unsupported browser and completed installation have no inactive action", async ({
+  page,
+}) => {
+  await arrange(page);
+  await page
+    .getByRole("button", { name: "Menu utilisateur", exact: true })
+    .click();
+  const action = page.getByRole("button", {
+    name: "Ajouter l’application",
+    exact: true,
+  });
+  await expect(action).toHaveCount(0);
+  await page.evaluate(() => {
+    const event = new Event("beforeinstallprompt", { cancelable: true });
+    Object.assign(event, {
+      prompt: async () => {},
+      userChoice: Promise.resolve({ outcome: "dismissed" }),
+    });
+    window.dispatchEvent(event);
+  });
+  await expect(action).toBeVisible();
+  await action.click();
+  await expect(action).toHaveCount(0);
+  await page.evaluate(() => {
+    const event = new Event("beforeinstallprompt", { cancelable: true });
+    Object.assign(event, {
+      prompt: async () => {},
+      userChoice: Promise.resolve({ outcome: "accepted" }),
+    });
+    window.dispatchEvent(event);
+  });
+  await expect(action).toBeVisible();
+  await page.evaluate(() => window.dispatchEvent(new Event("appinstalled")));
+  await expect(action).toHaveCount(0);
+});
+
+for (const standalone of [false, true]) {
+  test(`iOS installation help and standalone hiding: ${standalone}`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.addInitScript((installed) => {
+      Object.defineProperty(navigator, "userAgent", {
+        value:
+          "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Version/18.0 Mobile/15E148 Safari/604.1",
+      });
+      Object.defineProperty(navigator, "standalone", { value: installed });
+    }, standalone);
+    await arrange(page);
+    await page
+      .getByRole("button", { name: "Menu utilisateur", exact: true })
+      .click();
+    const action = page.getByRole("button", {
+      name: "Ajouter l’application",
+      exact: true,
+    });
+    if (standalone) {
+      await expect(action).toHaveCount(0);
+    } else {
+      await action.click();
+      await expect(page.getByRole("status")).toContainText(
+        "Touchez Partager puis « Sur l’écran d’accueil ».",
+      );
+      expect(
+        await page.evaluate(
+          () =>
+            document.documentElement.scrollHeight <= innerHeight &&
+            scrollY === 0,
+        ),
+      ).toBe(true);
+      await page
+        .getByRole("button", { name: "Fermer l’aide à l’installation" })
+        .click();
+      await expect(page.getByRole("status")).toHaveCount(0);
+    }
+  });
+}

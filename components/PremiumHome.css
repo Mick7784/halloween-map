@@ -628,3 +628,48 @@
       linear-gradient(90deg, transparent, #000 14%, #000 86%, transparent);
   }
 }
+
+/* Secondary installation action: no extra home CTA or document scrolling. */
+.home-drawer-login {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+.home-install-guest {
+  margin-top: auto;
+}
+.home-drawer-links .install-cta {
+  color: var(--home-text);
+}
+.home-drawer-links .install-cta > svg {
+  color: #bca0ec;
+}
+.install-help {
+  position: relative;
+  margin: 8px 0;
+  padding: 14px 34px 14px 14px;
+  border: 1px solid #474351;
+  border-radius: 12px;
+  background: #ffffff06;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.install-help p {
+  margin: 8px 0 0;
+}
+.home-drawer-links .install-help-close {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 28px;
+  min-height: 28px;
+  padding: 6px;
+  color: var(--home-text);
+}
+.home-drawer-links .install-help-close > svg {
+  width: 16px;
+}
+
+.home-install-guest:not(:has(.install-action)) {
+  display: none;
+}

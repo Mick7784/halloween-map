@@ -30,12 +30,12 @@ La nouvelle page est limitée à la route `/`. Carte, routage, participation, ad
 
 Les données de saison, date et compteur ne demandent aucun branchement supplémentaire. Aucun nouveau back-office n’a été créé.
 
-| Option future | Source attendue | Point de branchement |
-|---|---|---|
-| Décors configurables par commune | Champ validé de configuration d’instance renvoyé par l’API publique | URLs des deux couches dans PremiumHome.css ; le cadrage reste séparé mobile/desktop |
-| Texte explicatif éditable | Nouvelle clé publique de contenu, validée par l’administration | `home-explanation` dans PremiumHome.tsx, avec la phrase actuelle comme défaut |
-| Libellés contextuels configurables | Paramètres publics de contenu/instance, sans modifier les contrôles serveur | Objet `cta` centralisé dans PremiumHome.tsx |
-| Palette/identité graphique par instance | Tokens de configuration d’instance validés | Variables CSS `--home-*` du conteneur `.home-reference` |
+| Option future                           | Source attendue                                                             | Point de branchement                                                                |
+| --------------------------------------- | --------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| Décors configurables par commune        | Champ validé de configuration d’instance renvoyé par l’API publique         | URLs des deux couches dans PremiumHome.css ; le cadrage reste séparé mobile/desktop |
+| Texte explicatif éditable               | Nouvelle clé publique de contenu, validée par l’administration              | `home-explanation` dans PremiumHome.tsx, avec la phrase actuelle comme défaut       |
+| Libellés contextuels configurables      | Paramètres publics de contenu/instance, sans modifier les contrôles serveur | Objet `cta` centralisé dans PremiumHome.tsx                                         |
+| Palette/identité graphique par instance | Tokens de configuration d’instance validés                                  | Variables CSS `--home-*` du conteneur `.home-reference`                             |
 
 ## Fichiers
 
@@ -64,3 +64,15 @@ Prompt d’édition retenu :
 > Edit this background composition only. Preserve identical sophisticated painterly cinematic village, amber moon, branches, warm lighting and colors. Keep upper village within top 30%. Critical correction: compress and relocate the ENTIRE foreground black cat, left stone pillar, right lantern, wrought iron gate and pumpkin into the bottom 22% of the image. The cat must be clearly visible in profile on the LEFT pillar at y=78% or lower; lantern right at y=80%; gate spans y=84%-97%. Make pillars/gate shorter; do not retain tall gate currently spanning half the image. Leave the entire central zone from y=35% to y=75% as quiet dark near-black plum mist negative space. No text, no UI. Portrait composition. Keep cat and lamp slightly inset horizontally at x=25% and x=75% so both survive narrow central mobile cropping.
 
 Résultats finaux : lint et typecheck réussis, build de production réussi, 10 tests ciblés accueil/menu réussis et 22 tests navigateur du projet réussis (dont activation démo et routage existant).
+
+## Installation depuis le menu latéral
+
+L’action secondaire « Ajouter l’application » est accessible aux visiteurs et à tous les rôles connectés. Elle figure sous la connexion pour les visiteurs, avant Mon compte pour les membres. Aucun CTA n’est ajouté à l’accueil.
+
+`InstallAppProvider`, monté dans le layout, enregistre `/sw.js` et écoute `beforeinstallprompt` même lorsque le menu est fermé. `InstallApp` consomme cette offre native une seule fois. Une annulation masque l’action jusqu’à une nouvelle offre du navigateur ; une acceptation, `appinstalled` ou le mode standalone la masque également. Aucun écran ne simule une installation.
+
+Sur iOS, une aide intégrée au menu indique Partager puis « Sur l’écran d’accueil ». Pour les autres navigateurs iOS, elle propose d’ouvrir la page dans Safari. Sans offre native ni méthode iOS, aucune action inactive n’est affichée. L’aide reste dans le panneau existant, avec fermeture explicite ; le document conserve son viewport fixe.
+
+Le support actuel comprend `app/manifest.ts`, son lien dans `app/layout.tsx`, les icônes PNG et Apple, `/sw.js` et `/offline.html`. Aucun de ces éléments ne manque au branchement. Le déclenchement natif dépend du navigateur et d’un contexte sécurisé HTTPS (localhost pour le développement). Il faut vérifier la proposition réelle sur le domaine de production et l’ajout manuel sur un appareil iOS ; les événements simulés en test vérifient le branchement UI, pas l’éligibilité réelle du navigateur. Une éventuelle future évolution du manifest, des icônes ou du service worker doit conserver ce provider et l’événement natif, sans ajouter de faux bouton d’installation.
+
+L’installation depuis le menu est publiée dans V0.5.5 ; la composition de référence reste celle de V0.5.4.
