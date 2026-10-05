@@ -653,6 +653,7 @@ describe("V0.5.2 independent Snap entries", () => {
           distances: body.sources.map(() => body.destinations.map(() => 150)),
           durations: body.sources.map(() => body.destinations.map(() => 120)),
         });
+      expect(body).not.toHaveProperty("instructions");
       geometry = body.coordinates.flatMap((p: number[]) => [
         p,
         [p[0] + 0.0001, p[1] + 0.0001],
@@ -682,8 +683,113 @@ describe("V0.5.2 independent Snap entries", () => {
     ).toHaveLength(25);
     expect((await router.directions(result)).geometry).toEqual(geometry);
     expect(geometry).toHaveLength(10);
+    const finalRoute = await planRoute(
+      result.map((point, n) => ({ ...house(`demo-${n}`), ...point })),
+      season,
+      input,
+      now,
+      router,
+    );
+    expect(finalRoute.stops).toHaveLength(5);
+    expect(finalRoute.distanceMeters).toBe(750);
+    expect(finalRoute.walkingSeconds).toBe(600);
+    expect(finalRoute.walkingMinutes).toBe(10);
+    expect(finalRoute.durationMinutes).toBe(35);
+    expect(finalRoute.geometry).toEqual(geometry);
     expect(
       fetcher.mock.calls.every(([url]) => url.includes("foot-walking")),
     ).toBe(true);
+  });
+});
+
+describe("V0.5.3 ORS Directions default instructions", () => {
+  it("requests default segments for multiple waypoints and ignores turn instructions", async () => {
+    vi.stubEnv("ORS_API_KEY", "test-key");
+    vi.stubEnv("ORS_BASE_URL", "https://api.heigit.org/openrouteservice");
+    const points = [
+      input.origin,
+      { latitude: 48.102, longitude: -1.668 },
+      { latitude: 48.104, longitude: -1.665 },
+    ];
+    const geometry = [
+      [-1.67, 48.1],
+      [-1.669, 48.1005],
+      [-1.668, 48.102],
+      [-1.666, 48.103],
+      [-1.665, 48.104],
+    ];
+    const segments = [
+      {
+        distance: 321.5,
+        duration: 240,
+        steps: [
+          { instruction: "Tournez à gauche", distance: 321.5, duration: 240 },
+        ],
+      },
+      {
+        distance: 456.7,
+        duration: 360,
+        steps: [{ instruction: "Continuez", distance: 456.7, duration: 360 }],
+      },
+    ];
+    const fetcher = vi.fn(async (url: string, options: RequestInit) => {
+      expect(url).toContain("foot-walking/geojson");
+      const body = JSON.parse(options.body as string);
+      expect(body).toEqual({
+        coordinates: points.map((p) => [p.longitude, p.latitude]),
+        radiuses: [50, 50, 50],
+        units: "m",
+      });
+      return Response.json({
+        type: "FeatureCollection",
+        features: [
+          {
+            type: "Feature",
+            geometry: { type: "LineString", coordinates: geometry },
+            properties: body.instructions === false ? {} : { segments },
+          },
+        ],
+      });
+    });
+    vi.stubGlobal("fetch", fetcher);
+    const result = await createWalkingRouter().directions(points);
+    expect(fetcher.mock.calls[0][0]).toBe(
+      "https://api.heigit.org/openrouteservice/v2/directions/foot-walking/geojson",
+    );
+    expect(result).toEqual({
+      geometry,
+      legs: [cost(321.5, 240), cost(456.7, 360)],
+    });
+    expect(result.legs).toHaveLength(points.length - 1);
+    expect(JSON.stringify(result)).not.toMatch(/instruction|steps|Tournez/);
+  });
+  it("still rejects a segment count inconsistent with the waypoints", async () => {
+    vi.stubEnv("ORS_API_KEY", "test-key");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        Response.json({
+          features: [
+            {
+              geometry: {
+                type: "LineString",
+                coordinates: [
+                  [-1.67, 48.1],
+                  [-1.66, 48.11],
+                ],
+              },
+              properties: { segments: [{ distance: 300, duration: 250 }] },
+            },
+          ],
+        }),
+      ),
+    );
+    await expect(
+      createWalkingRouter().directions([
+        input.origin,
+        input.origin,
+        input.origin,
+      ]),
+    ).rejects.toMatchObject({ reason: "invalid" });
   });
 });

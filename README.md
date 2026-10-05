@@ -123,7 +123,7 @@ Métier : PGlite local, PostgreSQL 17 en CI (`TEST_DATABASE_URL`). Migrations fr
 
 Production : `npm audit --omit=dev`. L’avis GHSA-vfj7-8cjw-p6xm concerne le transitif de développement `braces`, exclu du runtime ; ne pas forcer une rétrogradation du lint.
 
-La CI publie après verify et Docker verts seulement : tag **V0.5.2**, release **Halloween Map V0.5.2 Beta**, `ghcr.io/mick7784/halloween-map:V0.5.2` et `:latest`, labels OCI version/commit. Aucun numéro parallèle dans package.json, aucun déploiement externe.
+La CI publie après verify et Docker verts seulement : tag **V0.5.3**, release **Halloween Map V0.5.3 Beta**, `ghcr.io/mick7784/halloween-map:V0.5.3` et `:latest`, labels OCI version/commit. Aucun numéro parallèle dans package.json, aucun déploiement externe.
 
 Limites : mono-instance active, parcours exclusivement piétons selon le réseau disponible chez le fournisseur, cinq minutes de visite par maison. Pas de navigation vocale ni de suivi GPS continu. Recalculer si les disponibilités changent. Provenance du décor : [docs/visual-assets.md](docs/visual-assets.md).
 
@@ -160,3 +160,7 @@ Les diagnostics des réponses invalides indiquent endpoint et champs concernés,
 Chaque entrée Snap est validée séparément : null, coordonnées invalides ou snapped_distance absente/null/invalide deviennent un point non raccordable, sans bloquer les autres. Un tableau locations absent, de type incorrect ou de longueur incohérente reste une réponse invalide. Les journaux des entrées ignorées ne contiennent que leurs indices et les noms des champs. Matrix et Directions gardent leur validation stricte et aucun tracé de secours n’est produit.
 
 L’activation de la session preview ne dépend plus du fournisseur : le choix du créneau conserve les horaires des vraies maisons lorsqu’il y en a au moins deux, sinon les horaires configurés de la saison. La génération ORS intervient ensuite dans la preview ; une erreur explicite s’affiche avec la carte et la possibilité de quitter la démonstration.
+
+### V0.5.3 — segments Directions
+
+La requête Directions ne désactive plus les instructions : ORS retourne ainsi les segments nécessaires aux distances et durées de chaque liaison. Seuls la géométrie LineString et les couples distance/durée sont conservés. Les éventuelles instructions/steps sont ignorées ; aucune navigation turn-by-turn ni métrique calculée à vol d’oiseau. La validation du nombre de segments (points moins un) reste obligatoire.

@@ -48,9 +48,23 @@ http
             {
               geometry: { type: "LineString", coordinates: body.coordinates },
               properties: {
-                segments: body.coordinates
-                  .slice(1)
-                  .map(() => ({ distance: 140, duration: 120 })),
+                ...(body.instructions === false
+                  ? {}
+                  : {
+                      segments: body.coordinates
+                        .slice(1)
+                        .map(() => ({
+                          distance: 140,
+                          duration: 120,
+                          steps: [
+                            {
+                              instruction: "Test instruction ignored",
+                              distance: 140,
+                              duration: 120,
+                            },
+                          ],
+                        })),
+                    }),
               },
             },
           ],

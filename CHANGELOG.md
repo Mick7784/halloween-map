@@ -1,5 +1,10 @@
 # Changelog
 
+## V0.5.3
+
+- Directions conserve les instructions par défaut d’ORS afin de recevoir les segments distance/durée ; les étapes de navigation sont ignorées et ne sont ni stockées ni affichées.
+- Tests du contrat multi-waypoints, du nombre de segments et du parcours final de cinq maisons démo avec Snap/Matrix/Directions, métriques fournisseur et aucune ligne droite de secours.
+
 ## V0.5.2
 
 - Snap valide désormais chaque entrée indépendamment : les coordonnées/distances invalides sont ignorées, la structure globale reste strictement vérifiée. Les autres maisons restent utilisables et un départ non raccordable invite à choisir un autre point.

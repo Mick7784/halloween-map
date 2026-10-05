@@ -235,7 +235,6 @@ export function createWalkingRouter(): WalkingRouter {
         await request("directions/foot-walking/geojson", {
           coordinates: points.map(pair),
           radiuses: points.map(() => 50),
-          instructions: false,
           units: "m",
         }),
       );
