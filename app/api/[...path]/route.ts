@@ -9,9 +9,12 @@ import {
   accountAction,
   adminUserAction,
   activateAccount,
+  requestPasswordReset,
+  resetPassword,
 } from "../../../lib/accounts";
 import { contentAction, contentAdmin } from "../../../lib/content";
-import { localISO } from "../../../lib/domain";
+import { seasonState } from "../../../lib/domain";
+import { demoTime } from "../../../lib/demo";
 import { NextRequest, NextResponse } from "next/server";
 import { getUser, HttpError, hashToken, rateLimit } from "../../../lib/auth";
 import { db } from "../../../lib/db";
@@ -61,6 +64,7 @@ async function handle(
               await getUser(req.cookies.get(cookie)?.value),
               req.cookies.get(cookie)?.value,
             ),
+            await getUser(req.cookies.get(cookie)?.value),
           ),
         );
       if (path === "me")
@@ -85,24 +89,6 @@ async function handle(
         )
           throw new HttpError(403, "Accès interdit");
         return response({ smtpAvailable: smtpAvailable() });
-      }
-      if (path === "admin/preview") {
-        const u = await getUser(req.cookies.get(cookie)?.value);
-        if (
-          !u?.permissions.includes("season.preview") ||
-          !u.permissions.includes("admin.access")
-        )
-          throw new HttpError(403, "Accès interdit");
-        const row = (
-          await db().query(
-            "SELECT preview_at FROM sessions WHERE token_hash=$1",
-            [hashToken(req.cookies.get(cookie)!.value)],
-          )
-        ).rows[0];
-        return response({
-          at: row?.preview_at ?? null,
-          smtpAvailable: smtpAvailable(),
-        });
       }
       if (path.startsWith("admin/")) {
         await service.tick();
@@ -129,7 +115,16 @@ async function handle(
       throw new HttpError(413, "Requête trop volumineuse");
     const input = JSON.parse(raw);
     // Global persistent ceilings do not trust spoofable forwarded IP headers.
-    if (["login", "register", "setup", "activation"].includes(path))
+    if (
+      [
+        "login",
+        "register",
+        "setup",
+        "activation",
+        "forgot-password",
+        "reset-password",
+      ].includes(path)
+    )
       await rateLimit("auth-global", 150);
     if (path === "setup") {
       const r = withSession(
@@ -138,6 +133,9 @@ async function handle(
       r.cookies.delete(setupCookie);
       return r;
     }
+    if (path === "forgot-password")
+      return response(await requestPasswordReset(input));
+    if (path === "reset-password") return response(await resetPassword(input));
     if (path === "login")
       return withSession((await service.login(input)).token);
     if (path === "register")
@@ -252,28 +250,26 @@ async function handle(
         req.cookies.get(cookie)?.value,
       );
       if (!context.preview) await service.tick();
-      return response(await service.route(input, context));
+      return response(await service.route(input, context, user));
     }
     if (path === "admin") {
       if (input.action === "preview") {
-        if (
-          !user?.permissions.includes("admin.access") ||
-          !user.permissions.includes("season.preview")
-        )
-          throw new HttpError(403, "Accès interdit");
+        if (user?.role_name !== "SUPER_ADMIN")
+          throw new HttpError(403, "Super Admin requis");
         const previewInput = z
-          .object({ enabled: z.boolean(), at: z.string().max(40).optional() })
+          .object({ enabled: z.boolean() })
           .parse(input.payload);
-        const configured = await service.instance();
+        const configured = (await service.instance())!;
+        const season = await service.activeSeason(configured);
         let at: string | null = null;
         if (previewInput.enabled) {
-          if (typeof previewInput.at !== "string")
-            throw new HttpError(400, "Date requise");
-          try {
-            at = localISO(previewInput.at, configured!.timezone);
-          } catch {
-            throw new HttpError(400, "Date invalide ou ambiguë");
-          }
+          if (!season || seasonState(season) === "MAP_OPEN")
+            throw new HttpError(403, "Mode démo indisponible");
+          at = demoTime(
+            configured,
+            season,
+            await service.demoHouses(configured, season),
+          ).toISOString();
         }
         await db().query(
           "UPDATE sessions SET preview_at=$1 WHERE token_hash=$2 AND user_id=$3",

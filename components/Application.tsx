@@ -1,4 +1,5 @@
 "use client";
+import PasswordRecovery from "./PasswordRecovery";
 import Account, { Signup, Activation } from "./Account";
 import InstallApp from "./InstallApp";
 import Editorial from "./Editorial";
@@ -10,9 +11,7 @@ import { DateTime } from "luxon";
 import {
   House as HouseIcon,
   Route,
-  Users,
   CircleUserRound,
-  Menu,
   X,
   ArrowRight,
   Info,
@@ -83,6 +82,17 @@ export default function Application({
       clearInterval(clock);
     };
   }, [refresh]);
+  useEffect(() => {
+    const viewport = window.visualViewport;
+    const resize = () =>
+      document.documentElement.style.setProperty(
+        "--app-height",
+        (viewport?.height ?? window.innerHeight) + "px",
+      );
+    resize();
+    viewport?.addEventListener("resize", resize);
+    return () => viewport?.removeEventListener("resize", resize);
+  }, []);
   const effectiveNow = state?.preview ? +new Date(state.serverTime!) : now;
   const closed =
     !!state?.season && effectiveNow >= +new Date(state.season.closes_at);
@@ -92,11 +102,13 @@ export default function Application({
         state: closed ? "CLOSED" : state.state,
         houses: closed
           ? []
-          : (state.houses ?? []).filter(
-              (h) =>
-                effectiveNow >= +new Date(h.starts_at) &&
-                effectiveNow < +new Date(h.ends_at),
-            ),
+          : state.state !== "MAP_OPEN"
+            ? (state.houses ?? [])
+            : (state.houses ?? []).filter(
+                (h) =>
+                  effectiveNow >= +new Date(h.starts_at) &&
+                  effectiveNow < +new Date(h.ends_at),
+              ),
       }
     : null;
   let content: React.ReactNode;
@@ -123,6 +135,8 @@ export default function Application({
       </main>
     );
   else if (view === "login") content = <Login />;
+  else if (view === "forgot-password" || view === "reset-password")
+    content = <PasswordRecovery reset={view === "reset-password"} />;
   else if (view === "register") content = <Signup state={state} />;
   else if (view === "activation") content = <Activation state={state} />;
   else if (view === "account")
@@ -199,10 +213,10 @@ export default function Application({
             maisons accueillantes pour une soirée conviviale.
           </p>
           <p>
-            Les adresses sont publiées uniquement après validation, pendant les
-            horaires d’accueil. À la purge programmée de la saison, les données
-            de participation sont supprimées. Les comptes durables et les
-            statistiques anonymes sont conservés.
+            Les adresses sont publiées pendant les horaires d’accueil. À la
+            purge programmée de la saison, les données de participation sont
+            supprimées. Les comptes durables et les statistiques anonymes sont
+            conservés.
           </p>
           <h2>En toute sécurité</h2>
           <p>
@@ -220,11 +234,28 @@ export default function Application({
       </main>
     );
   else
-    content = (
-      <PublicMap state={liveState!} mapStyle={mapStyle} now={effectiveNow} />
-    );
+    content =
+      !user && ["map", "preview"].includes(view) ? (
+        <Login destination="/map" />
+      ) : (
+        <PublicMap
+          state={liveState!}
+          mapStyle={mapStyle}
+          now={effectiveNow}
+          showMap={
+            !!user &&
+            (view === "map" || view === "preview" || state.state === "MAP_OPEN")
+          }
+          user={user}
+        />
+      );
   return (
-    <>
+    <div
+      className={
+        "application " +
+        (["map", "preview"].includes(view) && user ? "map-app" : "")
+      }
+    >
       <header
         className={
           view === "admin" ? "site-header admin-header" : "site-header"
@@ -240,66 +271,70 @@ export default function Application({
             <em>{state?.instance?.territory ?? "Une commune plus vivante"}</em>
           </span>
         </Link>
-        <p className="brand-note">
-          DES MAISONS ACCUEILLANTES
-          <br />
-          UN HALLOWEEN À PARTAGER
-        </p>
-        <Link
-          className="account-icon"
-          href={user ? "/account" : "/login"}
-          aria-label="Mon compte"
-        >
-          <CircleUserRound size={22} />
-        </Link>
-        <button
-          className="menu-toggle"
-          aria-label="Menu"
-          aria-expanded={menu}
-          onClick={() => setMenu(!menu)}
-        >
-          {menu ? <X /> : <Menu />}
-        </button>
-        <nav className={menu ? "open" : ""}>
-          <Link href="/">
-            <HouseIcon />
-            Découvrir<span>les maisons participantes</span>
-          </Link>
-          <Link href="/#parcours">
-            <Route />
-            Préparer<span>son parcours</span>
-          </Link>
-          <Link href={!!user ? "/participant" : "/register"}>
-            <Users />
-            Partager<span>ma participation</span>
-          </Link>
-          {user?.permissions.includes("admin.access") && (
-            <Link href="/admin">Administration</Link>
-          )}
-          <Link
-            className="account-avatar"
-            href={user ? "/account" : "/login"}
-            aria-label="Mon compte"
-          >
-            <CircleUserRound size={22} />
-            {user ? "Mon compte" : "Compte"}
-          </Link>
-          <InstallApp />
-          {user ? (
-            <AsyncButton
-              onClick={async () => {
-                await api("logout", {});
-                window.location.href = "/";
-              }}
-            >
-              <LogOut size={16} /> Déconnexion
-            </AsyncButton>
+        <div className="header-account">
+          {!user ? (
+            <div className="desktop-login">
+              <LoginForm compact destination="/map" />
+            </div>
           ) : (
-            <Link className="nav-login" href="/login" aria-label="Compte">
-              Mon compte
+            <Link className="account-name" href="/account">
+              {user.display_name || "Mon compte"}
             </Link>
           )}
-        </nav>
+          <button
+            className="user-menu-toggle"
+            aria-label="Menu utilisateur"
+            aria-expanded={menu}
+            aria-controls="user-menu"
+            onClick={() => setMenu(!menu)}
+          >
+            <CircleUserRound size={22} />
+          </button>
+        </div>
+        {menu && (
+          <nav
+            className="user-menu open"
+            id="user-menu"
+            aria-label="Menu utilisateur"
+          >
+            {!user && (
+              <div className="mobile-login">
+                <LoginForm compact={false} destination="/map" />
+              </div>
+            )}
+            <Link href="/map" onClick={() => setMenu(false)}>
+              La carte
+            </Link>
+            <Link
+              href={user ? "/participant" : "/login?next=/participant"}
+              onClick={() => setMenu(false)}
+            >
+              Inscrire ma maison
+            </Link>
+            <Link href="/map#parcours" onClick={() => setMenu(false)}>
+              Préparer mon parcours
+            </Link>
+            {user && (
+              <Link href="/account" onClick={() => setMenu(false)}>
+                Informations personnelles
+              </Link>
+            )}
+            <InstallApp />
+            {user?.permissions.includes("admin.access") && (
+              <Link href="/admin">Administration</Link>
+            )}
+            {user && (
+              <AsyncButton
+                onClick={async () => {
+                  await api("logout", {});
+                  window.location.href = "/";
+                }}
+              >
+                <LogOut size={16} /> Déconnexion
+              </AsyncButton>
+            )}
+          </nav>
+        )}
       </header>
       {error && state && (
         <div className="notice global-notice" role="alert">
@@ -318,7 +353,17 @@ export default function Application({
             .setZone(state.instance!.timezone)
             .setLocale("fr")
             .toFormat("dd LLLL yyyy · HH:mm")}{" "}
-          <Link href="/admin">Retour à l’administration</Link>
+          <AsyncButton
+            onClick={async () => {
+              await api("admin", {
+                action: "preview",
+                payload: { enabled: false },
+              });
+              window.location.href = "/";
+            }}
+          >
+            Quitter le mode démo
+          </AsyncButton>
         </div>
       )}
       {content}
@@ -336,7 +381,7 @@ export default function Application({
           © {DateTime.now().setZone("Europe/Paris").year} DomotiK Studio
         </span>
       </footer>
-    </>
+    </div>
   );
 }
 function SetupGate() {
@@ -370,53 +415,75 @@ function SetupGate() {
     </main>
   );
 }
-function Login() {
+function Login({ destination }: { destination?: string }) {
+  return (
+    <main className="narrow login">
+      <h1>Bienvenue à la maison.</h1>
+      <section className="panel">
+        <LoginForm destination={destination} />
+      </section>
+    </main>
+  );
+}
+function LoginForm({
+  compact = false,
+  destination,
+}: {
+  compact?: boolean;
+  destination?: string;
+}) {
   const [error, setError] = useState(""),
     [busy, setBusy] = useState(false);
   return (
-    <main className="narrow login">
-      <div className="eyebrow">RETROUVEZ VOTRE ÉVÉNEMENT</div>
-      <h1>Bienvenue à la maison.</h1>
-      <section className="panel">
-        <form
-          onSubmit={async (e) => {
-            e.preventDefault();
-            setBusy(true);
-            setError("");
-            try {
-              await api("login", values(e.currentTarget));
-              const u = await api<User>("me");
-              window.location.href = u.permissions.includes("admin.access")
-                ? "/admin"
-                : "/participant";
-            } catch (e) {
-              setError((e as Error).message);
-            } finally {
-              setBusy(false);
-            }
-          }}
-        >
-          <Field label="Email" name="email" type="email" />
-          <Field label="Mot de passe" name="password" type="password" />
-          <Notice error={error} />
-          <button disabled={busy} className="primary wide">
-            {busy ? "Connexion…" : "Me connecter"}
-            <ArrowRight size={18} />
-          </button>
-        </form>
-        <p className="muted">
-          Pas encore de maison ?{" "}
-          <Link href="/register">Rejoignez l’événement.</Link>
-        </p>
-      </section>
-    </main>
+    <form
+      className={compact ? "compact-login" : "login-form"}
+      onSubmit={async (e) => {
+        e.preventDefault();
+        setBusy(true);
+        setError("");
+        try {
+          await api("login", values(e.currentTarget));
+          const next = new URLSearchParams(window.location.search).get("next");
+          window.location.href =
+            next && /^\/(?!\/)/.test(next) && !next.includes("\\")
+              ? next
+              : (destination ?? "/map");
+        } catch (e) {
+          setError((e as Error).message);
+        } finally {
+          setBusy(false);
+        }
+      }}
+    >
+      <div className="login-fields">
+        <Field label="Email" name="email" type="email" placeholder="Email" />
+        <Field
+          label="Mot de passe"
+          name="password"
+          type="password"
+          placeholder="Mot de passe"
+        />
+        <button className="primary" disabled={busy}>
+          {busy ? "Connexion…" : "Se connecter"}
+        </button>
+      </div>
+      <div className="login-links">
+        <Link href="/forgot-password">Mot de passe oublié ?</Link>
+        <Link href="/register">Créer un compte</Link>
+      </div>
+      <Notice error={error} />
+    </form>
   );
 }
 function PublicMap({
   state,
   mapStyle,
   now,
+  showMap,
+  user,
 }: {
+  showMap: boolean;
+  user: User | null;
   state: PublicState;
   mapStyle: string;
   now: number;
@@ -431,7 +498,14 @@ function PublicMap({
       state.instance!.latitude,
     ]),
     [pick, setPick] = useState(false),
-    [tab, setTab] = useState("map");
+    [tab, setTab] = useState("map"),
+    [routeOpen, setRouteOpen] = useState(false);
+  useEffect(() => {
+    if (window.location.hash === "#parcours") setRouteOpen(true);
+    const open = () => setRouteOpen(window.location.hash === "#parcours");
+    window.addEventListener("hashchange", open);
+    return () => window.removeEventListener("hashchange", open);
+  }, []);
   const i = state.instance!,
     s = state.season,
     open = state.state === "MAP_OPEN";
@@ -454,7 +528,7 @@ function PublicMap({
       }
     : null;
   const routeHouses = safeRoute?.stops.map((s) => s.house) ?? [];
-  if (!open) {
+  if (!showMap) {
     const closed = state.state === "CLOSED" || state.state === "ARCHIVED";
     const remaining = s ? Math.max(0, +new Date(s.opens_at) - now) : 0;
     const countdown = [
@@ -471,18 +545,21 @@ function PublicMap({
           <h1>
             {closed
               ? state.contents?.["home.closed"]
-              : state.contents?.["home.title"]}
+              : open
+                ? state.contents?.["home.open"]
+                : state.contents?.["home.title"]}
           </h1>
           <p>
             {closed
               ? state.contents?.["home.closedBody"]
-              : state.state === "PREPARATION"
-                ? state.contents?.["home.preparation"]
-                : s
-                  ? `La carte ouvre le ${DateTime.fromISO(s.opens_at).setZone(i.timezone).setLocale("fr").toFormat("d MMMM à HH:mm")}`
-                  : "La première saison est en préparation."}
+              : open
+                ? "Connectez-vous pour découvrir les maisons participantes."
+                : state.state === "PREPARATION"
+                  ? state.contents?.["home.preparation"]
+                  : s
+                    ? `La carte ouvre le ${DateTime.fromISO(s.opens_at).setZone(i.timezone).setLocale("fr").toFormat("d MMMM à HH:mm")}`
+                    : "La première saison est en préparation."}
           </p>
-          <InstallApp />
           {!closed && state.state === "COUNTDOWN" && (
             <div className="countdown-boxes">
               {countdown.map((n, k) => (
@@ -506,19 +583,56 @@ function PublicMap({
             </p>
           )}
           {!closed && s?.registrations_open && !state.preview && (
-            <Link href="/register" className="button primary">
+            <Link
+              href={user ? "/participant" : "/register"}
+              className="button primary"
+            >
               {state.contents?.["home.register"]}
               <ArrowRight size={18} />
             </Link>
           )}
+          <div className="actions">
+            <Link href="/map" className="button">
+              La carte
+            </Link>
+            {state.demoAvailable && (
+              <AsyncButton
+                onClick={async () => {
+                  await api("admin", {
+                    action: "preview",
+                    payload: { enabled: true },
+                  });
+                  window.location.href = "/preview";
+                }}
+              >
+                Mode démo
+              </AsyncButton>
+            )}
+          </div>
           <p className="tagline">{state.contents?.["home.final"]}</p>
         </div>
       </main>
     );
   }
   return (
-    <main className="public-layout">
+    <main className={"public-layout " + (routeOpen ? "route-open" : "")}>
       <section className="map-section">
+        {!open && (
+          <div className="notice info map-opening">
+            Pour le moment, seule votre maison est visible. Les autres maisons
+            participantes seront disponibles le{" "}
+            {s
+              ? DateTime.fromISO(s.opens_at)
+                  .setZone(i.timezone)
+                  .setLocale("fr")
+                  .toFormat("d MMMM yyyy")
+              : "jour de l’ouverture"}{" "}
+            à {s ? time(s.opens_at, i.timezone) : ""}.{" "}
+            {!state.houses?.length && (
+              <Link href="/participant">Inscrire ma maison</Link>
+            )}
+          </div>
+        )}
         <div className="map-heading">
           <div>
             <div className="eyebrow">DÉCOUVRIR · {i.territory}</div>
@@ -540,6 +654,14 @@ function PublicMap({
             </button>
           </div>
         </div>
+        {open && (
+          <button
+            className="mobile-route-toggle"
+            onClick={() => setRouteOpen(!routeOpen)}
+          >
+            Préparer mon parcours
+          </button>
+        )}
         <div className="map-filters">
           <button
             className={!filters.length ? "active" : ""}
@@ -624,75 +746,84 @@ function PublicMap({
           toutes les 30 secondes.
         </p>
       </section>
-      <aside className="route-panel panel" id="parcours">
-        <div className="eyebrow">PRÉPARER</div>
-        <h2>
-          <Route /> Mon parcours
-        </h2>
-        <p className="muted">Un moment à partager, à votre rythme.</p>
-        <RouteForm
-          state={state}
-          origin={origin}
-          filters={filters}
-          maxFear={maxFear}
-          setOrigin={setOrigin}
-          onPick={() => {
-            setTab("map");
-            setPick(true);
-          }}
-          onResult={setRoute}
-        />
-        {safeRoute && (
-          <div className="route-result">
-            <h3>
-              {safeRoute.stops.length}{" "}
-              {safeRoute.stops.length > 1 ? "étapes" : "étape"} ·{" "}
-              {safeRoute.durationMinutes} min
-            </h3>
-            <p>
-              {(safeRoute.distanceMeters / 1000).toFixed(1)} km estimés · fin{" "}
-              {time(safeRoute.estimatedEnd, i.timezone)}
-            </p>
-            <ol>
-              {safeRoute.stops.map((stop, n) => (
-                <li key={stop.house.id}>
-                  <button onClick={() => setSelected(stop.house)}>
-                    <span>{n + 1}</span>
-                    <div>
-                      <strong>{stop.house.name}</strong>
-                      <small>
-                        {time(stop.arrival, i.timezone)} · {stop.walkingMinutes}{" "}
-                        min à pied
-                      </small>
-                    </div>
-                  </button>
-                </li>
-              ))}
-            </ol>
-            <p className="muted small">{safeRoute.disclaimer}</p>
-            {routeHouses.length !== route?.stops.length && (
-              <p className="notice info">
-                Des étapes ont fermé. Recalculez votre parcours.
+      {open && (
+        <aside className="route-panel panel" id="parcours">
+          <button
+            className="close mobile-route-close"
+            aria-label="Fermer le parcours"
+            onClick={() => setRouteOpen(false)}
+          >
+            <X />
+          </button>
+          <div className="eyebrow">PRÉPARER</div>
+          <h2>
+            <Route /> Mon parcours
+          </h2>
+          <p className="muted">Un moment à partager, à votre rythme.</p>
+          <RouteForm
+            state={state}
+            origin={origin}
+            filters={filters}
+            maxFear={maxFear}
+            setOrigin={setOrigin}
+            onPick={() => {
+              setTab("map");
+              setPick(true);
+            }}
+            onResult={setRoute}
+          />
+          {safeRoute && (
+            <div className="route-result">
+              <h3>
+                {safeRoute.stops.length}{" "}
+                {safeRoute.stops.length > 1 ? "étapes" : "étape"} ·{" "}
+                {safeRoute.durationMinutes} min
+              </h3>
+              <p>
+                {(safeRoute.distanceMeters / 1000).toFixed(1)} km estimés · fin{" "}
+                {time(safeRoute.estimatedEnd, i.timezone)}
               </p>
-            )}
-            <AsyncButton
-              onClick={async () => {
-                await navigator.clipboard.writeText(
-                  `${i.public_name}\n` +
-                    safeRoute.stops
-                      .map(
-                        (s, n) =>
-                          `${n + 1}. ${time(s.arrival, i.timezone)} — ${s.house.name} — ${s.house.address}`,
-                      )
-                      .join("\n"),
-                );
-              }}
-            >
-              Copier les étapes
-            </AsyncButton>
-          </div>
-        )}
-      </aside>
+              <ol>
+                {safeRoute.stops.map((stop, n) => (
+                  <li key={stop.house.id}>
+                    <button onClick={() => setSelected(stop.house)}>
+                      <span>{n + 1}</span>
+                      <div>
+                        <strong>{stop.house.name}</strong>
+                        <small>
+                          {time(stop.arrival, i.timezone)} ·{" "}
+                          {stop.walkingMinutes} min à pied
+                        </small>
+                      </div>
+                    </button>
+                  </li>
+                ))}
+              </ol>
+              <p className="muted small">{safeRoute.disclaimer}</p>
+              {routeHouses.length !== route?.stops.length && (
+                <p className="notice info">
+                  Des étapes ont fermé. Recalculez votre parcours.
+                </p>
+              )}
+              <AsyncButton
+                onClick={async () => {
+                  await navigator.clipboard.writeText(
+                    `${i.public_name}\n` +
+                      safeRoute.stops
+                        .map(
+                          (s, n) =>
+                            `${n + 1}. ${time(s.arrival, i.timezone)} — ${s.house.name} — ${s.house.address}`,
+                        )
+                        .join("\n"),
+                  );
+                }}
+              >
+                Copier les étapes
+              </AsyncButton>
+            </div>
+          )}
+        </aside>
+      )}
       {selectedLive && (
         <div className="modal-backdrop" onClick={() => setSelected(null)}>
           <section
@@ -752,6 +883,7 @@ function PublicMap({
               onClick={() => {
                 setOrigin([selectedLive.longitude, selectedLive.latitude]);
                 setSelected(null);
+                setRouteOpen(true);
                 document.getElementById("parcours")?.scrollIntoView({
                   behavior: window.matchMedia(
                     "(prefers-reduced-motion: reduce)",
@@ -986,13 +1118,9 @@ function Participant({
         <span className={"status " + house.status}>{labels[house.status]}</span>
         <span className="badge">{labels[house.activity]}</span>
       </div>
-      {house.status === "PENDING" && (
+      {house.status === "HIDDEN" && (
         <p className="notice info">
-          {
-            state.contents?.[
-              saved ? "participation.confirmation" : "participation.pending"
-            ]
-          }
+          Votre maison est masquée par l’administration.
         </p>
       )}
       {saved && (
@@ -1090,8 +1218,7 @@ function Participant({
         </AsyncButton>
       </section>
       <p className="muted small">
-        Les modifications du nom, de l’adresse et des textes demandent une
-        nouvelle validation. Les actions en direct prennent effet immédiatement
+        Les modifications et les actions en direct prennent effet immédiatement
         sur le serveur.
       </p>
     </main>

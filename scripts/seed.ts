@@ -124,7 +124,7 @@ export async function seed(mode = "on") {
           n % 4 === 0,
           "Une ambiance fictive et quelques surprises vous attendent.",
           "Données de démonstration : cette adresse n’existe pas.",
-          n === 6 ? "PENDING" : n === 10 ? "REJECTED" : "APPROVED",
+          n === 10 ? "HIDDEN" : "VISIBLE",
           n === 9 ? "PAUSED" : "ACTIVE",
           n !== 8,
         ],

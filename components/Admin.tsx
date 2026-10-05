@@ -12,23 +12,20 @@ import {
   CalendarDays,
   ChartNoAxesCombined,
   Settings,
-  ShieldCheck,
   ScrollText,
   X,
   ArrowRight,
 } from "lucide-react";
 import type { Instance, Season, House, User } from "../lib/domain";
-import { permissions } from "../lib/domain";
+import Campaigns from "./Campaigns";
+import Link from "next/link";
 import {
   api,
   has,
   labels,
-  Field,
-  Check,
   Notice,
   AsyncButton,
   Badges,
-  values,
   localDate,
   type PublicState,
 } from "./common";
@@ -36,7 +33,7 @@ import HouseForm from "./HouseForm";
 type Role = { id: string; name: string; permissions: string[] };
 type Dashboard = {
   approved: number;
-  pending: number;
+  hidden: number;
   users: number;
   routes: number;
   state: string;
@@ -60,6 +57,12 @@ const sections = [
   { id: "users", name: "Utilisateurs", p: "users.read", Icon: Users },
   { id: "seasons", name: "Saison", p: "season.read", Icon: CalendarDays },
   {
+    id: "communications",
+    name: "Communications",
+    p: "communications.read",
+    Icon: ScrollText,
+  },
+  {
     id: "stats",
     name: "Statistiques",
     p: "stats.read",
@@ -67,12 +70,6 @@ const sections = [
   },
   { id: "settings", name: "Paramètres", p: "settings.read", Icon: Settings },
   { id: "content", name: "Contenus", p: "content.manage", Icon: ScrollText },
-  {
-    id: "roles",
-    name: "Rôles & permissions",
-    p: "users.read",
-    Icon: ShieldCheck,
-  },
   {
     id: "audit",
     name: "Journal d’activité",
@@ -99,6 +96,9 @@ export default function Admin({
     [roles, setRoles] = useState<Role[]>([]),
     [editing, setEditing] = useState<House | null>(null),
     [filter, setFilter] = useState("ALL");
+  const [activeAdminSeason, setActiveAdminSeason] = useState<Season | null>(
+    null,
+  );
   const currentSection = useRef(section);
   useEffect(() => {
     currentSection.current = section;
@@ -130,6 +130,13 @@ export default function Admin({
     };
   }, [section]);
   useEffect(() => {
+    void api<Season[]>("admin/seasons")
+      .then((rows) =>
+        setActiveAdminSeason(
+          rows.find((row) => !row.archived) ?? rows[0] ?? null,
+        ),
+      )
+      .catch((e) => setError(e.message));
     if (has(user, "users.read"))
       void api<Role[]>("admin/roles")
         .then(setRoles)
@@ -139,7 +146,6 @@ export default function Admin({
     await api("admin", { action, payload, id });
     await reload();
     await refresh();
-    if (action === "role") setRoles(await api("admin/roles"));
   }
   const title =
     sections.find((s) => s.id === section)?.name ?? "Administration";
@@ -153,6 +159,7 @@ export default function Admin({
           {user.display_name}
           <small>{labels[user.role_name ?? ""] ?? user.role_name}</small>
         </p>
+        <Link href="/">Retour au site</Link>
         <nav>
           {available.map(({ id, name, Icon }) => (
             <button
@@ -194,13 +201,13 @@ export default function Admin({
                   {[
                     [
                       HouseIcon,
-                      "Maisons validées",
+                      "Maisons visibles",
                       (data as Dashboard).approved,
                     ],
                     [
                       CalendarDays,
-                      "Demandes en attente",
-                      (data as Dashboard).pending,
+                      "Maisons masquées",
+                      (data as Dashboard).hidden,
                     ],
                     [
                       ChartNoAxesCombined,
@@ -263,20 +270,18 @@ export default function Admin({
             {section === "houses" && (
               <section className="panel">
                 <div className="table-toolbar">
-                  <h2>Maisons · modération</h2>
+                  <h2>Gestion des maisons</h2>
                   <select
                     aria-label="Filtrer les maisons"
                     value={filter}
                     onChange={(e) => setFilter(e.target.value)}
                   >
                     <option value="ALL">Toutes</option>
-                    {["PENDING", "APPROVED", "REJECTED", "DISABLED"].map(
-                      (st) => (
-                        <option key={st} value={st}>
-                          {labels[st]}
-                        </option>
-                      ),
-                    )}
+                    {["VISIBLE", "HIDDEN"].map((st) => (
+                      <option key={st} value={st}>
+                        {labels[st]}
+                      </option>
+                    ))}
                   </select>
                 </div>
                 <div className="table-wrap">
@@ -316,44 +321,34 @@ export default function Admin({
                                     ? " / modifier"
                                     : ""}
                                 </button>
-                                {has(user, "participants.validate") && (
-                                  <>
-                                    <AsyncButton
-                                      onClick={() =>
-                                        act("moderate", "APPROVED", h.id)
-                                      }
-                                    >
-                                      Valider
-                                    </AsyncButton>
-                                    <AsyncButton
-                                      onClick={() =>
-                                        act("moderate", "REJECTED", h.id)
-                                      }
-                                    >
-                                      Refuser
-                                    </AsyncButton>
-                                    <AsyncButton
-                                      onClick={() =>
-                                        act("moderate", "DISABLED", h.id)
-                                      }
-                                    >
-                                      Désactiver
-                                    </AsyncButton>
-                                  </>
-                                )}
+                                <AsyncButton
+                                  onClick={() =>
+                                    act(
+                                      "visibility",
+                                      h.status === "HIDDEN"
+                                        ? "VISIBLE"
+                                        : "HIDDEN",
+                                      h.id,
+                                    )
+                                  }
+                                >
+                                  {h.status === "HIDDEN"
+                                    ? "Rendre visible"
+                                    : "Masquer"}
+                                </AsyncButton>
                                 {has(user, "participants.delete") && (
                                   <AsyncButton
                                     danger
                                     onClick={async () => {
                                       if (
-                                        window.confirm(
-                                          "Supprimer le compte participant et toutes ses données ?",
-                                        )
+                                        window.prompt(
+                                          "Suppression définitive de la maison, de son adresse et de ses données. Le compte reste disponible. Saisissez SUPPRIMER LA MAISON.",
+                                        ) === "SUPPRIMER LA MAISON"
                                       )
                                         await act(
-                                          "deleteParticipant",
-                                          "SUPPRIMER",
-                                          h.user_id,
+                                          "deleteHouse",
+                                          "SUPPRIMER LA MAISON",
+                                          h.id,
                                         );
                                     }}
                                   >
@@ -392,6 +387,13 @@ export default function Admin({
                 user={user}
                 zone={i.timezone}
                 act={act}
+              />
+            )}
+            {section === "communications" && activeAdminSeason && (
+              <Campaigns
+                season={activeAdminSeason}
+                zone={i.timezone}
+                user={user}
               />
             )}
             {section === "stats" && (
@@ -445,38 +447,6 @@ export default function Admin({
                   </p>
                 </section>
               ))}
-            {section === "roles" && (
-              <>
-                <div className="grid two">
-                  {(data as Role[]).map((r) => (
-                    <section className="panel" key={r.id}>
-                      <h2>
-                        <ShieldCheck />
-                        {labels[r.name] ?? r.name}
-                      </h2>
-                      <ul className="permissions">
-                        {r.permissions.map((p) => (
-                          <li key={p}>{p}</li>
-                        ))}
-                      </ul>
-                      {has(user, "roles.manage") &&
-                        r.name !== "SUPER_ADMIN" && (
-                          <details>
-                            <summary>Modifier les permissions</summary>
-                            <RoleForm role={r} onSave={(p) => act("role", p)} />
-                          </details>
-                        )}
-                    </section>
-                  ))}
-                </div>
-                {has(user, "roles.manage") && (
-                  <section className="panel">
-                    <h2>Créer un rôle personnalisé</h2>
-                    <RoleForm onSave={(p) => act("role", p)} />
-                  </section>
-                )}
-              </>
-            )}
             {section === "audit" && (
               <section className="panel">
                 <h2>Dernières actions</h2>
@@ -564,86 +534,5 @@ export default function Admin({
         </div>
       )}
     </main>
-  );
-}
-function AdminForm({
-  children,
-  onSave,
-  disabled = false,
-}: {
-  children: React.ReactNode;
-  onSave: (v: Record<string, string>) => Promise<void>;
-  disabled?: boolean;
-}) {
-  const [error, setError] = useState(""),
-    [busy, setBusy] = useState(false),
-    [done, setDone] = useState(false);
-  return (
-    <form
-      onSubmit={async (e) => {
-        e.preventDefault();
-        setBusy(true);
-        setError("");
-        setDone(false);
-        try {
-          await onSave(values(e.currentTarget));
-          setDone(true);
-        } catch (e) {
-          setError((e as Error).message);
-        } finally {
-          setBusy(false);
-        }
-      }}
-    >
-      <fieldset disabled={disabled}>
-        {children}
-        <Notice error={error} />
-        {done && (
-          <p className="success" role="status">
-            Enregistré
-          </p>
-        )}
-        {!disabled && (
-          <button className="primary" disabled={busy}>
-            {busy ? "Enregistrement…" : "Enregistrer"}
-          </button>
-        )}
-      </fieldset>
-    </form>
-  );
-}
-function RoleForm({
-  role,
-  onSave,
-}: {
-  role?: Role;
-  onSave: (p: unknown) => Promise<void>;
-}) {
-  return (
-    <AdminForm
-      onSave={(v) =>
-        onSave({
-          name: role?.name ?? v.name,
-          permissions: permissions.filter((p) => v[p] === "on"),
-        })
-      }
-    >
-      {!role && (
-        <Field
-          label="Identifiant du rôle (MAJUSCULES_SANS_ESPACES)"
-          name="name"
-        />
-      )}
-      <div className="permission-checks">
-        {permissions.map((p) => (
-          <Check
-            key={p}
-            name={p}
-            label={p}
-            checked={role?.permissions.includes(p)}
-          />
-        ))}
-      </div>
-    </AdminForm>
   );
 }

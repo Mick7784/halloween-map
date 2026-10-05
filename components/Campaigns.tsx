@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { DateTime } from "luxon";
+import { mailLayout } from "../lib/mail-layout";
 import {
   api,
   Field,
@@ -253,8 +254,7 @@ function CampaignForm({
             <span>Audience</span>
             <select name="audience" defaultValue={campaign?.audience ?? "ALL"}>
               <option value="ALL">Tous les participants</option>
-              <option value="APPROVED">Approuvés</option>
-              <option value="PENDING">En attente</option>
+              <option value="VISIBLE">Maisons visibles</option>
               <option value="ACTIVE">Actifs</option>
             </select>
           </label>
@@ -311,8 +311,16 @@ function CampaignForm({
           </button>
         </form>
         <h3>Aperçu</h3>
-        <strong>{preview(subject)}</strong>
-        <p className="mail-preview">{preview(body)}</p>
+        <iframe
+          title="Aperçu de l’email HTML"
+          sandbox=""
+          srcDoc={mailLayout(preview(subject), preview(body))}
+          style={{ width: "100%", height: 480, border: 0 }}
+        />
+        <details>
+          <summary>Version texte</summary>
+          <p className="mail-preview">{preview(body)}</p>
+        </details>
       </section>
     </div>
   );

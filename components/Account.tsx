@@ -12,7 +12,6 @@ import {
 } from "./common";
 import type { House, User } from "../lib/domain";
 import Editorial from "./Editorial";
-import InstallApp from "./InstallApp";
 export function Signup({ state }: { state: PublicState }) {
   const [error, setError] = useState(""),
     [busy, setBusy] = useState(false);
@@ -220,7 +219,6 @@ export default function Account({
         <Link className="button primary" href="/participant">
           {house ? "Gérer ma participation" : "Inscrire ma maison"}
         </Link>
-        <InstallApp />
       </section>
       <section className="panel">
         <h2>Confidentialité</h2>

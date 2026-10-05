@@ -83,12 +83,12 @@ export default function DashboardVisuals({
             {
               houses.filter(
                 (h) =>
-                  (h as PublicHouse & { status: string }).status === "APPROVED",
+                  (h as PublicHouse & { status: string }).status === "VISIBLE",
               ).length
             }
           </strong>
           <span>
-            maisons validées
+            maisons visibles
             <br />
             prêtes à accueillir les visiteurs
           </span>

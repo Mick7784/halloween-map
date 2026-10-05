@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { DateTime } from "luxon";
-import { permissions, type User, type House } from "../lib/domain";
+import { type User, type House } from "../lib/domain";
 import {
   api,
   Field,
@@ -9,15 +9,12 @@ import {
   values,
   labels,
   AsyncButton,
-  Check,
   Badges,
 } from "./common";
 type Role = { id: string; name: string; permissions: string[] };
 export type ManagedUser = User & {
   created_at: string;
   last_login_at: string | null;
-  permission_grants: string[];
-  permission_revocations: string[];
   participation: House | null;
   communications: {
     kind: string;
@@ -49,10 +46,6 @@ export default function AdminUsers({
     [filter, setFilter] = useState("ALL"),
     [selected, setSelected] = useState<string | null>(null),
     [create, setCreate] = useState(false);
-  const effective = (u: ManagedUser) =>
-    [...u.permissions, ...u.permission_grants].filter(
-      (p) => !u.permission_revocations.includes(p),
-    );
   const list = users.filter(
     (u) =>
       (u.display_name + " " + u.email)
@@ -60,7 +53,8 @@ export default function AdminUsers({
         .includes(search.toLowerCase()) &&
       (filter === "ALL" ||
         (filter === "PARTICIPANTS" && u.participation) ||
-        (filter === "ADMIN" && effective(u).includes("admin.access")) ||
+        (filter === "ADMIN" &&
+          ["ADMIN", "SUPER_ADMIN"].includes(u.role_name ?? "")) ||
         (filter === "DISABLED" && u.account_status === "DISABLED") ||
         (filter === "UNVERIFIED" && u.email_status !== "VERIFIED")),
   );
@@ -204,13 +198,12 @@ export default function AdminUsers({
               <UserEditor
                 key={current?.id ?? "new"}
                 current={current}
-                roles={roles.filter(
-                  (r) =>
-                    (r.name !== "SUPER_ADMIN" ||
-                      user.role_name === "SUPER_ADMIN") &&
-                    r.permissions.every((p) => user.permissions.includes(p)),
-                )}
-                allowed={user.permissions}
+                roles={
+                  user.role_name === "SUPER_ADMIN"
+                    ? roles
+                    : roles.filter((r) => r.name === "USER")
+                }
+                canChangeRole={user.role_name === "SUPER_ADMIN" || !current}
                 submit={act}
               />
             )}
@@ -241,20 +234,26 @@ export default function AdminUsers({
                       : "Renvoyer la vérification"}
                   </AsyncButton>
                 )}
-                <AsyncButton
-                  danger
-                  onClick={async () => {
-                    const confirm = window.prompt(
-                      "Cette suppression est définitive. Saisissez SUPPRIMER CE COMPTE.",
-                    );
-                    if (confirm) {
-                      await act({ action: "delete", id: current.id, confirm });
-                      setSelected(null);
-                    }
-                  }}
-                >
-                  Supprimer le compte
-                </AsyncButton>
+                {user.role_name === "SUPER_ADMIN" && (
+                  <AsyncButton
+                    danger
+                    onClick={async () => {
+                      const confirm = window.prompt(
+                        "Cette suppression est définitive. Saisissez SUPPRIMER CE COMPTE.",
+                      );
+                      if (confirm) {
+                        await act({
+                          action: "delete",
+                          id: current.id,
+                          confirm,
+                        });
+                        setSelected(null);
+                      }
+                    }}
+                  >
+                    Supprimer le compte
+                  </AsyncButton>
+                )}
               </div>
             )}
           </section>
@@ -266,12 +265,12 @@ export default function AdminUsers({
 function UserEditor({
   current,
   roles,
-  allowed,
+  canChangeRole,
   submit,
 }: {
   current?: ManagedUser;
   roles: Role[];
-  allowed: string[];
+  canChangeRole: boolean;
   submit: (p: unknown) => Promise<void>;
 }) {
   const [error, setError] = useState(""),
@@ -289,11 +288,7 @@ function UserEditor({
             id: current?.id,
             email: v.email,
             display_name: v.display_name,
-            role_id: v.role_id,
-            permission_grants: allowed.filter((p) => v["grant:" + p] === "on"),
-            permission_revocations: permissions.filter(
-              (p) => v["revoke:" + p] === "on",
-            ),
+            role_id: canChangeRole ? v.role_id : undefined,
           });
         } catch (e) {
           setError((e as Error).message);
@@ -309,44 +304,22 @@ function UserEditor({
         value={current?.display_name}
       />
       <Field name="email" type="email" label="Email" value={current?.email} />
-      <label className="field">
-        <span>Profil</span>
-        <select
-          name="role_id"
-          defaultValue={
-            current?.role_id ?? roles.find((r) => r.name === "PARTICIPANT")?.id
-          }
-        >
-          {roles.map((r) => (
-            <option key={r.id} value={r.id}>
-              {labels[r.name] ?? r.name}
-            </option>
-          ))}
-        </select>
-      </label>
-      {current && (
-        <details>
-          <summary>Exceptions individuelles</summary>
-          <div className="permissions-grid">
-            {permissions.map((p) => (
-              <div key={p}>
-                <strong className="small">{p}</strong>
-                {allowed.includes(p) && (
-                  <Check
-                    name={"grant:" + p}
-                    label="Ajouter"
-                    checked={current.permission_grants.includes(p)}
-                  />
-                )}
-                <Check
-                  name={"revoke:" + p}
-                  label="Retirer"
-                  checked={current.permission_revocations.includes(p)}
-                />
-              </div>
+      {canChangeRole && (
+        <label className="field">
+          <span>Profil</span>
+          <select
+            name="role_id"
+            defaultValue={
+              current?.role_id ?? roles.find((r) => r.name === "USER")?.id
+            }
+          >
+            {roles.map((r) => (
+              <option key={r.id} value={r.id}>
+                {labels[r.name] ?? r.name}
+              </option>
             ))}
-          </div>
-        </details>
+          </select>
+        </label>
       )}
       <Notice error={error} />
       <button className="primary" disabled={busy}>

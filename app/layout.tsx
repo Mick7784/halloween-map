@@ -5,8 +5,15 @@ import "@fontsource/inter/600.css";
 import "@fontsource/cormorant-garamond/500.css";
 import "@fontsource/cormorant-garamond/600.css";
 import "./globals.css";
-export const viewport: Viewport = { themeColor: "#17171e" };
+export const viewport: Viewport = {
+  themeColor: "#17171e",
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  interactiveWidget: "resizes-content",
+};
 export const metadata: Metadata = {
+  referrer: "no-referrer",
   applicationName: "Halloween Map",
   manifest: "/manifest.webmanifest",
   appleWebApp: {

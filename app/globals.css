@@ -2628,3 +2628,348 @@ details[open] > summary {
     margin-left: 0;
   }
 }
+/* V0.4: compact account navigation and an app viewport with internal scrolling. */
+.application {
+  height: var(--app-height, 100dvh);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding-top: env(safe-area-inset-top);
+}
+html,
+body {
+  height: 100%;
+  overflow: hidden;
+}
+.application > main {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.application > footer {
+  flex-shrink: 0;
+  margin-top: 0;
+  padding: 8px 20px calc(8px + env(safe-area-inset-bottom));
+  font-size: 10px;
+}
+.application .site-header {
+  position: relative;
+  flex-shrink: 0;
+  min-height: 64px;
+  padding: 8px 24px;
+  justify-content: space-between;
+  gap: 16px;
+  z-index: 30;
+}
+.application .brand {
+  min-width: 0;
+  flex-shrink: 0;
+}
+.application .brand-mark {
+  width: 44px;
+  height: 44px;
+}
+.application .brand strong {
+  font-size: 24px;
+}
+.application .brand em {
+  display: none;
+}
+.header-account {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-left: auto;
+}
+.user-menu-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+}
+.application .site-header nav.user-menu {
+  position: absolute;
+  top: 100%;
+  right: 16px;
+  width: 290px;
+  max-height: calc(var(--app-height, 100dvh) - 90px);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+  padding: 12px;
+  background: var(--panel, #25232d);
+  border: 1px solid #49434f;
+  border-radius: 10px;
+  box-shadow: 0 16px 36px #0008;
+}
+.application .site-header nav.user-menu > a,
+.application .site-header nav.user-menu > button {
+  display: flex;
+  margin: 0;
+  width: 100%;
+  padding: 10px 12px;
+  min-height: 40px;
+  font-size: 14px;
+}
+.login-fields {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.compact-login .field {
+  margin: 0;
+}
+.compact-login .field > span {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+.compact-login input {
+  width: 170px;
+  padding: 8px 10px;
+  font-size: 12px;
+}
+.compact-login button {
+  min-height: 36px;
+  padding: 8px 12px;
+  font-size: 12px;
+}
+.login-links {
+  display: flex;
+  gap: 14px;
+  font-size: 11px;
+  margin-top: 5px;
+}
+.login-form .login-fields {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+}
+.login-form .login-links {
+  font-size: 13px;
+  margin: 12px 0;
+}
+.mobile-login {
+  display: none;
+}
+.application .countdown {
+  min-height: 0;
+}
+.application .public-layout {
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  padding: 12px 20px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: 16px;
+  overflow: hidden;
+}
+.application .public-layout:not(:has(.route-panel)) {
+  grid-template-columns: minmax(0, 1fr);
+}
+.application .map-section {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.application .map-heading {
+  flex-shrink: 0;
+  margin-bottom: 8px;
+}
+.application .map-heading h1 {
+  font-size: 28px;
+  margin: 0;
+}
+.application .map-heading p {
+  margin: 4px 0;
+}
+.application .map-filters {
+  flex-shrink: 0;
+  margin: 0 0 8px;
+}
+.application .map-shell {
+  flex: 1;
+  min-height: 120px;
+  height: auto;
+}
+.application .house-list {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+.application .route-panel {
+  min-height: 0;
+  overflow: auto;
+  margin: 0;
+  position: relative;
+}
+.application .map-opening {
+  flex-shrink: 0;
+  font-size: 12px;
+  margin: 0 0 8px;
+  padding: 8px 12px;
+}
+.mobile-route-toggle,
+.mobile-route-close {
+  display: none;
+}
+.house-marker.hidden-house {
+  filter: grayscale(1);
+  opacity: 0.55;
+}
+.status.HIDDEN {
+  background: #49434f;
+  color: #ded6e5;
+}
+.status.VISIBLE {
+  color: #9cd1a4;
+}
+.application .admin-layout {
+  overflow: hidden;
+}
+.application .admin-content,
+.application .admin-sidebar {
+  min-height: 0;
+  overflow: auto;
+}
+.application .demo-banner {
+  flex-shrink: 0;
+  padding: 6px 16px;
+  font-size: 12px;
+}
+.application .house-detail,
+.application .dialog {
+  max-height: calc(var(--app-height, 100dvh) - 40px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+@media (max-width: 900px) {
+  .desktop-login {
+    display: none;
+  }
+  .mobile-login {
+    display: block;
+  }
+  .application .site-header {
+    min-height: 52px;
+    padding: 6px 12px;
+  }
+  .application .brand-mark {
+    width: 34px;
+    height: 34px;
+  }
+  .application .brand strong {
+    font-size: 21px;
+  }
+  .application .brand small {
+    font-size: 8px;
+  }
+  .account-name {
+    max-width: 110px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 12px;
+  }
+  .application .public-layout {
+    display: flex;
+    flex-direction: column;
+    padding: 6px;
+    gap: 0;
+  }
+  .application .map-section {
+    flex: 1;
+  }
+  .application .map-heading h1 {
+    font-size: 22px;
+  }
+  .application .map-heading .eyebrow,
+  .application .map-heading p,
+  .application .map-section > p.muted {
+    display: none;
+  }
+  .application .map-filters {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    gap: 4px;
+    padding-bottom: 4px;
+  }
+  .application .map-filters > * {
+    flex-shrink: 0;
+    font-size: 11px;
+  }
+  .mobile-route-toggle {
+    display: block;
+    align-self: flex-end;
+    margin-bottom: 4px;
+    font-size: 12px;
+    padding: 6px 10px;
+  }
+  .application .route-panel {
+    display: none;
+  }
+  .application .route-open .route-panel {
+    display: block;
+    position: fixed;
+    z-index: 25;
+    left: 6px;
+    right: 6px;
+    bottom: env(safe-area-inset-bottom);
+    max-height: calc(var(--app-height, 100dvh) - 110px);
+    padding: 24px 18px;
+    box-shadow: 0 -20px 50px #0008;
+  }
+  .mobile-route-close {
+    display: block;
+  }
+  .application .route-panel form {
+    display: block;
+  }
+  .application > footer {
+    display: none;
+  }
+  .application .narrow {
+    width: 100%;
+    margin: 0;
+    padding: 18px 14px calc(18px + env(safe-area-inset-bottom));
+  }
+  .application .countdown {
+    padding: 16px 12px;
+  }
+  .application .countdown-content {
+    padding: 12px 0;
+    margin: auto;
+  }
+  .application .countdown h1 {
+    font-size: clamp(32px, 7vw, 48px);
+  }
+  .application .countdown-boxes {
+    margin: 16px 0;
+  }
+  .application .admin-layout {
+    display: flex;
+    flex-direction: column;
+    padding: 8px;
+  }
+  .application .admin-sidebar {
+    flex-shrink: 0;
+    max-height: 145px;
+  }
+  .application .admin-sidebar nav {
+    display: flex;
+    overflow-x: auto;
+  }
+  .application .admin-sidebar nav button {
+    flex-shrink: 0;
+  }
+  .application .admin-content {
+    flex: 1;
+  }
+}

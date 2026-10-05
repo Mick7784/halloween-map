@@ -7,12 +7,11 @@ export default defineConfig({
   reporter: [["list"], ["html", { open: "never" }]],
   use: {
     baseURL: process.env.APP_ORIGIN ?? "http://localhost:3000",
-    channel: "chromium",
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
   },
   webServer: {
-    command: "npm run start",
+    command: "node node_modules/next/dist/bin/next start",
     url: "http://localhost:3000/api/health",
     reuseExistingServer: !process.env.CI,
     timeout: 60000,

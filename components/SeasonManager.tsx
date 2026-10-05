@@ -1,9 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
-import Campaigns from "./Campaigns";
-import Link from "next/link";
 import { DateTime } from "luxon";
-import { CalendarDays, Ghost, Eye, ShieldAlert } from "lucide-react";
+import { CalendarDays, ShieldAlert } from "lucide-react";
 import type { Season, User } from "../lib/domain";
 import {
   api,
@@ -25,7 +23,9 @@ function SeasonForm({
   zone,
   year,
   act,
+  critical = true,
 }: {
+  critical?: boolean;
   season?: Season;
   zone: string;
   year: number;
@@ -104,6 +104,7 @@ function SeasonForm({
               label={label}
               type="datetime-local"
               value={season ? localDate(season[key], zone) : fallback}
+              readOnly={key === "purge_at" && !critical}
             />
           </div>
         ))}
@@ -147,78 +148,6 @@ function SeasonForm({
     </form>
   );
 }
-function Demo({ season, zone }: { season: Season; zone: string }) {
-  const [at, setAt] = useState(
-      localDate(new Date(+new Date(season.opens_at) + 6 * 3600000), zone),
-    ),
-    [enabled, setEnabled] = useState(false),
-    [error, setError] = useState("");
-  useEffect(() => {
-    void api<{ at: string | null }>("admin/preview")
-      .then((r) => {
-        setEnabled(!!r.at);
-        if (r.at) setAt(localDate(r.at, zone));
-      })
-      .catch((e) => setError(e.message));
-  }, [zone]);
-  return (
-    <section className="panel demo-panel">
-      <h2>
-        <Ghost /> Mode démonstration
-      </h2>
-      <p className="muted">
-        Explorez la vraie carte avec une heure simulée. Votre session seule voit
-        cette prévisualisation ; les dates, le public, les purges et les
-        compteurs réels restent inchangés.
-      </p>
-      <form
-        onSubmit={async (e) => {
-          e.preventDefault();
-          setError("");
-          try {
-            const v = values(e.currentTarget);
-            await api("admin", {
-              action: "preview",
-              payload: { enabled: v.enabled === "on", at },
-            });
-            setEnabled(v.enabled === "on");
-          } catch (e) {
-            setError((e as Error).message);
-          }
-        }}
-      >
-        <Check
-          name="enabled"
-          label="Activer pour ma session"
-          checked={enabled}
-        />
-        <label className="field">
-          <span>Heure simulée ({zone}) *</span>
-          <input
-            type="datetime-local"
-            required
-            value={at}
-            onChange={(e) => setAt(e.target.value)}
-          />
-        </label>
-        <div className="actions">
-          <button className="primary">Appliquer le mode démonstration</button>
-          {enabled && (
-            <Link
-              className="button"
-              href="/preview"
-              target="_blank"
-              rel="noreferrer"
-            >
-              <Eye size={18} /> Ouvrir la prévisualisation
-            </Link>
-          )}
-        </div>
-        <Notice error={error} />
-      </form>
-    </section>
-  );
-}
 export default function SeasonManager({
   seasons,
   user,
@@ -253,7 +182,13 @@ export default function SeasonManager({
               </span>
             </div>
             {!s.purged_at && !s.archived && has(user, "season.manage") ? (
-              <SeasonForm season={s} zone={zone} year={s.year} act={act} />
+              <SeasonForm
+                season={s}
+                zone={zone}
+                year={s.year}
+                act={act}
+                critical={user.role_name === "SUPER_ADMIN"}
+              />
             ) : (
               <p>
                 {DateTime.fromJSDate(new Date(s.opens_at))
@@ -273,14 +208,6 @@ export default function SeasonManager({
               </p>
             )}
           </section>
-          {!s.purged_at && !s.archived && (
-            <div className="grid two">
-              {has(user, "communications.read") && (
-                <Campaigns season={s} zone={zone} user={user} />
-              )}{" "}
-              {has(user, "season.preview") && <Demo season={s} zone={zone} />}
-            </div>
-          )}
           {!s.purged_at && user.role_name === "SUPER_ADMIN" && (
             <section className="panel purge-block">
               <h3>

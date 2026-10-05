@@ -15,7 +15,7 @@ export default function MapView({
   onPoint,
   geometry,
 }: {
-  houses: PublicHouse[];
+  houses: (PublicHouse & { status?: string })[];
   center: [number, number];
   zoom: number;
   styleUrl: string;
@@ -46,6 +46,9 @@ export default function MapView({
           attributionControl: { compact: true },
         });
         map.current = g;
+        const observer = new ResizeObserver(() => g.resize());
+        observer.observe(el.current);
+        g.on("remove", () => observer.disconnect());
         g.addControl(
           new m.NavigationControl({ showCompass: false }),
           "top-right",
@@ -84,7 +87,9 @@ export default function MapView({
       if (cancelled) return;
       for (const h of houses) {
         const button = document.createElement("button");
-        button.className = "house-marker";
+        button.className =
+          "house-marker" + (h.status === "HIDDEN" ? " hidden-house" : "");
+        if (h.status === "HIDDEN") button.title = "Masquée · " + h.name;
         button.setAttribute("aria-label", h.name);
         button.innerHTML = houseSVG;
         button.onclick = (e) => {

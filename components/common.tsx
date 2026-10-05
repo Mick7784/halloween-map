@@ -26,6 +26,8 @@ export type PublicState = {
     import("../lib/content").LegalDocument
   >;
   preview?: boolean;
+  demoAvailable?: boolean;
+  mapAccessible?: boolean;
   instance?: Pick<
     Instance,
     "public_name" | "territory" | "timezone" | "latitude" | "longitude" | "zoom"
@@ -59,9 +61,8 @@ export const labels: Record<string, string> = {
   DECORATION: "Décoration",
   CANDY: "Bonbons",
   ACTING: "Mise en scène",
-  PENDING: "En attente",
-  APPROVED: "Validée",
-  REJECTED: "Refusée",
+  VISIBLE: "Visible",
+  HIDDEN: "Masquée",
   DISABLED: "Désactivée",
   ACTIVE: "En activité",
   PAUSED: "En pause",
@@ -76,9 +77,8 @@ export const labels: Record<string, string> = {
   UNVERIFIED: "Non vérifié",
   PENDING_ACTIVATION: "Invitation en attente",
   SUPER_ADMIN: "Super Admin",
-  LOCAL_ADMIN: "Administrateur local",
-  MODERATOR: "Modérateur",
-  READ_ONLY: "Lecture seule",
+  ADMIN: "Administrateur",
+  USER: "Utilisateur",
 };
 export const fears = [
   "Très doux",
@@ -138,6 +138,7 @@ export function Field({
   max,
   placeholder,
   maxLength,
+  readOnly,
 }: {
   label: string;
   name: string;
@@ -148,11 +149,13 @@ export function Field({
   max?: string | number;
   placeholder?: string;
   maxLength?: number;
+  readOnly?: boolean;
 }) {
   if (type === "datetime-local")
     return (
       <FrenchDate
         label={label}
+        readOnly={readOnly}
         name={name}
         value={value}
         required={required}
@@ -167,6 +170,7 @@ export function Field({
         {required && <b className="required"> *</b>}
       </span>
       <input
+        readOnly={readOnly}
         name={name}
         type={type}
         defaultValue={value}

@@ -25,33 +25,33 @@ Protéger l’accès aux logs initiaux. `APP_ORIGIN` doit correspondre à l’or
 
 ## Comptes et participations
 
-Un **user** conserve son nom/pseudo, email, vérification, empreinte du mot de passe, profil, exceptions de permissions et informations techniques minimales. Il peut exister sans maison et revenir l’année suivante. Une **participation** appartient à une saison et porte maison, adresse/GPS, horaires, activités, descriptions, modération et preuves d’acceptation. Une participation par compte et saison.
+Un **user** conserve son nom/pseudo, email, vérification, empreinte du mot de passe, rôle et informations techniques minimales. Il peut exister sans maison et revenir l’année suivante. Une **participation** appartient à une saison et porte maison, adresse/GPS, horaires, activités, descriptions, visibilité et preuves d’acceptation. Une participation par compte et saison.
 
 La création libre ouvre un compte `UNVERIFIED` et programme un email. Le lien expire après 48 heures, à usage unique et hashé en base. Un renvoi invalide les anciens liens et applique un cooldown de 15 minutes. Seul un email `VERIFIED` peut finaliser une nouvelle participation. `BOUNCED` et `INVALID` sont prévus ; le SMTP générique ne fournit pas systématiquement de retour automatique de rebond.
 
 **Mon compte** permet de changer nom, email et mot de passe, de consulter sa participation et la confidentialité, ou de supprimer définitivement le compte. Changement d’email/mot de passe et suppression demandent le mot de passe actuel ; les sessions sont révoquées. Le nouvel email doit être vérifié. La suppression d’une participation garde le compte ; celle du compte efface aussi ses participations et données associées. Le dernier Super Admin actif est protégé.
 
-**Admin → Utilisateurs** : recherche, filtres, identité, participation, états des communications, profils et exceptions. Créer un utilisateur envoie une invitation : pas de mot de passe généré ni envoyé. Le clic vérifie l’email puis ouvre une session d’activation de 30 minutes pour choisir son mot de passe.
+**Admin → Utilisateurs** : recherche, filtres, identité, participation, états des communications, trois rôles fixes. Créer un utilisateur envoie une invitation : pas de mot de passe généré ni envoyé. Le clic vérifie l’email puis ouvre une session d’activation de 30 minutes pour choisir son mot de passe.
 
-## Profils et permissions
+## Rôles
 
-Participant, Lecture seule, Modérateur, Administrateur et Super Admin réutilisent les rôles existants. Chaque utilisateur peut recevoir des ajouts/retraits individuels ; STAFF/PARTICIPANT n’accorde plus d’accès. `admin.access` est nécessaire à l’administration, puis chaque section/action exige sa permission : `participants.read/validate/edit/delete`, `users.read/manage`, `season.read/manage/preview`, `communications.read/manage`, `content.manage`, `settings.read/manage`, `stats.read`, `audit.read`, `roles.manage`. Les droits attribués ne peuvent pas dépasser ceux de l’opérateur ; profils Super Admin et accès de son propre compte sont protégés.
+USER accède au compte, à la participation, à la carte et aux parcours. ADMIN gère les maisons, utilisateurs USER, saison courante, communications, statistiques, contenus et journal. SUPER_ADMIN gère aussi les paramètres critiques, les rôles et les actions dangereuses. Seul SUPER_ADMIN peut attribuer ADMIN/SUPER_ADMIN ; aucun ADMIN ne peut élever ses droits. Aucune exception individuelle.
 
 ## Saison, dates et purge
 
 Quatre dates : **inscriptions ≤ ouverture < fermeture ≤ purge**. Calendrier français et heures 24 h dans le fuseau de l’instance ; stockage UTC. Heures locales inexistantes/ambiguës refusées. Préremplissage : 1 octobre, 31 octobre à 12 h, 1 novembre à 0 h, 2 novembre à 12 h. Activation explicite.
 
-Avant ouverture, aucune position ni adresse n’est publique. Pendant ouverture, uniquement les maisons approuvées, actives, dans leurs horaires et avec une activité disponible. Fermeture : carte/parcours masqués, accès de l’équipe conservé jusqu’à purge. Modifier identité/adresse/textes remet en modération ; pause, reprise, fin définitive et rupture de bonbons restent disponibles.
+La carte exige une connexion. Avant ouverture, seule la maison du propriétaire peut être envoyée à ce compte. Pendant ouverture, uniquement les maisons VISIBLE, actives, dans leurs horaires et avec une activité disponible. Fermeture : carte/parcours masqués, accès de l’équipe conservé jusqu’à purge. Modifier identité/adresse/textes conserve la visibilité administrative ; pause, reprise, fin définitive et rupture de bonbons restent disponibles.
 
-La purge transactionnelle/idempotente supprime réellement participations, adresse/GPS, textes, états et acceptations, détails d’envoi et audits saisonniers ciblés. **Les comptes et permissions restent.** Seuls les totaux anonymes des saisons/campagnes subsistent ; aucun historique des adresses, aucune réutilisation commerciale. Le worker utilise les dates réelles toutes les 30 secondes ; les accès public/admin rattrapent les purges échues. Une saison purgée ne se rouvre pas.
+La purge transactionnelle/idempotente supprime réellement participations, adresse/GPS, textes, états et acceptations, détails d’envoi et audits saisonniers ciblés. **Les comptes et rôles restent.** Seuls les totaux anonymes des saisons/campagnes subsistent ; aucun historique des adresses, aucune réutilisation commerciale. Le worker utilise les dates réelles toutes les 30 secondes ; les accès public/admin rattrapent les purges échues. Une saison purgée ne se rouvre pas.
 
 Politique de comptes inactifs : aucun nettoyage automatique implicite. L’exploitant doit définir/publier un délai justifié, informer les utilisateurs avant suppression puis utiliser la suppression de compte, avec rétention limitée des sauvegardes. Les jetons expirés sont supprimés ; les états d’emails d’identité terminés sont effacés après 30 jours.
 
-**Mode démonstration** : `admin.access` + `season.preview`, temps propre à la session et bandeau visible. Carte/fiches/parcours réels au temps simulé ; aucun compteur réel ni purge simulée. Le public conserve les dates réelles. Seed synthétique facultatif avec `DEMO_PASSWORD`, `scripts/seed.ts on/off`, exclu des campagnes.
+**Mode démonstration** : Super Admin uniquement, activé en un clic sur l’accueil hors ouverture publique. Moins de deux maisons réelles disponibles : cinq maisons fictives éphémères sans écriture en base. Sinon : vraies maisons au temps simulé choisi automatiquement. Aucun compteur ni purge simulée.
 
 ## SMTP et communications
 
-SMTP est nécessaire pour vérifier les nouveaux comptes et activer les invitations. Sans SMTP, l’interface indique l’attente ; aucune participation nouvelle ne peut être finalisée. Paramètres existants, aucune nouvelle variable :
+SMTP est nécessaire pour vérifier les nouveaux comptes et activer les invitations. Sans SMTP, l’interface indique l’attente ; aucune participation nouvelle ne peut être finalisée. Paramètres SMTP :
 
 | Variable                     | Usage                                                                 |
 | ---------------------------- | --------------------------------------------------------------------- |
@@ -60,7 +60,7 @@ SMTP est nécessaire pour vérifier les nouveaux comptes et activer les invitati
 | `SMTP_USER`, `SMTP_PASSWORD` | Authentification selon le fournisseur                                 |
 | `SMTP_SECURE`                | `true` : TLS implicite (souvent 465) ; `false` : STARTTLS obligatoire |
 
-**Admin → Saison → Communications** permet plusieurs campagnes : audience tous/approuvés/en attente/actifs, activation, date fixe ou décalage en jours autour d’une date de saison, aperçu et test à son propre email vérifié. Les campagnes relatives non commencées sont recalculées dans le fuseau local après changement des dates ; le formulaire affiche leur nombre. Variables explicitement listées près de l’éditeur : nom, territoire, événement, année, dates et maison/horaires. Les messages sont en texte, sans HTML arbitraire.
+**Admin → Communications** permet plusieurs campagnes : audience tous/maisons visibles/actifs, activation, date fixe ou décalage en jours autour d’une date de saison, aperçu et test à son propre email vérifié. Les campagnes relatives non commencées sont recalculées dans le fuseau local après changement des dates ; le formulaire affiche leur nombre. Variables explicitement listées près de l’éditeur : nom, territoire, événement, année, dates et maison/horaires. Les messages utilisent un layout HTML responsive commun, avec fallback texte et sans HTML arbitraire.
 
 `email_campaigns` et `email_outbox` : contraintes d’idempotence, claim atomique avant SMTP, compteurs, aucun email recopié si l’ID utilisateur suffit. Maximum 20 jobs par passage, espacés de 250 ms en production. Démo, comptes désactivés et emails non vérifiés/invalides/rebondis exclus au lancement et vérifiés de nouveau au claim. `SENT` n’est jamais renvoyé. Connexion refusée/DNS avant acceptation : réessais limités, espacés de cinq minutes ; résultat ambigu ou claim abandonné après dix minutes : erreur sans réessai automatique. Aucun suivi d’ouverture. Le test est séparé des compteurs réels.
 
@@ -82,7 +82,7 @@ Manifest standalone, icônes communes dérivées du manoir officiel V0.2, Apple/
 
 Le service worker ne conserve que ressources statiques et un écran générique hors connexion. **Jamais API, HTML de compte/participation, adresses, tuiles ni routes privées en cache.** La carte nécessite une connexion. Les polices/worker MapLibre sont locaux.
 
-## Upgrade V0.2 → V0.3
+## Upgrade V0.2 → V0.4
 
 Migration **003_durable_accounts.sql**, transactionnelle et rejouable, plus initialisation des versions légales dans le même transaction du runner. Renomme houses en participations, adapte l’unicité par saison, préserve IDs, FK, mots de passe, profils/droits, saisons/dates, maisons et états. Les comptes legacy ne sont pas faussement marqués vérifiés : leurs participations déjà finalisées sont conservées pour l’édition en cours, mais toute nouvelle participation/campagne nécessite vérification. Les changements d’email retirent cette exception.
 
@@ -93,7 +93,7 @@ Un ancien rappel non envoyé devient une campagne ; claims et résultats sont co
 ```sh
 docker compose exec -T db pg_dump -U halloween -d halloween --clean --if-exists > halloween-backup.sql
 docker compose stop app worker
-# Mettre à jour le dépôt/Compose et HALLOWEEN_IMAGE=ghcr.io/mick7784/halloween-map:V0.3
+# Mettre à jour le dépôt/Compose et HALLOWEEN_IMAGE=ghcr.io/mick7784/halloween-map:V0.4
 docker compose pull app worker migrate
 docker compose run --rm --no-deps migrate
 docker compose up -d --no-build --force-recreate app worker
@@ -119,10 +119,16 @@ npx playwright install --with-deps chromium
 npm run test:e2e
 ```
 
-Métier : PGlite local, PostgreSQL 17 en CI (`TEST_DATABASE_URL`). Migrations fresh/V0.2/replay, identité, permissions, participations, purge, campagnes, concurrence, incertitude SMTP, CMS/documents et PWA. Playwright : wizard, inscription/vérification/CGU, invitation, accès, publication CMS et campagne/purge ; quelques captures représentatives dans browser-report. Base locale jetable : `scripts/test-db.ts`, port 54329. Le job Docker démarre la vraie stack et vérifie santé/version.
+Métier : PGlite local, PostgreSQL 17 en CI (`TEST_DATABASE_URL`). Migrations fresh/V0.2/replay, identité, permissions, participations, purge, campagnes, concurrence, incertitude SMTP, CMS/documents et PWA. Playwright : connexion/carte avant ouverture, masquage admin, mode démo/parcours et récupération de mot de passe ; captures uniquement en cas d’échec. Base locale jetable : `scripts/test-db.ts`, port 54329. Le job Docker démarre la vraie stack et vérifie santé/version.
 
 Production : `npm audit --omit=dev`. L’avis GHSA-vfj7-8cjw-p6xm concerne le transitif de développement `braces`, exclu du runtime ; ne pas forcer une rétrogradation du lint.
 
-La CI publie après verify et Docker verts seulement : tag **V0.3**, release **Halloween Map V0.3 Beta**, `ghcr.io/mick7784/halloween-map:V0.3` et `:latest`, labels OCI version/commit. Aucun numéro parallèle dans package.json, aucun déploiement externe.
+La CI publie après verify et Docker verts seulement : tag **V0.4**, release **Halloween Map V0.4 Beta**, `ghcr.io/mick7784/halloween-map:V0.4` et `:latest`, labels OCI version/commit. Aucun numéro parallèle dans package.json, aucun déploiement externe.
 
-Limites : mono-instance active, aucune récupération de mot de passe par email V0.3 ; parcours estimés à 4,2 km/h, cinq minutes par maison, segments à vol d’oiseau sans instructions de voirie. Vérifier les voies publiques et recalculer si les disponibilités changent. Provenance du décor : [docs/visual-assets.md](docs/visual-assets.md).
+Limites : mono-instance active, parcours estimés à 4,2 km/h, cinq minutes par maison, segments à vol d’oiseau sans instructions de voirie. Vérifier les voies publiques et recalculer si les disponibilités changent. Provenance du décor : [docs/visual-assets.md](docs/visual-assets.md).
+
+### V0.4 Beta
+
+Les rôles sont désormais USER, ADMIN et SUPER_ADMIN. La migration `004_beta_simplification.sql` convertit les anciens rôles et états de maison sans supprimer les données. Les maisons sont inscrites automatiquement et peuvent être masquées ou supprimées en conservant le compte. La carte exige une connexion ; avant ouverture, elle ne renvoie que la maison du propriétaire.
+
+Le Super Admin peut activer le mode démo depuis l’accueil, hors ouverture publique. Il utilise cinq maisons éphémères si moins de deux maisons réelles sont disponibles et ne change ni les dates, ni les compteurs, ni la purge. La récupération de compte est accessible dans « Mot de passe oublié ? » ; les liens expirent après une heure et révoquent les sessions après utilisation. Les emails HTML conservent leur version texte. `SMTP_REPLY_TO` est facultatif ; aucune intégration Brevo n’est requise.

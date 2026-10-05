@@ -12,6 +12,7 @@ x-app: &app
     SMTP_USER: ${SMTP_USER:-}
     SMTP_PASSWORD: ${SMTP_PASSWORD:-}
     SMTP_FROM: ${SMTP_FROM:-}
+    SMTP_REPLY_TO: ${SMTP_REPLY_TO:-}
     SMTP_SECURE: ${SMTP_SECURE:-false}
     MAP_STYLE_URL: ${MAP_STYLE_URL:-https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json}
     DEMO_PASSWORD: ${DEMO_PASSWORD:-}

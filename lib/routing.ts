@@ -46,7 +46,7 @@ export function planRoute(
     meters = 0;
   const remaining = houses.filter(
     (h) =>
-      h.status === "APPROVED" &&
+      h.status === "VISIBLE" &&
       h.activity === "ACTIVE" &&
       effectiveActivities(h).length &&
       (!input.activities.length ||

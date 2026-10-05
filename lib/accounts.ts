@@ -11,21 +11,76 @@ import {
   verifyPassword,
 } from "./auth";
 import { credentials } from "./validation";
-import { permissions, type User } from "./domain";
+import { defaultRoles, type User } from "./domain";
 export async function queueIdentity(
   client: Database,
   userId: string,
-  kind: "VERIFY" | "INVITE",
+  kind: "VERIFY" | "INVITE" | "RESET",
 ) {
-  await client.query("DELETE FROM email_tokens WHERE user_id=$1", [userId]);
   await client.query(
-    "UPDATE email_outbox SET status='CANCELLED' WHERE user_id=$1 AND kind IN('VERIFY','INVITE') AND status='PENDING'",
-    [userId],
+    "DELETE FROM email_tokens WHERE user_id=$1 AND (kind=$2 OR ($2<>'RESET' AND kind IN('VERIFY','INVITE','ACTIVATE')))",
+    [userId, kind],
+  );
+  await client.query(
+    "UPDATE email_outbox SET status='CANCELLED' WHERE user_id=$1 AND kind=$2 AND status='PENDING'",
+    [userId, kind],
   );
   await client.query(
     "INSERT INTO email_outbox(user_id,kind,idempotency_key) VALUES($1,$2,$3)",
     [userId, kind, randomBytes(24).toString("hex")],
   );
+}
+export async function requestPasswordReset(input: unknown) {
+  const p = z.object({ email: credentials.shape.email }).parse(input);
+  await rateLimit("password-reset:" + p.email, 3);
+  await transaction(async (c) => {
+    const u = (
+      await c.query(
+        "SELECT id FROM users WHERE email=$1 AND account_status='ACTIVE' AND password_hash IS NOT NULL FOR UPDATE",
+        [p.email],
+      )
+    ).rows[0];
+    if (u) await queueIdentity(c, String(u.id), "RESET");
+  });
+  return {
+    ok: true,
+    message:
+      "Si un compte correspond à cette adresse, un lien de récupération vous sera envoyé.",
+  };
+}
+export async function resetPassword(input: unknown) {
+  const p = z
+    .object({
+      token: z.string().regex(/^[a-f0-9]{64}$/),
+      password: credentials.shape.password,
+    })
+    .parse(input);
+  await rateLimit("reset-token:" + hashToken(p.token), 5);
+  const hash = await hashPassword(p.password);
+  return transaction(async (c) => {
+    const t = (
+      await c.query(
+        "SELECT t.*,u.email FROM email_tokens t JOIN users u ON u.id=t.user_id WHERE t.token_hash=$1 AND t.kind='RESET' AND t.expires_at>now() AND u.account_status='ACTIVE' FOR UPDATE OF t,u",
+        [hashToken(p.token)],
+      )
+    ).rows[0];
+    if (!t || t.email_hash !== hashToken(String(t.email)))
+      throw new HttpError(400, "Lien invalide ou expiré");
+    await c.query("UPDATE users SET password_hash=$1 WHERE id=$2", [
+      hash,
+      t.user_id,
+    ]);
+    await c.query(
+      "DELETE FROM email_tokens WHERE user_id=$1 AND kind='RESET'",
+      [t.user_id],
+    );
+    await c.query(
+      "UPDATE email_outbox SET status='CANCELLED' WHERE user_id=$1 AND kind='RESET' AND status='PENDING'",
+      [t.user_id],
+    );
+    await c.query("DELETE FROM sessions WHERE user_id=$1", [t.user_id]);
+    return { ok: true };
+  });
 }
 export async function createAccount(input: unknown) {
   const p = credentials
@@ -38,7 +93,7 @@ export async function createAccount(input: unknown) {
     if (!i) throw new HttpError(409, "Instance non configurée");
     const r = (
       await c.query(
-        "SELECT id FROM roles WHERE instance_id=$1 AND name='PARTICIPANT'",
+        "SELECT id FROM roles WHERE instance_id=$1 AND name='USER'",
         [i.id],
       )
     ).rows[0];
@@ -155,20 +210,12 @@ async function protectedAccount(
   ]);
   const old = (
     await c.query(
-      "SELECT u.*,r.name role_name,r.permissions FROM users u LEFT JOIN roles r ON r.id=u.role_id WHERE u.id=$1 AND u.instance_id=$2 FOR UPDATE OF u",
+      "SELECT u.*,r.name role_name FROM users u LEFT JOIN roles r ON r.id=u.role_id WHERE u.id=$1 AND u.instance_id=$2 FOR UPDATE OF u",
       [id, instanceId],
     )
   ).rows[0];
   if (!old) throw new HttpError(404, "Compte introuvable");
-  if (
-    actor &&
-    actor.role_name !== "SUPER_ADMIN" &&
-    (old.role_name === "SUPER_ADMIN" ||
-      [
-        ...((old.permissions as string[]) ?? []),
-        ...(old.permission_grants as string[]),
-      ].some((p) => !actor.permissions.includes(p)))
-  )
+  if (actor && actor.role_name !== "SUPER_ADMIN" && old.role_name !== "USER")
     throw new HttpError(403, "Compte protégé");
   if (old.role_name === "SUPER_ADMIN") {
     const n = (
@@ -258,13 +305,16 @@ export async function adminUsers(user: User | null) {
   requirePermission(u, "users.read");
   return (
     await db().query(
-      `SELECT u.id,u.email,u.display_name,u.email_status,u.email_verified_at,u.account_status,u.created_at,u.last_login_at,u.role_id,u.permission_grants,u.permission_revocations,COALESCE(r.name,'PARTICIPANT') role_name,COALESCE(r.permissions,ARRAY[]::text[]) permissions,
+      `SELECT u.id,u.email,u.display_name,u.email_status,u.email_verified_at,u.account_status,u.created_at,u.last_login_at,u.role_id,COALESCE(r.name,'USER') role_name,
  (SELECT row_to_json(p) FROM participations p JOIN instances i ON i.active_season_id=p.season_id WHERE p.user_id=u.id) participation,
  (SELECT COALESCE(json_agg(x),'[]'::json) FROM (SELECT kind,status,scheduled_at,sent_at,last_error FROM email_outbox WHERE user_id=u.id ORDER BY created_at DESC LIMIT 50) x) communications
  FROM users u LEFT JOIN roles r ON r.id=u.role_id WHERE u.instance_id=$1 ORDER BY u.created_at`,
       [u.instance_id],
     )
-  ).rows;
+  ).rows.map((row) => ({
+    ...row,
+    permissions: [...(defaultRoles[String(row.role_name)] ?? [])],
+  }));
 }
 export async function adminUserAction(user: User | null, input: unknown) {
   const u = requirePermission(user, "admin.access");
@@ -283,8 +333,6 @@ export async function adminUserAction(user: User | null, input: unknown) {
       email: credentials.shape.email.optional(),
       display_name: z.string().trim().min(1).max(80).optional(),
       role_id: z.uuid().optional(),
-      permission_grants: z.array(z.enum(permissions)).optional(),
-      permission_revocations: z.array(z.enum(permissions)).optional(),
       confirm: z.string().optional(),
     })
     .parse(input);
@@ -310,15 +358,13 @@ export async function adminUserAction(user: User | null, input: unknown) {
       ).rows[0];
       if (!role) throw new HttpError(400, "Profil invalide");
     }
-    const rights = [
-      ...((role?.permissions ?? []) as string[]),
-      ...(p.permission_grants ?? []),
-    ];
-    if (
-      (role?.name === "SUPER_ADMIN" && u.role_name !== "SUPER_ADMIN") ||
-      rights.some((r) => !u.permissions.includes(r))
-    )
-      throw new HttpError(403, "Attribution de droits interdite");
+    if (u.role_name !== "SUPER_ADMIN" && role && role.name !== "USER")
+      throw new HttpError(
+        403,
+        "Seul le Super Admin peut attribuer un rôle administrateur",
+      );
+    if (p.action === "delete" && u.role_name !== "SUPER_ADMIN")
+      throw new HttpError(403, "Super Admin requis");
     if (p.action === "invite") {
       if (!p.email || !p.display_name || !p.role_id)
         throw new HttpError(400, "Nom, email et profil requis");
@@ -336,15 +382,8 @@ export async function adminUserAction(user: User | null, input: unknown) {
           await c.query("SELECT email FROM users WHERE id=$1", [p.id])
         ).rows[0];
         await c.query(
-          "UPDATE users SET display_name=COALESCE($1,display_name),email=COALESCE($2,email),role_id=COALESCE($3,role_id),permission_grants=COALESCE($4,permission_grants),permission_revocations=COALESCE($5,permission_revocations) WHERE id=$6",
-          [
-            p.display_name,
-            p.email,
-            p.role_id,
-            p.permission_grants,
-            p.permission_revocations,
-            p.id,
-          ],
+          "UPDATE users SET display_name=COALESCE($1,display_name),email=COALESCE($2,email),role_id=COALESCE($3,role_id) WHERE id=$4",
+          [p.display_name, p.email, p.role_id, p.id],
         );
         if (p.email && p.email !== old.email) {
           await c.query(

@@ -72,17 +72,12 @@ export const contentDefaults: Record<
     [
       "participation.intro",
       "Participation",
-      "Une décoration, quelques bonbons, une mise en scène : à vous de choisir. Votre inscription sera vérifiée par l’équipe.",
+      "Une décoration, quelques bonbons, une mise en scène : à vous de choisir. Votre maison est inscrite automatiquement.",
     ],
     [
       "participation.confirmation",
       "Participation",
-      "Votre participation attend la validation de l’équipe.",
-    ],
-    [
-      "participation.pending",
-      "Participation",
-      "Votre maison est en attente de modération.",
+      "Votre participation est enregistrée.",
     ],
     ["privacy.title", "Confidentialité", "Vos données restent les vôtres."],
     [
@@ -93,7 +88,7 @@ export const contentDefaults: Record<
     [
       "privacy.account",
       "Confidentialité",
-      "Votre compte, nom, email, mot de passe chiffré par empreinte et permissions sont conservés pour les prochaines éditions. Votre maison, adresse, position, horaires et descriptions sont supprimés à la purge.",
+      "Votre compte, nom, email, mot de passe chiffré par empreinte et rôle sont conservés pour les prochaines éditions. Votre maison, adresse, position, horaires et descriptions sont supprimés à la purge.",
     ],
     ["footer.signature", "Interface", "Une expérience DomotiK Studio"],
   ].map(([key, category, value]) => [
@@ -110,7 +105,7 @@ export const contentDefaults: Record<
 export const legalDefaults = {
   TERMS: {
     title: "Conditions d’utilisation",
-    body: "## Participer à Halloween\n\nInscrivez uniquement une adresse que vous êtes autorisé à proposer. L’équipe vérifie les participations avant publication. Vous êtes responsable de votre accueil et pouvez le mettre en pause ou le terminer.\n\nLes parcours sont indicatifs. Les visiteurs respectent les propriétés privées, les horaires et la voie publique. Les enfants restent accompagnés.\n\nLes informations de participation sont supprimées après la saison. L’exploitant reste responsable de l’organisation et de la publication de ses textes.",
+    body: "## Participer à Halloween\n\nInscrivez uniquement une adresse que vous êtes autorisé à proposer. Les maisons sont inscrites automatiquement ; l’équipe peut les masquer si nécessaire. Vous êtes responsable de votre accueil et pouvez le mettre en pause ou le terminer.\n\nLes parcours sont indicatifs. Les visiteurs respectent les propriétés privées, les horaires et la voie publique. Les enfants restent accompagnés.\n\nLes informations de participation sont supprimées après la saison. L’exploitant reste responsable de l’organisation et de la publication de ses textes.",
   },
   GUIDELINES: {
     title: "Bonnes pratiques",

@@ -1,3 +1,4 @@
+import { mailLayout } from "./mail-layout";
 import { randomBytes } from "node:crypto";
 import nodemailer from "nodemailer";
 import { DateTime } from "luxon";
@@ -21,6 +22,7 @@ export type Sender = (mail: {
   to: string;
   subject: string;
   text: string;
+  html: string;
   messageId: string;
 }) => Promise<void>;
 export function smtpAvailable() {
@@ -41,7 +43,11 @@ function smtpSender(): Sender {
     debug: false,
   });
   return async (mail) => {
-    await transport.sendMail({ ...mail, from: process.env.SMTP_FROM });
+    await transport.sendMail({
+      ...mail,
+      from: process.env.SMTP_FROM,
+      replyTo: process.env.SMTP_REPLY_TO || undefined,
+    });
   };
 }
 export async function recomputeCampaigns(c: Database, seasonId: string) {
@@ -85,7 +91,7 @@ export async function campaignAction(user: User | null, input: unknown) {
             .max(150)
             .refine((v) => !/[\r\n]/.test(v)),
           body: z.string().trim().min(1).max(5000),
-          audience: z.enum(["ALL", "APPROVED", "PENDING", "ACTIVE"]),
+          audience: z.enum(["ALL", "VISIBLE", "ACTIVE"]),
           active: z.boolean(),
           schedule_mode: z.enum(["ABSOLUTE", "RELATIVE"]),
           anchor: z.enum([
@@ -270,13 +276,18 @@ async function claimJob(now: Date) {
       [job.id, now],
     );
     let subject = "",
-      text = "";
-    if (job.kind === "VERIFY" || job.kind === "INVITE") {
+      text = "",
+      html = "";
+    if (
+      job.kind === "VERIFY" ||
+      job.kind === "INVITE" ||
+      job.kind === "RESET"
+    ) {
       const token = randomBytes(32).toString("hex");
-      await c.query(
-        "DELETE FROM email_tokens WHERE user_id=$1 AND kind IN('VERIFY','INVITE')",
-        [u.id],
-      );
+      await c.query("DELETE FROM email_tokens WHERE user_id=$1 AND kind=$2", [
+        u.id,
+        job.kind,
+      ]);
       await c.query(
         "INSERT INTO email_tokens(token_hash,user_id,kind,email_hash,expires_at) VALUES($1,$2,$3,$4,$5)",
         [
@@ -284,17 +295,38 @@ async function claimJob(now: Date) {
           u.id,
           job.kind,
           hashToken(String(u.email)),
-          new Date(+now + 48 * 3600000),
+          new Date(+now + (job.kind === "RESET" ? 1 : 48) * 3600000),
         ],
       );
       const base = new URL(process.env.APP_ORIGIN ?? "http://localhost:3000");
-      base.pathname = job.kind === "VERIFY" ? "/verify" : "/activate";
+      base.pathname =
+        job.kind === "VERIFY"
+          ? "/verify"
+          : job.kind === "RESET"
+            ? "/reset-password"
+            : "/activate";
       base.searchParams.set("token", token);
       subject =
+        job.kind === "RESET"
+          ? "Réinitialisez votre mot de passe — Halloween Map"
+          : job.kind === "VERIFY"
+            ? "Vérifiez votre email — Halloween Map"
+            : "Votre invitation — Halloween Map";
+      const title =
         job.kind === "VERIFY"
-          ? "Vérifiez votre email — Halloween Map"
-          : "Votre invitation — Halloween Map";
-      text = `Bonjour ${u.display_name},\n\n${job.kind === "VERIFY" ? "Vérifiez votre email" : "Activez votre compte et choisissez votre mot de passe"} :\n${base.href}\n\nLien à usage unique, valable 48 heures. Si vous n’êtes pas à l’origine de cette demande, ignorez ce message.`;
+          ? "Vérifiez votre adresse email"
+          : job.kind === "RESET"
+            ? "Réinitialisez votre mot de passe"
+            : "Votre invitation";
+      const label =
+        job.kind === "VERIFY"
+          ? "Vérifier mon adresse"
+          : job.kind === "RESET"
+            ? "Choisir un nouveau mot de passe"
+            : "Activer mon compte";
+      const body = `Bonjour ${u.display_name},\n\n${label}.\nCe lien est valable pendant ${job.kind === "RESET" ? "1 heure" : "48 heures"}.`;
+      html = mailLayout(title, body, { label, url: base.href });
+      text = `${body}\n${base.href}\n\nIgnorez ce message si vous n’êtes pas à l’origine de cette demande.`;
     } else if (campaign) {
       const h = (
         await c.query(
@@ -330,6 +362,7 @@ async function claimJob(now: Date) {
         " ",
       );
       text = interpolate(String(campaign.body), vars);
+      html = mailLayout(subject, text);
     }
     return {
       skip: false,
@@ -338,6 +371,7 @@ async function claimJob(now: Date) {
         to: String(u.email),
         subject,
         text,
+        html,
         messageId: `<${job.id}@halloween-map.local>`,
       },
     };

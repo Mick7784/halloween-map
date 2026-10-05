@@ -39,6 +39,9 @@ import {
   setupAuthorized,
 } from "../lib/bootstrap";
 import { effectiveTime } from "../lib/time";
+import { requestPasswordReset, resetPassword } from "../lib/accounts";
+import { demoSeason, demoTime } from "../lib/demo";
+import { mailLayout } from "../lib/mail-layout";
 import { dispatchEmails, campaignAction, campaignAdmin } from "../lib/mail";
 import {
   consumeIdentity,
@@ -111,6 +114,9 @@ beforeAll(async () => {
     await pool.query(
       await readFile("migrations/003_durable_accounts.sql", "utf8"),
     );
+    await pool.query(
+      await readFile("migrations/004_beta_simplification.sql", "utf8"),
+    );
   } else {
     const pg = new PGlite();
     engine = pg;
@@ -120,6 +126,9 @@ beforeAll(async () => {
     );
     await pg.exec(
       await readFile("migrations/003_durable_accounts.sql", "utf8"),
+    );
+    await pg.exec(
+      await readFile("migrations/004_beta_simplification.sql", "utf8"),
     );
     globalDb.testDb = {
       async query(sql, values) {
@@ -180,11 +189,332 @@ afterAll(async () => {
   if (engine instanceof Pool) await engine.end();
   else await engine.close();
 });
+describe("V0.4 privacy, roles, demo and recovery", () => {
+  it("derives access solely from USER / ADMIN / SUPER_ADMIN and protects critical operations", async () => {
+    expect(participant.role_name).toBe("USER");
+    expect(() =>
+      requirePermission(
+        { ...participant, permissions: ["admin.access"] },
+        "admin.access",
+      ),
+    ).toThrow();
+    const local = { ...admin, role_name: "ADMIN" };
+    expect(() => requirePermission(local, "participants.edit")).not.toThrow();
+    await expect(
+      service.adminAction(local, { action: "settings", payload: {} }),
+    ).rejects.toMatchObject({ status: 403 });
+    await expect(
+      service.adminAction(local, {
+        action: "purge",
+        id: season.id,
+        payload: "PURGER",
+      }),
+    ).rejects.toMatchObject({ status: 403 });
+    const role = (await db().query("SELECT id FROM roles WHERE name='ADMIN'"))
+      .rows[0];
+    await expect(
+      adminUserAction(local, {
+        action: "edit",
+        id: participant.id,
+        role_id: role.id,
+      }),
+    ).rejects.toMatchObject({ status: 403 });
+    await expect(
+      adminUserAction(local, {
+        action: "edit",
+        id: local.id,
+        role_id: role.id,
+      }),
+    ).rejects.toThrow();
+    await db().query("UPDATE users SET role_id=$1 WHERE id=$2", [
+      role.id,
+      participant.id,
+    ]);
+    const result = await service.login({
+      email: participant.email,
+      password: "valid-password-1234",
+    });
+    expect((await getUser(result.token))?.permissions).toContain(
+      "admin.access",
+    );
+  });
+  it("creates a visible house automatically and limits preopening APIs to the owner", async () => {
+    expect(house.status).toBe("VISIBLE");
+    const before = new Date("2026-10-30T10:00Z");
+    expect(
+      (await service.publicState(before, participant)).houses?.map((h) => h.id),
+    ).toEqual([house.id]);
+    const stranger = (
+      await service.register({
+        display_name: "Autre",
+        email: "other@example.invalid",
+        password: "valid-password-1234",
+      })
+    ).token;
+    const u = (await getUser(stranger))!;
+    for (const user of [null, u]) {
+      const state = await service.publicState(before, user);
+      expect(state.houses).toEqual([]);
+      expect(JSON.stringify(state)).not.toContain(house.address);
+      expect(JSON.stringify(state)).not.toContain(String(house.latitude));
+    }
+    const input = {
+      start: "2026-10-31T18:00Z",
+      end: "2026-10-31T20:00Z",
+      origin: { latitude: 48.1, longitude: -1.67 },
+      activities: [],
+    };
+    await expect(
+      service.route(input, { now: before, preview: false }, null),
+    ).rejects.toMatchObject({ status: 401 });
+    await expect(
+      service.route(input, { now: before, preview: false }, participant),
+    ).rejects.toMatchObject({ status: 403 });
+  });
+  it("hides and restores houses server-side; owner resume cannot override admin hiding", async () => {
+    await db().query("UPDATE seasons SET activated=true WHERE id=$1", [
+      season.id,
+    ]);
+    await service.adminAction(admin, {
+      action: "visibility",
+      id: house.id,
+      payload: "HIDDEN",
+    });
+    await service.participantAction(participant, { action: "resume" });
+    const context = { now: new Date("2026-10-31T18:00Z"), preview: false };
+    const state = await service.publicState(context, participant);
+    expect(state.houses).toEqual([]);
+    expect(JSON.stringify(state)).not.toContain(house.address);
+    const result = await service.route(
+      {
+        start: context.now.toISOString(),
+        end: "2026-10-31T20:00Z",
+        origin: { latitude: 48.1, longitude: -1.67 },
+        activities: [],
+      },
+      context,
+      participant,
+    );
+    expect(result.stops).toEqual([]);
+    expect(await service.adminRead(admin, "houses")).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: house.id, status: "HIDDEN" }),
+      ]),
+    );
+    await service.adminAction(admin, {
+      action: "visibility",
+      id: house.id,
+      payload: "VISIBLE",
+    });
+    expect(
+      (await service.publicState(context, participant)).houses,
+    ).toHaveLength(1);
+    expect((await service.publicState(context, null)).houses).toEqual([]);
+  });
+  it("deletes only the selected house with strong confirmation and retains its account", async () => {
+    await expect(
+      service.adminAction(admin, {
+        action: "deleteHouse",
+        id: house.id,
+        payload: "SUPPRIMER",
+      }),
+    ).rejects.toMatchObject({ status: 400 });
+    await service.adminAction(admin, {
+      action: "deleteHouse",
+      id: house.id,
+      payload: "SUPPRIMER LA MAISON",
+    });
+    expect(await service.ownHouse(participant)).toBeNull();
+    expect(
+      (await db().query("SELECT id FROM users WHERE id=$1", [participant.id]))
+        .rows,
+    ).toHaveLength(1);
+    expect(
+      JSON.stringify((await db().query("SELECT * FROM audit_logs")).rows),
+    ).not.toContain(house.address);
+  });
+  it("uses five ephemeral demo houses below two real houses and real data otherwise, without statistics or purge", async () => {
+    const i = (await service.instance())!;
+    const demo = demoSeason(season);
+    expect(await service.demoHouses(i, demo)).toHaveLength(5);
+    expect(
+      (
+        await service.publicState(
+          { now: demoTime(i, demo, []), preview: true },
+          admin,
+        )
+      ).houses,
+    ).toHaveLength(5);
+    expect(
+      (await db().query("SELECT * FROM participations")).rows,
+    ).toHaveLength(1);
+    const second = await service.register({
+      display_name: "Deux",
+      email: "two@example.invalid",
+      password: "valid-password-1234",
+    });
+    await verifyQueued("two@example.invalid");
+    const u = (await getUser(second.token))!;
+    await service.createParticipation(u, {
+      house: { ...houseData(), name: "Deuxième maison" },
+      acceptance: acceptance(),
+    });
+    expect((await service.demoHouses(i, demo)).map((h) => h.demo)).toEqual([
+      false,
+      false,
+    ]);
+    const context = {
+      now: demoTime(i, demo, await service.demoHouses(i, demo)),
+      preview: true,
+    };
+    const before = await service.activeSeason(i);
+    expect((await service.publicState(context, admin)).houses).toHaveLength(2);
+    const r = await service.route(
+      {
+        start: context.now.toISOString(),
+        end: new Date(demo.closes_at).toISOString(),
+        origin: { latitude: 48.1, longitude: -1.67 },
+        activities: [],
+      },
+      context,
+      admin,
+    );
+    expect(r.stops).toHaveLength(2);
+    expect(await service.activeSeason(i)).toEqual(before);
+    await expect(
+      service.publicState(context, participant),
+    ).rejects.toMatchObject({ status: 403 });
+    await service.purgeSeason(season.id, i.id, admin, true);
+    expect(await service.demoHouses(i, demo)).toHaveLength(5);
+  });
+  it("disallows demo during official opening even for a previously enabled session", async () => {
+    const session = (
+      await service.login({
+        email: admin.email,
+        password: "valid-password-1234",
+      })
+    ).token;
+    await db().query("UPDATE sessions SET preview_at=$1 WHERE token_hash=$2", [
+      "2026-10-31T18:00Z",
+      hashToken(session),
+    ]);
+    vi.setSystemTime(new Date("2026-10-31T18:00Z"));
+    await db().query("UPDATE seasons SET activated=true WHERE id=$1", [
+      season.id,
+    ]);
+    await expect(effectiveTime(true, admin, session)).rejects.toMatchObject({
+      status: 403,
+    });
+    expect(
+      (
+        await service.publicState(
+          { now: new Date("2026-10-31T18:00Z"), preview: false },
+          admin,
+        )
+      ).demoAvailable,
+    ).toBe(false);
+    vi.setSystemTime(new Date("2026-10-04T12:00Z"));
+  });
+  it("sends a neutral reset response, hashed expiring single-use tokens and invalidates sessions", async () => {
+    const unknown = await requestPasswordReset({
+      email: "unknown@example.invalid",
+    });
+    expect(await requestPasswordReset({ email: participant.email })).toEqual(
+      unknown,
+    );
+    await db().query(
+      "UPDATE email_outbox SET scheduled_at='2026-10-04T12:00Z' WHERE kind='RESET'",
+    );
+    let token = "";
+    await dispatchEmails(new Date("2026-10-04T12:00Z"), async (mail) => {
+      if (mail.to === participant.email) {
+        expect(mail.html).toContain("Choisir un nouveau mot de passe");
+        token = new URL(mail.text.match(/https?:[^\s]+/)![0]).searchParams.get(
+          "token",
+        )!;
+      }
+    });
+    expect(token).toHaveLength(64);
+    expect(
+      JSON.stringify((await db().query("SELECT * FROM email_tokens")).rows),
+    ).not.toContain(token);
+    // Database wall time is independent of the JS fake clock.
+    await db().query(
+      "UPDATE email_tokens SET expires_at=now()+interval '1 hour' WHERE kind='RESET'",
+    );
+    await resetPassword({ token, password: "new-password-1234" });
+    await expect(
+      resetPassword({ token, password: "new-password-1234" }),
+    ).rejects.toMatchObject({ status: 400 });
+    expect(
+      (
+        await db().query("SELECT * FROM sessions WHERE user_id=$1", [
+          participant.id,
+        ])
+      ).rows,
+    ).toHaveLength(0);
+    expect(
+      await service.login({
+        email: participant.email,
+        password: "new-password-1234",
+      }),
+    ).toHaveProperty("token");
+    const expired = "ab".repeat(32);
+    await db().query(
+      "INSERT INTO email_tokens(token_hash,user_id,kind,email_hash,expires_at) VALUES($1,$2,'RESET',$3,now()-interval '1 second')",
+      [hashToken(expired), participant.id, hashToken(participant.email)],
+    );
+    await expect(
+      resetPassword({ token: expired, password: "new-password-1234" }),
+    ).rejects.toMatchObject({ status: 400 });
+    await requestPasswordReset({ email: participant.email });
+    await requestPasswordReset({ email: participant.email });
+    await expect(
+      requestPasswordReset({ email: participant.email }),
+    ).rejects.toMatchObject({ status: 429 });
+  });
+  it("renders escaped responsive HTML with a CTA and rejects unsafe links", () => {
+    const html = mailLayout(
+      "Vérifiez votre adresse email",
+      "Bonjour <script>\nCe lien est valable pendant 48 heures.",
+      {
+        label: "Vérifier mon adresse",
+        url: "https://example.invalid/verify?token=abc",
+      },
+    );
+    expect(html).toContain("viewport");
+    expect(html).toContain("&lt;script&gt;");
+    expect(html).toContain('href="https://example.invalid/verify?token=abc"');
+    expect(() =>
+      mailLayout("Title", "Body", {
+        label: "Click",
+        url: "javascript:alert(1)",
+      }),
+    ).toThrow();
+  });
+  it("replays V0.4 migration safely without losing accounts or household data", async () => {
+    const sql = await readFile(
+      "migrations/004_beta_simplification.sql",
+      "utf8",
+    );
+    if (engine instanceof Pool) await engine.query(sql);
+    else await engine.exec(sql);
+    expect((await service.ownHouse(participant))?.address).toBe(house.address);
+    expect(
+      (await db().query("SELECT name,permissions FROM roles ORDER BY name"))
+        .rows,
+    ).toEqual([
+      { name: "ADMIN", permissions: [] },
+      { name: "SUPER_ADMIN", permissions: [] },
+      { name: "USER", permissions: [] },
+    ]);
+  });
+});
 describe("Setup, authentication and RBAC", () => {
-  it("creates an instance, admin, five profiles and inactive first season", async () => {
+  it("creates an instance, admin, three roles and inactive first season", async () => {
     expect(admin.role_name).toBe("SUPER_ADMIN");
     expect(season.activated).toBe(false);
-    expect((await db().query("SELECT * FROM roles")).rows).toHaveLength(5);
+    expect((await db().query("SELECT * FROM roles")).rows).toHaveLength(3);
     expect((await service.instance())?.territory).toBe("Territoire fictif");
   });
   it("locks setup after creation and rejects an invalid key", async () => {
@@ -223,42 +553,9 @@ describe("Setup, authentication and RBAC", () => {
     );
     await expect(
       service.adminAction(participant, {
-        action: "moderate",
+        action: "visibility",
         id: house.id,
-        payload: "APPROVED",
-      }),
-    ).rejects.toMatchObject({ status: 403 });
-  });
-  it("supports custom permissions and prevents local admin escalation", async () => {
-    await service.adminAction(admin, {
-      action: "role",
-      payload: { name: "CUSTOM_READER", permissions: ["participants.read"] },
-    });
-    const custom = (
-      await db().query("SELECT * FROM roles WHERE name='CUSTOM_READER'")
-    ).rows[0];
-    expect(custom.permissions).toEqual(["participants.read"]);
-    const local = {
-      ...admin,
-      role_name: "LOCAL_ADMIN",
-      permissions: admin.permissions.filter((p) => p !== "roles.manage"),
-    };
-    await expect(
-      service.adminAction(local, {
-        action: "role",
-        payload: { name: "BAD", permissions: ["users.manage"] },
-      }),
-    ).rejects.toMatchObject({ status: 403 });
-    const superRole = (
-      await db().query("SELECT id FROM roles WHERE name='SUPER_ADMIN'")
-    ).rows[0];
-    await expect(
-      adminUserAction(local, {
-        action: "invite",
-        email: "staff@example.invalid",
-        password: "valid-password-1234",
-        display_name: "Staff",
-        role_id: superRole.id,
+        payload: "VISIBLE",
       }),
     ).rejects.toMatchObject({ status: 403 });
   });
@@ -272,9 +569,9 @@ describe("Setup, authentication and RBAC", () => {
 describe("Seasons, privacy and participant activity", () => {
   it("hides addresses before opening and counts validated houses only", async () => {
     await service.adminAction(admin, {
-      action: "moderate",
+      action: "visibility",
       id: house.id,
-      payload: "APPROVED",
+      payload: "VISIBLE",
     });
     const state = await service.publicState(new Date("2026-10-30T10:00Z"));
     expect(state.houses).toEqual([]);
@@ -292,17 +589,23 @@ describe("Seasons, privacy and participant activity", () => {
   });
   it("publishes approved active houses only during their exact hours", async () => {
     const now = new Date("2026-10-31T18:00Z");
-    expect(visible(house, { ...season, activated: true }, now)).toBe(false);
     expect(
       visible(
-        { ...house, status: "APPROVED" },
+        { ...house, status: "HIDDEN" },
+        { ...season, activated: true },
+        now,
+      ),
+    ).toBe(false);
+    expect(
+      visible(
+        { ...house, status: "VISIBLE" },
         { ...season, activated: true },
         now,
       ),
     ).toBe(true);
     expect(
       visible(
-        { ...house, status: "APPROVED" },
+        { ...house, status: "VISIBLE" },
         { ...season, activated: true },
         new Date(house.ends_at),
       ),
@@ -311,11 +614,11 @@ describe("Seasons, privacy and participant activity", () => {
       season.id,
     ]);
     await service.adminAction(admin, {
-      action: "moderate",
+      action: "visibility",
       id: house.id,
-      payload: "APPROVED",
+      payload: "VISIBLE",
     });
-    const result = await service.publicState(now);
+    const result = await service.publicState(now, participant);
     expect(result.houses).toHaveLength(1);
     expect(result.houses?.[0]).not.toHaveProperty("user_id");
     expect(result.houses?.[0]).not.toHaveProperty("email");
@@ -339,24 +642,24 @@ describe("Seasons, privacy and participant activity", () => {
     expect(effectiveActivities(h)).toEqual(["DECORATION"]);
     expect(
       visible(
-        { ...h, status: "APPROVED", activities: ["CANDY"] },
+        { ...h, status: "VISIBLE", activities: ["CANDY"] },
         { ...season, activated: true },
         new Date("2026-10-31T18:00Z"),
       ),
     ).toBe(false);
   });
-  it("revalidates address and text edits and forbids invalid hours", async () => {
+  it("automatically retains visibility for address and text edits and forbids invalid hours", async () => {
     await service.adminAction(admin, {
-      action: "moderate",
+      action: "visibility",
       id: house.id,
-      payload: "APPROVED",
+      payload: "VISIBLE",
     });
     expect(
       await service.updateHouse(participant, house.id, {
         ...houseData(),
         rp: "Nouvelle ambiance",
       }),
-    ).toEqual({ status: "PENDING" });
+    ).toEqual({ status: "VISIBLE" });
     await expect(
       service.updateHouse(participant, house.id, {
         ...houseData(),
@@ -394,9 +697,9 @@ describe("Seasons, privacy and participant activity", () => {
   });
   it("closes publicly, retains admin data, then purges idempotently at the separate deadline", async () => {
     await service.adminAction(admin, {
-      action: "moderate",
+      action: "visibility",
       id: house.id,
-      payload: "APPROVED",
+      payload: "VISIBLE",
     });
     await db().query(
       "UPDATE seasons SET activated=true,routes_count=3 WHERE id=$1",
@@ -440,12 +743,12 @@ describe("Seasons, privacy and participant activity", () => {
         )
       ).rows,
     ).toHaveLength(1);
-    expect((await db().query("SELECT * FROM roles")).rows).toHaveLength(5);
+    expect((await db().query("SELECT * FROM roles")).rows).toHaveLength(3);
   });
   it("restricts manual purge to Super Admin, refuses revival and starts new seasons inactive", async () => {
     await expect(
       service.adminAction(
-        { ...admin, role_name: "LOCAL_ADMIN" },
+        { ...admin, role_name: "ADMIN" },
         { action: "purge", id: season.id, payload: "PURGER" },
       ),
     ).rejects.toMatchObject({ status: 403 });
@@ -487,7 +790,7 @@ describe("Seasons, privacy and participant activity", () => {
 describe("Routing, demo and canonical versions", () => {
   it("respects filters, walking time, availability and closing hours", () => {
     const s = { ...season, activated: true };
-    const h = { ...house, status: "APPROVED" };
+    const h = { ...house, status: "VISIBLE" };
     const input = {
       start: "2026-10-31T17:05:00Z",
       end: "2026-10-31T20:00:00Z",
@@ -544,7 +847,7 @@ describe("Routing, demo and canonical versions", () => {
     ).toThrow("fermée");
   });
   it("waits for future opening and orders feasible houses", () => {
-    const a = { ...house, status: "APPROVED", starts_at: "2026-10-31T18:00Z" };
+    const a = { ...house, status: "VISIBLE", starts_at: "2026-10-31T18:00Z" };
     const b = {
       ...a,
       id: "other",
@@ -578,15 +881,19 @@ describe("Routing, demo and canonical versions", () => {
       [season.id],
     );
     await db().query(
-      "UPDATE participations SET status='APPROVED',starts_at=now()+interval '1 hour',ends_at=now()+interval '3 hours' WHERE id=$1",
+      "UPDATE participations SET status='VISIBLE',starts_at=now()+interval '1 hour',ends_at=now()+interval '3 hours' WHERE id=$1",
       [house.id],
     );
-    const result = await service.route({
-      start: new Date(+now + 7200000).toISOString(),
-      end: new Date(+now + 10800000).toISOString(),
-      origin: { latitude: 48.1, longitude: -1.67 },
-      activities: [],
-    });
+    const result = await service.route(
+      {
+        start: new Date(+now + 7200000).toISOString(),
+        end: new Date(+now + 10800000).toISOString(),
+        origin: { latitude: 48.1, longitude: -1.67 },
+        activities: [],
+      },
+      { now, preview: false },
+      participant,
+    );
     expect(result.stops).toHaveLength(0);
     expect(JSON.stringify(result)).not.toContain(house.address);
     vi.setSystemTime(new Date("2026-10-04T12:00:00Z"));
@@ -731,82 +1038,6 @@ describe("V0.2 bootstrap, dates, preview and reminders", () => {
       "2026-10-25T00:30:00.000Z",
     );
   });
-  it("authorizes preview per session and never exposes a public time bypass", async () => {
-    await expect(effectiveTime(true, null)).rejects.toMatchObject({
-      status: 401,
-    });
-    await expect(
-      effectiveTime(true, participant, "anything"),
-    ).rejects.toMatchObject({ status: 403 });
-    await expect(
-      effectiveTime(true, { ...admin, permissions: [] }, "anything"),
-    ).rejects.toMatchObject({ status: 403 });
-    const session = (await service.login(setupData().admin)).token;
-    await expect(effectiveTime(true, admin, session)).rejects.toMatchObject({
-      status: 403,
-    });
-    const { hashToken } = await import("../lib/auth");
-    await db().query("UPDATE sessions SET preview_at=$1 WHERE token_hash=$2", [
-      "2026-10-31T18:00Z",
-      hashToken(session),
-    ]);
-    const context = await effectiveTime(true, admin, session);
-    expect(context.preview).toBe(true);
-    expect(context.now.toISOString()).toBe("2026-10-31T18:00:00.000Z");
-    expect((await effectiveTime(false, admin, session)).preview).toBe(false);
-  });
-  it("shows preview countdown/open/closed states and computes routes without changing dates, counters or purging", async () => {
-    await db().query("UPDATE seasons SET activated=true WHERE id=$1", [
-      season.id,
-    ]);
-    await service.adminAction(admin, {
-      action: "moderate",
-      id: house.id,
-      payload: "APPROVED",
-    });
-    expect(
-      (
-        await service.publicState({
-          now: new Date("2026-10-30T18:00Z"),
-          preview: true,
-        })
-      ).state,
-    ).toBe("COUNTDOWN");
-    const context = { now: new Date("2026-10-31T18:00Z"), preview: true };
-    const open = await service.publicState(context);
-    expect(open.houses).toHaveLength(1);
-    expect(open.preview).toBe(true);
-    const result = await service.route(
-      {
-        start: "2026-10-31T18:02Z",
-        end: "2026-10-31T20:00Z",
-        origin: { latitude: house.latitude, longitude: house.longitude },
-        activities: [],
-        maxFear: 5,
-      },
-      context,
-    );
-    expect(result.stops).toHaveLength(1);
-    expect(
-      (await service.activeSeason((await service.instance())!))?.routes_count,
-    ).toBe(0);
-    expect((await service.publicState()).state).toBe("COUNTDOWN");
-    expect(
-      (
-        await service.publicState({
-          now: new Date("2030-01-01T00:00Z"),
-          preview: true,
-        })
-      ).state,
-    ).toBe("CLOSED");
-    expect(
-      (await service.adminRead(admin, "houses")) as unknown[],
-    ).toHaveLength(1);
-    expect(
-      (await service.activeSeason((await service.instance())!))?.purged_at,
-    ).toBeNull();
-  });
-
   it("migrates an existing V0.1 database without data loss and records migrations idempotently", async () => {
     const legacy = new PGlite();
     try {
@@ -998,9 +1229,8 @@ describe("V0.3 durable accounts, identity and permissions", () => {
     });
   });
   it("invites without a plaintext password and activates once with chosen password", async () => {
-    const role = (
-      await db().query("SELECT id FROM roles WHERE name='READ_ONLY'")
-    ).rows[0];
+    const role = (await db().query("SELECT id FROM roles WHERE name='ADMIN'"))
+      .rows[0];
     await adminUserAction(admin, {
       action: "invite",
       display_name: "Lecture",
@@ -1027,52 +1257,6 @@ describe("V0.3 durable accounts, identity and permissions", () => {
     await expect(
       activateAccount(invitation.token, { password: "chosen-password-1234" }),
     ).rejects.toThrow();
-  });
-  it("applies role defaults and individual exceptions to any user, protects privileges and disabled login", async () => {
-    const role = (
-      await db().query("SELECT id FROM roles WHERE name='READ_ONLY'")
-    ).rows[0];
-    await adminUserAction(admin, {
-      action: "edit",
-      id: participant.id,
-      role_id: role.id,
-      permission_grants: ["content.manage"],
-      permission_revocations: ["users.read"],
-    });
-    const session = await service.login({
-      email: participant.email,
-      password: "valid-password-1234",
-    });
-    const u = (await getUser(session.token))!;
-    expect(u.kind).toBe("PARTICIPANT");
-    expect(u.permissions).toContain("admin.access");
-    expect(u.permissions).toContain("content.manage");
-    expect(u.permissions).not.toContain("users.read");
-    await expect(service.adminRead(u, "users")).rejects.toMatchObject({
-      status: 403,
-    });
-    await expect(
-      adminUserAction(
-        {
-          ...admin,
-          role_name: "LOCAL_ADMIN",
-          permissions: ["admin.access", "users.manage"],
-        },
-        {
-          action: "edit",
-          id: participant.id,
-          permission_grants: ["roles.manage"],
-        },
-      ),
-    ).rejects.toMatchObject({ status: 403 });
-    await adminUserAction(admin, { action: "disable", id: participant.id });
-    expect(await getUser(session.token)).toBeNull();
-    await expect(
-      service.login({
-        email: participant.email,
-        password: "valid-password-1234",
-      }),
-    ).rejects.toMatchObject({ status: 401 });
   });
   it("requires the current password for email change, reverifies and revokes sessions", async () => {
     await expect(
@@ -1513,6 +1697,41 @@ describe("V0.3 content, legal versions and installation", () => {
           ])
         ).rows[0],
       ).toEqual({ email_status: "UNVERIFIED" });
+      const v04 = await readFile(
+        "migrations/004_beta_simplification.sql",
+        "utf8",
+      );
+      for (let pass = 0; pass < 2; pass++) {
+        await legacy.exec("BEGIN");
+        await legacy.exec(v04);
+        await legacy.exec("COMMIT");
+      }
+      expect(
+        (
+          await legacy.query(
+            "SELECT address,status,activity FROM participations",
+          )
+        ).rows[0],
+      ).toEqual({
+        address: "Legacy address",
+        status: "VISIBLE",
+        activity: "PAUSED",
+      });
+      expect(
+        (
+          await legacy.query(
+            "SELECT u.password_hash,r.name FROM users u JOIN roles r ON r.id=u.role_id WHERE u.id=$1",
+            [adminId.id],
+          )
+        ).rows[0],
+      ).toEqual({ password_hash: "preserved-admin-hash", name: "SUPER_ADMIN" });
+      expect(
+        (
+          await legacy.query<{ permissions: string[] }>(
+            "SELECT permissions FROM roles",
+          )
+        ).rows.every((row) => (row.permissions as string[]).length === 0),
+      ).toBe(true);
     } finally {
       await legacy.close();
     }

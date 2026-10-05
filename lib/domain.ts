@@ -64,13 +64,13 @@ export type User = {
   permissions: string[];
 };
 export type Participation = House;
+// Capabilities are derived exclusively from the three fixed roles.
 export const permissions = [
   "admin.access",
   "communications.read",
   "communications.manage",
   "content.manage",
   "participants.read",
-  "participants.validate",
   "participants.edit",
   "participants.delete",
   "users.read",
@@ -85,28 +85,22 @@ export const permissions = [
   "roles.manage",
 ] as const;
 export const defaultRoles: Record<string, readonly string[]> = {
-  PARTICIPANT: [],
+  USER: [],
   SUPER_ADMIN: permissions,
-  LOCAL_ADMIN: permissions.filter((p) => p !== "roles.manage"),
-  MODERATOR: [
-    "admin.access",
-    "participants.read",
-    "participants.validate",
-    "participants.edit",
-    "season.read",
-    "audit.read",
-  ],
-  READ_ONLY: [
-    "admin.access",
-    "participants.read",
-    "users.read",
-    "season.read",
-    "settings.read",
-    "stats.read",
-  ],
+  ADMIN: permissions.filter(
+    (p) =>
+      ![
+        "roles.manage",
+        "settings.manage",
+        "settings.read",
+        "season.preview",
+      ].includes(p),
+  ),
 };
 export function can(user: User | null, permission: string) {
-  return !!user?.permissions.includes(permission);
+  return (
+    !!user && !!defaultRoles[user.role_name ?? "USER"]?.includes(permission)
+  );
 }
 export function seasonState(s: Season | null, now = new Date()) {
   if (!s) return "PREPARATION";
@@ -122,7 +116,7 @@ export function effectiveActivities(h: House) {
 export function visible(h: House, s: Season, now = new Date()) {
   return (
     seasonState(s, now) === "MAP_OPEN" &&
-    h.status === "APPROVED" &&
+    h.status === "VISIBLE" &&
     h.activity === "ACTIVE" &&
     effectiveActivities(h).length > 0 &&
     +now >= +new Date(h.starts_at) &&

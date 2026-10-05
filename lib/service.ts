@@ -5,6 +5,7 @@ import {
   validateAcceptance,
   interpolate,
 } from "./content";
+import { demoSeason, fictionalHouses } from "./demo";
 import { recomputeCampaigns } from "./mail";
 import { createAccount, adminUsers } from "./accounts";
 import { setupAuthorized, finishBootstrap } from "./bootstrap";
@@ -29,7 +30,6 @@ import {
   type Season,
   type User,
   type House,
-  permissions,
 } from "./domain";
 import {
   setupSchema,
@@ -119,10 +119,10 @@ export async function setup(input: unknown, setupSession?: string) {
     const i = ii[0] as unknown as Instance;
     await initializeLegalDocuments(i.id, c);
     let roleId = "";
-    for (const [name, perms] of Object.entries(defaultRoles)) {
+    for (const name of Object.keys(defaultRoles)) {
       const { rows } = await c.query(
         "INSERT INTO roles(instance_id,name,permissions) VALUES($1,$2,$3) RETURNING id",
-        [i.id, name, perms],
+        [i.id, name, []],
       );
       if (name === "SUPER_ADMIN") roleId = String(rows[0].id);
     }
@@ -202,7 +202,7 @@ export async function purgeSeason(
     if (s.purged_at) return { purged: false };
     if (!manual && +new Date(s.purge_at) > +now) return { purged: false };
     const { rows: totals } = await c.query(
-      `SELECT count(*)::int houses,count(*) FILTER(WHERE status='APPROVED')::int approved,
+      `SELECT count(*)::int houses,count(*) FILTER(WHERE status='VISIBLE')::int approved,
       count(*) FILTER(WHERE 'DECORATION'=ANY(activities))::int decoration,count(*) FILTER(WHERE 'CANDY'=ANY(activities))::int candy,
       count(*) FILTER(WHERE 'ACTING'=ANY(activities))::int acting FROM participations WHERE season_id=$1 AND instance_id=$2`,
       [s.id, instanceId],
@@ -265,31 +265,49 @@ function formatDate(value: Date | string | undefined, zone: string) {
       }).format(new Date(value))
     : "";
 }
-export async function publicState(context: TimeContext | Date = realTime()) {
+export async function publicState(
+  context: TimeContext | Date = realTime(),
+  user: User | null = null,
+) {
   const { now, preview } =
     context instanceof Date ? { now: context, preview: false } : context;
+  if (preview && user?.role_name !== "SUPER_ADMIN")
+    throw new HttpError(403, "Super Admin requis");
   if (!preview) await tick(now);
   const i = await instance();
   if (!i) return { setupRequired: true };
-  const s = await activeSeason(i),
+  const actualSeason = await activeSeason(i);
+  const s = actualSeason && preview ? demoSeason(actualSeason) : actualSeason,
     state = seasonState(s, now);
   let count = 0,
     houses: ReturnType<typeof publicHouse>[] = [];
   if (s && state !== "CLOSED" && state !== "ARCHIVED") {
     const { rows } = await db().query(
       "SELECT count(*)::int n FROM participations WHERE instance_id=$1 AND season_id=$2 AND status=$3 AND EXISTS(SELECT 1 FROM users u WHERE u.id=participations.user_id AND u.account_status='ACTIVE' AND (u.email_status='VERIFIED' OR participations.legacy_imported)) AND NOT EXISTS(SELECT 1 FROM legal_documents d WHERE d.instance_id=participations.instance_id AND d.active AND d.requires_reaccept AND ((d.kind='TERMS' AND participations.terms_version IS DISTINCT FROM d.version) OR (d.kind='GUIDELINES' AND participations.guidelines_version IS DISTINCT FROM d.version)))",
-      [i.id, s.id, "APPROVED"],
+      [i.id, s.id, "VISIBLE"],
     );
     count = Number(rows[0].n);
-    if (state === "MAP_OPEN") {
+    if (state === "MAP_OPEN" && user) {
       const { rows } = await db().query(
-        "SELECT * FROM participations WHERE instance_id=$1 AND season_id=$2 AND status='APPROVED' AND activity='ACTIVE' AND EXISTS(SELECT 1 FROM users u WHERE u.id=participations.user_id AND u.account_status='ACTIVE' AND (u.email_status='VERIFIED' OR participations.legacy_imported)) AND NOT EXISTS(SELECT 1 FROM legal_documents d WHERE d.instance_id=participations.instance_id AND d.active AND d.requires_reaccept AND ((d.kind='TERMS' AND participations.terms_version IS DISTINCT FROM d.version) OR (d.kind='GUIDELINES' AND participations.guidelines_version IS DISTINCT FROM d.version))) AND starts_at<=$3 AND ends_at>$3",
+        "SELECT * FROM participations WHERE instance_id=$1 AND season_id=$2 AND status='VISIBLE' AND activity='ACTIVE' AND EXISTS(SELECT 1 FROM users u WHERE u.id=participations.user_id AND u.account_status='ACTIVE' AND (u.email_status='VERIFIED' OR participations.legacy_imported)) AND NOT EXISTS(SELECT 1 FROM legal_documents d WHERE d.instance_id=participations.instance_id AND d.active AND d.requires_reaccept AND ((d.kind='TERMS' AND participations.terms_version IS DISTINCT FROM d.version) OR (d.kind='GUIDELINES' AND participations.guidelines_version IS DISTINCT FROM d.version))) AND starts_at<=$3 AND ends_at>$3",
         [i.id, s.id, now],
       );
       houses = (rows as unknown as House[])
         .filter((h) => visible(h, s, now))
         .map(publicHouse);
     }
+  }
+  if (s && user && !preview && ["PREPARATION", "COUNTDOWN"].includes(state)) {
+    const own = await db().query(
+      "SELECT * FROM participations WHERE instance_id=$1 AND season_id=$2 AND user_id=$3 AND status='VISIBLE'",
+      [i.id, s.id, user.id],
+    );
+    houses = (own.rows as unknown as House[]).map(publicHouse);
+  }
+  if (s && preview) {
+    houses = (await demoHouses(i, s))
+      .filter((h) => visible(h, s, now))
+      .map(publicHouse);
   }
   return {
     setupRequired: false,
@@ -310,6 +328,11 @@ export async function publicState(context: TimeContext | Date = realTime()) {
     ),
     documents: await legalState(i.id),
     preview,
+    demoAvailable:
+      user?.role_name === "SUPER_ADMIN" &&
+      !!actualSeason &&
+      seasonState(actualSeason) !== "MAP_OPEN",
+    mapAccessible: !!user,
     instance: {
       public_name: i.public_name,
       territory: i.territory,
@@ -496,15 +519,7 @@ export async function updateHouse(
       }
     }
     const [starts, ends] = houseDates(data, i, s);
-    const changed = [
-      "name",
-      "address",
-      "latitude",
-      "longitude",
-      "rp",
-      "practical",
-    ].some((key) => old[key as keyof House] !== data[key as keyof typeof data]);
-    const status = !admin && changed ? "PENDING" : old.status;
+    const status = old.status;
     await c.query(
       "UPDATE participations SET name=$1,address=$2,latitude=$3,longitude=$4,activities=$5,starts_at=$6,ends_at=$7,fear=$8,adaptable=$9,rp=$10,practical=$11,status=$12 WHERE id=$13 AND instance_id=$14",
       [
@@ -585,7 +600,11 @@ export async function participantAction(user: User | null, input: unknown) {
 export async function route(
   userInput: unknown,
   context: TimeContext = realTime(),
+  user: User | null = null,
 ) {
+  if (!user) throw new HttpError(401, "Connexion requise");
+  if (context.preview && user.role_name !== "SUPER_ADMIN")
+    throw new HttpError(403, "Super Admin requis");
   const input = routeSchema.parse(userInput);
   const i = await instance();
   if (!i) throw new HttpError(404, "Instance manquante");
@@ -594,14 +613,18 @@ export async function route(
       "SELECT * FROM seasons WHERE id=$1 AND instance_id=$2 FOR UPDATE",
       [i.active_season_id, i.id],
     );
-    const s = ss[0] as unknown as Season;
+    const rawSeason = ss[0] as unknown as Season;
+    const s = rawSeason && context.preview ? demoSeason(rawSeason) : rawSeason;
     if (!s || seasonState(s, context.now) !== "MAP_OPEN")
       throw new HttpError(403, "La carte est fermée");
     const { rows } = await c.query(
-      "SELECT * FROM participations WHERE instance_id=$1 AND season_id=$2 AND status='APPROVED' AND activity='ACTIVE' AND EXISTS(SELECT 1 FROM users u WHERE u.id=participations.user_id AND u.account_status='ACTIVE' AND (u.email_status='VERIFIED' OR participations.legacy_imported)) AND NOT EXISTS(SELECT 1 FROM legal_documents d WHERE d.instance_id=participations.instance_id AND d.active AND d.requires_reaccept AND ((d.kind='TERMS' AND participations.terms_version IS DISTINCT FROM d.version) OR (d.kind='GUIDELINES' AND participations.guidelines_version IS DISTINCT FROM d.version))) AND starts_at<=$3 AND ends_at>$3",
+      "SELECT * FROM participations WHERE instance_id=$1 AND season_id=$2 AND status='VISIBLE' AND activity='ACTIVE' AND EXISTS(SELECT 1 FROM users u WHERE u.id=participations.user_id AND u.account_status='ACTIVE' AND (u.email_status='VERIFIED' OR participations.legacy_imported)) AND NOT EXISTS(SELECT 1 FROM legal_documents d WHERE d.instance_id=participations.instance_id AND d.active AND d.requires_reaccept AND ((d.kind='TERMS' AND participations.terms_version IS DISTINCT FROM d.version) OR (d.kind='GUIDELINES' AND participations.guidelines_version IS DISTINCT FROM d.version))) AND starts_at<=$3 AND ends_at>$3",
       [i.id, s.id, context.now],
     );
-    const result = planRoute(rows as unknown as House[], s, input, context.now);
+    const candidates = context.preview
+      ? await demoHouses(i, s, c)
+      : (rows as unknown as House[]);
+    const result = planRoute(candidates, s, input, context.now);
     if (!context.preview)
       await c.query(
         "UPDATE seasons SET routes_count=routes_count+1 WHERE id=$1",
@@ -647,7 +670,7 @@ export async function adminRead(user: User | null, section: string) {
     case "roles":
       return (
         await db().query(
-          "SELECT * FROM roles WHERE instance_id=$1 ORDER BY name",
+          "SELECT id,name FROM roles WHERE instance_id=$1 ORDER BY name",
           [u.instance_id],
         )
       ).rows;
@@ -662,7 +685,7 @@ export async function adminRead(user: User | null, section: string) {
       const i = (await instance())!,
         s = await activeSeason(i);
       const { rows } = await db().query(
-        "SELECT count(*)::int total,count(*) FILTER(WHERE status='APPROVED')::int approved,count(*) FILTER(WHERE status='PENDING')::int pending FROM participations WHERE instance_id=$1 AND season_id=$2",
+        "SELECT count(*)::int total,count(*) FILTER(WHERE status='VISIBLE')::int approved,count(*) FILTER(WHERE status='HIDDEN')::int hidden FROM participations WHERE instance_id=$1 AND season_id=$2",
         [i.id, s?.id ?? null],
       );
       const { rows: users } = await db().query(
@@ -696,11 +719,9 @@ export async function adminAction(user: User | null, input: unknown) {
     })
     .parse(input);
   const u = user;
-  if (data.action === "moderate") {
-    requirePermission(u, "participants.validate");
-    const status = z
-      .enum(["APPROVED", "REJECTED", "DISABLED"])
-      .parse(data.payload);
+  if (data.action === "visibility") {
+    requirePermission(u, "participants.edit");
+    const status = z.enum(["VISIBLE", "HIDDEN"]).parse(data.payload);
     const result = await db().query(
       "UPDATE participations SET status=$1 WHERE id=$2 AND instance_id=$3 RETURNING id",
       [status, data.id, u.instance_id],
@@ -717,17 +738,17 @@ export async function adminAction(user: User | null, input: unknown) {
   }
   if (data.action === "editHouse")
     return updateHouse(u, data.id!, data.payload, true);
-  if (data.action === "deleteParticipant") {
+  if (data.action === "deleteHouse") {
     requirePermission(u, "participants.delete");
-    if (data.payload !== "SUPPRIMER")
+    if (data.payload !== "SUPPRIMER LA MAISON")
       throw new HttpError(400, "Confirmation requise");
     return transaction(async (c) => {
       await c.query(
-        "DELETE FROM audit_logs WHERE instance_id=$1 AND (target_id=$2 OR target_id IN(SELECT id FROM participations WHERE user_id=$2))",
+        "DELETE FROM audit_logs WHERE instance_id=$1 AND target_id=$2",
         [u.instance_id, data.id],
       );
       const { rows } = await c.query(
-        "DELETE FROM participations WHERE user_id=$1 AND instance_id=$2 RETURNING id",
+        "DELETE FROM participations WHERE id=$1 AND instance_id=$2 RETURNING id",
         [data.id, u.instance_id],
       );
       if (!rows.length) throw new HttpError(404, "Participant introuvable");
@@ -794,6 +815,11 @@ export async function adminAction(user: User | null, input: unknown) {
           i.timezone,
         );
         if (
+          u.role_name !== "SUPER_ADMIN" &&
+          +new Date(purge) !== +new Date(s.purge_at)
+        )
+          throw new HttpError(403, "Super Admin requis pour modifier la purge");
+        if (
           (
             await c.query(
               "SELECT id FROM seasons WHERE id=$1 AND reminder_enabled=true AND reminder_at>=$2",
@@ -859,24 +885,22 @@ export async function adminAction(user: User | null, input: unknown) {
       return { ok: true };
     });
   }
-  if (data.action === "role") {
-    requirePermission(u, "roles.manage");
-    const p = z
-      .object({
-        name: z.string().regex(/^[A-Z][A-Z0-9_]{2,39}$/),
-        permissions: z.array(z.enum(permissions)).max(permissions.length),
-      })
-      .parse(data.payload);
-    if (p.permissions.some((v) => !u.permissions.includes(v)))
-      throw new HttpError(403, "Attribution de droits interdite");
-    if (p.name === "SUPER_ADMIN")
-      throw new HttpError(400, "Le rôle Super Admin est protégé");
-    await db().query(
-      "INSERT INTO roles(instance_id,name,permissions) VALUES($1,$2,$3) ON CONFLICT(instance_id,name) DO UPDATE SET permissions=EXCLUDED.permissions",
-      [u.instance_id, p.name, p.permissions],
-    );
-    await audit(db(), u.instance_id, u, "role.updated");
-    return { ok: true };
-  }
   throw new HttpError(400, "Action inconnue");
+}
+
+export async function demoHouses(i: Instance, s: Season, c: Database = db()) {
+  const total = (
+    await c.query(
+      "SELECT count(*)::int n FROM participations p JOIN users u ON u.id=p.user_id WHERE p.instance_id=$1 AND p.season_id=$2 AND NOT p.demo AND NOT u.demo",
+      [i.id, s.id],
+    )
+  ).rows[0];
+  if (Number(total.n) < 2) return fictionalHouses(i, s);
+  const rows = (
+    await c.query(
+      "SELECT p.* FROM participations p JOIN users u ON u.id=p.user_id WHERE p.instance_id=$1 AND p.season_id=$2 AND NOT p.demo AND NOT u.demo AND p.status='VISIBLE' AND u.account_status='ACTIVE' AND (u.email_status='VERIFIED' OR p.legacy_imported)",
+      [i.id, s.id],
+    )
+  ).rows as unknown as House[];
+  return rows;
 }

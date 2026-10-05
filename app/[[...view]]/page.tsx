@@ -5,7 +5,7 @@ export default async function Page({
 }: {
   params: Promise<{ view?: string[] }>;
 }) {
-  const view = (await params).view?.[0] ?? "map";
+  const view = (await params).view?.[0] ?? "home";
   const version = (await readFile(process.cwd() + "/VERSION", "utf8")).trim();
   return (
     <Application

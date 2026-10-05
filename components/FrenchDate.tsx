@@ -9,6 +9,7 @@ export default function FrenchDate({
   min,
   max,
   recurring = false,
+  readOnly = false,
 }: {
   label: string;
   name: string;
@@ -17,6 +18,7 @@ export default function FrenchDate({
   min?: string | number;
   max?: string | number;
   recurring?: boolean;
+  readOnly?: boolean;
 }) {
   const initial = String(value ?? "");
   const [date, setDate] = useState(initial.slice(0, 10)),
@@ -51,6 +53,7 @@ export default function FrenchDate({
       <div className="date-controls">
         <button
           type="button"
+          disabled={readOnly}
           aria-label={label + " : choisir la date"}
           aria-expanded={open}
           onClick={() => setOpen(!open)}
@@ -64,6 +67,7 @@ export default function FrenchDate({
           <input
             aria-label={label + " : heure"}
             type="time"
+            readOnly={readOnly}
             lang="fr"
             required={required}
             value={clock}

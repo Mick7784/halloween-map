@@ -39,7 +39,7 @@ export default function InstallApp() {
       window.removeEventListener("appinstalled", check);
     };
   }, []);
-  if (installed) return null;
+  if (installed || (!prompt && !ios)) return null;
   return (
     <>
       <button

@@ -1,5 +1,15 @@
 # Changelog
 
+## V0.4 — Halloween Map V0.4 Beta
+
+- Navigation compacte avec connexion desktop, menu utilisateur unique et panneaux mobiles dans le viewport.
+- Carte réservée aux comptes connectés ; avant ouverture, seule la maison du propriétaire est renvoyée par le serveur.
+- Trois rôles fixes USER / ADMIN / SUPER_ADMIN, inscription automatique et gestion Visible / Masquée / suppression de maison sans supprimer le compte.
+- Mode démo Super Admin en un clic, hors ouverture publique : cinq maisons éphémères sous deux maisons réelles, sinon les vraies maisons ; parcours sans statistiques ni purge simulée.
+- Récupération de mot de passe par token hashé, valable une heure, à usage unique, avec révocation des sessions.
+- Layout HTML commun avec fallback texte pour vérification, invitation, récupération et campagnes ; SMTP_REPLY_TO facultatif.
+- Migration 004 transactionnelle et rejouable, préservant les comptes et données V0.3.
+
 ## V0.3 — Halloween Map V0.3 Beta
 
 - Comptes durables et participations saisonnières séparées. Migration 003 transactionnelle et rejouable, conservation des mots de passe, profils, maisons et états V0.2 ; purge sans suppression des comptes.
