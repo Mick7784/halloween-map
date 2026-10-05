@@ -669,3 +669,7 @@
 .home-drawer-links .install-help-close > svg {
   width: 16px;
 }
+
+.home-install-guest:not(:has(.install-action)) {
+  display: none;
+}

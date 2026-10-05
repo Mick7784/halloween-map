@@ -123,7 +123,7 @@ Métier : PGlite local, PostgreSQL 17 en CI (`TEST_DATABASE_URL`). Migrations fr
 
 Production : `npm audit --omit=dev`. L’avis GHSA-vfj7-8cjw-p6xm concerne le transitif de développement `braces`, exclu du runtime ; ne pas forcer une rétrogradation du lint.
 
-La CI publie après verify et Docker verts seulement : tag **V0.5.4**, release **Halloween Map V0.5.4 Beta**, `ghcr.io/mick7784/halloween-map:V0.5.4` et `:latest`, labels OCI version/commit. Aucun numéro parallèle dans package.json, aucun déploiement externe. L’accueil premium et ses sources/fallbacks sont documentés dans [docs/home-reference.md](docs/home-reference.md).
+La CI publie après verify et Docker verts seulement : tag **V0.5.5**, release **Halloween Map V0.5.5 Beta**, `ghcr.io/mick7784/halloween-map:V0.5.5` et `:latest`, labels OCI version/commit. Aucun numéro parallèle dans package.json, aucun déploiement externe. L’accueil premium et ses sources/fallbacks sont documentés dans [docs/home-reference.md](docs/home-reference.md).
 
 Limites : mono-instance active, parcours exclusivement piétons selon le réseau disponible chez le fournisseur, cinq minutes de visite par maison. Pas de navigation vocale ni de suivi GPS continu. Recalculer si les disponibilités changent. Provenance du décor : [docs/visual-assets.md](docs/visual-assets.md).
 
