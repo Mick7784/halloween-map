@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 export function nextVersion(current, override) {
-  const pattern = /^V(\d+)\.([1-9])(\d{2,})?$/;
+  const pattern = /^V(\d+)\.([1-9])(\d{2,})?(?:\.([1-9]\d*))?$/;
   const match = pattern.exec(current);
   if (!match) throw new Error("Invalid version: " + current);
   if (override) {
@@ -9,6 +9,7 @@ export function nextVersion(current, override) {
     if (override === current) throw new Error("Version unchanged");
     return override;
   }
+  if (match[4]) return `V${match[1]}.${match[2]}.${Number(match[4]) + 1}`;
   return `V${match[1]}.${match[2]}${String(Number(match[3] ?? 0) + 1).padStart(2, "0")}`;
 }
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

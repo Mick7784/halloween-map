@@ -211,7 +211,7 @@ describe("walking plan", () => {
 describe("ORS server adapter", () => {
   it("forces foot-walking, batches both metrics, and excludes unsnappable points", async () => {
     vi.stubEnv("ORS_API_KEY", "test-key");
-    vi.stubEnv("ORS_BASE_URL", "https://api.openrouteservice.org");
+    vi.stubEnv("ORS_BASE_URL", "https://api.heigit.org/openrouteservice");
     const fetcher = vi
       .fn()
       .mockResolvedValueOnce(
@@ -263,6 +263,11 @@ describe("ORS server adapter", () => {
     expect(matrix[0][2]).toEqual(cost(800, 600));
     const route = await router.directions([input.origin, house("b", 48.11)]);
     expect(route.geometry).toHaveLength(3);
+    expect(fetcher.mock.calls.map((c) => c[0])).toEqual([
+      "https://api.heigit.org/openrouteservice/v2/snap/foot-walking/json",
+      "https://api.heigit.org/openrouteservice/v2/matrix/foot-walking",
+      "https://api.heigit.org/openrouteservice/v2/directions/foot-walking/geojson",
+    ]);
     for (const [url, options] of fetcher.mock.calls) {
       expect(url).toContain("foot-walking");
       expect(options.headers.Authorization).toBe("test-key");
@@ -432,4 +437,105 @@ describe("location and framing", () => {
       padding: { bottom: 45 },
     });
   });
+});
+
+// Corrective demo discovery: seeds are never returned as house positions.
+describe("V0.5.1 demo network discovery", () => {
+  it("uses deterministic spaced snapped points and validates a connected itinerary", async () => {
+    const { demoPositions } = await import("../lib/demo");
+    const points = Array.from({ length: 5 }, (_, n) => ({
+      latitude: 48.1 + n * 0.001,
+      longitude: -1.67,
+    }));
+    const snap = vi.fn<NonNullable<WalkingRouter["snap"]>>(async () => [
+      null,
+      ...points,
+      ...points,
+    ]);
+    const matrix = vi.fn(async () =>
+      points.map(() => points.map(() => cost(150, 120))),
+    );
+    const directions = vi.fn(async (p: typeof points) => ({
+      geometry: p.flatMap((q) => [
+        [q.longitude, q.latitude],
+        [q.longitude + 0.0001, q.latitude + 0.0001],
+      ]),
+      legs: p.slice(1).map(() => cost(150, 120)),
+    }));
+    const instance = {
+      latitude: 48.1,
+      longitude: -1.67,
+    } as import("../lib/domain").Instance;
+    const router = { snap, matrix, directions };
+    expect(await demoPositions(instance, router)).toEqual(points);
+    expect(await demoPositions(instance, router)).toEqual(points);
+    expect(snap.mock.calls[0][1]).toBe(300);
+    expect(matrix).toHaveBeenCalledWith(points);
+    expect(directions).toHaveBeenCalledWith(points);
+  });
+  it("rejects insufficient, disconnected and unroutable points without fallback", async () => {
+    const { demoPositions } = await import("../lib/demo");
+    const points = Array.from({ length: 5 }, (_, n) => ({
+      latitude: 48.1 + n * 0.001,
+      longitude: -1.67,
+    }));
+    const instance = {
+      latitude: 48.1,
+      longitude: -1.67,
+    } as import("../lib/domain").Instance;
+    const directions = vi.fn(async () => {
+      throw new RoutingError("no_route");
+    });
+    const router: WalkingRouter = {
+      snap: async () => points,
+      matrix: async () => points.map(() => points.map(() => null)),
+      directions,
+    };
+    await expect(demoPositions(instance, router)).rejects.toMatchObject({
+      reason: "no_route",
+    });
+    expect(directions).not.toHaveBeenCalled();
+    router.matrix = async () =>
+      points.map(() => points.map(() => cost(150, 120)));
+    await expect(demoPositions(instance, router)).rejects.toMatchObject({
+      reason: "no_route",
+    });
+    router.snap = async () => [points[0], points[0]];
+    await expect(demoPositions(instance, router)).rejects.toMatchObject({
+      reason: "no_route",
+    });
+  });
+  it("accepts the requested corrective release and increments dotted patches", async () => {
+    const { nextVersion } = await import("../scripts/version.mjs");
+    expect(nextVersion("V0.5", "V0.5.1")).toBe("V0.5.1");
+    expect(nextVersion("V0.5.1")).toBe("V0.5.2");
+  });
+});
+
+it("logs the exact invalid ORS endpoint and field without key or raw response", async () => {
+  vi.stubEnv("ORS_API_KEY", "never-print-key");
+  vi.stubEnv("ORS_BASE_URL", "https://api.heigit.org/openrouteservice");
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () =>
+      Response.json({
+        locations: [
+          {
+            location: [-1.67, 48.1],
+            snapped_distance: "invalid",
+            secret: "never-print-body",
+          },
+        ],
+      }),
+    ),
+  );
+  const warning = vi.spyOn(console, "warn").mockImplementation(() => {});
+  await expect(
+    createWalkingRouter().snap!([input.origin]),
+  ).rejects.toMatchObject({ reason: "invalid" });
+  expect(warning).toHaveBeenCalledWith("Invalid walking routing response", {
+    endpoint: "snap/foot-walking/json",
+    fields: ["locations.0.snapped_distance"],
+  });
+  expect(JSON.stringify(warning.mock.calls)).not.toMatch(/never-print/);
 });

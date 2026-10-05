@@ -1,5 +1,12 @@
 # Changelog
 
+## V0.5.1
+
+- Marqueurs MapLibre à positionnement natif ; icône et badge dans un élément interne, survol sans modifier la transformation géographique.
+- Cinq maisons démo éphémères raccordées par Snap, espacées et connectées, vérifiées par Matrix/Directions piétons ; positions affichées identiques aux positions routées et libellés explicites.
+- Endpoint HeiGIT par défaut et diagnostics serveur endpoint/champs invalides, sans clé ni repli à vol d’oiseau.
+- Tests de zoom/déplacement desktop/mobile, données démo et compatibilité des trois endpoints.
+
 ## V0.5 — routage piéton réel
 
 - Adaptateur serveur openrouteservice, profil foot-walking forcé : Snap, matrices piétonnes et Directions GeoJSON, sans repli à vol d’oiseau.

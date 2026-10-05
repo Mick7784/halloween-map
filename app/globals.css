@@ -602,6 +602,9 @@ legend {
 }
 .house-marker:hover {
   background: transparent;
+}
+.house-marker:hover .house-marker-visual,
+.house-marker:focus-visible .house-marker-visual {
   transform: scale(1.15);
 }
 .map-error,
@@ -2986,9 +2989,16 @@ body {
     0 3px 12px #0009;
 }
 .house-marker {
+  align-items: flex-end;
+  width: 34px;
+  height: 38px;
+}
+.house-marker-visual {
+  display: block;
   width: 34px;
   height: 38px;
   position: relative;
+  transform-origin: bottom center;
 }
 .house-marker.route-house {
   filter: drop-shadow(0 0 5px #ff8c3266);

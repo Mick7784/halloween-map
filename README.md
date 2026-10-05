@@ -123,7 +123,7 @@ Métier : PGlite local, PostgreSQL 17 en CI (`TEST_DATABASE_URL`). Migrations fr
 
 Production : `npm audit --omit=dev`. L’avis GHSA-vfj7-8cjw-p6xm concerne le transitif de développement `braces`, exclu du runtime ; ne pas forcer une rétrogradation du lint.
 
-La CI publie après verify et Docker verts seulement : tag **V0.5**, release **Halloween Map V0.5 Beta**, `ghcr.io/mick7784/halloween-map:V0.5` et `:latest`, labels OCI version/commit. Aucun numéro parallèle dans package.json, aucun déploiement externe.
+La CI publie après verify et Docker verts seulement : tag **V0.5.1**, release **Halloween Map V0.5.1 Beta**, `ghcr.io/mick7784/halloween-map:V0.5.1` et `:latest`, labels OCI version/commit. Aucun numéro parallèle dans package.json, aucun déploiement externe.
 
 Limites : mono-instance active, parcours exclusivement piétons selon le réseau disponible chez le fournisseur, cinq minutes de visite par maison. Pas de navigation vocale ni de suivi GPS continu. Recalculer si les disponibilités changent. Provenance du décor : [docs/visual-assets.md](docs/visual-assets.md).
 
@@ -135,7 +135,7 @@ Le Super Admin peut activer le mode démo depuis l’accueil, hors ouverture pub
 
 ### V0.5 — parcours piétons
 
-**Configuration requise pour le routage hébergé** : créer une clé openrouteservice (https://openrouteservice.org/), puis renseigner `ORS_API_KEY` dans le fichier .env du serveur. `ORS_BASE_URL` vaut https://api.openrouteservice.org par défaut. Le profil est toujours **foot-walking**, sans option voiture/vélo. La clé et l’URL ne sont jamais envoyées au navigateur. Aucun SDK, conteneur ni migration supplémentaire. Un serveur ORS existant peut être utilisé via ORS_BASE_URL (ex. https://routing.example.org/ors), avec Snap, Matrix et Directions piétons activés. Ne pas utiliser un serveur de démonstration non contractuel en production.
+**Configuration requise pour le routage hébergé** : créer une clé openrouteservice (https://openrouteservice.org/), puis renseigner `ORS_API_KEY` dans le fichier .env du serveur. `ORS_BASE_URL` vaut https://api.heigit.org/openrouteservice par défaut. Le profil est toujours **foot-walking**, sans option voiture/vélo. La clé et l’URL ne sont jamais envoyées au navigateur. Aucun SDK, conteneur ni migration supplémentaire. Un serveur ORS existant peut être utilisé via ORS_BASE_URL (ex. https://routing.example.org/ors), avec Snap, Matrix et Directions piétons activés. Ne pas utiliser un serveur de démonstration non contractuel en production.
 
 Séquence : validation/snapshot SQL → Snap (rayon maximal 50 m) → matrice distances/durées piétonnes → sélection gloutonne de l’arrivée la plus précoce → Directions GeoJSON multi-étapes → vérification des horaires avec les métriques définitives → courte transaction SQL de contrôle et compteur. Aucun appel réseau pendant le verrou SQL. Les points non raccordables et les liaisons nulles sont exclus, sans ligne droite de secours. Erreurs explicites pour clé absente, quota/indisponibilité, timeout ou réponse invalide.
 
@@ -148,3 +148,9 @@ Données transmises au fournisseur : coordonnées de départ et des maisons cand
 Départ explicitement choisi, acquisition GPS haute précision sans cache, précision affichée, marqueur lavande, recentrage, étapes orange numérotées et cadrage automatique. Modifier départ/filtres/frayeur/horaires efface le résultat. Un changement de maison invalide l’intégralité du résultat lors de l’actualisation (30 s), sans conserver d’anciens totaux. Une nouvelle maison commence sans coordonnées et exige confirmation explicite du point côté UI/API.
 
 Validation dédiée : `npm run lint`, `npm test`, `npm run build`, `npm run test:routing:ui`. Les tests utilisent un fournisseur contrôlé, jamais une fausse route en production. La CI existante vérifie PostgreSQL, navigateur et stack Docker avant publication de l’image V0.5. Aucun accès VPS/Dockhand/Pangolin n’est configuré dans le dépôt ; publication d’image et déploiement de l’instance sont distincts. Pour l’upgrade, conserver DB/volume, configurer ORS_API_KEY, sélectionner l’image V0.5 et recréer app/worker avec le Compose mis à jour ; aucune nouvelle migration V0.5.
+
+### V0.5.1 — marqueurs et démonstration
+
+ORS_BASE_URL vaut désormais `https://api.heigit.org/openrouteservice`. Les trois endpoints ajoutent `/v2/snap/foot-walking/json`, `/v2/matrix/foot-walking` et `/v2/directions/foot-walking/geojson` à cette base. Sous deux maisons réelles, le serveur découvre cinq points avec Snap (rayon maximal 300 m autour de graines déterministes dans un rayon de 750 m du centre), écarte les doublons à moins de 80 m et vérifie la connexion piétonne avec Matrix puis Directions. Seuls les points raccordés sont affichés. Un cache mémoire borné partage les résultats ; aucune écriture en base. Si le réseau ne permet pas cinq points compatibles, aucun trajet artificiel n’est produit.
+
+Les diagnostics des réponses invalides indiquent endpoint et champs concernés, jamais la clé API ni le contenu brut. La publication corrective est `V0.5.1` et `ghcr.io/mick7784/halloween-map:V0.5.1`. Aucun changement de Compose ou déploiement de serveur dans ce correctif.

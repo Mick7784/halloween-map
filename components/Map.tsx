@@ -110,12 +110,15 @@ export default function MapView({
           "aria-label",
           step >= 0 ? `Étape ${step + 1} · ${h.name}` : h.name,
         );
-        button.innerHTML = houseSVG;
+        const visual = document.createElement("span");
+        visual.className = "house-marker-visual";
+        visual.innerHTML = houseSVG;
+        button.append(visual);
         if (step >= 0) {
           const badge = document.createElement("span");
           badge.className = "route-marker-number";
           badge.textContent = String(step + 1);
-          button.append(badge);
+          visual.append(badge);
         }
         button.onclick = (e) => {
           e.stopPropagation();

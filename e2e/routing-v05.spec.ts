@@ -111,6 +111,20 @@ async function generate(page: Page) {
   await expect(
     page.getByRole("button", { name: "Étape 2 · Les lanternes 2" }),
   ).toBeVisible();
+  for (const visual of await page
+    .locator(".route-house .house-marker-visual")
+    .all()) {
+    expect(
+      await visual.evaluate((el) => {
+        const badge = el.querySelector(".route-marker-number")!;
+        const r = el.getBoundingClientRect(),
+          b = badge.getBoundingClientRect();
+        return (
+          Math.abs(b.top - r.top + 7) < 1 && Math.abs(b.right - r.right - 7) < 1
+        );
+      }),
+    ).toBe(true);
+  }
 }
 test("GPS departure, numbered stops, framed route, and all input invalidations", async ({
   page,
@@ -329,3 +343,80 @@ test("new house starts blank and requires explicit coordinate confirmation", asy
   await page.getByRole("spinbutton", { name: "Latitude" }).fill("48.2");
   await expect(confirm).not.toBeChecked();
 });
+
+for (const viewport of [
+  { width: 1280, height: 900 },
+  { width: 390, height: 844 },
+]) {
+  test(`geographical marker anchors during zoom/pan ${viewport.width}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize(viewport);
+    await arrange(page);
+    const marker = page.locator(".house-marker").first();
+    const map = page.locator(".map-canvas");
+    const anchor = () =>
+      marker.evaluate((el) => {
+        const r = el.getBoundingClientRect();
+        return {
+          x: r.x + r.width / 2,
+          y: r.bottom,
+          position: getComputedStyle(el).position,
+        };
+      });
+    const box = (await map.boundingBox())!;
+    await expect
+      .poll(async () => Math.abs((await anchor()).x - (box.x + box.width / 2)))
+      .toBeLessThan(2);
+    await expect
+      .poll(async () => Math.abs((await anchor()).y - (box.y + box.height / 2)))
+      .toBeLessThan(2);
+    expect((await anchor()).position).toBe("absolute");
+    expect(
+      await marker.evaluate((el) =>
+        Math.abs(
+          el.getBoundingClientRect().bottom -
+            el.querySelector(".house-marker-visual")!.getBoundingClientRect()
+              .bottom,
+        ),
+      ),
+    ).toBeLessThan(1);
+    await page.locator(".maplibregl-ctrl-zoom-in").click();
+    await page.waitForTimeout(600);
+    await expect
+      .poll(async () => Math.abs((await anchor()).x - (box.x + box.width / 2)))
+      .toBeLessThan(2);
+    await page.locator(".maplibregl-ctrl-zoom-out").click();
+    await page.waitForTimeout(600);
+    await expect
+      .poll(async () => Math.abs((await anchor()).y - (box.y + box.height / 2)))
+      .toBeLessThan(2);
+    await marker.hover({ force: true });
+    await marker.focus();
+    expect(
+      await marker.evaluate((el) => {
+        const m = new DOMMatrix(getComputedStyle(el).transform);
+        return [m.a, m.b, m.c, m.d];
+      }),
+    ).toEqual([1, 0, 0, 1]);
+    const before = await anchor();
+    const x = box.x + box.width / 2 - 80,
+      y = box.y + 120;
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    await page.mouse.move(x + 35, y + 25, { steps: 15 });
+    await expect
+      .poll(async () => Math.abs((await anchor()).x - before.x - 35))
+      .toBeLessThan(3);
+    await expect
+      .poll(async () => Math.abs((await anchor()).y - before.y - 25))
+      .toBeLessThan(3);
+    await page.mouse.up();
+
+    expect(
+      await marker
+        .locator(".house-marker-visual")
+        .evaluate((el) => getComputedStyle(el).position),
+    ).toBe("relative");
+  });
+}

@@ -1,6 +1,9 @@
 import type { WalkingRouter } from "../lib/walking-router";
 // Deterministic test provider; production never substitutes these fixtures.
 export const fixtureRouter: WalkingRouter = {
+  async snap(points) {
+    return points;
+  },
   async matrix(points) {
     return points.map((_, a) =>
       points.map((_, b) => ({

@@ -3,6 +3,7 @@ export type Point = { latitude: number; longitude: number };
 export type WalkingCost = { distanceMeters: number; durationSeconds: number };
 export type WalkingMatrix = (WalkingCost | null)[][];
 export interface WalkingRouter {
+  snap?(points: Point[], radius?: number): Promise<(Point | null)[]>;
   matrix(points: Point[]): Promise<WalkingMatrix>;
   directions(
     points: Point[],
@@ -37,7 +38,8 @@ const metric = z.number().finite().nonnegative();
 const pair = (p: Point) => [p.longitude, p.latitude];
 // The profile is fixed here, never taken from client input or configuration.
 export function createWalkingRouter(): WalkingRouter {
-  const base = process.env.ORS_BASE_URL ?? "https://api.openrouteservice.org",
+  const base =
+      process.env.ORS_BASE_URL ?? "https://api.heigit.org/openrouteservice",
     key = process.env.ORS_API_KEY;
   let url: URL;
   try {
@@ -46,7 +48,8 @@ export function createWalkingRouter(): WalkingRouter {
     throw new RoutingError("configuration");
   }
   if (
-    (url.hostname === "api.openrouteservice.org" && !key) ||
+    (["api.openrouteservice.org", "api.heigit.org"].includes(url.hostname) &&
+      !key) ||
     !["https:", "http:"].includes(url.protocol) ||
     url.username ||
     url.password
@@ -78,7 +81,8 @@ export function createWalkingRouter(): WalkingRouter {
     }
     if (!response.ok) {
       const error = await response.json().catch(() => null),
-        code = error?.error?.code;
+        code =
+          typeof error?.error?.code === "number" ? error.error.code : undefined;
       console.warn("Walking routing provider rejected request", {
         endpoint,
         status: response.status,
@@ -91,41 +95,54 @@ export function createWalkingRouter(): WalkingRouter {
     try {
       return await response.json();
     } catch {
+      console.warn("Invalid walking routing response", {
+        endpoint,
+        fields: ["json"],
+      });
       throw new RoutingError("invalid");
     }
   }
-  function parse<T>(schema: z.ZodType<T>, data: unknown): T {
+  function parse<T>(endpoint: string, schema: z.ZodType<T>, data: unknown): T {
     const result = schema.safeParse(data);
     if (!result.success) {
       console.warn("Invalid walking routing response", {
+        endpoint,
         fields: result.error.issues.map((i) => i.path.join(".")),
       });
       throw new RoutingError("invalid");
     }
     return result.data;
   }
+  async function snapLocations(points: Point[], radius = 50) {
+    const endpoint = "snap/foot-walking/json";
+    const data = parse(
+      endpoint,
+      z.object({
+        locations: z
+          .array(
+            z
+              .object({ location: coordinate, snapped_distance: metric })
+              .nullable(),
+          )
+          .length(points.length),
+      }),
+      await request(endpoint, { locations: points.map(pair), radius }),
+    );
+    return data.locations;
+  }
   return {
+    async snap(points, radius = 50) {
+      return (await snapLocations(points, radius)).map((p) =>
+        p ? { longitude: p.location[0], latitude: p.location[1] } : null,
+      );
+    },
     async matrix(points) {
       // Explicit resource bound, never silently truncate eligible houses.
       if (points.length > 201)
         throw new Error(
           "Plus de 200 maisons correspondent. Affinez les activités ou les horaires.",
         );
-      const snap = parse(
-        z.object({
-          locations: z.array(
-            z
-              .object({ location: coordinate, snapped_distance: metric })
-              .nullable(),
-          ),
-        }),
-        await request("snap/foot-walking/json", {
-          locations: points.map(pair),
-          radius: 50,
-        }),
-      );
-      if (snap.locations.length !== points.length)
-        throw new RoutingError("invalid");
+      const snap = { locations: await snapLocations(points) };
       if (!snap.locations[0]) throw new RoutingError("no_route");
       const active = snap.locations.flatMap((p, i) => (p ? [i] : [])),
         result: WalkingMatrix = points.map(() => points.map(() => null));
@@ -137,6 +154,7 @@ export function createWalkingRouter(): WalkingRouter {
         for (const destinations of blocks) {
           const indexes = [...new Set([...sources, ...destinations])];
           const data = parse(
+            "matrix/foot-walking",
             z.object({
               distances: z.array(z.array(metric.nullable())),
               durations: z.array(z.array(metric.nullable())),
@@ -154,8 +172,13 @@ export function createWalkingRouter(): WalkingRouter {
             data.durations.length !== sources.length ||
             data.distances.some((r) => r.length !== destinations.length) ||
             data.durations.some((r) => r.length !== destinations.length)
-          )
+          ) {
+            console.warn("Invalid walking routing response", {
+              endpoint: "matrix/foot-walking",
+              fields: ["distances.dimensions", "durations.dimensions"],
+            });
             throw new RoutingError("invalid");
+          }
           sources.forEach((from, r) =>
             destinations.forEach((to, c) => {
               const d = data.distances[r][c],
@@ -171,6 +194,7 @@ export function createWalkingRouter(): WalkingRouter {
     },
     async directions(points) {
       const data = parse(
+        "directions/foot-walking/geojson",
         z.object({
           features: z
             .array(
@@ -196,8 +220,13 @@ export function createWalkingRouter(): WalkingRouter {
         }),
       );
       const feature = data.features[0];
-      if (feature.properties.segments.length !== points.length - 1)
+      if (feature.properties.segments.length !== points.length - 1) {
+        console.warn("Invalid walking routing response", {
+          endpoint: "directions/foot-walking/geojson",
+          fields: ["features.0.properties.segments.length"],
+        });
         throw new RoutingError("invalid");
+      }
       return {
         geometry: feature.geometry.coordinates,
         legs: feature.properties.segments.map((s) => ({

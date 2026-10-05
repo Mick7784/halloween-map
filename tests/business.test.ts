@@ -342,7 +342,14 @@ describe("V0.4 privacy, roles, demo and recovery", () => {
   it("uses five ephemeral demo houses below two real houses and real data otherwise, without statistics or purge", async () => {
     const i = (await service.instance())!;
     const demo = demoSeason(season);
-    expect(await service.demoHouses(i, demo)).toHaveLength(5);
+    const simulated = await service.demoHouses(i, demo);
+    expect(simulated).toHaveLength(5);
+    expect(
+      simulated.every(
+        (h) => h.address === `Maison de démonstration · ${i.territory}`,
+      ),
+    ).toBe(true);
+    expect(await service.demoHouses(i, demo)).toEqual(simulated);
     expect(
       (
         await service.publicState(
