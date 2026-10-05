@@ -111,16 +111,23 @@ async function generate(page: Page) {
   await expect(
     page.getByRole("button", { name: "Étape 2 · Les lanternes 2" }),
   ).toBeVisible();
+  await expectRouteBadges(page);
+}
+async function expectRouteBadges(page: Page) {
   for (const visual of await page
     .locator(".route-house .house-marker-visual")
     .all()) {
     expect(
       await visual.evaluate((el) => {
+        if (!(el instanceof HTMLElement)) return false;
         const badge = el.querySelector(".route-marker-number")!;
         const r = el.getBoundingClientRect(),
           b = badge.getBoundingClientRect();
         return (
-          Math.abs(b.top - r.top + 7) < 1 && Math.abs(b.right - r.right - 7) < 1
+          // Hover scales the visual and its badge together; compare screen
+          // distances to the scaled 7px offsets, not unscaled CSS pixels.
+          Math.abs(b.top - r.top + 7 * (r.height / el.offsetHeight)) < 1 &&
+          Math.abs(b.right - r.right - 7 * (r.width / el.offsetWidth)) < 1
         );
       }),
     ).toBe(true);
@@ -420,3 +427,15 @@ for (const viewport of [
     ).toBe("relative");
   });
 }
+
+test("route badges remain anchored when a house is hovered", async ({
+  page,
+  context,
+}) => {
+  await context.grantPermissions(["geolocation"]);
+  await context.setGeolocation({ latitude: 48.105, longitude: -1.675 });
+  await arrange(page);
+  await generate(page);
+  await page.locator(".route-house").first().hover({ force: true });
+  await expectRouteBadges(page);
+});

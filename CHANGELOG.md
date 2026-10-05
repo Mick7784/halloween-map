@@ -6,6 +6,7 @@
 - Conservation de l’offre native lorsque le menu est fermé ; masquage en standalone, après installation ou sans méthode disponible.
 - Aide iOS intégrée au panneau ; aucun CTA supplémentaire ni scroll global.
 - Documentation du support PWA existant et tests navigateur ciblés.
+- Contrôle des badges de parcours corrigé pour tenir compte du zoom visuel au survol, avec test de non-régression.
 
 ## V0.5.4 — accueil premium
 
