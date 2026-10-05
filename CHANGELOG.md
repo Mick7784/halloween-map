@@ -1,5 +1,13 @@
 # Changelog
 
+## V0.5 — routage piéton réel
+
+- Adaptateur serveur openrouteservice, profil foot-walking forcé : Snap, matrices piétonnes et Directions GeoJSON, sans repli à vol d’oiseau.
+- Ordre et horaires fondés sur les coûts piétons, maisons ouvrant plus tard, métriques détaillées et contrôle des données hors appels réseau SQL verrouillés.
+- Départ explicite, GPS haute précision/états/erreurs, marqueur lavande, étapes numérotées, cadrage et sélection mobile avec confirmation.
+- Invalidation complète des résultats obsolètes ; confirmation obligatoire de la position des nouvelles maisons.
+- Configuration ORS_API_KEY/ORS_BASE_URL documentée et tests dédiés métier, fournisseur et navigateur.
+
 ## V0.4 — Halloween Map V0.4 Beta
 
 - Navigation compacte avec connexion desktop, menu utilisateur unique et panneaux mobiles dans le viewport.

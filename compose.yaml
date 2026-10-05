@@ -15,6 +15,8 @@ x-app: &app
     SMTP_REPLY_TO: ${SMTP_REPLY_TO:-}
     SMTP_SECURE: ${SMTP_SECURE:-false}
     MAP_STYLE_URL: ${MAP_STYLE_URL:-https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json}
+    ORS_API_KEY: ${ORS_API_KEY:-}
+    ORS_BASE_URL: ${ORS_BASE_URL:-https://api.openrouteservice.org}
     DEMO_PASSWORD: ${DEMO_PASSWORD:-}
   init: true
 services:

@@ -3,6 +3,7 @@ import { useState } from "react";
 import { DateTime } from "luxon";
 export default function FrenchDate({
   label,
+  onValueChange,
   name,
   value,
   required = true,
@@ -12,6 +13,7 @@ export default function FrenchDate({
   readOnly = false,
 }: {
   label: string;
+  onValueChange?: () => void;
   name: string;
   value?: string | number;
   required?: boolean;
@@ -38,6 +40,7 @@ export default function FrenchDate({
       field.value = nextDate + "T" + nextClock;
       field.dispatchEvent(new Event("input", { bubbles: true }));
     }
+    onValueChange?.();
     setDate(nextDate);
     setClock(nextClock);
   }

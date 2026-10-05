@@ -12,7 +12,7 @@ import {
 import { readFile } from "node:fs/promises";
 import { PGlite } from "@electric-sql/pglite";
 import { Pool } from "pg";
-import { db, type Database } from "../lib/db";
+import { db, transaction, type Database } from "../lib/db";
 import * as service from "../lib/service";
 import {
   getUser,
@@ -57,6 +57,11 @@ import {
   sanitizeContent,
 } from "../lib/content";
 import { hashToken } from "../lib/auth";
+vi.mock("../lib/walking-router", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../lib/walking-router")>()),
+  createWalkingRouter: () => fixtureRouter,
+}));
+import { fixtureRouter } from "./walking-fixture";
 const globalDb = globalThis as unknown as { testDb?: Database };
 let engine: PGlite | Pool;
 const setupData = () => ({
@@ -85,6 +90,7 @@ const setupData = () => ({
   },
 });
 const houseData = () => ({
+  position_confirmed: true,
   name: "La demeure des murmures",
   address: "1 allée fictive",
   latitude: 48.1001,
@@ -788,7 +794,56 @@ describe("Seasons, privacy and participant activity", () => {
   });
 });
 describe("Routing, demo and canonical versions", () => {
-  it("respects filters, walking time, availability and closing hours", () => {
+  it("requires an explicit position confirmation for a new participation", async () => {
+    await expect(
+      service.createParticipation(participant, {
+        house: { ...houseData(), position_confirmed: false },
+        acceptance: acceptance(),
+      }),
+    ).rejects.toMatchObject({ status: 400 });
+  });
+  it("releases database locks before routing and rejects a house changed during the network call", async () => {
+    const context = { now: new Date("2026-10-31T18:00Z"), preview: false };
+    await db().query("UPDATE seasons SET activated=true WHERE id=$1", [
+      season.id,
+    ]);
+    const original = fixtureRouter.matrix.bind(fixtureRouter);
+    const spy = vi
+      .spyOn(fixtureRouter, "matrix")
+      .mockImplementationOnce(async (points) => {
+        await transaction(async (c) => {
+          await c.query("SELECT id FROM seasons WHERE id=$1 FOR UPDATE", [
+            season.id,
+          ]);
+          await c.query(
+            "UPDATE participations SET status='HIDDEN' WHERE id=$1",
+            [house.id],
+          );
+        });
+        return original(points);
+      });
+    await expect(
+      service.route(
+        {
+          start: context.now.toISOString(),
+          end: "2026-10-31T20:00Z",
+          origin: { latitude: 48.1, longitude: -1.67 },
+          activities: [],
+        },
+        context,
+        participant,
+      ),
+    ).rejects.toMatchObject({ status: 409 });
+    expect(
+      (
+        await db().query("SELECT routes_count FROM seasons WHERE id=$1", [
+          season.id,
+        ])
+      ).rows[0].routes_count,
+    ).toBe(0);
+    spy.mockRestore();
+  });
+  it("respects filters, walking time, availability and closing hours", async () => {
     const s = { ...season, activated: true };
     const h = { ...house, status: "VISIBLE" };
     const input = {
@@ -797,7 +852,7 @@ describe("Routing, demo and canonical versions", () => {
       origin: { latitude: 48.1, longitude: -1.67 },
       activities: ["CANDY"] as const,
     };
-    const r = planRoute(
+    const r = await planRoute(
       [h],
       s,
       { ...input, activities: [...input.activities] },
@@ -806,47 +861,55 @@ describe("Routing, demo and canonical versions", () => {
     expect(r.stops).toHaveLength(1);
     expect(r.durationMinutes).toBeGreaterThanOrEqual(5);
     expect(
-      planRoute(
-        [{ ...h, candy_available: false }],
-        s,
-        { ...input, activities: [...input.activities] },
-        new Date(input.start),
+      (
+        await planRoute(
+          [{ ...h, candy_available: false }],
+          s,
+          { ...input, activities: [...input.activities] },
+          new Date(input.start),
+        )
       ).stops,
     ).toHaveLength(0);
     expect(
-      planRoute(
-        [{ ...h, activity: "PAUSED" }],
-        s,
-        { ...input, activities: [...input.activities] },
-        new Date(input.start),
+      (
+        await planRoute(
+          [{ ...h, activity: "PAUSED" }],
+          s,
+          { ...input, activities: [...input.activities] },
+          new Date(input.start),
+        )
       ).stops,
     ).toHaveLength(0);
     expect(
-      planRoute(
-        [{ ...h, fear: 5, adaptable: true }],
-        s,
-        { ...input, activities: [], maxFear: 1 },
-        new Date(input.start),
+      (
+        await planRoute(
+          [{ ...h, fear: 5, adaptable: true }],
+          s,
+          { ...input, activities: [], maxFear: 1 },
+          new Date(input.start),
+        )
       ).stops,
     ).toHaveLength(1);
     expect(
-      planRoute(
-        [{ ...h, ends_at: "2026-10-31T17:07:00Z" }],
-        s,
-        { ...input, activities: [] },
-        new Date(input.start),
+      (
+        await planRoute(
+          [{ ...h, ends_at: "2026-10-31T17:07:00Z" }],
+          s,
+          { ...input, activities: [] },
+          new Date(input.start),
+        )
       ).stops,
     ).toHaveLength(0);
-    expect(() =>
+    await expect(
       planRoute(
         [h],
         season,
         { ...input, activities: [] },
         new Date(input.start),
       ),
-    ).toThrow("fermée");
+    ).rejects.toThrow("fermée");
   });
-  it("waits for future opening and orders feasible houses", () => {
+  it("waits for future opening and orders feasible houses", async () => {
     const a = { ...house, status: "VISIBLE", starts_at: "2026-10-31T18:00Z" };
     const b = {
       ...a,
@@ -861,7 +924,7 @@ describe("Routing, demo and canonical versions", () => {
       origin: { latitude: 48.1, longitude: -1.67 },
       activities: [],
     };
-    const r = planRoute(
+    const r = await planRoute(
       [a, b],
       { ...season, activated: true },
       input,
@@ -872,7 +935,7 @@ describe("Routing, demo and canonical versions", () => {
       +new Date(a.starts_at),
     );
   });
-  it("public route API never reveals a house that has not opened yet", async () => {
+  it("route API includes future opening only during the open season and requested window", async () => {
     const current = (await db().query("SELECT now() current")).rows[0].current;
     const now = new Date(String(current));
     vi.setSystemTime(now);
@@ -894,8 +957,8 @@ describe("Routing, demo and canonical versions", () => {
       { now, preview: false },
       participant,
     );
-    expect(result.stops).toHaveLength(0);
-    expect(JSON.stringify(result)).not.toContain(house.address);
+    expect(result.stops).toHaveLength(1);
+    expect(result.stops[0].house.id).toBe(house.id);
     vi.setSystemTime(new Date("2026-10-04T12:00:00Z"));
   });
   it("seeds 12 synthetic houses idempotently and removes only demo participants", async () => {

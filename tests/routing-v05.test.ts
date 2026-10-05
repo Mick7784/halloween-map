@@ -1,0 +1,435 @@
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { planRoute } from "../lib/routing";
+import {
+  createWalkingRouter,
+  RoutingError,
+  type WalkingRouter,
+} from "../lib/walking-router";
+import { locateOrigin } from "../lib/geolocation";
+import { routeIsCurrent } from "../lib/route-state";
+import { publicHouse, type House, type Season } from "../lib/domain";
+import { frameRoute } from "../lib/map-framing";
+const season = {
+  activated: true,
+  opens_at: "2026-10-31T17:00Z",
+  closes_at: "2026-10-31T22:00Z",
+  archived: false,
+  purged_at: null,
+} as Season;
+const house = (id: string, latitude = 48.1): House =>
+  ({
+    id,
+    name: id,
+    address: "adresse",
+    latitude,
+    longitude: -1.67,
+    activities: ["CANDY"],
+    candy_available: true,
+    status: "VISIBLE",
+    activity: "ACTIVE",
+    starts_at: "2026-10-31T17:00Z",
+    ends_at: "2026-10-31T22:00Z",
+    fear: 2,
+    adaptable: false,
+    rp: "",
+    practical: "",
+  }) as House;
+const input = {
+  start: "2026-10-31T18:00Z",
+  end: "2026-10-31T21:00Z",
+  origin: { latitude: 48.1, longitude: -1.67 },
+  activities: [],
+};
+const now = new Date(input.start);
+const cost = (distanceMeters: number, durationSeconds: number) => ({
+  distanceMeters,
+  durationSeconds,
+});
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
+  vi.restoreAllMocks();
+});
+describe("walking plan", () => {
+  it("orders by pedestrian costs, skips disconnected houses, and keeps provider geometry and final metrics", async () => {
+    const a = house("a", 48.10001),
+      b = house("b", 48.11),
+      c = house("c", 48.10002);
+    const geometry = [
+      [-1.67, 48.1],
+      [-1.68, 48.105],
+      [-1.67, 48.11],
+      [-1.66, 48.1],
+    ];
+    const router: WalkingRouter = {
+      matrix: vi.fn(async () => [
+        [cost(0, 0), cost(1500, 1200), cost(500, 300), null],
+        [cost(1500, 1200), cost(0, 0), cost(400, 240), null],
+        [cost(500, 300), cost(600, 360), cost(0, 0), null],
+        [null, null, null, cost(0, 0)],
+      ]),
+      directions: vi.fn(async () => ({
+        geometry,
+        legs: [cost(510, 310), cost(620, 370)],
+      })),
+    };
+    const r = await planRoute([a, b, c], season, input, now, router);
+    expect(r.stops.map((s) => s.house.id)).toEqual(["b", "a"]);
+    expect(router.directions).toHaveBeenCalledWith([input.origin, b, a]);
+    expect(r.geometry).toEqual(geometry);
+    expect(r.distanceMeters).toBe(1130);
+    expect(r.walkingSeconds).toBe(680);
+    expect(r.durationMinutes).toBe(22);
+    expect(r.stops[0]).toMatchObject({
+      distanceMeters: 510,
+      walkingSeconds: 310,
+      arrival: "2026-10-31T18:05:10.000Z",
+      departure: "2026-10-31T18:10:10.000Z",
+    });
+    expect(r.estimatedEnd).toBe("2026-10-31T18:21:20.000Z");
+    expect(r.disclaimer).not.toContain("vol d’oiseau");
+    expect(routeIsCurrent(r, [a, b].map(publicHouse), +now)).toBe(true);
+    expect(routeIsCurrent(r, [a].map(publicHouse), +now)).toBe(false);
+    expect(
+      routeIsCurrent(r, [a, { ...b, longitude: -1.8 }].map(publicHouse), +now),
+    ).toBe(false);
+    expect(
+      routeIsCurrent(r, [a, { ...b, activities: [] }].map(publicHouse), +now),
+    ).toBe(false);
+  });
+  it("waits for future opening, visits for five minutes, and rejects closing before departure", async () => {
+    const router: WalkingRouter = {
+      matrix: async () => [
+        [cost(0, 0), cost(500, 300)],
+        [cost(500, 300), cost(0, 0)],
+      ],
+      directions: async () => ({
+        geometry: [
+          [-1.67, 48.1],
+          [-1.68, 48.11],
+        ],
+        legs: [cost(500, 300)],
+      }),
+    };
+    const h = {
+      ...house("later"),
+      starts_at: "2026-10-31T19:00Z",
+      ends_at: "2026-10-31T19:05Z",
+    };
+    const r = await planRoute([h], season, input, now, router);
+    expect(r.durationMinutes).toBe(65);
+    expect(r.walkingMinutes).toBe(5);
+    expect(r.stops[0].departure).toBe("2026-10-31T19:05:00.000Z");
+    expect(
+      (
+        await planRoute(
+          [{ ...h, ends_at: "2026-10-31T19:04Z" }],
+          season,
+          input,
+          now,
+          router,
+        )
+      ).geometry,
+    ).toEqual([]);
+  });
+  it("reroutes and recomputes the whole schedule if final directions make a stop infeasible", async () => {
+    const a = { ...house("a"), ends_at: "2026-10-31T18:06Z" },
+      b = house("b");
+    const directions = vi
+      .fn()
+      .mockResolvedValueOnce({
+        geometry: [
+          [0, 0],
+          [1, 1],
+        ],
+        legs: [cost(500, 180), cost(500, 180)],
+      })
+      .mockResolvedValueOnce({
+        geometry: [
+          [0, 0],
+          [0.5, 0.6],
+          [2, 2],
+        ],
+        legs: [cost(700, 240)],
+      });
+    const r = await planRoute([a, b], season, input, now, {
+      matrix: async () =>
+        Array.from({ length: 3 }, () =>
+          Array.from({ length: 3 }, () => cost(100, 30)),
+        ),
+      directions,
+    });
+    expect(r.stops.map((s) => s.house.id)).toEqual(["b"]);
+    expect(r.distanceMeters).toBe(700);
+    expect(r.durationMinutes).toBe(9);
+    expect(directions).toHaveBeenCalledTimes(2);
+  });
+  it("never creates a straight-line fallback on provider failure or disconnected graph", async () => {
+    const directions = vi.fn();
+    const r = await planRoute([house("a")], season, input, now, {
+      matrix: async () => [
+        [cost(0, 0), null],
+        [null, cost(0, 0)],
+      ],
+      directions,
+    });
+    expect(r.stops).toEqual([]);
+    expect(r.geometry).toEqual([]);
+    expect(directions).not.toHaveBeenCalled();
+    await expect(
+      planRoute([house("a")], season, input, now, {
+        matrix: async () => {
+          throw new RoutingError("timeout");
+        },
+        directions,
+      }),
+    ).rejects.toThrow("trop de temps");
+  });
+  it("caps visits at thirty without an individual network request for every candidate", async () => {
+    const matrix = vi.fn(async (points) =>
+      points.map(() => points.map(() => cost(1, 1))),
+    );
+    const directions = vi.fn(async (points) => ({
+      geometry: [
+        [0, 0],
+        [0.1, 0.1],
+      ],
+      legs: points.slice(1).map(() => cost(1, 1)),
+    }));
+    const r = await planRoute(
+      Array.from({ length: 40 }, (_, i) => house(String(i))),
+      season,
+      { ...input, end: "2026-10-31T22:00Z" },
+      now,
+      { matrix, directions },
+    );
+    expect(r.stops).toHaveLength(30);
+    expect(matrix).toHaveBeenCalledTimes(1);
+    expect(directions).toHaveBeenCalledTimes(1);
+  });
+});
+describe("ORS server adapter", () => {
+  it("forces foot-walking, batches both metrics, and excludes unsnappable points", async () => {
+    vi.stubEnv("ORS_API_KEY", "test-key");
+    vi.stubEnv("ORS_BASE_URL", "https://api.openrouteservice.org");
+    const fetcher = vi
+      .fn()
+      .mockResolvedValueOnce(
+        Response.json({
+          locations: [
+            { location: [-1.67, 48.1], snapped_distance: 2 },
+            null,
+            { location: [-1.66, 48.11], snapped_distance: 1 },
+          ],
+        }),
+      )
+      .mockResolvedValueOnce(
+        Response.json({
+          distances: [
+            [0, 800],
+            [900, 0],
+          ],
+          durations: [
+            [0, 600],
+            [700, 0],
+          ],
+        }),
+      )
+      .mockResolvedValueOnce(
+        Response.json({
+          features: [
+            {
+              geometry: {
+                type: "LineString",
+                coordinates: [
+                  [-1.67, 48.1],
+                  [-1.665, 48.105],
+                  [-1.66, 48.11],
+                ],
+              },
+              properties: { segments: [{ distance: 800, duration: 600 }] },
+            },
+          ],
+        }),
+      );
+    vi.stubGlobal("fetch", fetcher);
+    const router = createWalkingRouter();
+    const matrix = await router.matrix([
+      input.origin,
+      house("a"),
+      house("b", 48.11),
+    ]);
+    expect(matrix[0][1]).toBeNull();
+    expect(matrix[0][2]).toEqual(cost(800, 600));
+    const route = await router.directions([input.origin, house("b", 48.11)]);
+    expect(route.geometry).toHaveLength(3);
+    for (const [url, options] of fetcher.mock.calls) {
+      expect(url).toContain("foot-walking");
+      expect(options.headers.Authorization).toBe("test-key");
+      expect(options.cache).toBe("no-store");
+    }
+    expect(JSON.parse(fetcher.mock.calls[1][1].body)).toMatchObject({
+      metrics: ["distance", "duration"],
+      units: "m",
+    });
+  });
+  it("splits matrices above 50 nodes and maps asymmetric block results to original indexes", async () => {
+    vi.stubEnv("ORS_API_KEY", "test-key");
+    const fetcher = vi.fn(async (url: string, options: RequestInit) => {
+      const body = JSON.parse(options.body as string);
+      if (url.includes("snap"))
+        return Response.json({
+          locations: body.locations.map((p: number[]) => ({
+            location: p,
+            snapped_distance: 0,
+          })),
+        });
+      return Response.json({
+        distances: body.sources.map((a: string) =>
+          body.destinations.map(
+            (b: string) => body.locations[+a][0] * 100 + body.locations[+b][0],
+          ),
+        ),
+        durations: body.sources.map(() => body.destinations.map(() => 60)),
+      });
+    });
+    vi.stubGlobal("fetch", fetcher);
+    const r = await createWalkingRouter().matrix(
+      Array.from({ length: 51 }, (_, i) => ({ longitude: i, latitude: 48 })),
+    );
+    expect(fetcher).toHaveBeenCalledTimes(5);
+    expect(r[50][2]?.distanceMeters).toBe(5002);
+    expect(r[2][50]?.distanceMeters).toBe(250);
+  });
+  it.each(["bad-json", "bad-dimensions", "negative", "http-error", "timeout"])(
+    "rejects %s without raw errors or fallback",
+    async (kind) => {
+      vi.stubEnv("ORS_API_KEY", "test-key");
+      const validSnap = Response.json({
+        locations: [
+          { location: [-1.67, 48.1], snapped_distance: 0 },
+          { location: [-1.67, 48.11], snapped_distance: 0 },
+        ],
+      });
+      const fetcher = vi.fn().mockResolvedValueOnce(validSnap);
+      if (kind === "timeout")
+        fetcher.mockRejectedValueOnce(
+          new DOMException("technical", "TimeoutError"),
+        );
+      else
+        fetcher.mockResolvedValueOnce(
+          kind === "bad-json"
+            ? new Response("bad")
+            : kind === "http-error"
+              ? Response.json(
+                  { error: { code: 6000, message: "secret details" } },
+                  { status: 503 },
+                )
+              : Response.json({
+                  distances:
+                    kind === "negative"
+                      ? [
+                          [-1, 0],
+                          [0, 0],
+                        ]
+                      : [[0]],
+                  durations: [
+                    [0, 0],
+                    [0, 0],
+                  ],
+                }),
+        );
+      vi.stubGlobal("fetch", fetcher);
+      await expect(
+        createWalkingRouter().matrix([input.origin, house("a")]),
+      ).rejects.toBeInstanceOf(RoutingError);
+    },
+  );
+  it("requires a server key for hosted routing", () => {
+    vi.stubEnv("ORS_API_KEY", "");
+    vi.stubEnv("ORS_BASE_URL", "https://api.openrouteservice.org");
+    expect(() => createWalkingRouter()).toThrow("configuré");
+  });
+});
+describe("location and framing", () => {
+  it("keeps lng/lat and accuracy and asks for a fresh precise position", async () => {
+    const getCurrentPosition = vi.fn<Geolocation["getCurrentPosition"]>(
+      (success) =>
+        success({
+          coords: { longitude: -1.67, latitude: 48.1, accuracy: 12 },
+        } as GeolocationPosition),
+    );
+    expect(await locateOrigin({ getCurrentPosition })).toEqual({
+      point: [-1.67, 48.1],
+      accuracy: 12,
+    });
+    expect(getCurrentPosition.mock.calls[0][2]).toEqual({
+      enableHighAccuracy: true,
+      timeout: 15000,
+      maximumAge: 0,
+    });
+  });
+  it.each([1, 2, 3])("handles geolocation failure %s", async (code) => {
+    await expect(
+      locateOrigin({
+        getCurrentPosition: (_ok, fail) =>
+          fail!({ code } as GeolocationPositionError),
+      }),
+    ).rejects.toThrow(
+      code === 1 ? "refusée" : code === 2 ? "indisponible" : "expiré",
+    );
+  });
+  it("handles absent geolocation", async () => {
+    await expect(locateOrigin(undefined)).rejects.toThrow("pas disponible");
+  });
+  it("frames departure, full geometry, and stops with mobile panel padding", () => {
+    const map = {
+      fitBounds: vi.fn(),
+      getContainer: () =>
+        ({
+          clientHeight: 700,
+          getBoundingClientRect: () => ({ height: 700, bottom: 700 }),
+        }) as HTMLElement,
+    };
+    frameRoute(
+      map,
+      [
+        [2, 48],
+        [2.1, 48.1],
+      ],
+      [1.9, 48.05],
+      [{ longitude: 2.2, latitude: 48.2 }],
+      true,
+      true,
+      false,
+      351,
+    );
+    expect(map.fitBounds).toHaveBeenCalledWith(
+      [
+        [1.9, 48],
+        [2.2, 48.2],
+      ],
+      expect.objectContaining({
+        maxZoom: 16,
+        absolutePadding: true,
+        padding: expect.objectContaining({ bottom: 384 }),
+      }),
+    );
+    frameRoute(
+      map,
+      [
+        [2, 48],
+        [2.1, 48.1],
+      ],
+      undefined,
+      [],
+      false,
+      false,
+      true,
+    );
+    expect(map.fitBounds.mock.calls[1][1]).toMatchObject({
+      duration: 0,
+      padding: { bottom: 45 },
+    });
+  });
+});

@@ -4,20 +4,9 @@ import { useState } from "react";
 import { Sparkles, Candy, Drama } from "lucide-react";
 import { DateTime } from "luxon";
 import type { Activity, Instance, Season, User } from "../lib/domain";
-export type PublicHouse = {
-  id: string;
-  name: string;
-  address: string;
-  latitude: number;
-  longitude: number;
-  activities: Activity[];
-  starts_at: string;
-  ends_at: string;
-  fear: number | null;
-  adaptable: boolean;
-  rp: string;
-  practical: string;
-};
+export type PublicHouse = ReturnType<
+  typeof import("../lib/domain").publicHouse
+>;
 export type PublicState = {
   setupRequired: boolean;
   contents?: Record<string, string>;
@@ -42,21 +31,10 @@ export type PublicState = {
   state?: string;
   count?: number;
   houses?: PublicHouse[];
+  routeCandidates?: PublicHouse[];
   serverTime?: string;
 };
-export type RouteResult = {
-  stops: {
-    house: PublicHouse;
-    arrival: string;
-    departure: string;
-    walkingMinutes: number;
-  }[];
-  distanceMeters: number;
-  durationMinutes: number;
-  estimatedEnd: string;
-  geometry: number[][];
-  disclaimer: string;
-};
+export type { RouteResult } from "../lib/routing";
 export const labels: Record<string, string> = {
   DECORATION: "Décoration",
   CANDY: "Bonbons",
@@ -129,6 +107,7 @@ export function numeric<T extends Record<string, unknown>>(
   return result;
 }
 export function Field({
+  onValueChange,
   label,
   name,
   type = "text",
@@ -141,6 +120,7 @@ export function Field({
   readOnly,
 }: {
   label: string;
+  onValueChange?: () => void;
   name: string;
   type?: string;
   value?: string | number;
@@ -154,6 +134,7 @@ export function Field({
   if (type === "datetime-local")
     return (
       <FrenchDate
+        onValueChange={onValueChange}
         label={label}
         readOnly={readOnly}
         name={name}
@@ -174,6 +155,7 @@ export function Field({
         name={name}
         type={type}
         defaultValue={value}
+        onChange={onValueChange}
         required={required}
         min={min}
         max={max}

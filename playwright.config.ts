@@ -10,10 +10,18 @@ export default defineConfig({
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
   },
-  webServer: {
-    command: "node node_modules/next/dist/bin/next start",
-    url: "http://localhost:3000/api/health",
-    reuseExistingServer: !process.env.CI,
-    timeout: 60000,
-  },
+  webServer: [
+    {
+      command: "node e2e/ors-fixture.mjs",
+      url: "http://127.0.0.1:3106/health",
+      reuseExistingServer: false,
+    },
+    {
+      command: "node node_modules/next/dist/bin/next start",
+      env: { ORS_BASE_URL: "http://127.0.0.1:3106", ORS_API_KEY: "" },
+      url: "http://localhost:3000/api/health",
+      reuseExistingServer: !process.env.CI,
+      timeout: 60000,
+    },
+  ],
 });

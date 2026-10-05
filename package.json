@@ -14,7 +14,8 @@
     "migrate": "tsx scripts/migrate.ts",
     "seed": "tsx scripts/seed.ts",
     "worker": "tsx scripts/worker.ts",
-    "version:next": "node scripts/version.mjs"
+    "version:next": "node scripts/version.mjs",
+    "test:routing:ui": "playwright test --config playwright.routing.config.ts"
   },
   "dependencies": {
     "@fontsource/cormorant-garamond": "^5.3.0",

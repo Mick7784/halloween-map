@@ -2973,3 +2973,134 @@ body {
     flex: 1;
   }
 }
+/* V0.5: walking map and route controls */
+.origin-marker {
+  width: 19px;
+  height: 19px;
+  border-radius: 50%;
+  background: var(--purple);
+  border: 3px solid #ede2ff;
+  box-shadow:
+    0 0 0 7px #b6a1d72b,
+    0 0 0 9px #b6a1d76b,
+    0 3px 12px #0009;
+}
+.house-marker {
+  width: 34px;
+  height: 38px;
+  position: relative;
+}
+.house-marker.route-house {
+  filter: drop-shadow(0 0 5px #ff8c3266);
+}
+.route-marker-number {
+  position: absolute;
+  right: -7px;
+  top: -7px;
+  min-width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--orange);
+  border: 2px solid #17191f;
+  color: #151216;
+  font: 700 11px var(--font-body);
+}
+.application .route-panel {
+  background: linear-gradient(150deg, #1b1e25, #101216);
+  border: 1px solid #454052;
+  border-radius: 18px;
+}
+.route-panel h2 {
+  font-family: var(--font-editorial);
+}
+.route-panel .primary {
+  min-height: 48px;
+  font-size: 15px;
+  border-radius: 14px;
+}
+.location-status {
+  color: var(--purple);
+  font-size: 13px;
+}
+.recenter-origin {
+  margin-bottom: 12px;
+  font-size: 12px;
+}
+.point-picker {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  background: #1b1e25;
+  border: 1px solid #59506e;
+  padding: 10px;
+  border-radius: 12px;
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+.point-picker > div {
+  display: flex;
+  gap: 6px;
+}
+.application .map-picking .route-panel,
+.application .map-picking .map-filters,
+.application .map-picking .mobile-route-toggle {
+  display: none;
+}
+.application .map-picking {
+  grid-template-columns: minmax(0, 1fr);
+}
+.position-confirmation {
+  margin: 14px 0;
+}
+@media (max-width: 767px) {
+  .application .route-open .route-panel {
+    max-height: 52dvh;
+    border-radius: 20px 20px 0 0;
+    padding: 20px 16px;
+    padding-bottom: max(18px, env(safe-area-inset-bottom));
+  }
+  .application .route-panel .origin {
+    padding: 10px 0;
+    margin-bottom: 10px;
+  }
+  .application .route-panel .origin button {
+    min-height: 40px;
+  }
+  .application .route-panel .grid {
+    gap: 8px;
+  }
+  .point-picker {
+    font-size: 12px;
+  }
+  .point-picker button {
+    min-height: 40px;
+  }
+  .application .map-picking .map-heading {
+    display: none;
+  }
+}
+.application .map-shell .map-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  border-radius: inherit;
+}
+.route-parameters summary {
+  cursor: pointer;
+  color: var(--purple);
+  font-size: 13px;
+  padding: 10px 0;
+}
+.route-parameters[open] {
+  margin-bottom: 12px;
+}
+.route-result {
+  margin-top: 12px;
+  padding-top: 12px;
+}

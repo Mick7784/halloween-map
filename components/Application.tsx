@@ -1,11 +1,13 @@
 "use client";
+import { routeIsCurrent } from "../lib/route-state";
+import { locateOrigin } from "../lib/geolocation";
 import PasswordRecovery from "./PasswordRecovery";
 import Account, { Signup, Activation } from "./Account";
 import InstallApp from "./InstallApp";
 import Editorial from "./Editorial";
 import { useDialogFocus } from "./useDialogFocus";
 import ManorMark from "./ManorMark";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { DateTime } from "luxon";
 import {
@@ -493,10 +495,12 @@ function PublicMap({
     [filters, setFilters] = useState<Activity[]>([]),
     [maxFear, setMaxFear] = useState(5),
     [route, setRoute] = useState<RouteResult | null>(null),
-    [origin, setOrigin] = useState<[number, number]>([
-      state.instance!.longitude,
-      state.instance!.latitude,
-    ]),
+    [origin, setOrigin] = useState<[number, number] | null>(null),
+    [originLabel, setOriginLabel] = useState(
+      "Choisissez votre point de départ",
+    ),
+    [focusToken, setFocusToken] = useState(0),
+    [draftOrigin, setDraftOrigin] = useState<[number, number] | null>(null),
     [pick, setPick] = useState(false),
     [tab, setTab] = useState("map"),
     [routeOpen, setRouteOpen] = useState(false);
@@ -506,28 +510,44 @@ function PublicMap({
     window.addEventListener("hashchange", open);
     return () => window.removeEventListener("hashchange", open);
   }, []);
+  const revision = useRef(0);
+  const invalidate = useCallback(() => {
+    revision.current++;
+    setRoute(null);
+  }, []);
+  const changeOrigin = (p: [number, number], label: string) => {
+    invalidate();
+    setOrigin(p);
+    setOriginLabel(label);
+    setFocusToken((n) => n + 1);
+  };
   const i = state.instance!,
     s = state.season,
     open = state.state === "MAP_OPEN";
-  const houses = (state.houses ?? []).filter(
-    (h) =>
-      (!filters.length || filters.some((a) => h.activities.includes(a))) &&
-      (h.adaptable || (h.fear ?? 0) <= maxFear),
+  const houses = useMemo(
+    () =>
+      (state.houses ?? []).filter(
+        (h) =>
+          (!filters.length || filters.some((a) => h.activities.includes(a))) &&
+          (h.adaptable || (h.fear ?? 0) <= maxFear),
+      ),
+    [state.houses, filters, maxFear],
   );
   const selectedLive = selected
-    ? ((state.houses ?? []).find((h) => h.id === selected.id) ?? null)
+    ? ([...(state.houses ?? []), ...(state.routeCandidates ?? [])].find(
+        (h) => h.id === selected.id,
+      ) ?? null)
     : null;
-  const safeRoute = route
-    ? {
-        ...route,
-        stops: route.stops.filter(
-          (s) =>
-            (state.houses ?? []).some((h) => h.id === s.house.id) &&
-            +new Date(s.house.ends_at) > now,
-        ),
-      }
-    : null;
-  const routeHouses = safeRoute?.stops.map((s) => s.house) ?? [];
+  const safeRoute =
+    route &&
+    routeIsCurrent(route, state.routeCandidates ?? state.houses ?? [], now) &&
+    (!s || +new Date(route.estimatedEnd) <= +new Date(s.closes_at))
+      ? route
+      : null;
+  const routeHouses = useMemo(
+    () => safeRoute?.stops.map((stop) => stop.house) ?? [],
+    [safeRoute],
+  );
   if (!showMap) {
     const closed = state.state === "CLOSED" || state.state === "ARCHIVED";
     const remaining = s ? Math.max(0, +new Date(s.opens_at) - now) : 0;
@@ -615,7 +635,13 @@ function PublicMap({
     );
   }
   return (
-    <main className={"public-layout " + (routeOpen ? "route-open" : "")}>
+    <main
+      className={
+        "public-layout " +
+        (routeOpen ? "route-open " : "") +
+        (pick ? "map-picking" : "")
+      }
+    >
       <section className="map-section">
         {!open && (
           <div className="notice info map-opening">
@@ -665,7 +691,10 @@ function PublicMap({
         <div className="map-filters">
           <button
             className={!filters.length ? "active" : ""}
-            onClick={() => setFilters([])}
+            onClick={() => {
+              invalidate();
+              setFilters([]);
+            }}
           >
             Toutes
           </button>
@@ -673,13 +702,14 @@ function PublicMap({
             <button
               key={a}
               className={filters.includes(a) ? "active" : ""}
-              onClick={() =>
+              onClick={() => {
+                invalidate();
                 setFilters(
                   filters.includes(a)
                     ? filters.filter((x) => x !== a)
                     : [...filters, a],
-                )
-              }
+                );
+              }}
             >
               {labels[a]}
             </button>
@@ -689,7 +719,10 @@ function PublicMap({
             <select
               aria-label="Frayeur maximale"
               value={maxFear}
-              onChange={(e) => setMaxFear(Number(e.target.value))}
+              onChange={(e) => {
+                invalidate();
+                setMaxFear(Number(e.target.value));
+              }}
             >
               {fears.map((f, n) => (
                 <option key={f} value={n + 1}>
@@ -702,6 +735,39 @@ function PublicMap({
             <Info size={15} /> Légende
           </button>
         </div>
+        {pick && (
+          <div className="point-picker" role="status">
+            <span>
+              {draftOrigin
+                ? "Point choisi. Confirmez le départ."
+                : "Touchez la carte pour placer le départ."}
+            </span>
+            <div>
+              <button
+                onClick={() => {
+                  setPick(false);
+                  setDraftOrigin(null);
+                  setRouteOpen(true);
+                }}
+              >
+                Annuler
+              </button>
+              <button
+                className="primary"
+                disabled={!draftOrigin}
+                onClick={() => {
+                  if (draftOrigin)
+                    changeOrigin(draftOrigin, "Point choisi sur la carte");
+                  setPick(false);
+                  setDraftOrigin(null);
+                  setRouteOpen(true);
+                }}
+              >
+                Valider le départ
+              </button>
+            </div>
+          </div>
+        )}
         {tab === "map" ? (
           <MapView
             houses={houses}
@@ -709,16 +775,15 @@ function PublicMap({
             zoom={i.zoom}
             styleUrl={mapStyle}
             onSelect={setSelected}
-            geometry={
-              safeRoute?.stops.length === route?.stops.length
-                ? route?.geometry
-                : undefined
-            }
+            geometry={safeRoute?.geometry}
+            origin={(pick ? draftOrigin : origin) ?? undefined}
+            focusToken={pick ? 0 : focusToken}
+            routeSteps={routeHouses}
+            routePanelOpen={routeOpen && !pick}
             onPoint={
               pick
                 ? (lat, lng) => {
-                    setOrigin([lng, lat]);
-                    setPick(false);
+                    setDraftOrigin([lng, lat]);
                   }
                 : undefined
             }
@@ -760,27 +825,64 @@ function PublicMap({
             <Route /> Mon parcours
           </h2>
           <p className="muted">Un moment à partager, à votre rythme.</p>
-          <RouteForm
-            state={state}
-            origin={origin}
-            filters={filters}
-            maxFear={maxFear}
-            setOrigin={setOrigin}
-            onPick={() => {
-              setTab("map");
-              setPick(true);
-            }}
-            onResult={setRoute}
-          />
-          {safeRoute && (
+          <details className="route-parameters" open={!safeRoute?.stops.length}>
+            <summary>
+              {safeRoute?.stops.length
+                ? "Modifier le départ et les horaires"
+                : "Départ et horaires"}
+            </summary>
+            <RouteForm
+              state={state}
+              origin={origin}
+              originLabel={originLabel}
+              onInvalidate={invalidate}
+              getRevision={() => revision.current}
+              filters={filters}
+              maxFear={maxFear}
+              setOrigin={(p, accuracy) =>
+                changeOrigin(
+                  p,
+                  accuracy === undefined
+                    ? "Point choisi"
+                    : `Position actuelle · précision ±${Math.round(accuracy)} m${accuracy > 50 ? " · Vérifiez le point sur la carte" : ""}`,
+                )
+              }
+              onRecenter={() => setFocusToken((n) => n + 1)}
+              onPick={() => {
+                invalidate();
+                setDraftOrigin(null);
+                setRouteOpen(false);
+                setTab("map");
+                setPick(true);
+              }}
+              onResult={(result) => {
+                setRoute(result);
+                requestAnimationFrame(() =>
+                  document.getElementById("parcours")?.scrollTo({ top: 0 }),
+                );
+              }}
+            />
+          </details>
+          {route && !safeRoute && (
+            <p className="notice info" role="status">
+              Les maisons ou horaires ont changé. Recalculez votre parcours.
+            </p>
+          )}
+          {safeRoute?.message && (
+            <p className="notice info" role="status">
+              {safeRoute.message}
+            </p>
+          )}
+          {safeRoute && safeRoute.stops.length > 0 && (
             <div className="route-result">
               <h3>
                 {safeRoute.stops.length}{" "}
                 {safeRoute.stops.length > 1 ? "étapes" : "étape"} ·{" "}
-                {safeRoute.durationMinutes} min
+                {safeRoute.durationMinutes} min au total
               </h3>
               <p>
-                {(safeRoute.distanceMeters / 1000).toFixed(1)} km estimés · fin{" "}
+                {(safeRoute.distanceMeters / 1000).toFixed(1)} km à pied ·{" "}
+                {safeRoute.walkingMinutes} min de marche · fin{" "}
                 {time(safeRoute.estimatedEnd, i.timezone)}
               </p>
               <ol>
@@ -792,7 +894,8 @@ function PublicMap({
                         <strong>{stop.house.name}</strong>
                         <small>
                           {time(stop.arrival, i.timezone)} ·{" "}
-                          {stop.walkingMinutes} min à pied
+                          {stop.walkingMinutes} min à pied ·{" "}
+                          {Math.round(stop.distanceMeters)} m
                         </small>
                       </div>
                     </button>
@@ -800,11 +903,6 @@ function PublicMap({
                 ))}
               </ol>
               <p className="muted small">{safeRoute.disclaimer}</p>
-              {routeHouses.length !== route?.stops.length && (
-                <p className="notice info">
-                  Des étapes ont fermé. Recalculez votre parcours.
-                </p>
-              )}
               <AsyncButton
                 onClick={async () => {
                   await navigator.clipboard.writeText(
@@ -881,7 +979,10 @@ function PublicMap({
             <button
               className="primary wide"
               onClick={() => {
-                setOrigin([selectedLive.longitude, selectedLive.latitude]);
+                changeOrigin(
+                  [selectedLive.longitude, selectedLive.latitude],
+                  "Départ depuis " + selectedLive.name,
+                );
                 setSelected(null);
                 setRouteOpen(true);
                 document.getElementById("parcours")?.scrollIntoView({
@@ -952,22 +1053,31 @@ function PublicMap({
 function RouteForm({
   state,
   origin,
+  originLabel,
   filters,
   maxFear,
   setOrigin,
   onPick,
+  onRecenter,
+  onInvalidate,
+  getRevision,
   onResult,
 }: {
   state: PublicState;
-  origin: [number, number];
+  origin: [number, number] | null;
+  originLabel: string;
+  onRecenter: () => void;
+  onInvalidate: () => void;
+  getRevision: () => number;
   filters: Activity[];
   maxFear: number;
-  setOrigin: (p: [number, number]) => void;
+  setOrigin: (p: [number, number], accuracy?: number) => void;
   onPick: () => void;
   onResult: (r: RouteResult) => void;
 }) {
   const [error, setError] = useState(""),
-    [busy, setBusy] = useState(false);
+    [busy, setBusy] = useState(false),
+    [locating, setLocating] = useState(false);
   const zone = state.instance!.timezone;
   const now = (
       state.preview ? DateTime.fromISO(state.serverTime!) : DateTime.now()
@@ -977,33 +1087,42 @@ function RouteForm({
     <form
       onSubmit={async (e) => {
         e.preventDefault();
+        if (!origin || locating) return;
         const v = values(e.currentTarget);
+        const requestedRevision = getRevision();
         setBusy(true);
         setError("");
         try {
-          onResult(
-            await api(state.preview ? "route?preview=1" : "route", {
+          const result: RouteResult = await api(
+            state.preview ? "route?preview=1" : "route",
+            {
               start: DateTime.fromISO(v.start, { zone }).toUTC().toISO(),
               end: DateTime.fromISO(v.end, { zone }).toUTC().toISO(),
               origin: { latitude: origin[1], longitude: origin[0] },
               activities: filters,
               maxFear,
-            }),
+            },
           );
+          if (getRevision() === requestedRevision) onResult(result);
         } catch (e) {
-          setError((e as Error).message);
+          if (getRevision() === requestedRevision)
+            setError((e as Error).message);
         } finally {
           setBusy(false);
         }
       }}
     >
       <Field
+        onValueChange={onInvalidate}
+        readOnly={locating}
         label="Départ"
         name="start"
         type="datetime-local"
         value={now.plus({ minutes: 2 }).toFormat("yyyy-MM-dd'T'HH:mm")}
       />
       <Field
+        onValueChange={onInvalidate}
+        readOnly={locating}
         label="Arrivée au plus tard"
         name="end"
         type="datetime-local"
@@ -1016,31 +1135,55 @@ function RouteForm({
       <div className="origin">
         <strong>Point de départ</strong>
         <span>
-          {origin[1].toFixed(5)}, {origin[0].toFixed(5)}
+          {originLabel}
+          {origin && (
+            <>
+              {" "}
+              · {origin[1].toFixed(5)}, {origin[0].toFixed(5)}
+            </>
+          )}
         </span>
-        <button type="button" onClick={onPick}>
+        <button type="button" disabled={locating} onClick={onPick}>
           <HouseIcon size={15} /> Choisir sur la carte
         </button>
         <button
           type="button"
-          onClick={() => {
-            navigator.geolocation?.getCurrentPosition(
-              (p) => setOrigin([p.coords.longitude, p.coords.latitude]),
-              () => setError("Position indisponible. Choisissez sur la carte."),
-              { timeout: 10000 },
-            );
+          disabled={locating}
+          onClick={async () => {
+            onInvalidate();
+            setLocating(true);
+            setError("");
+            try {
+              const position = await locateOrigin(navigator.geolocation);
+              setOrigin(position.point, position.accuracy);
+            } catch (e) {
+              setError((e as Error).message);
+            } finally {
+              setLocating(false);
+            }
           }}
         >
-          <Navigation size={15} /> Ma position
+          <Navigation size={15} />{" "}
+          {locating ? "Recherche de position…" : "Ma position"}
         </button>
       </div>
+      {origin && (
+        <button type="button" className="recenter-origin" onClick={onRecenter}>
+          Recentrer sur le départ
+        </button>
+      )}
+      {locating && (
+        <p role="status" className="location-status">
+          Recherche de votre position précise…
+        </p>
+      )}
       <p className="muted small">
         Les filtres d’activités et de frayeur de la carte s’appliquent au
         parcours.
       </p>
       <Notice error={error} />
-      <button className="primary wide" disabled={busy}>
-        {busy ? "Calcul…" : "Créer mon parcours"}
+      <button className="primary wide" disabled={busy || locating || !origin}>
+        {busy ? "Calcul piéton…" : "Créer mon parcours"}
         <ArrowRight size={18} />
       </button>
     </form>

@@ -167,6 +167,11 @@ test("Super Admin enters demo in one click and plans a route without changing st
   await expect(
     page.getByText("MODE DÉMONSTRATION", { exact: false }),
   ).toBeVisible();
+  await page.getByRole("button", { name: "Liste", exact: true }).click();
+  await page.locator(".house-list button").first().click();
+  await page
+    .getByRole("button", { name: "Choisir comme point de départ" })
+    .click();
   await page.getByRole("button", { name: "Créer mon parcours" }).click();
   await expect(page.locator(".route-result")).toContainText("2 étapes");
   expect(

@@ -1,4 +1,5 @@
 "use client";
+import { locateOrigin } from "../lib/geolocation";
 import { useState } from "react";
 import { Ghost, MapPin } from "lucide-react";
 import { Field, Check, Notice, values, localDate, fears } from "./common";
@@ -13,7 +14,6 @@ export default function HouseForm({
   closes,
   onSave,
   registration = false,
-  center,
   documents,
 }: {
   house?: House;
@@ -32,13 +32,21 @@ export default function HouseForm({
     [fear, setFear] = useState(house?.fear ?? 2),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false);
-  const [lat, setLat] = useState(house?.latitude ?? center[1]),
-    [lng, setLng] = useState(house?.longitude ?? center[0]);
+  const [lat, setLat] = useState<number | string>(house?.latitude ?? ""),
+    [lng, setLng] = useState<number | string>(house?.longitude ?? ""),
+    [confirmed, setConfirmed] = useState(!!house),
+    [locating, setLocating] = useState(false);
   return (
     <form
       onSubmit={async (e) => {
         e.preventDefault();
         const form = e.currentTarget;
+        if (!confirmed || locating || lat === "" || lng === "") {
+          setError(
+            "Saisissez et confirmez le point de votre maison, ou utilisez votre position sur place.",
+          );
+          return;
+        }
         const v = values(form);
         setError("");
         setBusy(true);
@@ -46,8 +54,9 @@ export default function HouseForm({
           const h = {
             name: v.name,
             address: v.address,
-            latitude: lat,
-            longitude: lng,
+            latitude: Number(lat),
+            longitude: Number(lng),
+            position_confirmed: confirmed,
             activities: ["DECORATION", "CANDY", "ACTING"].filter(
               (a) => v[a] === "on",
             ),
@@ -114,10 +123,13 @@ export default function HouseForm({
             required
             type="number"
             step="any"
-            min={-85}
-            max={85}
+            min={-90}
+            max={90}
             value={lat}
-            onChange={(e) => setLat(Number(e.target.value))}
+            onChange={(e) => {
+              setLat(e.target.value);
+              setConfirmed(false);
+            }}
           />
         </label>
         <label className="field">
@@ -129,35 +141,46 @@ export default function HouseForm({
             min={-180}
             max={180}
             value={lng}
-            onChange={(e) => setLng(Number(e.target.value))}
+            onChange={(e) => {
+              setLng(e.target.value);
+              setConfirmed(false);
+            }}
           />
         </label>
       </div>
       <button
         type="button"
-        onClick={() => {
-          if (!navigator.geolocation) {
-            setError("Géolocalisation indisponible");
-            return;
+        disabled={locating}
+        onClick={async () => {
+          setError("");
+          setLocating(true);
+          try {
+            const p = await locateOrigin(navigator.geolocation);
+            setLat(p.point[1]);
+            setLng(p.point[0]);
+            setConfirmed(false);
+          } catch (e) {
+            setError((e as Error).message);
+          } finally {
+            setLocating(false);
           }
-          navigator.geolocation.getCurrentPosition(
-            (p) => {
-              setLat(p.coords.latitude);
-              setLng(p.coords.longitude);
-            },
-            () =>
-              setError(
-                "Position indisponible : renseignez les coordonnées de votre maison.",
-              ),
-            { enableHighAccuracy: true, timeout: 10000 },
-          );
         }}
       >
-        <MapPin size={16} /> Utiliser ma position actuelle
+        <MapPin size={16} />{" "}
+        {locating ? "Recherche de position…" : "Utiliser ma position actuelle"}
       </button>
+      <label className="check position-confirmation">
+        <input
+          type="checkbox"
+          checked={confirmed}
+          disabled={locating || lat === "" || lng === ""}
+          onChange={(e) => setConfirmed(e.target.checked)}
+        />
+        Je confirme que ce point correspond à ma maison.
+      </label>
       <p className="muted small">
-        Faites-le sur place, puis vérifiez les coordonnées. Elles ne sont
-        envoyées à aucun service de géocodage.
+        Localisez-vous sur place ou saisissez les coordonnées, puis confirmez le
+        point. Aucun géocodage automatique de l’adresse.
       </p>
       <fieldset>
         <legend>Activités proposées *</legend>
@@ -328,7 +351,10 @@ export default function HouseForm({
         </div>
       )}
       <Notice error={error} />
-      <button className="primary wide" disabled={busy}>
+      <button
+        className="primary wide"
+        disabled={busy || locating || !confirmed}
+      >
         {busy
           ? "Enregistrement…"
           : registration

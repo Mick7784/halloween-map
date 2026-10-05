@@ -9,7 +9,7 @@ export const credentials = z.object({
   password: z.string().min(12).max(128),
 });
 export const coordinates = {
-  latitude: z.number().min(-85).max(85),
+  latitude: z.number().min(-90).max(90),
   longitude: z.number().min(-180).max(180),
 };
 export const instanceSchema = z.object({
@@ -40,6 +40,7 @@ export const setupSchema = z.object({
   season: seasonSchema,
 });
 export const houseSchema = z.object({
+  position_confirmed: z.boolean().optional(),
   name: text(100),
   address: text(200),
   ...coordinates,

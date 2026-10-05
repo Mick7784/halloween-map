@@ -21,6 +21,7 @@ import {
   rateLimit,
 } from "./auth";
 import {
+  effectiveActivities,
   defaultRoles,
   localISO,
   publicHouse,
@@ -39,7 +40,9 @@ import {
   credentials,
   routeSchema,
 } from "./validation";
-import { planRoute } from "./routing";
+import { planRoute, validateRouteWindow } from "./routing";
+import { RoutingError } from "./walking-router";
+import { houseRouteKey } from "./route-state";
 import { z } from "zod";
 export async function audit(
   client: Database,
@@ -265,6 +268,21 @@ function formatDate(value: Date | string | undefined, zone: string) {
       }).format(new Date(value))
     : "";
 }
+
+async function routeCandidates(
+  client: Database,
+  i: Instance,
+  s: Season,
+  start: Date | string,
+  end: Date | string,
+) {
+  const { rows } = await client.query(
+    "SELECT * FROM participations WHERE instance_id=$1 AND season_id=$2 AND status='VISIBLE' AND activity='ACTIVE' AND EXISTS(SELECT 1 FROM users u WHERE u.id=participations.user_id AND u.account_status='ACTIVE' AND (u.email_status='VERIFIED' OR participations.legacy_imported)) AND NOT EXISTS(SELECT 1 FROM legal_documents d WHERE d.instance_id=participations.instance_id AND d.active AND d.requires_reaccept AND ((d.kind='TERMS' AND participations.terms_version IS DISTINCT FROM d.version) OR (d.kind='GUIDELINES' AND participations.guidelines_version IS DISTINCT FROM d.version))) AND starts_at<$4 AND ends_at>$3",
+    [i.id, s.id, start, end],
+  );
+  return rows as unknown as House[];
+}
+
 export async function publicState(
   context: TimeContext | Date = realTime(),
   user: User | null = null,
@@ -281,6 +299,7 @@ export async function publicState(
     state = seasonState(s, now);
   let count = 0,
     houses: ReturnType<typeof publicHouse>[] = [];
+  let upcoming: ReturnType<typeof publicHouse>[] = [];
   if (s && state !== "CLOSED" && state !== "ARCHIVED") {
     const { rows } = await db().query(
       "SELECT count(*)::int n FROM participations WHERE instance_id=$1 AND season_id=$2 AND status=$3 AND EXISTS(SELECT 1 FROM users u WHERE u.id=participations.user_id AND u.account_status='ACTIVE' AND (u.email_status='VERIFIED' OR participations.legacy_imported)) AND NOT EXISTS(SELECT 1 FROM legal_documents d WHERE d.instance_id=participations.instance_id AND d.active AND d.requires_reaccept AND ((d.kind='TERMS' AND participations.terms_version IS DISTINCT FROM d.version) OR (d.kind='GUIDELINES' AND participations.guidelines_version IS DISTINCT FROM d.version)))",
@@ -309,7 +328,22 @@ export async function publicState(
       .filter((h) => visible(h, s, now))
       .map(publicHouse);
   }
+  if (s && state === "MAP_OPEN" && user)
+    upcoming = (
+      preview
+        ? await demoHouses(i, s)
+        : await routeCandidates(db(), i, s, now, s.closes_at)
+    )
+      .filter(
+        (h) =>
+          h.status === "VISIBLE" &&
+          h.activity === "ACTIVE" &&
+          effectiveActivities(h).length &&
+          +new Date(h.ends_at) > +now,
+      )
+      .map(publicHouse);
   return {
+    routeCandidates: upcoming,
     setupRequired: false,
     contents: Object.fromEntries(
       Object.entries(await contentState(i.id)).map(([k, v]) => [
@@ -405,6 +439,11 @@ export async function createParticipation(user: User | null, input: unknown) {
   const raw = z
     .object({ house: houseSchema, acceptance: z.unknown() })
     .parse(input);
+  if (!raw.house.position_confirmed)
+    throw new HttpError(
+      400,
+      "Choisissez ou confirmez explicitement le point de votre maison.",
+    );
   return transaction(async (c) => {
     const u = (
       await c.query(
@@ -608,30 +647,78 @@ export async function route(
   const input = routeSchema.parse(userInput);
   const i = await instance();
   if (!i) throw new HttpError(404, "Instance manquante");
-  return transaction(async (c) => {
-    const { rows: ss } = await c.query(
-      "SELECT * FROM seasons WHERE id=$1 AND instance_id=$2 FOR UPDATE",
-      [i.active_season_id, i.id],
-    );
-    const rawSeason = ss[0] as unknown as Season;
-    const s = rawSeason && context.preview ? demoSeason(rawSeason) : rawSeason;
-    if (!s || seasonState(s, context.now) !== "MAP_OPEN")
-      throw new HttpError(403, "La carte est fermée");
-    const { rows } = await c.query(
-      "SELECT * FROM participations WHERE instance_id=$1 AND season_id=$2 AND status='VISIBLE' AND activity='ACTIVE' AND EXISTS(SELECT 1 FROM users u WHERE u.id=participations.user_id AND u.account_status='ACTIVE' AND (u.email_status='VERIFIED' OR participations.legacy_imported)) AND NOT EXISTS(SELECT 1 FROM legal_documents d WHERE d.instance_id=participations.instance_id AND d.active AND d.requires_reaccept AND ((d.kind='TERMS' AND participations.terms_version IS DISTINCT FROM d.version) OR (d.kind='GUIDELINES' AND participations.guidelines_version IS DISTINCT FROM d.version))) AND starts_at<=$3 AND ends_at>$3",
-      [i.id, s.id, context.now],
-    );
-    const candidates = context.preview
+  const rawSeason = await activeSeason(i);
+  const s = rawSeason && context.preview ? demoSeason(rawSeason) : rawSeason;
+  if (!s || seasonState(s, context.now) !== "MAP_OPEN")
+    throw new HttpError(403, "La carte est fermée");
+  try {
+    validateRouteWindow(s, input, context.now);
+  } catch (e) {
+    throw new HttpError(400, (e as Error).message);
+  }
+  const candidates = context.preview
+    ? await demoHouses(i, s)
+    : await routeCandidates(db(), i, s, input.start, input.end);
+  let result;
+  try {
+    result = await planRoute(candidates, s, input, context.now);
+  } catch (e) {
+    if (e instanceof RoutingError)
+      throw new HttpError(e.reason === "no_route" ? 422 : 503, e.message);
+    if (e instanceof Error && e.message.startsWith("Plus de 200"))
+      throw new HttpError(400, e.message);
+    throw e;
+  }
+  // Network calls have completed before acquiring this short consistency lock.
+  await transaction(async (c) => {
+    const current = (
+      await c.query(
+        "SELECT * FROM seasons WHERE id=$1 AND instance_id=$2 FOR UPDATE",
+        [s.id, i.id],
+      )
+    ).rows[0] as unknown as Season;
+    const currentInstance = (
+      await c.query("SELECT active_season_id FROM instances WHERE id=$1", [
+        i.id,
+      ])
+    ).rows[0];
+    const currentUser = (
+      await c.query("SELECT account_status FROM users WHERE id=$1", [user.id])
+    ).rows[0];
+    if (!currentUser || currentUser.account_status !== "ACTIVE")
+      throw new HttpError(403, "Compte indisponible");
+    if (
+      !current ||
+      currentInstance?.active_season_id !== s.id ||
+      +new Date(current.opens_at) !== +new Date(rawSeason!.opens_at) ||
+      +new Date(current.closes_at) !== +new Date(rawSeason!.closes_at) ||
+      (!context.preview && seasonState(current, context.now) !== "MAP_OPEN")
+    )
+      throw new HttpError(409, "La saison a changé. Recalculez le parcours.");
+    const latest = context.preview
       ? await demoHouses(i, s, c)
-      : (rows as unknown as House[]);
-    const result = planRoute(candidates, s, input, context.now);
-    if (!context.preview)
+      : await routeCandidates(c, i, current, input.start, input.end);
+    if (
+      result.stops.some(
+        (stop) =>
+          !latest.some(
+            (h) =>
+              h.id === stop.house.id &&
+              houseRouteKey(publicHouse(h)) === houseRouteKey(stop.house),
+          ),
+      )
+    )
+      throw new HttpError(
+        409,
+        "Les maisons ont changé. Recalculez le parcours.",
+      );
+    if (!context.preview && result.stops.length)
       await c.query(
         "UPDATE seasons SET routes_count=routes_count+1 WHERE id=$1",
         [s.id],
       );
-    return result;
   });
+  return result;
 }
 export async function adminRead(user: User | null, section: string) {
   const permission: Record<string, string> = {
