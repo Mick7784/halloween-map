@@ -16,6 +16,7 @@ export type PublicState = {
   >;
   preview?: boolean;
   demoAvailable?: boolean;
+  demoError?: string;
   mapAccessible?: boolean;
   instance?: Pick<
     Instance,

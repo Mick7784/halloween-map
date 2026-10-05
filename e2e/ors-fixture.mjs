@@ -1,5 +1,6 @@
 // Test-only ORS contract server. Never imported by the application.
 import http from "node:http";
+let failSnap = false;
 http
   .createServer(async (req, res) => {
     res.setHeader("Content-Type", "application/json");
@@ -10,6 +11,16 @@ http
     let raw = "";
     for await (const chunk of req) raw += chunk;
     const body = JSON.parse(raw);
+    if (req.url === "/test-only/snap-failure") {
+      failSnap = body.enabled === true;
+      res.end(JSON.stringify({ enabled: failSnap }));
+      return;
+    }
+    if (failSnap && req.url === "/v2/snap/foot-walking/json") {
+      res.statusCode = 503;
+      res.end(JSON.stringify({ error: { code: 6000 } }));
+      return;
+    }
     if (req.url === "/v2/snap/foot-walking/json")
       res.end(
         JSON.stringify({

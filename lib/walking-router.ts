@@ -13,20 +13,22 @@ export class RoutingError extends Error {
   constructor(
     public readonly reason:
       "configuration" | "timeout" | "unavailable" | "invalid" | "no_route",
+    message?: string,
   ) {
     super(
-      {
-        configuration:
-          "Le calcul piéton n’est pas encore configuré. Contactez l’équipe organisatrice.",
-        timeout:
-          "Le calcul piéton prend trop de temps. Réessayez dans un instant.",
-        unavailable:
-          "Le service de parcours piéton est indisponible. Réessayez plus tard.",
-        invalid:
-          "Le service piéton n’a pas fourni un trajet exploitable. Réessayez plus tard.",
-        no_route:
-          "Aucun parcours piéton compatible. Vérifiez le départ, les filtres et les horaires.",
-      }[reason],
+      message ??
+        {
+          configuration:
+            "Le calcul piéton n’est pas encore configuré. Contactez l’équipe organisatrice.",
+          timeout:
+            "Le calcul piéton prend trop de temps. Réessayez dans un instant.",
+          unavailable:
+            "Le service de parcours piéton est indisponible. Réessayez plus tard.",
+          invalid:
+            "Le service piéton n’a pas fourni un trajet exploitable. Réessayez plus tard.",
+          no_route:
+            "Aucun parcours piéton compatible. Vérifiez le départ, les filtres et les horaires.",
+        }[reason],
     );
   }
 }
@@ -118,17 +120,31 @@ export function createWalkingRouter(): WalkingRouter {
     const data = parse(
       endpoint,
       z.object({
-        locations: z
-          .array(
-            z
-              .object({ location: coordinate, snapped_distance: metric })
-              .nullable(),
-          )
-          .length(points.length),
+        locations: z.array(z.unknown()).length(points.length),
       }),
       await request(endpoint, { locations: points.map(pair), radius }),
     );
-    return data.locations;
+    const entrySchema = z.object({
+      location: coordinate,
+      snapped_distance: metric,
+    });
+    const ignored: { index: number; fields: string[] }[] = [];
+    const locations = data.locations.map((entry, index) => {
+      if (entry === null) return null;
+      const result = entrySchema.safeParse(entry);
+      if (result.success) return result.data;
+      ignored.push({
+        index,
+        fields: result.error.issues.map((issue) => issue.path.join(".")),
+      });
+      return null;
+    });
+    if (ignored.length)
+      console.info("Walking snap entries ignored", {
+        endpoint,
+        entries: ignored,
+      });
+    return locations;
   }
   return {
     async snap(points, radius = 50) {
@@ -143,7 +159,11 @@ export function createWalkingRouter(): WalkingRouter {
           "Plus de 200 maisons correspondent. Affinez les activités ou les horaires.",
         );
       const snap = { locations: await snapLocations(points) };
-      if (!snap.locations[0]) throw new RoutingError("no_route");
+      if (!snap.locations[0])
+        throw new RoutingError(
+          "no_route",
+          "Le point de départ n’est pas raccordable au réseau piéton. Choisissez un autre départ sur une rue ou un chemin.",
+        );
       const active = snap.locations.flatMap((p, i) => (p ? [i] : [])),
         result: WalkingMatrix = points.map(() => points.map(() => null));
       const blocks: number[][] = [];

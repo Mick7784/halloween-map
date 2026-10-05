@@ -123,7 +123,7 @@ Métier : PGlite local, PostgreSQL 17 en CI (`TEST_DATABASE_URL`). Migrations fr
 
 Production : `npm audit --omit=dev`. L’avis GHSA-vfj7-8cjw-p6xm concerne le transitif de développement `braces`, exclu du runtime ; ne pas forcer une rétrogradation du lint.
 
-La CI publie après verify et Docker verts seulement : tag **V0.5.1**, release **Halloween Map V0.5.1 Beta**, `ghcr.io/mick7784/halloween-map:V0.5.1` et `:latest`, labels OCI version/commit. Aucun numéro parallèle dans package.json, aucun déploiement externe.
+La CI publie après verify et Docker verts seulement : tag **V0.5.2**, release **Halloween Map V0.5.2 Beta**, `ghcr.io/mick7784/halloween-map:V0.5.2` et `:latest`, labels OCI version/commit. Aucun numéro parallèle dans package.json, aucun déploiement externe.
 
 Limites : mono-instance active, parcours exclusivement piétons selon le réseau disponible chez le fournisseur, cinq minutes de visite par maison. Pas de navigation vocale ni de suivi GPS continu. Recalculer si les disponibilités changent. Provenance du décor : [docs/visual-assets.md](docs/visual-assets.md).
 
@@ -154,3 +154,9 @@ Validation dédiée : `npm run lint`, `npm test`, `npm run build`, `npm run test
 ORS_BASE_URL vaut désormais `https://api.heigit.org/openrouteservice`. Les trois endpoints ajoutent `/v2/snap/foot-walking/json`, `/v2/matrix/foot-walking` et `/v2/directions/foot-walking/geojson` à cette base. Sous deux maisons réelles, le serveur découvre cinq points avec Snap (rayon maximal 300 m autour de graines déterministes dans un rayon de 750 m du centre), écarte les doublons à moins de 80 m et vérifie la connexion piétonne avec Matrix puis Directions. Seuls les points raccordés sont affichés. Un cache mémoire borné partage les résultats ; aucune écriture en base. Si le réseau ne permet pas cinq points compatibles, aucun trajet artificiel n’est produit.
 
 Les diagnostics des réponses invalides indiquent endpoint et champs concernés, jamais la clé API ni le contenu brut. La publication corrective est `V0.5.1` et `ghcr.io/mick7784/halloween-map:V0.5.1`. Aucun changement de Compose ou déploiement de serveur dans ce correctif.
+
+### V0.5.2 — Snap et preview
+
+Chaque entrée Snap est validée séparément : null, coordonnées invalides ou snapped_distance absente/null/invalide deviennent un point non raccordable, sans bloquer les autres. Un tableau locations absent, de type incorrect ou de longueur incohérente reste une réponse invalide. Les journaux des entrées ignorées ne contiennent que leurs indices et les noms des champs. Matrix et Directions gardent leur validation stricte et aucun tracé de secours n’est produit.
+
+L’activation de la session preview ne dépend plus du fournisseur : le choix du créneau conserve les horaires des vraies maisons lorsqu’il y en a au moins deux, sinon les horaires configurés de la saison. La génération ORS intervient ensuite dans la preview ; une erreur explicite s’affiche avec la carte et la possibilité de quitter la démonstration.

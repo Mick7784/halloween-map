@@ -1,5 +1,11 @@
 # Changelog
 
+## V0.5.2
+
+- Snap valide désormais chaque entrée indépendamment : les coordonnées/distances invalides sont ignorées, la structure globale reste strictement vérifiée. Les autres maisons restent utilisables et un départ non raccordable invite à choisir un autre point.
+- Activation de la preview sans appel ORS, avec conservation du choix temporel sur les vraies maisons ; erreur fournisseur explicite dans la preview et les réponses de parcours.
+- Tests ciblés sur deux entrées Snap invalides, cinq points démo cohérents, absence de tracé de secours, confidentialité des journaux et activation en panne ORS.
+
 ## V0.5.1
 
 - Marqueurs MapLibre à positionnement natif ; icône et badge dans un élément interne, survol sans modifier la transformation géographique.

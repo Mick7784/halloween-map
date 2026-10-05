@@ -803,7 +803,8 @@ function PublicMap({
             ))}
           </div>
         )}
-        {!houses.length && (
+        <Notice error={state.demoError ?? ""} />
+        {!houses.length && !state.demoError && (
           <p className="empty">{state.contents?.["home.empty"]}</p>
         )}
         <p className="muted small">

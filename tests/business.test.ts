@@ -1807,3 +1807,53 @@ describe("V0.3 content, legal versions and installation", () => {
     }
   });
 });
+
+it("calculates preview time without ORS and returns explicit demo errors in the preview shell", async () => {
+  const { RoutingError } = await import("../lib/walking-router");
+  const configured = (await service.instance())!;
+  const simulated = demoSeason(season);
+  const previousBase = process.env.ORS_BASE_URL;
+  process.env.ORS_BASE_URL = "http://preview-unavailable-test.invalid";
+  const snap = vi
+    .spyOn(fixtureRouter, "snap")
+    .mockRejectedValue(new RoutingError("unavailable"));
+  try {
+    const clockHouses = await service.demoHouses(configured, season, db(), {
+      generate: false,
+    });
+    expect(clockHouses).toEqual([]);
+    expect(snap).not.toHaveBeenCalled();
+    const now = demoTime(configured, season, clockHouses);
+    const preview = await service.publicState({ now, preview: true }, admin);
+    expect(preview.preview).toBe(true);
+    expect(preview.houses).toEqual([]);
+    expect(preview.routeCandidates).toEqual([]);
+    expect(preview.demoError).toContain(
+      "service de parcours piéton est indisponible",
+    );
+    await expect(
+      service.route(
+        {
+          origin: {
+            latitude: configured.latitude,
+            longitude: configured.longitude,
+          },
+          start: now.toISOString(),
+          end: new Date(simulated.closes_at).toISOString(),
+          activities: [],
+        },
+        { now, preview: true },
+        admin,
+      ),
+    ).rejects.toMatchObject({
+      status: 503,
+      message: expect.stringContaining(
+        "service de parcours piéton est indisponible",
+      ),
+    });
+  } finally {
+    snap.mockRestore();
+    if (previousBase === undefined) delete process.env.ORS_BASE_URL;
+    else process.env.ORS_BASE_URL = previousBase;
+  }
+});

@@ -268,7 +268,9 @@ async function handle(
           at = demoTime(
             configured,
             season,
-            await service.demoHouses(configured, season),
+            await service.demoHouses(configured, season, db(), {
+              generate: false,
+            }),
           ).toISOString();
         }
         await db().query(

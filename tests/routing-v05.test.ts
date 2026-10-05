@@ -512,7 +512,7 @@ describe("V0.5.1 demo network discovery", () => {
   });
 });
 
-it("logs the exact invalid ORS endpoint and field without key or raw response", async () => {
+it("logs ignored Snap entries without key or raw response", async () => {
   vi.stubEnv("ORS_API_KEY", "never-print-key");
   vi.stubEnv("ORS_BASE_URL", "https://api.heigit.org/openrouteservice");
   vi.stubGlobal(
@@ -529,13 +529,161 @@ it("logs the exact invalid ORS endpoint and field without key or raw response", 
       }),
     ),
   );
-  const warning = vi.spyOn(console, "warn").mockImplementation(() => {});
-  await expect(
-    createWalkingRouter().snap!([input.origin]),
-  ).rejects.toMatchObject({ reason: "invalid" });
-  expect(warning).toHaveBeenCalledWith("Invalid walking routing response", {
+  const warning = vi.spyOn(console, "info").mockImplementation(() => {});
+  await expect(createWalkingRouter().snap!([input.origin])).resolves.toEqual([
+    null,
+  ]);
+  expect(warning).toHaveBeenCalledWith("Walking snap entries ignored", {
     endpoint: "snap/foot-walking/json",
-    fields: ["locations.0.snapped_distance"],
+    entries: [{ index: 0, fields: ["snapped_distance"] }],
   });
   expect(JSON.stringify(warning.mock.calls)).not.toMatch(/never-print/);
+});
+
+describe("V0.5.2 independent Snap entries", () => {
+  const points = Array.from({ length: 7 }, (_, n) => ({
+    latitude: 48.1 + n * 0.001,
+    longitude: -1.67,
+  }));
+  const locations = points.map((p, n) => ({
+    location: [p.longitude, p.latitude],
+    snapped_distance: n === 2 ? null : n === 3 ? "invalid" : 0,
+  }));
+  it("keeps all valid entries when two snapped distances are invalid", async () => {
+    vi.stubEnv("ORS_API_KEY", "test-key");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => Response.json({ locations })),
+    );
+    const result = await createWalkingRouter().snap!(points);
+    expect(result).toEqual(
+      points.map((p, n) => (n === 2 || n === 3 ? null : p)),
+    );
+  });
+  it.each([undefined, null, -1, "invalid"])(
+    "ignores missing or invalid distance %s",
+    async (distance) => {
+      vi.stubEnv("ORS_API_KEY", "test-key");
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async () =>
+          Response.json({
+            locations: [
+              { location: [-1.67, 48.1], snapped_distance: distance },
+            ],
+          }),
+        ),
+      );
+      expect(await createWalkingRouter().snap!([input.origin])).toEqual([null]);
+    },
+  );
+  it.each([
+    {},
+    { locations: null },
+    { locations: [] },
+    { locations: "invalid" },
+  ])("rejects malformed global structure %j", async (body) => {
+    vi.stubEnv("ORS_API_KEY", "test-key");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => Response.json(body)),
+    );
+    await expect(
+      createWalkingRouter().snap!([input.origin]),
+    ).rejects.toMatchObject({ reason: "invalid" });
+  });
+  it("rejects an unsnappable origin before Matrix and invites another departure", async () => {
+    vi.stubEnv("ORS_API_KEY", "test-key");
+    const fetcher = vi.fn(async () =>
+      Response.json({ locations: [locations[2], locations[1]] }),
+    );
+    vi.stubGlobal("fetch", fetcher);
+    await expect(
+      createWalkingRouter().matrix(points.slice(0, 2)),
+    ).rejects.toMatchObject({
+      reason: "no_route",
+      message: expect.stringContaining("Choisissez un autre départ"),
+    });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+  it("excludes only invalid houses from the matrix, leaving all valid houses usable", async () => {
+    vi.stubEnv("ORS_API_KEY", "test-key");
+    const fetcher = vi
+      .fn()
+      .mockResolvedValueOnce(Response.json({ locations }))
+      .mockResolvedValueOnce(
+        Response.json({
+          distances: Array.from({ length: 5 }, () => Array(5).fill(140)),
+          durations: Array.from({ length: 5 }, () => Array(5).fill(120)),
+        }),
+      );
+    vi.stubGlobal("fetch", fetcher);
+    const matrix = await createWalkingRouter().matrix(points);
+    expect(matrix[0].map((v) => v === null)).toEqual([
+      false,
+      false,
+      true,
+      true,
+      false,
+      false,
+      false,
+    ]);
+    expect(JSON.parse(fetcher.mock.calls[1][1].body).locations).toHaveLength(5);
+  });
+  it("discovers five demo points despite two invalid seeds and keeps provider street geometry", async () => {
+    const { demoPositions } = await import("../lib/demo");
+    vi.stubEnv("ORS_API_KEY", "test-key");
+    let geometry: number[][] = [];
+    const fetcher = vi.fn(async (url: string, options: RequestInit) => {
+      const body = JSON.parse(options.body as string);
+      if (url.includes("snap"))
+        return Response.json({
+          locations: body.locations.map((location: number[], n: number) => ({
+            location,
+            snapped_distance:
+              body.radius === 300 && n === 2
+                ? null
+                : body.radius === 300 && n === 3
+                  ? "invalid"
+                  : 0,
+          })),
+        });
+      if (url.includes("matrix"))
+        return Response.json({
+          distances: body.sources.map(() => body.destinations.map(() => 150)),
+          durations: body.sources.map(() => body.destinations.map(() => 120)),
+        });
+      geometry = body.coordinates.flatMap((p: number[]) => [
+        p,
+        [p[0] + 0.0001, p[1] + 0.0001],
+      ]);
+      return Response.json({
+        features: [
+          {
+            geometry: { type: "LineString", coordinates: geometry },
+            properties: {
+              segments: body.coordinates
+                .slice(1)
+                .map(() => ({ distance: 150, duration: 120 })),
+            },
+          },
+        ],
+      });
+    });
+    vi.stubGlobal("fetch", fetcher);
+    const router = createWalkingRouter();
+    const result = await demoPositions(
+      { latitude: 48.1, longitude: -1.67 } as import("../lib/domain").Instance,
+      router,
+    );
+    expect(result).toHaveLength(5);
+    expect(
+      JSON.parse(fetcher.mock.calls[0][1].body as string).locations,
+    ).toHaveLength(25);
+    expect((await router.directions(result)).geometry).toEqual(geometry);
+    expect(geometry).toHaveLength(10);
+    expect(
+      fetcher.mock.calls.every(([url]) => url.includes("foot-walking")),
+    ).toBe(true);
+  });
 });

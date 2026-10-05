@@ -223,3 +223,46 @@ test("forgot password → email CTA → one-use reset → login", async ({
   expect(replay.status()).toBe(400);
   await login(page, "visitor0@example.invalid", "replacement-password-1234");
 });
+
+test("preview activation succeeds when ORS fails and displays the precise error", async ({
+  page,
+  request,
+}) => {
+  await pool.query("UPDATE participations SET demo=true");
+  await request.post("http://127.0.0.1:3106/test-only/snap-failure", {
+    data: { enabled: true },
+  });
+  try {
+    await login(page);
+    await page.goto("/");
+    const activated = page.waitForResponse(
+      (r) => r.url().endsWith("/api/admin") && r.request().method() === "POST",
+    );
+    await page.getByRole("button", { name: "Mode démo", exact: true }).click();
+    expect((await activated).status()).toBe(200);
+    await page.waitForURL("/preview");
+    await expect(
+      page.getByText("MODE DÉMONSTRATION", { exact: false }),
+    ).toBeVisible();
+    await expect(page.locator(".notice[role=alert]")).toBeVisible();
+    await expect(page.locator(".notice[role=alert]")).toContainText(
+      "Maisons de démonstration indisponibles",
+    );
+    await expect(page.locator(".notice[role=alert]")).toContainText(
+      "service de parcours piéton est indisponible",
+    );
+    await expect(
+      page.getByText("Service temporairement indisponible", { exact: true }),
+    ).toHaveCount(0);
+    expect((await page.request.get("/api/public?preview=1")).status()).toBe(
+      200,
+    );
+    await page.getByRole("button", { name: "Quitter le mode démo" }).click();
+    await page.waitForURL("/");
+  } finally {
+    await request.post("http://127.0.0.1:3106/test-only/snap-failure", {
+      data: { enabled: false },
+    });
+    await pool.query("UPDATE participations SET demo=false");
+  }
+});

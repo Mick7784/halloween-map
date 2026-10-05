@@ -300,6 +300,8 @@ export async function publicState(
   let count = 0,
     houses: ReturnType<typeof publicHouse>[] = [];
   let upcoming: ReturnType<typeof publicHouse>[] = [];
+  let demoError: string | undefined;
+  let previewHouses: House[] = [];
   if (s && state !== "CLOSED" && state !== "ARCHIVED") {
     const { rows } = await db().query(
       "SELECT count(*)::int n FROM participations WHERE instance_id=$1 AND season_id=$2 AND status=$3 AND EXISTS(SELECT 1 FROM users u WHERE u.id=participations.user_id AND u.account_status='ACTIVE' AND (u.email_status='VERIFIED' OR participations.legacy_imported)) AND NOT EXISTS(SELECT 1 FROM legal_documents d WHERE d.instance_id=participations.instance_id AND d.active AND d.requires_reaccept AND ((d.kind='TERMS' AND participations.terms_version IS DISTINCT FROM d.version) OR (d.kind='GUIDELINES' AND participations.guidelines_version IS DISTINCT FROM d.version)))",
@@ -324,14 +326,18 @@ export async function publicState(
     houses = (own.rows as unknown as House[]).map(publicHouse);
   }
   if (s && preview) {
-    houses = (await demoHouses(i, s))
-      .filter((h) => visible(h, s, now))
-      .map(publicHouse);
+    try {
+      previewHouses = await demoHouses(i, s);
+    } catch (e) {
+      if (!(e instanceof RoutingError)) throw e;
+      demoError = `Maisons de démonstration indisponibles : ${e.message}`;
+    }
+    houses = previewHouses.filter((h) => visible(h, s, now)).map(publicHouse);
   }
   if (s && state === "MAP_OPEN" && user)
     upcoming = (
       preview
-        ? await demoHouses(i, s)
+        ? previewHouses
         : await routeCandidates(db(), i, s, now, s.closes_at)
     )
       .filter(
@@ -344,6 +350,7 @@ export async function publicState(
       .map(publicHouse);
   return {
     routeCandidates: upcoming,
+    demoError,
     setupRequired: false,
     contents: Object.fromEntries(
       Object.entries(await contentState(i.id)).map(([k, v]) => [
@@ -656,11 +663,11 @@ export async function route(
   } catch (e) {
     throw new HttpError(400, (e as Error).message);
   }
-  const candidates = context.preview
-    ? await demoHouses(i, s)
-    : await routeCandidates(db(), i, s, input.start, input.end);
   let result;
   try {
+    const candidates = context.preview
+      ? await demoHouses(i, s)
+      : await routeCandidates(db(), i, s, input.start, input.end);
     result = await planRoute(candidates, s, input, context.now);
   } catch (e) {
     if (e instanceof RoutingError)
@@ -975,14 +982,20 @@ export async function adminAction(user: User | null, input: unknown) {
   throw new HttpError(400, "Action inconnue");
 }
 
-export async function demoHouses(i: Instance, s: Season, c: Database = db()) {
+export async function demoHouses(
+  i: Instance,
+  s: Season,
+  c: Database = db(),
+  options: { generate?: boolean } = {},
+) {
   const total = (
     await c.query(
       "SELECT count(*)::int n FROM participations p JOIN users u ON u.id=p.user_id WHERE p.instance_id=$1 AND p.season_id=$2 AND NOT p.demo AND NOT u.demo",
       [i.id, s.id],
     )
   ).rows[0];
-  if (Number(total.n) < 2) return fictionalHouses(i, s);
+  if (Number(total.n) < 2)
+    return options.generate === false ? [] : fictionalHouses(i, s);
   const rows = (
     await c.query(
       "SELECT p.* FROM participations p JOIN users u ON u.id=p.user_id WHERE p.instance_id=$1 AND p.season_id=$2 AND NOT p.demo AND NOT u.demo AND p.status='VISIBLE' AND u.account_status='ACTIVE' AND (u.email_status='VERIFIED' OR p.legacy_imported)",
