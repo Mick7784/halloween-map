@@ -45,6 +45,7 @@ import {
 } from "./common";
 import Setup from "./Setup";
 import Scene from "./Scene";
+import PremiumHome from "./PremiumHome";
 import MapView from "./Map";
 import HouseForm from "./HouseForm";
 import Admin from "./Admin";
@@ -251,6 +252,18 @@ export default function Application({
           user={user}
         />
       );
+  if (view === "home" && state && !state.setupRequired)
+    return (
+      <PremiumHome
+        state={liveState!}
+        user={user}
+        now={effectiveNow}
+        version={version}
+        login={<LoginForm destination="/map" />}
+        error={error}
+        onRetry={refresh}
+      />
+    );
   return (
     <div
       className={

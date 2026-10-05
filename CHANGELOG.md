@@ -1,5 +1,12 @@
 # Changelog
 
+## V0.5.4 — accueil premium
+
+- Nouvel accueil cinématique : village et lune, compteur dynamique, maisons inscrites, CTA contextuel et scène basse chat/portail/lanterne.
+- Composition mobile sans défilement global, safe areas et adaptation tablette/desktop ; menu latéral accessible avec connexion et navigation adaptées aux permissions et à la participation.
+- Réutilisation des données et fonctions V0.5.3, mode démo accessible depuis le menu ; documentation des fallbacks et futurs paramètres administrables.
+- Vérifications responsive sur cinq formats et quatre états de menu, sans modification du routage, de la base de données ou de l’infrastructure.
+
 ## V0.5.3
 
 - Directions conserve les instructions par défaut d’ORS afin de recevoir les segments distance/durée ; les étapes de navigation sont ignorées et ne sont ni stockées ni affichées.

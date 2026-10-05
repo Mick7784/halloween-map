@@ -162,6 +162,9 @@ test("Super Admin enters demo in one click and plans a route without changing st
   const before = (
     await pool.query("SELECT routes_count,opens_at,closes_at FROM seasons")
   ).rows[0];
+  await page
+    .getByRole("button", { name: "Menu utilisateur", exact: true })
+    .click();
   await page.getByRole("button", { name: "Mode démo", exact: true }).click();
   await page.waitForURL("/preview");
   await expect(
@@ -238,6 +241,9 @@ test("preview activation succeeds when ORS fails and displays the precise error"
     const activated = page.waitForResponse(
       (r) => r.url().endsWith("/api/admin") && r.request().method() === "POST",
     );
+    await page
+      .getByRole("button", { name: "Menu utilisateur", exact: true })
+      .click();
     await page.getByRole("button", { name: "Mode démo", exact: true }).click();
     expect((await activated).status()).toBe(200);
     await page.waitForURL("/preview");
