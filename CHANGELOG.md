@@ -1,5 +1,12 @@
 # Changelog
 
+## V0.5.7 — Menus, confidentialité et accueil desktop
+
+- Corrections des menus desktop/mobile : panneau desktop compact et alignement commun des actions, y compris l’installation PWA.
+- Politique de confidentialité intégrée aux sous-vues de Mon compte, avec retour au niveau précédent.
+- Paramètres de confidentialité et de contact préparés pour le futur back-office.
+- Accueil desktop recentré sur le visuel mobile, avec compteur centré et cadrage adapté.
+
 ## V0.5.6 — Mon compte premium et confidentialité
 
 - Refonte premium de Mon compte : plein écran mobile, sous-vues internes et modal desktop conservant le contexte actif.
