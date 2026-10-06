@@ -1,5 +1,17 @@
 # Changelog
 
+## V0.6.3
+
+- Nouveau parcours en collecte libre.
+- Maisons visitables dans n’importe quel ordre.
+- GPS temps réel pour progression et distance réelle.
+- Validation automatique des visites.
+- Maisons visitées grisées.
+- Sauvegarde/reprise du parcours.
+- Arrêt manuel ou fin automatique.
+- Statistiques finales.
+- ORS conservé uniquement pour l’estimation théorique.
+
 ## V0.6.2 — Saisons TEST et environnement isolé
 
 - Saisons nommées REAL / TEST et environnement TEST isolé.
