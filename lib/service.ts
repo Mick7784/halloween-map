@@ -1,4 +1,9 @@
 import {
+  applicationSeason,
+  selectedSeason,
+  eligibleOwner,
+} from "./season-context";
+import {
   initializeLegalDocuments,
   contentState,
   legalState,
@@ -14,6 +19,7 @@ import { db, transaction, type Database } from "./db";
 import {
   HttpError,
   hashPassword,
+  hashToken,
   createSession,
   verifyPassword,
   requirePermission,
@@ -60,14 +66,16 @@ export async function audit(
   actor: User | null,
   action: string,
   target?: string,
+  seasonId?: string,
 ) {
   await client.query(
-    "INSERT INTO audit_logs(instance_id,actor_id,action,target_id) VALUES($1,$2,$3,$4)",
+    "INSERT INTO audit_logs(instance_id,actor_id,action,target_id,season_id) VALUES($1,$2,$3,$4,COALESCE($5::uuid,(SELECT season_id FROM participations WHERE id=$4 AND instance_id=$1),(SELECT id FROM seasons WHERE id=$4 AND instance_id=$1)))",
     [
       instanceId,
       actor?.permissions.includes("admin.access") ? actor.id : null,
       action,
       target ?? null,
+      seasonId ?? actor?.created_for_season_id ?? null,
     ],
   );
 }
@@ -160,7 +168,7 @@ async function insertSeason(
 ) {
   const { opens, closes, registrations, purge } = seasonDates(data, i.timezone);
   const { rows } = await c.query(
-    "INSERT INTO seasons(instance_id,year,opens_at,closes_at,registrations_open,activated,registrations_open_at,purge_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *",
+    "INSERT INTO seasons(instance_id,year,opens_at,closes_at,registrations_open,activated,registrations_open_at,purge_at,name,is_test) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *",
     [
       i.id,
       data.year,
@@ -170,6 +178,8 @@ async function insertSeason(
       data.activated,
       registrations,
       purge,
+      data.name ?? "Halloween " + data.year,
+      data.is_test,
     ],
   );
   return rows[0] as unknown as Season;
@@ -250,6 +260,103 @@ export async function purgeSeason(
     return { purged: true, stats };
   });
 }
+export async function deleteTestSeason(
+  user: User,
+  seasonId: string,
+  confirmation: unknown,
+) {
+  requirePermission(user, "season.manage");
+  if (user.role_name !== "SUPER_ADMIN")
+    throw new HttpError(403, "Super Admin requis");
+  return transaction(async (c) => {
+    await c.query("SELECT id FROM instances WHERE id=$1 FOR UPDATE", [
+      user.instance_id,
+    ]);
+    const s = (
+      await c.query(
+        "SELECT * FROM seasons WHERE id=$1 AND instance_id=$2 FOR UPDATE",
+        [seasonId, user.instance_id],
+      )
+    ).rows[0];
+    if (!s || !s.is_test)
+      throw new HttpError(
+        403,
+        "Suppression complète réservée aux saisons TEST",
+      );
+    if (confirmation !== s.name)
+      throw new HttpError(400, "Saisissez exactement le nom de la saison");
+    const users = (
+      await c.query(
+        "SELECT id,email FROM users WHERE created_for_season_id=$1 AND instance_id=$2 FOR UPDATE",
+        [seasonId, user.instance_id],
+      )
+    ).rows;
+    if (users.some((u) => u.id === user.id))
+      throw new HttpError(403, "Votre propre compte doit être conservé");
+    if (
+      (
+        await c.query(
+          "SELECT id FROM participations WHERE user_id IN(SELECT id FROM users WHERE created_for_season_id=$1) AND season_id<>$1 LIMIT 1",
+          [seasonId],
+        )
+      ).rows.length
+    )
+      throw new HttpError(
+        409,
+        "Un compte est lié à une autre saison : suppression bloquée pour protéger ses données",
+      );
+    if (
+      (
+        await c.query("SELECT id FROM instances WHERE active_season_id=$1", [
+          seasonId,
+        ])
+      ).rows.length
+    )
+      throw new HttpError(409, "La saison publique doit être conservée");
+    const tokens = (
+      await c.query(
+        "SELECT token_hash FROM email_tokens WHERE user_id IN(SELECT id FROM users WHERE created_for_season_id=$1)",
+        [seasonId],
+      )
+    ).rows;
+    const keys = [
+      ...users.flatMap((u) => [
+        "login:" + u.email,
+        "register:" + u.email,
+        "password-reset:" + u.email,
+        "identity:" + u.id,
+        "account-change:" + u.id,
+        "route-availability:" + u.id,
+        "address:" + u.id,
+      ]),
+      ...tokens.flatMap((t) => [
+        "reset-token:" + t.token_hash,
+        "email-link:" + t.token_hash,
+        "activation:" + t.token_hash,
+      ]),
+    ].map(hashToken);
+    await c.query("DELETE FROM rate_limits WHERE key=ANY($1)", [keys]);
+    await c.query(
+      "DELETE FROM audit_logs WHERE instance_id=$1 AND (season_id=$2 OR target_id=$2 OR target_id IN(SELECT id FROM participations WHERE season_id=$2) OR target_id IN(SELECT id FROM email_campaigns WHERE season_id=$2) OR target_id IN(SELECT id FROM users WHERE created_for_season_id=$2) OR actor_id IN(SELECT id FROM users WHERE created_for_season_id=$2))",
+      [user.instance_id, seasonId],
+    );
+    await c.query(
+      "UPDATE instances SET test_season_id=NULL WHERE id=$1 AND test_season_id=$2",
+      [user.instance_id, seasonId],
+    );
+    await c.query(
+      "DELETE FROM users WHERE created_for_season_id=$1 AND instance_id=$2",
+      [seasonId, user.instance_id],
+    );
+    // Season and user foreign keys remove houses, campaigns, deliveries, tokens and sessions.
+    await c.query("DELETE FROM seasons WHERE id=$1 AND instance_id=$2", [
+      seasonId,
+      user.instance_id,
+    ]);
+    await audit(c, user.instance_id, user, "season.test.deleted");
+    return { deleted: true };
+  });
+}
 export async function tick(now = new Date()) {
   const { rows } = await db().query(
     "SELECT id,instance_id FROM seasons WHERE purged_at IS NULL AND purge_at<=$1",
@@ -305,7 +412,7 @@ export async function publicState(
   const i = await instance();
   if (!i) return { setupRequired: true };
   const actualSeason = await activeSeason(i);
-  const s = actualSeason,
+  const s = await applicationSeason(i, user, earlyAccess),
     state = mapAccessible(s, now, earlyAccess)
       ? "MAP_OPEN"
       : seasonState(s, now);
@@ -379,8 +486,9 @@ export async function publicState(
     participation: publicParticipationSettings(i.config.participation),
     demoAvailable:
       user?.role_name === "SUPER_ADMIN" &&
-      !!actualSeason &&
-      ["PREPARATION", "COUNTDOWN"].includes(seasonState(actualSeason)),
+      (!!i.test_season_id ||
+        (!!actualSeason &&
+          ["PREPARATION", "COUNTDOWN"].includes(seasonState(actualSeason)))),
     mapAccessible: !!user,
     instance: {
       id: i.id,
@@ -504,7 +612,16 @@ function validateParticipationSettings(
       "Cette commune n’est pas ouverte aux participations.",
     );
 }
-export async function createParticipation(user: User | null, input: unknown) {
+export async function createParticipation(
+  user: User | null,
+  input: unknown,
+  management?: { actor: User; seasonId: string },
+) {
+  if (management) {
+    requirePermission(management.actor, "participants.edit");
+    if (management.actor.instance_id !== user?.instance_id)
+      throw new HttpError(403, "Instance incompatible");
+  }
   if (!user) throw new HttpError(401, "Connexion requise");
   const raw = z
     .object({ house: houseSchema, acceptance: z.unknown() })
@@ -518,11 +635,11 @@ export async function createParticipation(user: User | null, input: unknown) {
   return transaction(async (c) => {
     const u = (
       await c.query(
-        "SELECT email_status,account_status FROM users WHERE id=$1 FOR UPDATE",
-        [user.id],
+        "SELECT email_status,account_status,created_for_season_id FROM users WHERE id=$1 AND instance_id=$2 FOR UPDATE",
+        [user.id, user.instance_id],
       )
     ).rows[0];
-    if (u.email_status !== "VERIFIED" || u.account_status !== "ACTIVE")
+    if (!u || u.email_status !== "VERIFIED" || u.account_status !== "ACTIVE")
       throw new HttpError(403, "Vérifiez votre email avant de participer");
     const i = (
       await c.query("SELECT * FROM instances WHERE id=$1 FOR UPDATE", [
@@ -530,9 +647,10 @@ export async function createParticipation(user: User | null, input: unknown) {
       ])
     ).rows[0] as unknown as Instance;
     const ss = (
-      await c.query("SELECT * FROM seasons WHERE id=$1 FOR UPDATE", [
-        i.active_season_id,
-      ])
+      await c.query(
+        "SELECT * FROM seasons WHERE id=$1 AND instance_id=$2 FOR UPDATE",
+        [management?.seasonId ?? i.active_season_id, i.id],
+      )
     ).rows[0] as unknown as Season;
     if (
       !ss ||
@@ -542,6 +660,11 @@ export async function createParticipation(user: User | null, input: unknown) {
       +new Date() >= +new Date(ss.closes_at)
     )
       throw new HttpError(403, "Inscriptions fermées");
+    if (!eligibleOwner(u.created_for_season_id as string | null, ss))
+      throw new HttpError(
+        403,
+        "Compte incompatible avec la saison sélectionnée",
+      );
     const a = await validateAcceptance(c, i.id, raw.acceptance);
     const h = raw.house;
     validateParticipationSettings(h, i);
@@ -568,7 +691,19 @@ export async function createParticipation(user: User | null, input: unknown) {
         a.terms,
       ],
     );
-    await audit(c, i.id, user, "participation.created");
+    if (management)
+      await c.query(
+        "UPDATE participations SET review_status='PENDING' WHERE user_id=$1 AND season_id=$2",
+        [user.id, ss.id],
+      );
+    await audit(
+      c,
+      i.id,
+      management?.actor ?? user,
+      "participation.created",
+      undefined,
+      ss.id,
+    );
     if (h.address_parts)
       await c.query(
         "UPDATE participations SET address_parts=$1 WHERE user_id=$2 AND season_id=$3",
@@ -727,7 +862,14 @@ export async function participantAction(
         "DELETE FROM participations WHERE user_id=$1 AND instance_id=$2",
         [user.id, user.instance_id],
       );
-      await audit(c, user.instance_id, null, "participant.deleted");
+      await audit(
+        c,
+        user.instance_id,
+        null,
+        "participant.deleted",
+        undefined,
+        String(h.season_id),
+      );
       return { deleted: true };
     }
     if (h.purged_at || +new Date() >= +new Date(h.closes_at))
@@ -779,7 +921,7 @@ export async function route(
   const input = routeSchema.parse(userInput);
   const i = await instance();
   if (!i) throw new HttpError(404, "Instance manquante");
-  const rawSeason = await activeSeason(i);
+  const rawSeason = await applicationSeason(i, user, context.earlyAccess);
   const s = rawSeason;
   if (!s || !mapAccessible(s, context.now, context.earlyAccess))
     throw new HttpError(403, "La carte est fermée");
@@ -823,9 +965,10 @@ export async function route(
       )
     ).rows[0] as unknown as Season;
     const currentInstance = (
-      await c.query("SELECT active_season_id FROM instances WHERE id=$1", [
-        i.id,
-      ])
+      await c.query(
+        "SELECT active_season_id,test_season_id FROM instances WHERE id=$1",
+        [i.id],
+      )
     ).rows[0];
     const currentUser = (
       await c.query("SELECT account_status FROM users WHERE id=$1", [user.id])
@@ -834,7 +977,11 @@ export async function route(
       throw new HttpError(403, "Compte indisponible");
     if (
       !current ||
-      currentInstance?.active_season_id !== s.id ||
+      (context.earlyAccess &&
+      user.role_name === "SUPER_ADMIN" &&
+      currentInstance?.test_season_id
+        ? currentInstance.test_season_id
+        : currentInstance?.active_season_id) !== s.id ||
       +new Date(current.opens_at) !== +new Date(rawSeason!.opens_at) ||
       +new Date(current.closes_at) !== +new Date(rawSeason!.closes_at) ||
       !mapAccessible(current, context.now, context.earlyAccess)
@@ -873,7 +1020,7 @@ export async function routeAvailability(
     throw new HttpError(403, "Super Admin requis");
   const input = routeAvailabilitySchema.parse(userInput);
   const i = await instance();
-  const raw = i && (await activeSeason(i));
+  const raw = i && (await applicationSeason(i, user, context.earlyAccess));
   const s = raw;
   const checkedAt = context.now.toISOString();
   if (
@@ -948,11 +1095,16 @@ export async function routeAvailability(
     }),
   };
 }
-export async function adminRead(user: User | null, section: string) {
+export async function adminRead(
+  user: User | null,
+  section: string,
+  seasonId?: string,
+) {
   const permission: Record<string, string> = {
     dashboard: "stats.read",
     houses: "participants.read",
     users: "users.read",
+    eligibleOwners: "users.read",
     seasons: "season.read",
     stats: "stats.read",
     settings: "settings.read",
@@ -962,24 +1114,34 @@ export async function adminRead(user: User | null, section: string) {
   if (!permission[section]) throw new HttpError(404, "Section inconnue");
   requirePermission(user, "admin.access");
   const u = requirePermission(user, permission[section]);
+  const scoped = await selectedSeason(u, seasonId);
   switch (section) {
     case "houses":
       return (
         await db().query(
-          "SELECT h.*,u.email,u.display_name owner_name,s.opens_at season_opens_at,s.closes_at season_closes_at,s.year season_year FROM participations h JOIN users u ON u.id=h.user_id JOIN seasons s ON s.id=h.season_id WHERE h.instance_id=$1 ORDER BY h.status,h.name",
-          [u.instance_id],
+          "SELECT h.*,u.email,u.display_name owner_name,s.opens_at season_opens_at,s.closes_at season_closes_at,s.year season_year,s.is_test season_is_test FROM participations h JOIN users u ON u.id=h.user_id JOIN seasons s ON s.id=h.season_id WHERE h.instance_id=$1 AND h.season_id=$2 ORDER BY h.status,h.name",
+          [u.instance_id, scoped?.id ?? null],
         )
       ).rows;
     case "users":
-      return adminUsers(u);
+      return adminUsers(u, scoped?.id);
+    case "eligibleOwners":
+      return (await adminUsers(u, scoped?.id, true)).filter(
+        (row) =>
+          row.account_status === "ACTIVE" &&
+          row.email_status === "VERIFIED" &&
+          !row.participation,
+      );
     case "seasons":
     case "stats":
       return (
         await db().query(
-          "SELECT s.*,(SELECT count(*)::int FROM email_campaigns ec WHERE ec.season_id=s.id AND ec.schedule_mode='RELATIVE' AND ec.active AND ec.status='SCHEDULED') relative_campaign_count,(SELECT count(DISTINCT u.id)::int FROM participations h JOIN users u ON u.id=h.user_id WHERE h.season_id=s.id AND u.account_status='ACTIVE' AND u.email_status='VERIFIED') reminder_recipient_estimate FROM seasons s WHERE s.instance_id=$1 ORDER BY s.year DESC",
+          "SELECT s.*,(s.id=(SELECT active_season_id FROM instances WHERE id=s.instance_id)) public_active,(s.id=(SELECT test_season_id FROM instances WHERE id=s.instance_id)) test_used,(SELECT count(*)::int FROM email_campaigns ec WHERE ec.season_id=s.id AND ec.schedule_mode='RELATIVE' AND ec.active AND ec.status='SCHEDULED') relative_campaign_count,(SELECT count(DISTINCT u.id)::int FROM participations h JOIN users u ON u.id=h.user_id WHERE h.season_id=s.id AND u.account_status='ACTIVE' AND u.email_status='VERIFIED') reminder_recipient_estimate FROM seasons s WHERE s.instance_id=$1 ORDER BY s.year DESC",
           [u.instance_id],
         )
-      ).rows.map((s) => redactSeason(s, u));
+      ).rows
+        .filter((s) => section !== "stats" || s.id === scoped?.id)
+        .map((s) => redactSeason(s, u));
     case "settings":
       return await instance();
     case "roles":
@@ -992,20 +1154,20 @@ export async function adminRead(user: User | null, section: string) {
     case "audit":
       return (
         await db().query(
-          "SELECT a.id,a.action,a.created_at,a.target_id,u.display_name actor FROM audit_logs a LEFT JOIN users u ON u.id=a.actor_id WHERE a.instance_id=$1 ORDER BY a.created_at DESC LIMIT 200",
-          [u.instance_id],
+          "SELECT a.id,a.action,a.created_at,a.target_id,u.display_name actor FROM audit_logs a LEFT JOIN users u ON u.id=a.actor_id WHERE a.instance_id=$1 AND a.season_id=$2 ORDER BY a.created_at DESC LIMIT 200",
+          [u.instance_id, scoped?.id ?? null],
         )
       ).rows;
     default: {
       const i = (await instance())!,
-        s = await activeSeason(i);
+        s = scoped;
       const { rows } = await db().query(
         "SELECT count(*)::int total,count(*) FILTER(WHERE review_status='VALIDATED')::int approved,count(*) FILTER(WHERE review_status='PENDING')::int pending,count(*) FILTER(WHERE status='HIDDEN')::int hidden FROM participations WHERE instance_id=$1 AND season_id=$2",
         [i.id, s?.id ?? null],
       );
       const { rows: users } = await db().query(
-        "SELECT count(*)::int total FROM users WHERE instance_id=$1",
-        [i.id],
+        "SELECT count(*)::int total FROM users u WHERE instance_id=$1 AND (created_for_season_id=$2 OR EXISTS(SELECT 1 FROM participations p WHERE p.user_id=u.id AND p.season_id=$2))",
+        [i.id, s?.id ?? null],
       );
       return {
         ...rows[0],
@@ -1029,11 +1191,65 @@ export async function adminAction(user: User | null, input: unknown) {
   const data = z
     .object({
       action: z.string(),
+      seasonId: z.uuid().optional(),
       id: z.uuid().optional(),
       payload: z.unknown().optional(),
     })
     .parse(input);
   const u = user;
+  if (
+    [
+      "houseActivity",
+      "reviewHouse",
+      "visibility",
+      "editHouse",
+      "deleteHouse",
+    ].includes(data.action)
+  ) {
+    const context = await selectedSeason(u, data.seasonId);
+    const target = (
+      await db().query(
+        "SELECT id FROM participations WHERE id=$1 AND instance_id=$2 AND season_id=$3",
+        [data.id, u.instance_id, context?.id ?? null],
+      )
+    ).rows[0];
+    if (!target) throw new HttpError(404, "Maison absente de cette saison");
+  }
+  if (data.action === "createHouse") {
+    requirePermission(u, "participants.edit");
+    const context = await selectedSeason(u, data.seasonId);
+    if (!context) throw new HttpError(404, "Saison introuvable");
+    const payload = z
+      .object({ userId: z.uuid(), participation: z.unknown() })
+      .parse(data.payload);
+    const owner = (
+      await db().query("SELECT * FROM users WHERE id=$1 AND instance_id=$2", [
+        payload.userId,
+        u.instance_id,
+      ])
+    ).rows[0];
+    if (!owner) throw new HttpError(404, "Utilisateur introuvable");
+    return createParticipation(
+      owner as unknown as User,
+      payload.participation,
+      { actor: u, seasonId: context.id },
+    );
+  }
+  if (data.action === "useForTests") {
+    if (u.role_name !== "SUPER_ADMIN")
+      throw new HttpError(403, "Super Admin requis");
+    const context = await selectedSeason(u, data.id);
+    if (!context?.is_test || context.purged_at || context.archived)
+      throw new HttpError(400, "Choisissez une saison TEST disponible");
+    await db().query("UPDATE instances SET test_season_id=$1 WHERE id=$2", [
+      context.id,
+      u.instance_id,
+    ]);
+    await audit(db(), u.instance_id, u, "season.test.selected", context.id);
+    return { ok: true };
+  }
+  if (data.action === "deleteTestSeason")
+    return deleteTestSeason(u, z.uuid().parse(data.id), data.payload);
   if (data.action === "houseActivity")
     return participantAction(u, data.payload, z.uuid().parse(data.id));
   if (data.action === "reviewHouse") {
@@ -1100,7 +1316,14 @@ export async function adminAction(user: User | null, input: unknown) {
         [data.id, u.instance_id],
       );
       if (!rows.length) throw new HttpError(404, "Participant introuvable");
-      await audit(c, u.instance_id, u, "participant.deleted");
+      await audit(
+        c,
+        u.instance_id,
+        u,
+        "participant.deleted",
+        undefined,
+        (await selectedSeason(u, data.seasonId, c))?.id,
+      );
       return { ok: true };
     });
   }
@@ -1143,6 +1366,8 @@ export async function adminAction(user: User | null, input: unknown) {
   if (data.action === "season") {
     requirePermission(u, "season.manage");
     const p = seasonSchema.parse(data.payload);
+    if (p.is_test && u.role_name !== "SUPER_ADMIN")
+      throw new HttpError(403, "Super Admin requis pour le mode TEST");
     const i = (await instance())!;
     return transaction(async (c) => {
       await c.query("SELECT id FROM instances WHERE id=$1 FOR UPDATE", [i.id]);
@@ -1158,6 +1383,21 @@ export async function adminAction(user: User | null, input: unknown) {
             400,
             "Une saison purgée ne peut pas être réouverte",
           );
+        if (Boolean(s.is_test) !== p.is_test) {
+          if (u.role_name !== "SUPER_ADMIN")
+            throw new HttpError(403, "Super Admin requis");
+          const used = (
+            await c.query(
+              "SELECT id FROM seasons WHERE id=$1 AND (routes_count>0 OR EXISTS(SELECT 1 FROM participations WHERE season_id=$1) OR EXISTS(SELECT 1 FROM users WHERE created_for_season_id=$1) OR EXISTS(SELECT 1 FROM email_campaigns WHERE season_id=$1) OR EXISTS(SELECT 1 FROM instances WHERE active_season_id=$1 OR test_season_id=$1))",
+              [s.id],
+            )
+          ).rows[0];
+          if (used)
+            throw new HttpError(
+              409,
+              "Le mode d’une saison utilisée ne peut pas être changé",
+            );
+        }
         const { opens, closes, registrations, purge } = seasonDates(
           p,
           i.timezone,
@@ -1186,7 +1426,7 @@ export async function adminAction(user: User | null, input: unknown) {
             "Les nouveaux horaires excluent des maisons inscrites",
           );
         await c.query(
-          "UPDATE seasons SET year=$1,opens_at=$2,closes_at=$3,registrations_open=$4,activated=$5,registrations_open_at=$7,purge_at=$8 WHERE id=$6",
+          "UPDATE seasons SET year=$1,opens_at=$2,closes_at=$3,registrations_open=$4,activated=$5,registrations_open_at=$7,purge_at=$8,name=$9,is_test=$10 WHERE id=$6",
           [
             p.year,
             opens,
@@ -1196,25 +1436,13 @@ export async function adminAction(user: User | null, input: unknown) {
             s.id,
             registrations,
             purge,
+            p.name ?? s.name ?? "Halloween " + p.year,
+            p.is_test,
           ],
         );
       } else {
-        const old = await activeSeason(i, c);
-        if (old && !old.purged_at)
-          throw new HttpError(
-            409,
-            "Fermez et purgez la saison actuelle avant d’en créer une nouvelle",
-          );
-        if (old)
-          await c.query("UPDATE seasons SET archived=true WHERE id=$1", [
-            old.id,
-          ]);
-        // New seasons always require a separate explicit activation.
         s = await insertSeason(c, i, { ...p, activated: false });
-        await c.query("UPDATE instances SET active_season_id=$1 WHERE id=$2", [
-          s.id,
-          i.id,
-        ]);
+        // Creating or selecting a season never changes the public season.
       }
       await recomputeCampaigns(c, s.id);
       if (

@@ -26,7 +26,6 @@ jobs:
       TEST_DATABASE_URL: postgresql://halloween:ci-password-only@localhost:5432/halloween
       APP_ORIGIN: http://localhost:3000
       SETUP_TOKEN: ci-setup-secret-with-sufficient-length
-      DEMO_PASSWORD: ci-demo-password-only
       NEXT_TELEMETRY_DISABLED: 1
     steps:
       - uses: actions/checkout@v4

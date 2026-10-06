@@ -105,7 +105,7 @@ Même image pour app/worker/migrate, mêmes secrets DB. **Ne jamais utiliser dow
 
 ## Environnement et vérification
 
-Autres variables existantes : `POSTGRES_PASSWORD` requis, `DATABASE_URL` hors Compose, `APP_PORT` (3000), `APP_ORIGIN`, `COOKIE_SECURE`, `SETUP_TOKEN` facultatif, `TEST_PROFILE_PASSWORD` facultatif, `MAP_STYLE_URL`, `HALLOWEEN_IMAGE`. Ne jamais committer `.env`. Changer .env ne change pas le mot de passe d’un PostgreSQL déjà créé. La DB n’a pas de port public dans Compose ; le proxy est configuré par l’exploitant.
+Autres variables existantes : `POSTGRES_PASSWORD` requis, `DATABASE_URL` hors Compose, `APP_PORT` (3000), `APP_ORIGIN`, `COOKIE_SECURE`, `SETUP_TOKEN` facultatif, `MAP_STYLE_URL`, `HALLOWEEN_IMAGE`. Ne jamais committer `.env`. Changer .env ne change pas le mot de passe d’un PostgreSQL déjà créé. La DB n’a pas de port public dans Compose ; le proxy est configuré par l’exploitant.
 
 ```sh
 npm ci
@@ -165,8 +165,10 @@ L’activation de la session preview ne dépend plus du fournisseur : le choix d
 
 La requête Directions ne désactive plus les instructions : ORS retourne ainsi les segments nécessaires aux distances et durées de chaque liaison. Seuls la géométrie LineString et les couples distance/durée sont conservés. Les éventuelles instructions/steps sont ignorées ; aucune navigation turn-by-turn ni métrique calculée à vol d’oiseau. La validation du nombre de segments (points moins un) reste obligatoire.
 
-### Profils de test et saison ouverte
+### Saisons de test
 
-Après les migrations, exécuter `npm run seed -- on` sur la base configurée. ORS et le géocodage français doivent être accessibles : les cinq positions sont vérifiées avant toute écriture. Le script crée cinq comptes UUID Mr Test 1 à 5 et une saison normale ouverte pendant 14 jours, sans modifier la saison Halloween 2026. Le champ année prend la première année libre (contrainte existante), les dates effectives sont celles du test immédiat. Leurs identifiants sont mr-test-1@example.invalid à mr-test-5@example.invalid. Définir TEST_PROFILE_PASSWORD pour se connecter à ces comptes ; sinon un mot de passe aléatoire non affiché est créé. Une seconde exécution conserve les états modifiés et les identifiants. `npm run seed -- restore` remet la saison précédente comme saison active sans effacer les tests.
+La migration 007 ajoute le nom et le type des saisons, leur contexte admin et une référence de test distincte de la saison publique. Plusieurs saisons peuvent partager une année. Les anciens profils provisionnés sont rattachés à leur saison enregistrée ; la référence publique précédente est restaurée lorsqu’elle existe. Les anciens champs `is_test` des comptes et maisons restent uniquement des métadonnées de compatibilité.
 
-Le badge Test est informatif dans le back-office ; il ne modifie aucune règle publique. Le back-office bêta expose Tableau de bord, Maisons et Utilisateurs selon les permissions existantes.
+Depuis le back-office, sélectionner ou créer « Tests octobre » avec Mode TEST et des dates réellement ouvertes. Le Super Admin peut la désigner via « Utiliser pour les tests », créer cinq comptes sans invitation (mot de passe normal), puis créer et valider leurs maisons avec le formulaire de participation. Le Mode démo ouvre cette saison sur les API habituelles, à l’heure réelle : carte, GPS, parcours et polling restent identiques. Sans saison TEST désignée, il conserve son accès anticipé à la saison publique. Aucun seed n’est nécessaire.
+
+Pour tester PC → téléphone, fermer une maison, retirer ses bonbons ou changer ses horaires depuis le PC ; vérifier ensuite notification et recalcul sur le téléphone. La suppression d’une saison TEST exige son nom exact et le rôle Super Admin. Elle supprime transactionnellement ses maisons, comptes d’origine, sessions, tokens, communications, audits et compteurs, sans toucher aux saisons réelles. Les comptes durables ne peuvent pas être utilisés comme propriétaires d’une saison TEST.

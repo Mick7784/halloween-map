@@ -25,6 +25,8 @@ export const instanceSchema = z.object({
   zoom: z.number().int().min(2).max(18),
 });
 export const seasonSchema = z.object({
+  name: text(100).optional(),
+  is_test: z.boolean().default(false),
   year: z.number().int().min(2020).max(2200),
   registrations_open_at: text(40).optional(),
   purge_at: text(40).optional(),

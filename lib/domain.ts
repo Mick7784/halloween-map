@@ -4,6 +4,8 @@ export type Season = {
   id: string;
   instance_id: string;
   year: number;
+  name?: string;
+  is_test?: boolean;
   activated: boolean;
   registrations_open: boolean;
   registrations_open_at: Date | string;
@@ -54,6 +56,7 @@ export type Instance = {
   plan: string;
   config: Record<string, unknown>;
   active_season_id: string;
+  test_season_id?: string | null;
 };
 export type User = {
   id: string;
@@ -67,6 +70,7 @@ export type User = {
   role_name: string | null;
   role_id: string | null;
   permissions: string[];
+  created_for_season_id?: string | null;
 };
 export type Participation = House;
 // Capabilities are derived exclusively from the three fixed roles.

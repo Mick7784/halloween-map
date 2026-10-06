@@ -1,8 +1,14 @@
 "use client";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useRef } from "react";
 import Link from "next/link";
-import { X, LayoutDashboard, House as HouseIcon, Users } from "lucide-react";
-import type { House, User } from "../lib/domain";
+import {
+  X,
+  LayoutDashboard,
+  House as HouseIcon,
+  Users,
+  CalendarDays,
+} from "lucide-react";
+import type { House, User, Season } from "../lib/domain";
 import {
   api,
   has,
@@ -13,12 +19,15 @@ import {
 } from "./common";
 import AdminUsers, { type ManagedUser } from "./AdminUsers";
 import HouseForm from "./HouseForm";
+import SeasonManager from "./SeasonManager";
+import ParticipationForm from "./ParticipationForm";
 import "./AdminBeta.css";
 type ManagedHouse = House & {
   email: string;
   owner_name: string;
   season_opens_at: string;
   season_closes_at: string;
+  season_is_test: boolean;
 };
 type Dashboard = {
   approved: number;
@@ -47,6 +56,7 @@ export default function Admin({
   user,
   state,
   refresh,
+  mapStyle,
 }: {
   user: User;
   state: PublicState;
@@ -63,38 +73,85 @@ export default function Admin({
     [reason, setReason] = useState(""),
     [search, setSearch] = useState(""),
     [review, setReview] = useState("ALL"),
-    [test, setTest] = useState("ALL"),
     [availability, setAvailability] = useState("ALL"),
     [theme, setTheme] = useState("dark"),
     [users, setUsers] = useState<ManagedUser[]>([]),
     [roles, setRoles] = useState<
       { id: string; name: string; permissions: string[] }[]
     >([]);
+  const [seasons, setSeasons] = useState<
+      (Season & { public_active?: boolean; test_used?: boolean })[]
+    >([]),
+    [seasonId, setSeasonId] = useState(""),
+    [loadedSeason, setLoadedSeason] = useState(""),
+    [creating, setCreating] = useState(false),
+    [ownerId, setOwnerId] = useState(""),
+    [owners, setOwners] = useState<ManagedUser[]>([]);
+  const selectedSeason = seasons.find((s) => s.id === seasonId),
+    scheduleRef = useRef<HTMLElement | null>(null),
+    generation = useRef(0),
+    currentSeason = useRef(seasonId);
+  currentSeason.current = seasonId;
+  const reloadSeasons = useCallback(async () => {
+    const rows =
+      await api<(Season & { public_active?: boolean; test_used?: boolean })[]>(
+        "admin/seasons",
+      );
+    setSeasons(rows);
+    setSeasonId((id) =>
+      rows.some((s) => s.id === id)
+        ? id
+        : (rows.find((s) => s.public_active)?.id ?? rows[0]?.id ?? ""),
+    );
+  }, []);
+  useEffect(() => {
+    void reloadSeasons().catch((e) => setError(e.message));
+  }, [reloadSeasons]);
   const reload = useCallback(async () => {
+    if (!seasonId) return;
+    const revision = ++generation.current,
+      query = "?seasonId=" + encodeURIComponent(seasonId);
     try {
       const [h, d, a] = await Promise.all([
         has(user, "participants.read")
-          ? api<ManagedHouse[]>("admin/houses")
+          ? api<ManagedHouse[]>("admin/houses" + query)
           : [],
-        has(user, "stats.read") ? api<Dashboard>("admin/dashboard") : null,
-        has(user, "audit.read") ? api<Audit[]>("admin/audit") : [],
+        has(user, "stats.read")
+          ? api<Dashboard>("admin/dashboard" + query)
+          : null,
+        has(user, "audit.read") ? api<Audit[]>("admin/audit" + query) : [],
       ]);
+      if (revision !== generation.current) return;
       setHouses(h);
       setDashboard(d);
       setAudit(a);
+      setLoadedSeason(seasonId);
       setError("");
     } catch (e) {
-      setError((e as Error).message);
+      if (revision === generation.current) setError((e as Error).message);
     }
-  }, [user]);
+  }, [user, seasonId]);
   const reloadUsers = useCallback(async () => {
+    if (!seasonId) return;
     const [u, r] = await Promise.all([
-      api<ManagedUser[]>("admin/users"),
-      api<{ id: string; name: string; permissions: string[] }[]>("admin/roles"),
+      api<ManagedUser[]>("admin/users?seasonId=" + seasonId),
+      api<{ id: string; name: string; permissions: string[] }[]>(
+        "admin/roles?seasonId=" + seasonId,
+      ),
     ]);
+    if (currentSeason.current !== seasonId) return;
     setUsers(u);
     setRoles(r);
-  }, []);
+  }, [seasonId]);
+  useEffect(() => {
+    setSelected(null);
+    setCreating(false);
+    setHouses([]);
+    setUsers([]);
+    setDashboard(null);
+    setAudit([]);
+    setLoadedSeason("");
+  }, [seasonId]);
   useEffect(() => {
     void reload();
   }, [reload]);
@@ -102,21 +159,39 @@ export default function Admin({
     if (section === "users")
       void reloadUsers().catch((e) => setError(e.message));
   }, [section, reloadUsers]);
+  async function seasonAction(action: string, payload: unknown, id?: string) {
+    await api("admin", { action, payload, id, seasonId });
+    await reloadSeasons();
+    if (action !== "deleteTestSeason") await reload();
+    await refresh();
+  }
+  async function startCreate() {
+    const available = await api<ManagedUser[]>(
+      "admin/eligibleOwners?seasonId=" + seasonId,
+    );
+    if (currentSeason.current !== seasonId) return;
+    setOwners(available);
+    setOwnerId(available[0]?.id ?? "");
+    setCreating(true);
+  }
   useEffect(() => {
     const stored = localStorage.getItem("halloween.admin.theme");
     if (stored && ["dark", "light", "system"].includes(stored))
       setTheme(stored);
   }, []);
-  const current = houses.find((h) => h.id === selected);
+  const current = (loadedSeason === seasonId ? houses : []).find(
+    (h) => h.id === selected,
+  );
   async function act(action: string, payload?: unknown) {
-    await api("admin", { action, id: selected, payload });
+    await api("admin", { action, id: selected, payload, seasonId });
     await reload();
     await refresh();
   }
-  const pending = houses.filter(
-    (h) => h.review_status === "PENDING" && h.season_id === state.season?.id,
+  const scopedHouses = loadedSeason === seasonId ? houses : [];
+  const pending = scopedHouses.filter(
+    (h) => h.review_status === "PENDING" && h.season_id === seasonId,
   );
-  const list = houses.filter(
+  const list = scopedHouses.filter(
     (h) =>
       (h.name + " " + h.owner_name + " " + h.email + " " + h.address)
         .toLocaleLowerCase()
@@ -125,7 +200,6 @@ export default function Admin({
         (review === "HIDDEN"
           ? h.status === "HIDDEN"
           : h.review_status === review)) &&
-      (test === "ALL" || Boolean(h.is_test) === (test === "TEST")) &&
       (availability === "ALL" || open(h) === (availability === "OPEN")),
   );
   function select(h: ManagedHouse) {
@@ -159,7 +233,7 @@ export default function Admin({
               <tr key={h.id}>
                 <td>
                   <strong>{h.name}</strong>
-                  {h.is_test && <span className="beta-badge">Test</span>}
+                  {h.season_is_test && <span className="beta-badge">Test</span>}
                   <small>
                     {h.owner_name} · {h.email}
                   </small>
@@ -235,6 +309,7 @@ export default function Admin({
               ["dashboard", "Tableau de bord", "stats.read", LayoutDashboard],
               ["houses", "Maisons", "participants.read", HouseIcon],
               ["users", "Utilisateurs", "users.read", Users],
+              ["seasons", "Saisons", "season.read", CalendarDays],
             ] as const
           ).map(
             ([id, title, p, Icon]) =>
@@ -276,9 +351,31 @@ export default function Admin({
                 ? "Tableau de bord"
                 : section === "houses"
                   ? "Maisons"
-                  : "Utilisateurs"}
+                  : section === "seasons"
+                    ? "Saisons"
+                    : "Utilisateurs"}
             </h1>
           </div>
+          <label className="beta-season-select">
+            Saison
+            <select
+              aria-label="Saison du back-office"
+              value={seasonId}
+              onChange={(e) => {
+                generation.current++;
+                setLoadedSeason("");
+                setSeasonId(e.target.value);
+              }}
+            >
+              {seasons.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name ?? "Halloween " + s.year}
+                  {s.is_test ? " · TEST" : ""}
+                  {s.public_active ? " · Publique" : ""}
+                </option>
+              ))}
+            </select>
+          </label>
           <button className="secondary" onClick={() => void reload()}>
             Actualiser
           </button>
@@ -326,6 +423,15 @@ export default function Admin({
         )}
         {section === "houses" && (
           <section className="beta-card">
+            {has(user, "participants.edit") && (
+              <button
+                onClick={() =>
+                  void startCreate().catch((e) => setError(e.message))
+                }
+              >
+                Créer une maison
+              </button>
+            )}
             <div className="beta-filters">
               <input
                 aria-label="Rechercher une maison"
@@ -347,15 +453,6 @@ export default function Admin({
                 <option value="HIDDEN">Masquées</option>
               </select>
               <select
-                aria-label="Profils"
-                value={test}
-                onChange={(e) => setTest(e.target.value)}
-              >
-                <option value="ALL">Test et normal</option>
-                <option value="TEST">Test</option>
-                <option value="NORMAL">Normal</option>
-              </select>
-              <select
                 aria-label="Disponibilité"
                 value={availability}
                 onChange={(e) => setAvailability(e.target.value)}
@@ -370,13 +467,84 @@ export default function Admin({
         )}
         {section === "users" && (
           <AdminUsers
+            key={seasonId}
+            seasonId={seasonId}
+            testSeason={!!selectedSeason?.is_test}
             users={users}
             roles={roles}
             user={user}
             reload={reloadUsers}
           />
         )}
+        {section === "seasons" && (
+          <SeasonManager
+            key={seasonId}
+            seasons={seasons}
+            selectedId={seasonId}
+            testSeasonId={seasons.find((s) => s.test_used)?.id}
+            user={user}
+            zone={state.instance?.timezone ?? "Europe/Paris"}
+            act={seasonAction}
+          />
+        )}
       </main>
+      {creating && selectedSeason && state.instance && (
+        <div className="beta-overlay">
+          <section
+            className="beta-panel"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Créer une maison"
+          >
+            <header>
+              <h2>Créer une maison</h2>
+              <button onClick={() => setCreating(false)}>Fermer</button>
+            </header>
+            <label>
+              Propriétaire
+              <select
+                aria-label="Propriétaire"
+                value={ownerId}
+                onChange={(e) => setOwnerId(e.target.value)}
+              >
+                {owners.map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.display_name} · {u.email}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {!ownerId ? (
+              <p>
+                Aucun utilisateur vérifié sans maison dans cette saison. Créez
+                ou activez un compte depuis Utilisateurs.
+              </p>
+            ) : (
+              <ParticipationForm
+                key={ownerId}
+                zone={state.instance.timezone}
+                opens={new Date(selectedSeason.opens_at).toISOString()}
+                closes={new Date(selectedSeason.closes_at).toISOString()}
+                center={[state.instance.longitude, state.instance.latitude]}
+                styleUrl={mapStyle}
+                settings={state.participation}
+                documents={state.documents}
+                scheduleRef={scheduleRef}
+                onSave={async (participation) => {
+                  await api("admin", {
+                    action: "createHouse",
+                    seasonId,
+                    payload: { userId: ownerId, participation },
+                  });
+                  setCreating(false);
+                  await reload();
+                  await refresh();
+                }}
+              />
+            )}
+          </section>
+        </div>
+      )}
       {current && (
         <div className="beta-overlay">
           <section
@@ -403,7 +571,9 @@ export default function Admin({
               {reviews[current.review_status ?? "VALIDATED"]} ·{" "}
               {current.status === "HIDDEN" ? "Masquée" : "Visible"} ·{" "}
               {open(current) ? "Ouverte" : "Fermée"}{" "}
-              {current.is_test && <span className="beta-badge">Test</span>}
+              {current.season_is_test && (
+                <span className="beta-badge">Test</span>
+              )}
             </p>
             <p>{current.activities.map((a) => labels[a]).join(" · ")}</p>
             <p>

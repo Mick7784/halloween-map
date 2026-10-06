@@ -17,7 +17,6 @@ x-app: &app
     MAP_STYLE_URL: ${MAP_STYLE_URL:-https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json}
     ORS_API_KEY: ${ORS_API_KEY:-}
     ORS_BASE_URL: ${ORS_BASE_URL:-https://api.openrouteservice.org}
-    TEST_PROFILE_PASSWORD: ${TEST_PROFILE_PASSWORD:-}
   init: true
 services:
   db:

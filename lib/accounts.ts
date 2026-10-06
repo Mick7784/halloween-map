@@ -1,3 +1,4 @@
+import { selectedSeason } from "./season-context";
 import { randomBytes } from "node:crypto";
 import { z } from "zod";
 import { db, transaction, type Database } from "./db";
@@ -300,16 +301,21 @@ export async function accountAction(user: User | null, input: unknown) {
     return { ok: true };
   });
 }
-export async function adminUsers(user: User | null) {
+export async function adminUsers(
+  user: User | null,
+  seasonId?: string,
+  eligible = false,
+): Promise<Record<string, unknown>[]> {
   const u = requirePermission(user, "admin.access");
   requirePermission(u, "users.read");
+  const context = await selectedSeason(u, seasonId);
   return (
     await db().query(
-      `SELECT u.id,u.email,u.display_name,u.email_status,u.email_verified_at,u.account_status,u.created_at,u.last_login_at,u.role_id,COALESCE(r.name,'USER') role_name,
- (SELECT row_to_json(p) FROM participations p JOIN instances i ON i.active_season_id=p.season_id WHERE p.user_id=u.id) participation,
- (SELECT COALESCE(json_agg(x),'[]'::json) FROM (SELECT kind,status,scheduled_at,sent_at,last_error FROM email_outbox WHERE user_id=u.id ORDER BY created_at DESC LIMIT 50) x) communications
- FROM users u LEFT JOIN roles r ON r.id=u.role_id WHERE u.instance_id=$1 ORDER BY u.created_at`,
-      [u.instance_id],
+      `SELECT u.id,u.email,u.display_name,u.email_status,u.email_verified_at,u.account_status,u.created_at,u.last_login_at,u.role_id,u.created_for_season_id,COALESCE(r.name,'USER') role_name,
+ (SELECT row_to_json(p) FROM participations p WHERE p.season_id=$2 AND p.user_id=u.id) participation,
+ (SELECT COALESCE(json_agg(x),'[]'::json) FROM (SELECT kind,status,scheduled_at,sent_at,last_error FROM email_outbox WHERE user_id=u.id AND (season_id=$2 OR (season_id IS NULL AND (u.created_for_season_id=$2 OR u.created_for_season_id IS NULL))) ORDER BY created_at DESC LIMIT 50) x) communications
+ FROM users u LEFT JOIN roles r ON r.id=u.role_id WHERE u.instance_id=$1 AND (CASE WHEN $3::boolean THEN u.created_for_season_id=$2 ELSE u.created_for_season_id IS NULL AND ($4::boolean OR EXISTS(SELECT 1 FROM participations p WHERE p.user_id=u.id AND p.season_id=$2) OR NOT EXISTS(SELECT 1 FROM participations p WHERE p.user_id=u.id)) END) ORDER BY u.created_at`,
+      [u.instance_id, context?.id ?? null, !!context?.is_test, eligible],
     )
   ).rows.map((row) => ({
     ...row,
@@ -334,8 +340,29 @@ export async function adminUserAction(user: User | null, input: unknown) {
       display_name: z.string().trim().min(1).max(80).optional(),
       role_id: z.uuid().optional(),
       confirm: z.string().optional(),
+      seasonId: z.uuid().optional(),
+      without_invitation: z.boolean().default(false),
+      password: credentials.shape.password.optional(),
     })
     .parse(input);
+  const context = await selectedSeason(u, p.seasonId);
+  if (
+    p.without_invitation &&
+    (p.action !== "invite" ||
+      !context?.is_test ||
+      u.role_name !== "SUPER_ADMIN")
+  )
+    throw new HttpError(
+      403,
+      "Création sans invitation réservée au Super Admin en saison TEST",
+    );
+  if (p.id) {
+    const allowed = (await adminUsers(u, p.seasonId)).some(
+      (row) => row.id === p.id,
+    );
+    if (!allowed)
+      throw new HttpError(404, "Utilisateur absent de cette saison");
+  }
   if (p.action === "resend") {
     if (!p.id) throw new HttpError(400, "Compte requis");
     return resendIdentity(u, p.id);
@@ -368,13 +395,42 @@ export async function adminUserAction(user: User | null, input: unknown) {
     if (p.action === "invite") {
       if (!p.email || !p.display_name || !p.role_id)
         throw new HttpError(400, "Nom, email et profil requis");
+      if (context?.is_test && role?.name !== "USER")
+        throw new HttpError(
+          403,
+          "Les comptes de saison TEST utilisent le profil Utilisateur",
+        );
+      if (p.without_invitation && !p.password)
+        throw new HttpError(400, "Mot de passe requis");
       const target = (
         await c.query(
-          "INSERT INTO users(instance_id,email,display_name,role_id,kind,account_status) VALUES($1,$2,$3,$4,'PARTICIPANT','PENDING_ACTIVATION') RETURNING id",
-          [u.instance_id, p.email, p.display_name, p.role_id],
+          "INSERT INTO users(instance_id,email,display_name,role_id,kind,account_status,email_status,email_verified_at,password_hash,created_for_season_id) VALUES($1,$2,$3,$4,'PARTICIPANT',$5,$6,CASE WHEN $7 THEN now() ELSE NULL END,$8,$9) RETURNING id",
+          [
+            u.instance_id,
+            p.email,
+            p.display_name,
+            p.role_id,
+            p.without_invitation ? "ACTIVE" : "PENDING_ACTIVATION",
+            p.without_invitation ? "VERIFIED" : "UNVERIFIED",
+            p.without_invitation,
+            p.without_invitation ? await hashPassword(p.password!) : null,
+            context?.is_test ? context.id : null,
+          ],
         )
       ).rows[0];
-      await queueIdentity(c, String(target.id), "INVITE");
+      if (!p.without_invitation)
+        await queueIdentity(c, String(target.id), "INVITE");
+      await c.query(
+        "INSERT INTO audit_logs(instance_id,actor_id,action,target_id,season_id) VALUES($1,$2,$3,$4,$5)",
+        [
+          u.instance_id,
+          u.id,
+          p.without_invitation ? "user.created" : "user.invite",
+          target.id,
+          context?.id ?? null,
+        ],
+      );
+      return { ok: true, id: target.id };
     } else {
       if (!p.id) throw new HttpError(400, "Compte requis");
       if (p.action === "edit") {
@@ -414,8 +470,14 @@ export async function adminUserAction(user: User | null, input: unknown) {
       }
     }
     await c.query(
-      "INSERT INTO audit_logs(instance_id,actor_id,action) VALUES($1,$2,$3)",
-      [u.instance_id, u.id, "user." + p.action],
+      "INSERT INTO audit_logs(instance_id,actor_id,action,target_id,season_id) VALUES($1,$2,$3,$4,$5)",
+      [
+        u.instance_id,
+        u.id,
+        "user." + p.action,
+        p.id ?? null,
+        context?.id ?? null,
+      ],
     );
     return { ok: true };
   });

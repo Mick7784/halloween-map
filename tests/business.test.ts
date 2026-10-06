@@ -1,4 +1,3 @@
-import { seed } from "../scripts/seed";
 import { effectiveTime } from "../lib/time";
 import { houseTravelKey } from "../lib/route-state";
 import manifest from "../app/manifest";
@@ -156,6 +155,12 @@ beforeAll(async () => {
       },
     };
   }
+  const contextMigration = await readFile(
+    "migrations/007_test_season_context.sql",
+    "utf8",
+  );
+  if (engine instanceof PGlite) await engine.exec(contextMigration);
+  else await engine.query(contextMigration);
 });
 const acceptance = () => ({
   terms: true,
@@ -1863,21 +1868,9 @@ describe("V0.3 content, legal versions and installation", () => {
   });
 });
 
-const seedOptions = {
-  router: fixtureRouter,
-  address: async (lat: number, lng: number) => ({
-    label: "12 rue des Tests, 35000 Rennes",
-    street: "rue des Tests",
-    number: "12",
-    postalCode: "35000",
-    city: "Rennes",
-    cityCode: "35238",
-    point: [lng, lat] as [number, number],
-  }),
-};
-it("real test profiles use normal routing, moderation, closure and polling with idempotent provisioning", async () => {
+it("test season manual workflow isolates real data, routes normally and deletes its complete environment", async () => {
   const migration = await readFile(
-    "migrations/006_real_test_profiles_beta.sql",
+    "migrations/007_test_season_context.sql",
     "utf8",
   );
   if (engine instanceof PGlite) await engine.exec(migration);
@@ -1885,20 +1878,134 @@ it("real test profiles use normal routing, moderation, closure and polling with 
   const official = (
     await db().query("SELECT * FROM seasons WHERE id=$1", [season.id])
   ).rows[0];
-  await seed("on", seedOptions);
+  await service.adminAction(admin, {
+    action: "season",
+    payload: {
+      ...setupData().season,
+      name: "Tests octobre",
+      is_test: true,
+      opens_at: "2026-10-03T00:00",
+      closes_at: "2026-10-18T00:00",
+      registrations_open_at: "2026-10-01T00:00",
+    },
+  });
+  const testSeason = (await db().query("SELECT * FROM seasons WHERE is_test"))
+    .rows[0] as unknown as Season;
+  await service.adminAction(admin, {
+    action: "season",
+    id: testSeason.id,
+    payload: {
+      ...setupData().season,
+      name: "Tests octobre",
+      is_test: true,
+      activated: true,
+      opens_at: "2026-10-03T00:00",
+      closes_at: "2026-10-18T00:00",
+      registrations_open_at: "2026-10-01T00:00",
+    },
+  });
+  await service.adminAction(admin, {
+    action: "useForTests",
+    id: testSeason.id,
+  });
+  const role = (await db().query("SELECT id FROM roles WHERE name='USER'"))
+    .rows[0];
+  for (let n = 1; n <= 5; n++) {
+    await adminUserAction(admin, {
+      action: "invite",
+      seasonId: testSeason.id,
+      display_name: "Mr Test " + n,
+      email: "mr-test-" + n + "@example.invalid",
+      role_id: role.id,
+      without_invitation: true,
+      password: "valid-password-1234",
+    });
+    await service.adminAction(admin, {
+      action: "createHouse",
+      seasonId: testSeason.id,
+      payload: {
+        userId: (
+          await db().query("SELECT id FROM users WHERE email=$1", [
+            "mr-test-" + n + "@example.invalid",
+          ])
+        ).rows[0].id,
+        participation: {
+          house: {
+            ...houseData(),
+            name: "Mr Test " + n,
+            activities: ["CANDY", "ACTING"],
+            starts_at: "2026-10-03T00:00",
+            ends_at: "2026-10-18T00:00",
+            latitude: 48.1 + n * 0.001,
+          },
+          acceptance: acceptance(),
+        },
+      },
+    });
+  }
+  await expect(
+    service.adminAction(admin, {
+      action: "createHouse",
+      seasonId: testSeason.id,
+      payload: {
+        userId: participant.id,
+        participation: { house: houseData(), acceptance: acceptance() },
+      },
+    }),
+  ).rejects.toMatchObject({ status: 403 });
+  expect(await service.adminRead(admin, "users", testSeason.id)).toHaveLength(
+    5,
+  );
+  expect(
+    (await service.adminRead(admin, "users", season.id)) as unknown[],
+  ).toHaveLength(2);
+  expect(await service.adminRead(admin, "stats", season.id)).toHaveLength(1);
+  const pending = (await service.adminRead(
+    admin,
+    "houses",
+    testSeason.id,
+  )) as House[];
+  expect(pending).toHaveLength(5);
+  for (const h of pending)
+    await service.adminAction(admin, {
+      action: "reviewHouse",
+      id: h.id,
+      seasonId: testSeason.id,
+      payload: { status: "VALIDATED" },
+    });
+  expect(
+    (
+      await db().query(
+        "SELECT id FROM email_outbox WHERE user_id IN(SELECT id FROM users WHERE created_for_season_id=$1)",
+        [testSeason.id],
+      )
+    ).rows,
+  ).toHaveLength(0);
+  expect(
+    (
+      await db().query(
+        "SELECT id FROM users WHERE created_for_season_id=$1 AND email_status='VERIFIED' AND account_status='ACTIVE'",
+        [testSeason.id],
+      )
+    ).rows,
+  ).toHaveLength(5);
   const first = (
-    await db().query("SELECT * FROM participations WHERE is_test ORDER BY name")
+    await db().query(
+      "SELECT * FROM participations WHERE season_id=$1 ORDER BY name",
+      [testSeason.id],
+    )
   ).rows;
   expect(first).toHaveLength(5);
   expect(
     JSON.stringify(await service.publicState(new Date(), participant)),
   ).not.toContain("is_test");
   first.forEach((h) => expect(h.id).toMatch(/^[a-f0-9-]{36}$/));
-  await seed("on", seedOptions);
+
   expect(
     (
       await db().query(
-        "SELECT id FROM participations WHERE is_test ORDER BY name",
+        "SELECT id FROM participations WHERE season_id=$1 ORDER BY name",
+        [testSeason.id],
       )
     ).rows.map((h) => h.id),
   ).toEqual(first.map((h) => h.id));
@@ -1907,10 +2014,13 @@ it("real test profiles use normal routing, moderation, closure and polling with 
       .rows[0],
   ).toEqual(official);
   const i = (await service.instance())!,
-    s = (await service.activeSeason(i))!,
+    s = (await db().query("SELECT * FROM seasons WHERE id=$1", [testSeason.id]))
+      .rows[0] as unknown as Season,
     now = new Date();
   expect(seasonState(s, now)).toBe("MAP_OPEN");
-  expect((await service.publicState(now, participant)).houses).toHaveLength(5);
+  expect(
+    (await service.publicState({ now, earlyAccess: true }, admin)).houses,
+  ).toHaveLength(5);
   const input = {
     acceptance: {
       mode: "GUIDELINES_ONLY",
@@ -1922,11 +2032,7 @@ it("real test profiles use normal routing, moderation, closure and polling with 
     end: new Date(+now + 7200000).toISOString(),
     activities: [],
   };
-  const route = await service.route(
-    input,
-    { now, earlyAccess: false },
-    participant,
-  );
+  const route = await service.route(input, { now, earlyAccess: true }, admin);
   expect(route.stops).toHaveLength(5);
   const availabilityInput = {
     instanceId: i.id,
@@ -1947,11 +2053,14 @@ it("real test profiles use normal routing, moderation, closure and polling with 
     }),
   ).rejects.toMatchObject({ status: 403 });
   await service.adminAction(admin, {
+    seasonId: testSeason.id,
     action: "houseActivity",
     id: first[2].id,
     payload: { action: "deplete", choice: "continue" },
   });
-  expect((await service.publicState(now, participant)).houses).toHaveLength(5);
+  expect(
+    (await service.publicState({ now, earlyAccess: true }, admin)).houses,
+  ).toHaveLength(5);
   expect(
     (
       await db().query(
@@ -1961,67 +2070,78 @@ it("real test profiles use normal routing, moderation, closure and polling with 
     ).rows[0],
   ).toEqual({ candy_available: false, activity: "ACTIVE" });
   await service.adminAction(admin, {
+    seasonId: testSeason.id,
     action: "houseActivity",
     id: first[3].id,
     payload: { action: "end" },
   });
   expect(
     (
-      await service.routeAvailability(participant, availabilityInput, {
+      await service.routeAvailability(admin, availabilityInput, {
         now,
-        earlyAccess: false,
+        earlyAccess: true,
       })
     ).steps.find((h) => h.id === first[3].id),
   ).toMatchObject({ available: false, reason: "ended" });
   expect(
-    (await service.route(input, { now, earlyAccess: false }, participant))
-      .stops,
+    (await service.route(input, { now, earlyAccess: true }, admin)).stops,
   ).toHaveLength(4);
   await service.adminAction(admin, {
+    seasonId: testSeason.id,
     action: "houseActivity",
     id: first[3].id,
     payload: { action: "resume" },
   });
   expect(
-    (await service.route(input, { now, earlyAccess: false }, participant))
-      .stops,
+    (await service.route(input, { now, earlyAccess: true }, admin)).stops,
   ).toHaveLength(5);
   await service.adminAction(admin, {
+    seasonId: testSeason.id,
     action: "visibility",
     id: first[0].id,
     payload: "HIDDEN",
   });
-  expect((await service.publicState(now, participant)).houses).toHaveLength(4);
+  expect(
+    (await service.publicState({ now, earlyAccess: true }, admin)).houses,
+  ).toHaveLength(4);
   const owner = { ...participant, id: first[0].user_id as string };
-  expect(await service.ownHouse(owner)).toMatchObject({ status: "VISIBLE" });
+  expect(await service.ownHouse(owner)).toBeNull();
   await service.adminAction(admin, {
+    seasonId: testSeason.id,
     action: "reviewHouse",
     id: first[1].id,
     payload: { status: "PENDING" },
   });
-  expect(await service.adminRead(admin, "dashboard")).toMatchObject({
+  expect(
+    await service.adminRead(admin, "dashboard", testSeason.id),
+  ).toMatchObject({
     pending: 1,
     approved: 4,
   });
-  expect((await service.publicState(now, participant)).houses).toHaveLength(3);
+  expect(
+    (await service.publicState({ now, earlyAccess: true }, admin)).houses,
+  ).toHaveLength(3);
   await expect(
     service.adminAction(admin, {
+      seasonId: testSeason.id,
       action: "reviewHouse",
       id: first[1].id,
       payload: { status: "REFUSED" },
     }),
   ).rejects.toMatchObject({ status: 400 });
   await service.adminAction(admin, {
+    seasonId: testSeason.id,
     action: "reviewHouse",
     id: first[1].id,
     payload: { status: "REFUSED", reason: "Adresse à vérifier" },
   });
   await service.adminAction(admin, {
+    seasonId: testSeason.id,
     action: "houseActivity",
     id: first[2].id,
     payload: { action: "candy", available: true },
   });
-  await seed("on", seedOptions);
+
   expect(
     (
       await db().query("SELECT status FROM participations WHERE id=$1", [
@@ -2030,25 +2150,28 @@ it("real test profiles use normal routing, moderation, closure and polling with 
     ).rows[0].status,
   ).toBe("HIDDEN");
   await service.adminAction(admin, {
+    seasonId: testSeason.id,
     action: "houseActivity",
     id: first[4].id,
     payload: { action: "deplete", choice: "close" },
   });
   expect(
     (
-      await service.routeAvailability(participant, availabilityInput, {
+      await service.routeAvailability(admin, availabilityInput, {
         now,
-        earlyAccess: false,
+        earlyAccess: true,
       })
     ).steps.find((h) => h.id === first[4].id),
   ).toMatchObject({ available: false, reason: "ended" });
   await service.adminAction(admin, {
+    seasonId: testSeason.id,
     action: "houseActivity",
     id: first[4].id,
     payload: { action: "resume" },
   });
   const h = first[3];
   await service.adminAction(admin, {
+    seasonId: testSeason.id,
     action: "editHouse",
     id: h.id,
     payload: {
@@ -2068,33 +2191,72 @@ it("real test profiles use normal routing, moderation, closure and polling with 
   });
   expect(
     (
-      await service.routeAvailability(participant, availabilityInput, {
+      await service.routeAvailability(admin, availabilityInput, {
         now,
-        earlyAccess: false,
+        earlyAccess: true,
       })
     ).steps.find((h) => h.id === first[3].id)?.available,
   ).toBe(false);
   await expect(
     service.adminAction(admin, {
+      seasonId: testSeason.id,
       action: "deleteHouse",
       id: first[3].id,
       payload: "bad",
     }),
   ).rejects.toMatchObject({ status: 400 });
   await service.adminAction(admin, {
+    seasonId: testSeason.id,
     action: "deleteHouse",
     id: first[3].id,
     payload: "SUPPRIMER LA MAISON",
   });
   expect(
     (
-      await service.routeAvailability(participant, availabilityInput, {
+      await service.routeAvailability(admin, availabilityInput, {
         now,
-        earlyAccess: false,
+        earlyAccess: true,
       })
     ).steps.find((h) => h.id === first[3].id),
   ).toMatchObject({ available: false, reason: "unavailable" });
-  await seed("restore");
+  await expect(
+    service.deleteTestSeason(admin, testSeason.id, "bad"),
+  ).rejects.toMatchObject({ status: 400 });
+  await expect(
+    service.deleteTestSeason(
+      { ...admin, role_name: "ADMIN" },
+      testSeason.id,
+      "Tests octobre",
+    ),
+  ).rejects.toMatchObject({ status: 403 });
+  await expect(
+    service.deleteTestSeason(admin, season.id, "Halloween 2026"),
+  ).rejects.toMatchObject({ status: 403 });
+  expect(await service.adminRead(admin, "houses", season.id)).toHaveLength(1);
+  await service.deleteTestSeason(admin, testSeason.id, "Tests octobre");
+  expect((await service.instance())?.test_season_id).toBeNull();
+  expect(
+    (
+      await db().query("SELECT id FROM users WHERE created_for_season_id=$1", [
+        testSeason.id,
+      ])
+    ).rows,
+  ).toHaveLength(0);
+  expect(
+    (await db().query("SELECT id FROM seasons WHERE id=$1", [testSeason.id]))
+      .rows,
+  ).toHaveLength(0);
+  expect(
+    (
+      await db().query("SELECT id FROM audit_logs WHERE season_id=$1", [
+        testSeason.id,
+      ])
+    ).rows,
+  ).toHaveLength(0);
+  expect(
+    (await db().query("SELECT id FROM participations WHERE id=$1", [house.id]))
+      .rows,
+  ).toHaveLength(1);
   expect((await service.instance())?.active_season_id).toBe(season.id);
 });
 it("early access is session secured and never replaces the real clock or creates houses", async () => {
@@ -2123,4 +2285,208 @@ it("early access is session secured and never replaces the real clock or creates
   expect((await effectiveTime(false, participant, token)).earlyAccess).toBe(
     false,
   );
+});
+
+async function makeTestSeason() {
+  await service.adminAction(admin, {
+    action: "season",
+    payload: { ...setupData().season, name: "Tests octobre", is_test: true },
+  });
+  return (await db().query("SELECT * FROM seasons WHERE is_test"))
+    .rows[0] as unknown as Season;
+}
+it("season context permissions, invitation and transactional purge protect real data", async () => {
+  const s = await makeTestSeason(),
+    role = (await db().query("SELECT id FROM roles WHERE name='USER'")).rows[0];
+  const input = {
+    action: "invite",
+    seasonId: s.id,
+    display_name: "Test invité",
+    email: "test-invite@example.invalid",
+    role_id: role.id,
+  };
+  await expect(
+    adminUserAction(
+      { ...admin, role_name: "ADMIN" },
+      { ...input, without_invitation: true, password: "valid-password-1234" },
+    ),
+  ).rejects.toMatchObject({ status: 403 });
+  await expect(
+    adminUserAction(admin, {
+      ...input,
+      seasonId: season.id,
+      without_invitation: true,
+      password: "valid-password-1234",
+    }),
+  ).rejects.toMatchObject({ status: 403 });
+  await expect(
+    adminUserAction(admin, {
+      ...input,
+      without_invitation: true,
+      password: "short",
+    }),
+  ).rejects.toThrow();
+  await adminUserAction(admin, input);
+  const owner = (
+    await db().query("SELECT * FROM users WHERE email=$1", [input.email])
+  ).rows[0];
+  expect(owner).toMatchObject({
+    created_for_season_id: s.id,
+    account_status: "PENDING_ACTIVATION",
+    email_status: "UNVERIFIED",
+  });
+  expect(
+    (
+      await db().query("SELECT id FROM email_outbox WHERE user_id=$1", [
+        owner.id,
+      ])
+    ).rows,
+  ).toHaveLength(1);
+  await expect(
+    service.adminAction(admin, {
+      action: "houseActivity",
+      seasonId: s.id,
+      id: house.id,
+      payload: { action: "end" },
+    }),
+  ).rejects.toMatchObject({ status: 404 });
+  await expect(
+    service.adminRead(admin, "houses", "30000000-0000-4000-8000-000000000009"),
+  ).rejects.toMatchObject({ status: 404 });
+  await expect(
+    db().query("UPDATE instances SET active_season_id=$1 WHERE id=$2", [
+      s.id,
+      admin.instance_id,
+    ]),
+  ).rejects.toThrow();
+  const original = globalDb.testDb!;
+  // Force a failure after users have been deleted, proving rollback restores the entire environment.
+  if (!(original instanceof Pool)) {
+    globalDb.testDb = {
+      query: async (sql, values) => {
+        if (sql.startsWith("DELETE FROM seasons"))
+          throw new Error("purge failure");
+        return original.query(sql, values);
+      },
+    };
+    try {
+      await expect(
+        service.deleteTestSeason(admin, s.id, "Tests octobre"),
+      ).rejects.toThrow("purge failure");
+    } finally {
+      globalDb.testDb = original;
+    }
+    expect(
+      (await db().query("SELECT id FROM users WHERE id=$1", [owner.id])).rows,
+    ).toHaveLength(1);
+    expect(
+      (
+        await db().query("SELECT id FROM email_outbox WHERE user_id=$1", [
+          owner.id,
+        ])
+      ).rows,
+    ).toHaveLength(1);
+  }
+  const token = await verifyQueued(input.email, "INVITE");
+  await activateAccount(token.token, { password: "valid-password-1234" });
+  const session = (
+    await service.login({ email: input.email, password: "valid-password-1234" })
+  ).token;
+  expect(await getUser(session)).toMatchObject({ created_for_season_id: s.id });
+  const normalRegistration = await service.register({
+    display_name: "Propriétaire réel",
+    email: "real-owner@example.invalid",
+    password: "valid-password-1234",
+  });
+  await verifyQueued("real-owner@example.invalid");
+  const normalOwner = (await getUser(normalRegistration.token))!;
+  await service.adminAction(admin, {
+    action: "createHouse",
+    seasonId: season.id,
+    payload: {
+      userId: normalOwner.id,
+      participation: {
+        house: { ...houseData(), name: "Maison normale admin" },
+        acceptance: acceptance(),
+      },
+    },
+  });
+  expect(
+    (await service.adminRead(admin, "houses", season.id)) as House[],
+  ).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        name: "Maison normale admin",
+        review_status: "PENDING",
+        season_id: season.id,
+      }),
+    ]),
+  );
+  await service.deleteTestSeason(admin, s.id, "Tests octobre");
+  expect(await getUser(session)).toBeNull();
+  for (const table of ["email_tokens", "email_outbox", "sessions"])
+    expect(
+      (
+        await db().query("SELECT * FROM " + table + " WHERE user_id=$1", [
+          owner.id,
+        ])
+      ).rows,
+    ).toHaveLength(0);
+  expect((await service.instance())?.active_season_id).toBe(season.id);
+  expect(await service.adminRead(admin, "houses", season.id)).toHaveLength(2);
+});
+it("migration 007 upgrades recorded legacy provisioning and replays without changing real seasons", async () => {
+  await db().query("DROP TRIGGER season_defaults ON seasons");
+  await db().query("DROP TRIGGER user_season_origin ON users");
+  await db().query(
+    "DROP TRIGGER participation_season_context ON participations",
+  );
+  await db().query("DROP TRIGGER instance_season_context ON instances");
+  const legacy = (
+    await db().query(
+      "INSERT INTO seasons(instance_id,year,opens_at,closes_at,registrations_open_at,purge_at) VALUES($1,2026,'2026-10-03','2026-10-18','2026-10-01','2026-10-20') RETURNING id",
+      [admin.instance_id],
+    )
+  ).rows[0];
+  await db().query("UPDATE users SET is_test=true WHERE id=$1", [
+    participant.id,
+  ]);
+  await db().query(
+    "UPDATE participations SET season_id=$1,is_test=true WHERE id=$2",
+    [legacy.id, house.id],
+  );
+  await db().query(
+    "UPDATE instances SET active_season_id=$1,config=jsonb_set(config,'{testProvisioning}',$2::jsonb) WHERE id=$3",
+    [
+      legacy.id,
+      JSON.stringify({ seasonId: legacy.id, previousSeasonId: season.id }),
+      admin.instance_id,
+    ],
+  );
+  const sql = await readFile("migrations/007_test_season_context.sql", "utf8");
+  for (let n = 0; n < 2; n++) {
+    if (engine instanceof PGlite) await engine.exec(sql);
+    else await engine.query(sql);
+  }
+  expect(await service.instance()).toMatchObject({
+    active_season_id: season.id,
+    test_season_id: legacy.id,
+  });
+  expect((await service.instance())?.config).not.toHaveProperty(
+    "testProvisioning",
+  );
+  expect(
+    (await db().query("SELECT * FROM users WHERE id=$1", [participant.id]))
+      .rows[0],
+  ).toMatchObject({ created_for_season_id: legacy.id });
+  expect(
+    (await db().query("SELECT * FROM seasons WHERE id=$1", [season.id]))
+      .rows[0],
+  ).toMatchObject({ name: "Halloween 2026", is_test: false });
+  await expect(
+    db().query("UPDATE participations SET season_id=$1 WHERE id=$2", [
+      season.id,
+      house.id,
+    ]),
+  ).rejects.toThrow();
 });

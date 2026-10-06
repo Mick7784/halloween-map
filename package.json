@@ -12,7 +12,6 @@
     "test:e2e": "playwright test",
     "bootstrap": "tsx scripts/bootstrap.ts",
     "migrate": "tsx scripts/migrate.ts",
-    "seed": "tsx scripts/seed.ts",
     "worker": "tsx scripts/worker.ts",
     "version:next": "node scripts/version.mjs",
     "test:routing:ui": "playwright test --config playwright.routing.config.ts"

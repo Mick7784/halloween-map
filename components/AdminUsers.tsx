@@ -36,7 +36,11 @@ export default function AdminUsers({
   roles,
   user,
   reload,
+  seasonId,
+  testSeason = false,
 }: {
+  seasonId?: string;
+  testSeason?: boolean;
   users: ManagedUser[];
   roles: Role[];
   user: User;
@@ -61,7 +65,7 @@ export default function AdminUsers({
   const current = users.find((u) => u.id === selected);
   const manageable = user.permissions.includes("users.manage");
   async function act(p: unknown) {
-    await api("admin/users", p);
+    await api("admin/users", { ...(p as object), seasonId });
     await reload();
     setCreate(false);
   }
@@ -199,11 +203,14 @@ export default function AdminUsers({
                 key={current?.id ?? "new"}
                 current={current}
                 roles={
-                  user.role_name === "SUPER_ADMIN"
+                  user.role_name === "SUPER_ADMIN" && !testSeason
                     ? roles
                     : roles.filter((r) => r.name === "USER")
                 }
                 canChangeRole={user.role_name === "SUPER_ADMIN" || !current}
+                allowDirect={
+                  !current && testSeason && user.role_name === "SUPER_ADMIN"
+                }
                 submit={act}
               />
             )}
@@ -267,7 +274,9 @@ function UserEditor({
   roles,
   canChangeRole,
   submit,
+  allowDirect = false,
 }: {
+  allowDirect?: boolean;
   current?: ManagedUser;
   roles: Role[];
   canChangeRole: boolean;
@@ -275,6 +284,7 @@ function UserEditor({
 }) {
   const [error, setError] = useState(""),
     [busy, setBusy] = useState(false);
+  const [direct, setDirect] = useState(false);
   return (
     <form
       onSubmit={async (e) => {
@@ -289,6 +299,8 @@ function UserEditor({
             email: v.email,
             display_name: v.display_name,
             role_id: canChangeRole ? v.role_id : undefined,
+            without_invitation: direct,
+            password: direct ? v.password : undefined,
           });
         } catch (e) {
           setError((e as Error).message);
@@ -321,11 +333,32 @@ function UserEditor({
           </select>
         </label>
       )}
+      {allowDirect && (
+        <label className="check">
+          <input
+            type="checkbox"
+            checked={direct}
+            onChange={(e) => setDirect(e.target.checked)}
+          />{" "}
+          Créer sans envoyer d’invitation
+        </label>
+      )}
+      {direct && (
+        <Field
+          name="password"
+          type="password"
+          label="Mot de passe (12 caractères minimum)"
+        />
+      )}
       <Notice error={error} />
       <button className="primary" disabled={busy}>
-        {current ? "Enregistrer l’utilisateur" : "Envoyer une invitation"}
+        {current
+          ? "Enregistrer l’utilisateur"
+          : direct
+            ? "Créer le compte"
+            : "Envoyer une invitation"}
       </button>
-      {!current && (
+      {!current && !direct && (
         <p className="small muted">
           Le destinataire valide son email et choisit son mot de passe. Aucun
           mot de passe n’est envoyé.

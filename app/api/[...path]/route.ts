@@ -124,6 +124,7 @@ async function handle(
           await service.adminRead(
             await getUser(req.cookies.get(cookie)?.value),
             path.slice(6),
+            req.nextUrl.searchParams.get("seasonId") ?? undefined,
           ),
         );
       }
@@ -298,10 +299,20 @@ async function handle(
           .object({ enabled: z.boolean() })
           .parse(input.payload);
         const configured = (await service.instance())!;
-        const season = await service.activeSeason(configured);
+        const season = configured.test_season_id
+          ? ((
+              await db().query(
+                "SELECT * FROM seasons WHERE id=$1 AND instance_id=$2 AND is_test",
+                [configured.test_season_id, configured.id],
+              )
+            ).rows[0] as unknown as import("../../../lib/domain").Season)
+          : await service.activeSeason(configured);
         let at: string | null = null;
         if (previewInput.enabled) {
-          if (!season || seasonState(season) === "MAP_OPEN")
+          if (
+            !season ||
+            (!configured.test_season_id && seasonState(season) === "MAP_OPEN")
+          )
             throw new HttpError(403, "Mode démo indisponible");
           if (
             season.archived ||
