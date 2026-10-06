@@ -1,5 +1,17 @@
 # Changelog
 
+## V0.6.4
+
+- Nouveau shell du back-office.
+- Dashboard administrateur refondu.
+- Navigation desktop et mobile.
+- Thèmes Clair / Sombre / Système persistants.
+- Contexte de saison BO persistant.
+- Activation publique d’une saison explicite et exclusive.
+- Saison TEST indépendante de la saison publique.
+- Statistiques et modération filtrées par saison.
+- Activité récente enrichie.
+
 ## V0.6.3
 
 - Nouveau parcours en collecte libre.
