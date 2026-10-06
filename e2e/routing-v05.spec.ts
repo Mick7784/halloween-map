@@ -172,7 +172,11 @@ test("GPS departure, numbered stops, framed route, and all input invalidations",
   await page
     .getByText("Modifier le départ et les horaires", { exact: true })
     .click();
-  await page.getByLabel("Départ : heure", { exact: true }).fill("19:00");
+  const departureTime = page.getByLabel("Départ : heure", { exact: true });
+  const [hour, minute] = (await departureTime.inputValue()).split(":");
+  // Keep the changed departure inside the fixture's relative opening window.
+  const changedMinute = Number(minute) === 59 ? 58 : Number(minute) + 1;
+  await departureTime.fill(`${hour}:${String(changedMinute).padStart(2, "0")}`);
   await expect(page.locator(".route-result")).toHaveCount(0);
   await generate(page);
   await page
