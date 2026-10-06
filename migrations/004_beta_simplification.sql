@@ -28,4 +28,8 @@ ALTER TABLE email_outbox ADD CONSTRAINT email_outbox_kind_check CHECK(kind IN('V
 ALTER TABLE email_campaigns DROP CONSTRAINT IF EXISTS email_campaigns_audience_check;
 UPDATE email_campaigns SET audience=CASE WHEN audience='APPROVED' THEN 'VISIBLE' WHEN audience='PENDING' THEN 'ALL' ELSE audience END;
 ALTER TABLE email_campaigns ADD CONSTRAINT email_campaigns_audience_check CHECK(audience IN('ALL','VISIBLE','ACTIVE'));
-UPDATE sessions SET preview_at=NULL;
+DO $ BEGIN
+ IF EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema=current_schema() AND table_name='sessions' AND column_name='preview_at') THEN
+  UPDATE sessions SET preview_at=NULL;
+ END IF;
+END $;
