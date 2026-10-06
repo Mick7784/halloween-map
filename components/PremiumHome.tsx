@@ -14,9 +14,12 @@ import {
   ArrowRight,
   Ghost,
   UserRound,
+  Bug,
 } from "lucide-react";
 import ManorMark from "./ManorMark";
 import InstallApp from "./InstallApp";
+import ProjectSupport from "./ProjectSupport";
+import { bugHref, publicProjectLinks } from "../lib/project-links";
 import { api, AsyncButton, Notice, type PublicState } from "./common";
 import type { House as Participation, User } from "../lib/domain";
 import "./PremiumHome.css";
@@ -39,6 +42,7 @@ export default function PremiumHome({
   onRetry: () => Promise<void>;
 }) {
   const [menu, setMenu] = useState(false);
+  const projectLinks = publicProjectLinks(state.projectLinks, state.privacy);
   const [participation, setParticipation] = useState<Participation | null>(
     null,
   );
@@ -129,7 +133,6 @@ export default function PremiumHome({
   return (
     <div className="home-reference">
       <div className="home-art" aria-hidden="true" />
-      <div className="home-bottom-art" aria-hidden="true" />
       <header className="home-header">
         <Link href="/" className="home-brand" aria-label="Halloween — accueil">
           <span className="home-brand-mark">
@@ -150,7 +153,7 @@ export default function PremiumHome({
           <Menu size={26} />
         </button>
       </header>
-      <main className="home-stage" aria-hidden={menu || undefined}>
+      <main className="home-stage" inert={menu} aria-hidden={menu || undefined}>
         <div className="home-center">
           <h1>
             {closed ? (
@@ -218,6 +221,13 @@ export default function PremiumHome({
         </div>
       </main>
       <footer className="home-signature">
+        <nav className="home-footer-links" aria-label="Informations légales">
+          <Link href="/terms">Conditions</Link>
+          <Link href="/privacy">Confidentialité</Link>
+          <Link href="/guidelines">Bonnes pratiques</Link>
+          <Link href="/legal">Mentions légales</Link>
+          <ProjectSupport settings={projectLinks} />
+        </nav>
         <Link href="/about">
           Une expérience <strong>DomotiK Studio</strong>
         </Link>
@@ -326,14 +336,19 @@ export default function PremiumHome({
                 </nav>
               </>
             )}
-            {user && (
-              <nav className="home-legal" aria-label="Informations légales">
-                <Link href="/terms">Conditions</Link>
-                <Link href="/privacy">Confidentialité</Link>
-                <Link href="/guidelines">Bonnes pratiques</Link>
-                <Link href="/legal">Mentions légales</Link>
-              </nav>
-            )}
+            <nav
+              className="home-drawer-links home-menu-group"
+              aria-label="Aide"
+            >
+              <a
+                href={bugHref(projectLinks, version)}
+                onClick={() => setMenu(false)}
+              >
+                <Bug />
+                <span>Signaler un bug</span>
+                <ArrowRight size={15} />
+              </a>
+            </nav>
           </aside>
         </div>
       )}

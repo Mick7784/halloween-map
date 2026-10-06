@@ -1,0 +1,44 @@
+.project-support-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-height: 24px;
+  color: inherit;
+  font: inherit;
+  text-decoration: none;
+}
+.project-support-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 180;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  background: #070912ce;
+  backdrop-filter: blur(3px);
+}
+.project-support-dialog {
+  position: relative;
+  width: min(420px, 100%);
+  max-height: 85dvh;
+  overflow: auto;
+  border: 1px solid #61506f;
+  border-radius: 14px;
+  background: #151923;
+  padding: 42px 22px 22px;
+  color: #eee4fa;
+  text-align: left;
+  font: 13px/1.7 var(--font-body);
+}
+.project-support-dialog h2 {
+  font: 600 30px/1.1 var(--font-editorial);
+  margin: 0 0 12px;
+}
+.project-support-dialog a {
+  color: #d4b6fb;
+}

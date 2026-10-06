@@ -44,6 +44,7 @@ import { planRoute, validateRouteWindow } from "./routing";
 import { RoutingError } from "./walking-router";
 import { houseRouteKey } from "./route-state";
 import { publicPrivacySettings } from "./privacy";
+import { publicProjectLinks } from "./project-links";
 import {
   publicParticipationSettings,
   formatAddress,
@@ -386,6 +387,7 @@ export async function publicState(
     ),
     documents: await legalState(i.id),
     privacy: publicPrivacySettings(i.config.privacy),
+    projectLinks: publicProjectLinks(i.config.projectLinks, i.config.privacy),
     participation: publicParticipationSettings(i.config.participation),
     preview,
     demoAvailable:
@@ -556,7 +558,7 @@ export async function createParticipation(user: User | null, input: unknown) {
     validateParticipationSettings(h, i);
     const [starts, ends] = houseDates(h, i, ss);
     await c.query(
-      "INSERT INTO participations(instance_id,season_id,user_id,name,address,latitude,longitude,activities,starts_at,ends_at,fear,adaptable,rp,practical,terms_version,terms_accepted_at,guidelines_version,guidelines_accepted_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,now(),$16,now())",
+      "INSERT INTO participations(instance_id,season_id,user_id,name,address,latitude,longitude,activities,starts_at,ends_at,fear,adaptable,rp,practical,terms_version,terms_accepted_at,guidelines_version,guidelines_accepted_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,CASE WHEN $17 THEN now() ELSE NULL END,$16,now())",
       [
         i.id,
         ss.id,
@@ -574,6 +576,7 @@ export async function createParticipation(user: User | null, input: unknown) {
         h.practical,
         a.terms_version,
         a.guidelines_version,
+        a.terms,
       ],
     );
     await audit(c, i.id, user, "participation.created");
@@ -639,8 +642,13 @@ export async function updateHouse(
           (input as { acceptance?: unknown }).acceptance,
         );
         await c.query(
-          "UPDATE participations SET terms_version=$1,terms_accepted_at=now(),guidelines_version=$2,guidelines_accepted_at=now() WHERE id=$3",
-          [acceptance.terms_version, acceptance.guidelines_version, id],
+          "UPDATE participations SET terms_version=$1,terms_accepted_at=CASE WHEN $4 THEN now() ELSE NULL END,guidelines_version=$2,guidelines_accepted_at=now() WHERE id=$3",
+          [
+            acceptance.terms_version,
+            acceptance.guidelines_version,
+            id,
+            acceptance.terms,
+          ],
         );
       }
     }

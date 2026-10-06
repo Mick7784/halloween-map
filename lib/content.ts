@@ -323,6 +323,32 @@ export async function validateAcceptance(
   instanceId: string,
   input: unknown,
 ) {
+  if (
+    input &&
+    typeof input === "object" &&
+    (input as { mode?: string }).mode === "GUIDELINES_ONLY"
+  ) {
+    const acknowledged = z
+      .object({
+        mode: z.literal("GUIDELINES_ONLY"),
+        guidelines: z.literal(true),
+        guidelines_version: z.string(),
+      })
+      .parse(input);
+    const docs = await legalState(instanceId, client);
+    if (acknowledged.guidelines_version !== docs.GUIDELINES.version)
+      throw new HttpError(
+        409,
+        "Les bonnes pratiques ont changé. Relisez-les avant de confirmer.",
+      );
+    // Keep the current TERMS version for compatibility, without recording consent.
+    return {
+      terms: false,
+      guidelines: true,
+      terms_version: docs.TERMS.version,
+      guidelines_version: acknowledged.guidelines_version,
+    };
+  }
   const p = z
     .object({
       terms: z.literal(true),

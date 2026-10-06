@@ -144,6 +144,14 @@ test("desktop compact menu uses the same grid for account, install and logout", 
     .getByRole("button", { name: "Menu utilisateur", exact: true })
     .click();
   const dialog = page.getByRole("dialog");
+  await expect(
+    dialog.getByRole("link", { name: "Signaler un bug", exact: true }),
+  ).toHaveAttribute("href", /^mailto:domotikpro77@gmail\.com\?subject=/);
+  await expect(
+    dialog.locator(
+      'a[href="/terms"], a[href="/privacy"], a[href="/guidelines"], a[href="/legal"]',
+    ),
+  ).toHaveCount(0);
   await dialog.evaluate(async (el) => {
     await Promise.all(
       el.getAnimations({ subtree: true }).map((a) => a.finished),
@@ -173,6 +181,23 @@ test("desktop compact menu uses the same grid for account, install and logout", 
   });
   await page.evaluate(() => window.dispatchEvent(new Event("appinstalled")));
   await expect(actions[1]).toHaveCount(0);
+  await page
+    .getByRole("button", { name: "Fermer le menu", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: "Soutenir le projet", exact: true })
+    .click();
+  await expect(
+    page.getByRole("dialog", { name: "Soutenir le projet", exact: true }),
+  ).toContainText("Un lien de soutien sera proposé");
+  await expect(
+    page.getByRole("link", {
+      name: "Nous contacter pour proposer votre soutien",
+    }),
+  ).toHaveAttribute("href", /^mailto:domotikpro77@gmail\.com/);
+  await page
+    .getByRole("button", { name: "Fermer le soutien au projet" })
+    .click();
 });
 
 for (const mode of ["guest", "member", "house", "admin"]) {
@@ -185,6 +210,14 @@ for (const mode of ["guest", "member", "house", "admin"]) {
       .click();
     const dialog = page.getByRole("dialog");
     await expect(dialog).toBeVisible();
+    await expect(
+      dialog.getByRole("link", { name: "Signaler un bug", exact: true }),
+    ).toHaveAttribute("href", /^mailto:domotikpro77@gmail\.com/);
+    await expect(
+      dialog.locator(
+        'a[href="/terms"], a[href="/privacy"], a[href="/guidelines"], a[href="/legal"]',
+      ),
+    ).toHaveCount(0);
     if (mode === "guest") {
       await expect(dialog.getByLabel("Email", { exact: false })).toBeVisible();
       await expect(
@@ -256,6 +289,51 @@ for (const mode of ["guest", "member", "house", "admin"]) {
       .locator(".home-menu-overlay")
       .click({ position: { x: 10, y: 200 } });
     await expect(dialog).toHaveCount(0);
+  });
+}
+for (const width of [390, 1440]) {
+  test(`shared compact menu and configured support ${width}`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await arrange(page, "member", {
+      projectLinks: {
+        bugEmail: "domotikpro77@gmail.com",
+        supportUrl: "https://example.org/support",
+      },
+    });
+    await page.goto("/map");
+    await page
+      .getByRole("button", { name: "Menu utilisateur", exact: true })
+      .click();
+    const menu = page.getByRole("navigation", {
+      name: "Menu utilisateur",
+      exact: true,
+    });
+    await expect(
+      menu.getByRole("link", { name: "Signaler un bug", exact: true }),
+    ).toHaveAttribute("href", /^mailto:domotikpro77@gmail\.com/);
+    await expect(
+      menu.locator(
+        'a[href="/terms"], a[href="/privacy"], a[href="/guidelines"], a[href="/legal"]',
+      ),
+    ).toHaveCount(0);
+    await expect(
+      page
+        .getByRole("contentinfo")
+        .getByRole("link", { name: "Soutenir le projet", exact: true }),
+    ).toHaveAttribute("href", "https://example.org/support");
+    await expect(menu).toBeVisible();
+    await menu.evaluate(async (el) => {
+      await Promise.all(
+        el.getAnimations({ subtree: true }).map((a) => a.finished),
+      );
+    });
+    expect((await menu.boundingBox())!.width).toBeLessThanOrEqual(320);
+    await page.screenshot({
+      animations: "disabled",
+      path: `${output}/menu-shared-${width}.png`,
+    });
   });
 }
 test("configured date, ticking seconds, zero count and safe unconfigured state", async ({

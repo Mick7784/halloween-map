@@ -8,6 +8,7 @@ export type PublicHouse = ReturnType<
   typeof import("../lib/domain").publicHouse
 >;
 export type PublicState = {
+  projectLinks?: import("../lib/project-links").ProjectLinks;
   participation?: import("../lib/participation-settings").ParticipationSettings;
   closedHouseIds?: string[];
   privacy?: import("../lib/privacy").PrivacySettings;

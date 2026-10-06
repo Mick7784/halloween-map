@@ -4,6 +4,8 @@ import { locateOrigin } from "../lib/geolocation";
 import PasswordRecovery from "./PasswordRecovery";
 import Account, { Signup, Activation } from "./Account";
 import InstallApp from "./InstallApp";
+import ProjectSupport from "./ProjectSupport";
+import { bugHref, publicProjectLinks } from "../lib/project-links";
 import Editorial from "./Editorial";
 import { useDialogFocus } from "./useDialogFocus";
 import ManorMark from "./ManorMark";
@@ -24,6 +26,7 @@ import {
   Clock,
   LogOut,
   Navigation,
+  Bug,
 } from "lucide-react";
 import type { User, Activity } from "../lib/domain";
 import {
@@ -446,6 +449,19 @@ export default function Application({
                 </AsyncButton>
               )}
             </div>
+            <div className="user-menu-group">
+              <a
+                href={bugHref(
+                  publicProjectLinks(state?.projectLinks, state?.privacy),
+                  version,
+                )}
+                onClick={() => setMenu(false)}
+              >
+                <Bug size={20} />
+                <span>Signaler un bug</span>
+                <ArrowRight size={15} />
+              </a>
+            </div>
           </nav>
         )}
       </header>
@@ -490,6 +506,7 @@ export default function Application({
         <Link href="/privacy">Politique de confidentialité</Link>
         <Link href="/guidelines">Bonnes pratiques</Link>
         <Link href="/legal">Mentions légales</Link>
+        <ProjectSupport settings={state?.projectLinks} />
         <span>
           © {DateTime.now().setZone("Europe/Paris").year} DomotiK Studio
         </span>

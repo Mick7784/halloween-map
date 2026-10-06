@@ -11,6 +11,7 @@ import {
   Save,
   Send,
   Sparkles,
+  X,
 } from "lucide-react";
 import type { House, Activity } from "../lib/domain";
 import type { LegalDocument, LegalKind } from "../lib/content";
@@ -23,6 +24,7 @@ import type { ParticipationSettings } from "../lib/participation-settings";
 import HouseLocation, { type LocationValue } from "./HouseLocation";
 import { localDate, Notice } from "./common";
 import Editorial from "./Editorial";
+import { legalDefaults } from "../lib/legal-defaults";
 const activityItems = {
   DECORATION: { label: "Décoration", icon: <Sparkles /> },
   CANDY: { label: "Bonbons", icon: <Candy /> },
@@ -81,20 +83,23 @@ export default function ParticipationForm({
     [ends, setEnds] = useState(
       house ? localDate(house.ends_at, zone) : localDate(closes, zone),
     ),
-    [terms, setTerms] = useState(false),
     [guidelines, setGuidelines] = useState(false),
+    [guidelinesOpen, setGuidelinesOpen] = useState(false),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
     [saved, setSaved] = useState(false);
   const acceptanceNeeded =
-    !!documents &&
-    (!house ||
-      (documents.TERMS.requires_reaccept &&
-        (house as House & { terms_version?: string }).terms_version !==
-          documents.TERMS.version) ||
-      (documents.GUIDELINES.requires_reaccept &&
-        (house as House & { guidelines_version?: string })
-          .guidelines_version !== documents.GUIDELINES.version));
+    !house ||
+    (documents?.TERMS.requires_reaccept &&
+      (house as House & { terms_version?: string }).terms_version !==
+        documents.TERMS.version) ||
+    (documents?.GUIDELINES.requires_reaccept &&
+      (house as House & { guidelines_version?: string }).guidelines_version !==
+        documents.GUIDELINES.version);
+  const guidelinesDocument = documents?.GUIDELINES ?? {
+    ...legalDefaults.GUIDELINES,
+    version: "2026.1",
+  };
   function section(
     n: number,
     title: string,
@@ -135,9 +140,9 @@ export default function ParticipationForm({
           );
           return;
         }
-        if (acceptanceNeeded && (!terms || !guidelines)) {
+        if (acceptanceNeeded && !guidelines) {
           setError(
-            "Acceptez les conditions et les bonnes pratiques pour participer.",
+            "Prenez connaissance des bonnes pratiques avant de participer.",
           );
           return;
         }
@@ -158,14 +163,11 @@ export default function ParticipationForm({
             rp,
             practical,
           };
-          const acceptance = documents
-            ? {
-                terms,
-                guidelines,
-                terms_version: documents.TERMS.version,
-                guidelines_version: documents.GUIDELINES.version,
-              }
-            : undefined;
+          const acceptance = {
+            mode: "GUIDELINES_ONLY",
+            guidelines,
+            guidelines_version: guidelinesDocument.version,
+          };
           await onSave(
             house
               ? { ...h, ...(acceptanceNeeded ? { acceptance } : {}) }
@@ -179,7 +181,7 @@ export default function ParticipationForm({
         }
       }}
     >
-      <div className="participation-form-grid">
+      <div className="participation-form-grid" inert={guidelinesOpen}>
         {section(
           1,
           "Localisation de la maison",
@@ -395,45 +397,45 @@ export default function ParticipationForm({
           </label>,
           "participation-practical",
         )}
-        {acceptanceNeeded && documents && (
+        {acceptanceNeeded && (
           <section className="participation-section participation-consent">
-            <h2>Avant de participer</h2>
-            <details>
-              <summary>Lire les bonnes pratiques</summary>
-              <Editorial text={documents.GUIDELINES.body} />
-            </details>
-            <details>
-              <summary>Lire les conditions d’utilisation</summary>
-              <Editorial text={documents.TERMS.body} />
-            </details>
             <label className="check">
               <input
                 type="checkbox"
                 checked={guidelines}
                 onChange={(e) => setGuidelines(e.target.checked)}
               />
-              Je confirme avoir lu les bonnes pratiques et disposer de
-              l’autorisation nécessaire pour inscrire cette adresse.
-            </label>
-            <label className="check">
-              <input
-                type="checkbox"
-                checked={terms}
-                onChange={(e) => setTerms(e.target.checked)}
-              />
-              J’ai lu et j’accepte les conditions d’utilisation.
+              <span>
+                J’ai pris connaissance des{" "}
+                <button
+                  type="button"
+                  className="participation-guidelines-link"
+                  aria-haspopup="dialog"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setGuidelinesOpen(true);
+                  }}
+                >
+                  bonnes pratiques
+                </button>
+              </span>
             </label>
           </section>
         )}
       </div>
-      <div className="participation-submit">
+      <div className="participation-submit" inert={guidelinesOpen}>
         <Notice error={error} />
         {saved && (
           <p role="status" className="participation-success">
             Modifications enregistrées.
           </p>
         )}
-        <button className="primary" disabled={busy || !location.confirmed}>
+        <button
+          className="primary"
+          disabled={
+            busy || !location.confirmed || (!!acceptanceNeeded && !guidelines)
+          }
+        >
           {house ? <Save size={18} /> : <Send size={18} />}{" "}
           {busy
             ? "Enregistrement…"
@@ -442,6 +444,36 @@ export default function ParticipationForm({
               : "Envoyer ma participation"}
         </button>
       </div>
+      {guidelinesOpen && (
+        <div className="participation-guidelines-backdrop">
+          <section
+            className="participation-guidelines-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="participation-guidelines-title"
+          >
+            <button
+              type="button"
+              className="close"
+              aria-label="Fermer les bonnes pratiques"
+              onClick={() => setGuidelinesOpen(false)}
+            >
+              <X />
+            </button>
+            <h2 id="participation-guidelines-title">Bonnes pratiques</h2>
+            <Editorial
+              text={guidelinesDocument.body || legalDefaults.GUIDELINES.body}
+            />
+            <button
+              type="button"
+              className="participation-guidelines-return"
+              onClick={() => setGuidelinesOpen(false)}
+            >
+              Retour au formulaire
+            </button>
+          </section>
+        </div>
+      )}
     </form>
   );
 }

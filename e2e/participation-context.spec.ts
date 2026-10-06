@@ -230,8 +230,33 @@ for (const width of [390, 1440]) {
     const description = "Une ambiance douce et mystérieuse.";
     await page.locator('textarea[name="rp"]').fill(description);
     await expect(dialog).toContainText(`${description.length} / 180`);
-    await page.getByRole("checkbox", { name: /Je confirme avoir lu/ }).check();
-    await page.getByRole("checkbox", { name: /J’ai lu et j’accepte/ }).check();
+    await expect(
+      page.getByRole("button", {
+        name: "Envoyer ma participation",
+        exact: true,
+      }),
+    ).toBeDisabled();
+    await expect(
+      page.locator(".participation-consent input[type=checkbox]"),
+    ).toHaveCount(1);
+    await expect(
+      page.getByText("Avant de participer", { exact: true }),
+    ).toHaveCount(0);
+    await page
+      .getByRole("button", { name: "bonnes pratiques", exact: true })
+      .click();
+    await expect(
+      page.getByRole("dialog", { name: "Bonnes pratiques", exact: true }),
+    ).toContainText("Gardez les accès dégagés.");
+    await page
+      .getByRole("button", { name: "Retour au formulaire", exact: true })
+      .click();
+    await expect(
+      page.getByRole("checkbox", { name: /J’ai pris connaissance/ }),
+    ).not.toBeChecked();
+    await page
+      .getByRole("checkbox", { name: /J’ai pris connaissance/ })
+      .check();
     await page.screenshot({
       animations: "disabled",
       path: `${output}/creation-${width}.png`,
@@ -243,6 +268,11 @@ for (const width of [390, 1440]) {
       dialog.getByRole("heading", { name: "Ma participation", exact: true }),
     ).toBeVisible();
     expect(calls[0].path).toBe("participation");
+    expect(calls[0].body.acceptance).toEqual({
+      mode: "GUIDELINES_ONLY",
+      guidelines: true,
+      guidelines_version: "2026.1",
+    });
     expect(
       (calls[0].body.house as Record<string, unknown>).address_parts,
     ).toEqual(address);

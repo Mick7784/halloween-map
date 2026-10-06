@@ -2701,8 +2701,8 @@ body {
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: 4px;
-  padding: 12px;
+  gap: 2px;
+  padding: 10px;
   background: var(--panel, #25232d);
   border: 1px solid #49434f;
   border-radius: 10px;
@@ -2713,7 +2713,7 @@ body {
   display: flex;
   margin: 0;
   width: 100%;
-  padding: 10px 12px;
+  padding: 7px 10px;
   min-height: 40px;
   font-size: 14px;
 }
@@ -2757,11 +2757,39 @@ body {
   text-align: left;
   justify-content: stretch;
   width: 100%;
-  min-height: 44px;
+  min-height: 40px;
   margin: 0;
 }
 .application .site-header nav.user-menu .user-menu-account > button {
   color: var(--text);
+}
+.application .site-header nav.user-menu a > span,
+.application .site-header nav.user-menu button > span {
+  font-size: 13px;
+  line-height: 1.35;
+}
+.application .site-header nav.user-menu a > svg:first-child,
+.application .site-header nav.user-menu button > svg:first-child {
+  width: 20px;
+  height: 20px;
+  margin: 0;
+}
+.application .site-header nav.user-menu a > svg:last-child:not(:first-child) {
+  width: 15px;
+  height: 15px;
+  margin: 0;
+}
+@media (max-width: 800px) {
+  .application .site-header nav.user-menu {
+    position: fixed;
+    top: calc(70px + env(safe-area-inset-top));
+    right: 10px;
+    width: min(88vw, 320px);
+    max-height: calc(
+      var(--app-height, 100dvh) - 86px - env(safe-area-inset-bottom)
+    );
+    animation: home-slide 0.25s ease-out;
+  }
 }
 .login-fields {
   display: flex;
@@ -2982,6 +3010,12 @@ body {
     display: block;
   }
   .application > footer {
+    display: flex;
+    gap: 3px 10px;
+    padding: 5px 10px calc(5px + env(safe-area-inset-bottom));
+    font-size: 9px;
+  }
+  .application > footer > span {
     display: none;
   }
   .application .narrow {

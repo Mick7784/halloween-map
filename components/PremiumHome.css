@@ -17,8 +17,7 @@
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
 }
-.home-art,
-.home-bottom-art {
+.home-art {
   position: absolute;
   inset: 0;
   z-index: -2;
@@ -39,9 +38,6 @@
     #090b111a 85%,
     #090b11ab 100%
   );
-}
-.home-bottom-art {
-  display: none;
 }
 .home-header {
   display: flex;
@@ -204,6 +200,7 @@
 }
 .home-signature {
   display: flex;
+  flex-wrap: wrap;
   justify-content: center;
   align-items: center;
   gap: 16px;
@@ -213,6 +210,14 @@
   font-size: 9px;
   color: #bdafd2;
   background: linear-gradient(transparent, #090b11b3);
+}
+.home-footer-links {
+  flex-basis: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px 14px;
 }
 .home-signature strong {
   font-weight: 500;
@@ -232,12 +237,15 @@
   position: absolute;
   right: 12px;
   top: calc(82px + env(safe-area-inset-top));
-  bottom: calc(16px + env(safe-area-inset-bottom));
-  width: min(85vw, 390px);
+  bottom: auto;
+  max-height: calc(
+    var(--app-height, 100dvh) - 98px - env(safe-area-inset-bottom)
+  );
+  width: min(88vw, 320px);
   border-radius: 18px;
   border: 1px solid #474351;
   background: linear-gradient(125deg, #1b202a, #11151d);
-  padding: 58px 20px 22px;
+  padding: 50px 16px 14px;
   overflow: auto;
   overscroll-behavior: contain;
   box-shadow: -8px 8px 28px #0004;
@@ -356,9 +364,9 @@
   align-items: center;
   gap: 14px;
   text-align: left;
-  min-height: 56px;
+  min-height: 40px;
   text-decoration: none;
-  padding: 10px 5px;
+  padding: 7px 5px;
   background: transparent;
   border: 0;
   border-radius: 8px;
@@ -393,8 +401,8 @@
 }
 .home-menu-group {
   border-top: 1px solid #383846;
-  margin-top: 16px;
-  padding-top: 12px;
+  margin-top: 8px;
+  padding-top: 8px;
 }
 .home-menu-group button {
   color: #ff8378;
@@ -449,35 +457,9 @@
     letter-spacing: 3px;
   }
   .home-art {
-    background-image: url("/art/home-reference-v2.webp");
+    background-image: url("/art/home-reference-desktop-v1.webp");
     background-size: cover;
-    background-position: center 53%;
-  }
-  .home-art::before {
-    content: "";
-    position: absolute;
-    inset: 0 0 auto;
-    height: 43%;
-    background: url("/art/home-reference-v2.webp") center top / 100% auto
-      no-repeat;
-    mask-image: linear-gradient(#000 55%, transparent);
-  }
-  .home-bottom-art {
-    display: block;
-    inset: auto 0 0;
-    height: 35%;
-    background-size: auto 90dvh;
-    background-position: center bottom;
-    mask-image:
-      linear-gradient(transparent, #000 32%),
-      linear-gradient(
-        90deg,
-        transparent 26%,
-        #000 37%,
-        #000 63%,
-        transparent 74%
-      );
-    mask-composite: intersect;
+    background-position: center center;
   }
   .home-stage {
     place-items: center;
@@ -486,10 +468,13 @@
   .home-center {
     max-width: 420px;
     gap: 24px;
-    padding-bottom: 45px;
+    padding-bottom: 0;
   }
   .home-center h1 {
     font-size: 44px;
+  }
+  .home-cta {
+    max-width: 390px;
   }
   .home-clock > div {
     height: 88px;
@@ -507,9 +492,9 @@
     top: 96px;
     bottom: auto;
     right: 32px;
-    width: 350px;
+    width: 320px;
     max-height: calc(100dvh - 120px);
-    padding: 52px 20px 16px;
+    padding: 48px 16px 14px;
   }
 }
 @media (min-width: 1400px) {

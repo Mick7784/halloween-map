@@ -699,6 +699,44 @@ describe("Seasons, privacy and participant activity", () => {
       ),
     ).toBe(false);
   });
+  it("requires versioned guidelines only without recording a fictitious terms acceptance", async () => {
+    await service.participantAction(participant, {
+      action: "delete",
+      confirm: "SUPPRIMER",
+    });
+    const ack = {
+      mode: "GUIDELINES_ONLY",
+      guidelines: true,
+      guidelines_version: "2026.1",
+    };
+    await expect(
+      service.createParticipation(participant, {
+        house: houseData(),
+        acceptance: { ...ack, guidelines: false },
+      }),
+    ).rejects.toThrow();
+    await expect(
+      service.createParticipation(participant, {
+        house: houseData(),
+        acceptance: { ...ack, guidelines_version: "outdated" },
+      }),
+    ).rejects.toMatchObject({ status: 409 });
+    await service.createParticipation(participant, {
+      house: houseData(),
+      acceptance: ack,
+    });
+    expect(await service.ownHouse(participant)).toMatchObject({
+      terms_accepted_at: null,
+      guidelines_version: "2026.1",
+    });
+    expect(
+      (
+        (await service.ownHouse(participant)) as House & {
+          guidelines_accepted_at?: unknown;
+        }
+      ).guidelines_accepted_at,
+    ).toBeTruthy();
+  });
   it("persists a verified structured French address and the explicitly adjusted point", async () => {
     vi.stubGlobal(
       "fetch",
