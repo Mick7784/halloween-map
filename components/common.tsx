@@ -1,6 +1,7 @@
 "use client";
 import FrenchDate from "./FrenchDate";
 import { useState } from "react";
+import { clearStoredRoute } from "../lib/active-route";
 import { Sparkles, Candy, Drama } from "lucide-react";
 import { DateTime } from "luxon";
 import type { Activity, Instance, Season, User } from "../lib/domain";
@@ -24,10 +25,16 @@ export type PublicState = {
   mapAccessible?: boolean;
   instance?: Pick<
     Instance,
-    "public_name" | "territory" | "timezone" | "latitude" | "longitude" | "zoom"
+    | "id"
+    | "public_name"
+    | "territory"
+    | "timezone"
+    | "latitude"
+    | "longitude"
+    | "zoom"
   > & { footer: string; defaultOpen: string; defaultClose: string };
   season?:
-    | (Pick<Season, "year" | "registrations_open"> & {
+    | (Pick<Season, "id" | "year" | "registrations_open"> & {
         opens_at: string;
         closes_at: string;
         purge_at: string;
@@ -81,6 +88,8 @@ export async function api<T>(path: string, body?: unknown): Promise<T> {
   const data = await r.json();
   if (!r.ok)
     throw new Error(data.error ?? "Impossible de terminer cette action");
+  if (path === "logout" || (path === "account" && data.deleted))
+    clearStoredRoute();
   return data;
 }
 export function time(value: string | Date, zone: string) {

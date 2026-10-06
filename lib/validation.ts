@@ -76,9 +76,33 @@ export const registrationSchema = z.object({
   house: houseSchema,
 });
 export const routeSchema = z.object({
+  acceptance: z.object({
+    mode: z.literal("GUIDELINES_ONLY"),
+    guidelines: z.literal(true),
+    guidelines_version: z.string().min(1).max(100),
+  }),
+  excludedHouseIds: z.array(z.string().uuid()).max(200).default([]),
   start: text(40),
   end: text(40),
   origin: z.object(coordinates),
   activities: z.array(z.enum(["DECORATION", "CANDY", "ACTING"])).max(3),
   maxFear: z.number().int().min(1).max(5).optional(),
+});
+export const routeAvailabilitySchema = z.object({
+  instanceId: z.string().uuid(),
+  seasonId: z.string().uuid(),
+  activities: z.array(z.enum(["DECORATION", "CANDY", "ACTING"])).max(3),
+  maxFear: z.number().int().min(1).max(5).optional(),
+  steps: z
+    .array(
+      z.object({
+        id: z.string().uuid(),
+        arrival: z.iso.datetime({ offset: true }),
+        departure: z.iso.datetime({ offset: true }),
+        key: z.string().max(3000),
+      }),
+    )
+    .min(1)
+    .max(30)
+    .refine((steps) => new Set(steps.map((s) => s.id)).size === steps.length),
 });

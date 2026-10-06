@@ -1,5 +1,6 @@
 "use client";
-import { retainClosedRoute } from "../lib/route-state";
+import useActiveRoute from "./useActiveRoute";
+import type { RouteParameters } from "../lib/active-route";
 import { locateOrigin } from "../lib/geolocation";
 import PasswordRecovery from "./PasswordRecovery";
 import Account, { Signup, Activation } from "./Account";
@@ -40,8 +41,6 @@ import {
   time,
   values,
   type PublicState,
-  type PublicHouse,
-  type RouteResult,
 } from "./common";
 import Setup from "./Setup";
 import Scene from "./Scene";
@@ -79,13 +78,8 @@ export default function Application({
   }, [view]);
   useEffect(() => {
     void refresh().catch((e) => setError(e.message));
-    const poll = setInterval(
-      () => void refresh().catch((e) => setError(e.message)),
-      30000,
-    );
     const clock = setInterval(() => setNow(Date.now()), 1000);
     return () => {
-      clearInterval(poll);
       clearInterval(clock);
     };
   }, [refresh]);
@@ -618,11 +612,19 @@ function PublicMap({
   mapStyle: string;
   now: number;
 }) {
-  const [selected, setSelected] = useState<PublicHouse | null>(null),
-    [legend, setLegend] = useState(false),
+  const controller = useActiveRoute({
+    ownerId: user?.id ?? "",
+    instanceId: state.instance!.id,
+    seasonId: state.season?.id ?? "",
+    closesAt: state.season?.closes_at ?? new Date(0).toISOString(),
+    preview: state.preview,
+    previewTime: state.serverTime,
+  });
+  const selected = controller.selectedHouse,
+    setSelected = controller.selectHouse;
+  const [legend, setLegend] = useState(false),
     [filters, setFilters] = useState<Activity[]>([]),
     [maxFear, setMaxFear] = useState(5),
-    [route, setRoute] = useState<RouteResult | null>(null),
     [origin, setOrigin] = useState<[number, number] | null>(null),
     [originLabel, setOriginLabel] = useState(
       "Choisissez votre point de départ",
@@ -638,11 +640,7 @@ function PublicMap({
     window.addEventListener("hashchange", open);
     return () => window.removeEventListener("hashchange", open);
   }, []);
-  const revision = useRef(0);
-  const invalidate = useCallback(() => {
-    revision.current++;
-    setRoute(null);
-  }, []);
+  const invalidate = controller.invalidate;
   const changeOrigin = (p: [number, number], label: string) => {
     invalidate();
     setOrigin(p);
@@ -661,37 +659,32 @@ function PublicMap({
       ),
     [state.houses, filters, maxFear],
   );
+  const safeRoute = controller.result;
   const selectedLive = selected
-    ? ([...(state.houses ?? []), ...(state.routeCandidates ?? [])].find(
-        (h) => h.id === selected.id,
-      ) ?? null)
+    ? (safeRoute?.stops.find((stop) => stop.house.id === selected.id)?.house ??
+      selected)
     : null;
-  const routeInWindow =
-    !!route &&
-    route.stops.every((stop) => +new Date(stop.house.ends_at) > now) &&
-    (!s || +new Date(route.estimatedEnd) <= +new Date(s.closes_at));
-  const safeRoute = useMemo(
+  const mapOrigin = useMemo(
     () =>
-      route && routeInWindow
-        ? retainClosedRoute(
-            route,
-            state.routeCandidates ?? state.houses ?? [],
-            state.closedHouseIds ?? [],
-            0,
-          )
-        : null,
-    [
-      route,
-      routeInWindow,
-      state.routeCandidates,
-      state.houses,
-      state.closedHouseIds,
-    ],
+      origin ??
+      (controller.parameters
+        ? ([
+            controller.parameters.origin.longitude,
+            controller.parameters.origin.latitude,
+          ] as [number, number])
+        : null),
+    [origin, controller.parameters],
   );
   const routeHouses = useMemo(
     () => safeRoute?.stops.map((stop) => stop.house) ?? [],
     [safeRoute],
   );
+  useEffect(() => {
+    if (controller.phase === "active") {
+      setTab("map");
+      setRouteOpen(true);
+    }
+  }, [controller.phase]);
   if (!showMap) {
     const closed = state.state === "CLOSED" || state.state === "ARCHIVED";
     const remaining = s ? Math.max(0, +new Date(s.opens_at) - now) : 0;
@@ -912,27 +905,39 @@ function PublicMap({
             </div>
           </div>
         )}
-        {tab === "map" ? (
-          <MapView
-            houses={houses}
-            center={[i.longitude, i.latitude]}
-            zoom={i.zoom}
-            styleUrl={mapStyle}
-            onSelect={setSelected}
-            geometry={safeRoute?.geometry}
-            origin={(pick ? draftOrigin : origin) ?? undefined}
-            focusToken={pick ? 0 : focusToken}
-            routeSteps={routeHouses}
-            routePanelOpen={routeOpen && !pick}
-            onPoint={
-              pick
-                ? (lat, lng) => {
-                    setDraftOrigin([lng, lat]);
-                  }
-                : undefined
-            }
-          />
-        ) : (
+        {controller.ready && (
+          <div style={{ display: tab === "map" ? "contents" : "none" }}>
+            <MapView
+              houses={houses}
+              center={[i.longitude, i.latitude]}
+              zoom={i.zoom}
+              styleUrl={mapStyle}
+              onSelect={setSelected}
+              geometry={safeRoute?.geometry}
+              origin={(pick ? draftOrigin : mapOrigin) ?? undefined}
+              focusToken={pick ? 0 : focusToken}
+              routeSteps={routeHouses}
+              routePanelOpen={routeOpen && !pick}
+              initialCamera={controller.camera}
+              onCameraChange={controller.setCamera}
+              sheetPosition={controller.sheet}
+              currentPosition={
+                ["tracking", "low-accuracy"].includes(controller.gpsState)
+                  ? controller.currentPosition
+                  : null
+              }
+              recenterTarget={controller.recenterTarget}
+              onPoint={
+                pick
+                  ? (lat, lng) => {
+                      setDraftOrigin([lng, lat]);
+                    }
+                  : undefined
+              }
+            />
+          </div>
+        )}
+        {tab !== "map" && (
           <div className="house-list">
             {houses.map((h) => (
               <button key={h.id} onClick={() => setSelected(h)}>
@@ -952,12 +957,17 @@ function PublicMap({
           <p className="empty">{state.contents?.["home.empty"]}</p>
         )}
         <p className="muted small">
-          Les maisons en pause ou hors horaires sont masquées. Actualisation
-          toutes les 30 secondes.
+          Les maisons en pause ou hors horaires sont masquées. Le parcours actif
+          est vérifié toutes les 60 secondes lorsque l’application est visible.
         </p>
       </section>
       {open && (
-        <aside className="route-panel panel" id="parcours">
+        <aside
+          className="route-panel panel"
+          id="parcours"
+          data-sheet-position={controller.sheet}
+          data-route-phase={controller.phase}
+        >
           <button
             className="close mobile-route-close"
             aria-label="Fermer le parcours"
@@ -978,10 +988,9 @@ function PublicMap({
             </summary>
             <RouteForm
               state={state}
-              origin={origin}
+              origin={mapOrigin}
               originLabel={originLabel}
               onInvalidate={invalidate}
-              getRevision={() => revision.current}
               filters={filters}
               maxFear={maxFear}
               setOrigin={(p, accuracy) =>
@@ -1000,18 +1009,108 @@ function PublicMap({
                 setTab("map");
                 setPick(true);
               }}
-              onResult={(result) => {
-                setRoute(result);
+              onCalculate={async (parameters) => {
+                await controller.calculateRoute(parameters);
                 requestAnimationFrame(() =>
                   document.getElementById("parcours")?.scrollTo({ top: 0 }),
                 );
               }}
             />
           </details>
-          {route && !safeRoute && (
-            <p className="notice info" role="status">
-              Les maisons ou horaires ont changé. Recalculez votre parcours.
+          <Notice error={controller.error || controller.storageError} />
+          {controller.phase === "active" && !controller.verified && (
+            <p role="status">
+              {controller.checking
+                ? "Vérification du parcours…"
+                : "Disponibilité non vérifiée."}
             </p>
+          )}
+          {controller.notification && (
+            <p className="notice info" role="status">
+              {controller.notification}
+            </p>
+          )}
+          {(controller.notification ||
+            (controller.phase === "active" && controller.error)) && (
+            <button
+              type="button"
+              disabled={controller.recalculating}
+              onClick={() => void controller.recalculateRoute()}
+            >
+              {controller.recalculating
+                ? "Recalcul…"
+                : "Recalculer mon parcours"}
+            </button>
+          )}
+          {controller.phase === "active" && (
+            <>
+              <p role="status">
+                {controller.gpsState === "tracking"
+                  ? `GPS actif · précision ±${Math.round(controller.accuracy ?? 0)} m`
+                  : controller.gpsState === "low-accuracy"
+                    ? `Position approximative · précision ±${Math.round(controller.accuracy ?? 0)} m`
+                    : controller.gpsState === "searching"
+                      ? "Recherche GPS…"
+                      : controller.gpsError || "Suivi GPS en pause."}
+              </p>
+              <button
+                type="button"
+                disabled={
+                  !["tracking", "low-accuracy"].includes(controller.gpsState)
+                }
+                onClick={controller.recenterCurrentPosition}
+              >
+                Recentrer sur ma position
+              </button>
+              <label>
+                Position du panneau{" "}
+                <select
+                  aria-label="Position du panneau"
+                  value={controller.sheet}
+                  onChange={(e) =>
+                    controller.setSheet(
+                      e.target.value as
+                        "collapsed" | "intermediate" | "expanded",
+                    )
+                  }
+                >
+                  <option value="collapsed">Réduit</option>
+                  <option value="intermediate">Intermédiaire</option>
+                  <option value="expanded">Étendu</option>
+                </select>
+              </label>
+              <button
+                type="button"
+                onClick={() => {
+                  controller.stopActiveRoute();
+                  setRouteOpen(false);
+                }}
+              >
+                Arrêter mon parcours
+              </button>
+            </>
+          )}
+          {controller.phase === "calculated" && safeRoute && (
+            <>
+              {!!safeRoute.stops.length && (
+                <button
+                  type="button"
+                  className="primary"
+                  onClick={controller.startRoute}
+                >
+                  Démarrer mon parcours
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  controller.deletePreparedRoute();
+                  setRouteOpen(false);
+                }}
+              >
+                Supprimer le parcours préparé
+              </button>
+            </>
           )}
           {safeRoute?.message && (
             <p className="notice info" role="status">
@@ -1039,7 +1138,7 @@ function PublicMap({
                         <strong>{stop.house.name}</strong>
                         {stop.unavailable && (
                           <small>
-                            Accueil fermé · étape conservée temporairement.
+                            Étape indisponible · conservée temporairement.
                             Exclue du prochain recalcul.
                           </small>
                         )}
@@ -1213,20 +1312,18 @@ function RouteForm({
   onPick,
   onRecenter,
   onInvalidate,
-  getRevision,
-  onResult,
+  onCalculate,
 }: {
   state: PublicState;
   origin: [number, number] | null;
   originLabel: string;
   onRecenter: () => void;
   onInvalidate: () => void;
-  getRevision: () => number;
   filters: Activity[];
   maxFear: number;
   setOrigin: (p: [number, number], accuracy?: number) => void;
   onPick: () => void;
-  onResult: (r: RouteResult) => void;
+  onCalculate: (parameters: RouteParameters) => Promise<void>;
 }) {
   const [error, setError] = useState(""),
     [busy, setBusy] = useState(false),
@@ -1242,24 +1339,24 @@ function RouteForm({
         e.preventDefault();
         if (!origin || locating) return;
         const v = values(e.currentTarget);
-        const requestedRevision = getRevision();
         setBusy(true);
         setError("");
         try {
-          const result: RouteResult = await api(
-            state.preview ? "route?preview=1" : "route",
-            {
-              start: DateTime.fromISO(v.start, { zone }).toUTC().toISO(),
-              end: DateTime.fromISO(v.end, { zone }).toUTC().toISO(),
-              origin: { latitude: origin[1], longitude: origin[0] },
-              activities: filters,
-              maxFear,
+          await onCalculate({
+            start: DateTime.fromISO(v.start, { zone }).toUTC().toISO()!,
+            end: DateTime.fromISO(v.end, { zone }).toUTC().toISO()!,
+            origin: { latitude: origin[1], longitude: origin[0] },
+            activities: filters,
+            maxFear,
+            excludedHouseIds: [],
+            acceptance: {
+              mode: "GUIDELINES_ONLY",
+              guidelines: true,
+              guidelines_version: state.documents!.GUIDELINES.version,
             },
-          );
-          if (getRevision() === requestedRevision) onResult(result);
+          });
         } catch (e) {
-          if (getRevision() === requestedRevision)
-            setError((e as Error).message);
+          setError((e as Error).message);
         } finally {
           setBusy(false);
         }
@@ -1335,6 +1432,18 @@ function RouteForm({
         parcours.
       </p>
       <Notice error={error} />
+      <label className="route-guidelines">
+        <input
+          type="checkbox"
+          name="guidelines"
+          required
+          onChange={onInvalidate}
+        />
+        J’ai pris connaissance des{" "}
+        <Link href="/guidelines" target="_blank">
+          bonnes pratiques
+        </Link>
+      </label>
       <button className="primary wide" disabled={busy || locating || !origin}>
         {busy ? "Calcul piéton…" : "Créer mon parcours"}
         <ArrowRight size={18} />

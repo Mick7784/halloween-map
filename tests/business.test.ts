@@ -1,3 +1,5 @@
+import { houseTravelKey } from "../lib/route-state";
+import { publicHouse } from "../lib/domain";
 import manifest from "../app/manifest";
 import { runInNewContext } from "node:vm";
 import {
@@ -271,6 +273,11 @@ describe("V0.4 privacy, roles, demo and recovery", () => {
       expect(JSON.stringify(state)).not.toContain(String(house.latitude));
     }
     const input = {
+      acceptance: {
+        mode: "GUIDELINES_ONLY",
+        guidelines: true,
+        guidelines_version: "2026.1",
+      },
       start: "2026-10-31T18:00Z",
       end: "2026-10-31T20:00Z",
       origin: { latitude: 48.1, longitude: -1.67 },
@@ -299,6 +306,11 @@ describe("V0.4 privacy, roles, demo and recovery", () => {
     expect(JSON.stringify(state)).not.toContain(house.address);
     const result = await service.route(
       {
+        acceptance: {
+          mode: "GUIDELINES_ONLY",
+          guidelines: true,
+          guidelines_version: "2026.1",
+        },
         start: context.now.toISOString(),
         end: "2026-10-31T20:00Z",
         origin: { latitude: 48.1, longitude: -1.67 },
@@ -390,6 +402,11 @@ describe("V0.4 privacy, roles, demo and recovery", () => {
     expect((await service.publicState(context, admin)).houses).toHaveLength(2);
     const r = await service.route(
       {
+        acceptance: {
+          mode: "GUIDELINES_ONLY",
+          guidelines: true,
+          guidelines_version: "2026.1",
+        },
         start: context.now.toISOString(),
         end: new Date(demo.closes_at).toISOString(),
         origin: { latitude: 48.1, longitude: -1.67 },
@@ -988,6 +1005,11 @@ describe("Routing, demo and canonical versions", () => {
     await expect(
       service.route(
         {
+          acceptance: {
+            mode: "GUIDELINES_ONLY",
+            guidelines: true,
+            guidelines_version: "2026.1",
+          },
           start: context.now.toISOString(),
           end: "2026-10-31T20:00Z",
           origin: { latitude: 48.1, longitude: -1.67 },
@@ -1112,6 +1134,11 @@ describe("Routing, demo and canonical versions", () => {
     );
     const result = await service.route(
       {
+        acceptance: {
+          mode: "GUIDELINES_ONLY",
+          guidelines: true,
+          guidelines_version: "2026.1",
+        },
         start: new Date(+now + 7200000).toISOString(),
         end: new Date(+now + 10800000).toISOString(),
         origin: { latitude: 48.1, longitude: -1.67 },
@@ -1990,6 +2017,11 @@ it("calculates preview time without ORS and returns explicit demo errors in the 
     await expect(
       service.route(
         {
+          acceptance: {
+            mode: "GUIDELINES_ONLY",
+            guidelines: true,
+            guidelines_version: "2026.1",
+          },
           origin: {
             latitude: configured.latitude,
             longitude: configured.longitude,
@@ -2012,4 +2044,190 @@ it("calculates preview time without ORS and returns explicit demo errors in the 
     if (previousBase === undefined) delete process.env.ORS_BASE_URL;
     else process.env.ORS_BASE_URL = previousBase;
   }
+});
+
+describe("active route phase 1 contracts", () => {
+  const context = { now: new Date("2026-10-31T18:00Z"), preview: false };
+  const parameters = () => ({
+    start: context.now.toISOString(),
+    end: "2026-10-31T20:00Z",
+    origin: { latitude: 48.1, longitude: -1.67 },
+    activities: [],
+    acceptance: {
+      mode: "GUIDELINES_ONLY",
+      guidelines: true,
+      guidelines_version: "2026.1",
+    },
+  });
+  const check = () => ({
+    instanceId: participant.instance_id,
+    seasonId: season.id,
+    activities: [],
+    steps: [
+      {
+        id: house.id,
+        arrival: "2026-10-31T18:10:00Z",
+        departure: "2026-10-31T18:15:00Z",
+        key: houseTravelKey(publicHouse(house)),
+      },
+    ],
+  });
+  it("requires the current guidelines and excludes specified houses without invoking another engine", async () => {
+    await db().query("UPDATE seasons SET activated=true WHERE id=$1", [
+      season.id,
+    ]);
+    const missing = { ...parameters(), acceptance: undefined };
+    await expect(
+      service.route(missing, context, participant),
+    ).rejects.toThrow();
+    await expect(
+      service.route(
+        {
+          ...parameters(),
+          acceptance: { ...parameters().acceptance, guidelines: false },
+        },
+        context,
+        participant,
+      ),
+    ).rejects.toThrow();
+    await expect(
+      service.route(
+        {
+          ...parameters(),
+          acceptance: {
+            ...parameters().acceptance,
+            guidelines_version: "2025.1",
+          },
+        },
+        context,
+        participant,
+      ),
+    ).rejects.toMatchObject({ status: 409 });
+    expect(
+      (
+        await service.route(
+          { ...parameters(), excludedHouseIds: [house.id] },
+          context,
+          participant,
+        )
+      ).stops,
+    ).toEqual([]);
+    expect(
+      (await service.route(parameters(), context, participant)).stops,
+    ).toHaveLength(1);
+  });
+  it("batches minimal statuses, distinguishes closure and protects admin-hidden houses", async () => {
+    await db().query("UPDATE seasons SET activated=true WHERE id=$1", [
+      season.id,
+    ]);
+    expect(
+      (await service.routeAvailability(participant, check(), context)).steps[0],
+    ).toMatchObject({ available: true });
+    await service.participantAction(participant, { action: "pause" });
+    expect(
+      (await service.routeAvailability(participant, check(), context)).steps[0],
+    ).toMatchObject({ available: false, reason: "paused" });
+    await service.participantAction(participant, { action: "end" });
+    expect(
+      (await service.routeAvailability(participant, check(), context)).steps[0]
+        .reason,
+    ).toBe("ended");
+    await service.adminAction(admin, {
+      action: "visibility",
+      id: house.id,
+      payload: "HIDDEN",
+    });
+    const hidden = (
+      await service.routeAvailability(participant, check(), context)
+    ).steps[0];
+    const absent = (
+      await service.routeAvailability(
+        participant,
+        {
+          ...check(),
+          steps: [
+            { ...check().steps[0], id: "00000000-0000-4000-8000-000000000099" },
+          ],
+        },
+        context,
+      )
+    ).steps[0];
+    expect(hidden).toEqual({
+      id: house.id,
+      available: false,
+      reason: "unavailable",
+    });
+    expect({ ...absent, id: house.id }).toEqual(hidden);
+    expect(
+      await service.routeAvailability(
+        participant,
+        { ...check(), seasonId: "00000000-0000-4000-8000-000000000099" },
+        context,
+      ),
+    ).toMatchObject({ valid: false });
+    await expect(
+      service.routeAvailability(null, check(), context),
+    ).rejects.toMatchObject({ status: 401 });
+    await expect(
+      service.routeAvailability(
+        participant,
+        {
+          ...check(),
+          steps: Array.from({ length: 31 }, () => check().steps[0]),
+        },
+        context,
+      ),
+    ).rejects.toThrow();
+  });
+  it("keeps adaptable houses compatible and checks changed coordinates, activities and expiry", async () => {
+    await db().query("UPDATE seasons SET activated=true WHERE id=$1", [
+      season.id,
+    ]);
+    await db().query("UPDATE participations SET adaptable=true WHERE id=$1", [
+      house.id,
+    ]);
+    house = (await service.ownHouse(participant)) as House;
+    expect(
+      (
+        await service.routeAvailability(
+          participant,
+          { ...check(), maxFear: 1 },
+          context,
+        )
+      ).steps[0].available,
+    ).toBe(true);
+    await db().query(
+      "UPDATE participations SET candy_available=false WHERE id=$1",
+      [house.id],
+    );
+    expect(
+      (await service.routeAvailability(participant, check(), context)).steps[0]
+        .available,
+    ).toBe(true);
+    expect(
+      (
+        await service.routeAvailability(
+          participant,
+          { ...check(), activities: ["CANDY"] },
+          context,
+        )
+      ).steps[0].reason,
+    ).toBe("activities");
+    await db().query(
+      "UPDATE participations SET longitude=longitude+0.01 WHERE id=$1",
+      [house.id],
+    );
+    expect(
+      (await service.routeAvailability(participant, check(), context)).steps[0]
+        .reason,
+    ).toBe("changed");
+    expect(
+      (
+        await service.routeAvailability(participant, check(), {
+          ...context,
+          now: new Date("2026-10-31T21:31Z"),
+        })
+      ).steps[0].reason,
+    ).toBe("expired");
+  });
 });

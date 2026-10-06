@@ -271,6 +271,16 @@ async function handle(
 
       return r;
     }
+    if (path === "route/availability") {
+      if (!user) throw new HttpError(401, "Connexion requise");
+      await rateLimit("route-availability:" + user.id, 120);
+      const context = await effectiveTime(
+        req.nextUrl.searchParams.get("preview") === "1",
+        user,
+        req.cookies.get(cookie)?.value,
+      );
+      return response(await service.routeAvailability(user, input, context));
+    }
     if (path === "route") {
       await rateLimit("routes-global", 300);
       const context = await effectiveTime(

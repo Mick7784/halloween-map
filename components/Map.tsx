@@ -5,6 +5,7 @@ import type { Feature, LineString } from "geojson";
 import "maplibre-gl/dist/maplibre-gl.css";
 import type { PublicHouse } from "./common";
 import { frameRoute, mapPadding } from "../lib/map-framing";
+import type { MapCamera, SheetPosition } from "../lib/active-route";
 const houseSVG =
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 36" width="30" height="34"><path d="M3 16 16 3l13 13M7 14v17h18V14" fill="#252125" stroke="#ff922f" stroke-width="3" stroke-linejoin="round"/><path d="M13 31V21h6v10M11 15h3m4 0h3" stroke="#ff922f" stroke-width="2"/></svg>';
 export default function MapView({
@@ -19,6 +20,11 @@ export default function MapView({
   focusToken = 0,
   routeSteps = [],
   routePanelOpen = false,
+  initialCamera,
+  onCameraChange,
+  sheetPosition,
+  currentPosition,
+  recenterTarget,
 }: {
   houses: (PublicHouse & { status?: string })[];
   center: [number, number];
@@ -31,6 +37,11 @@ export default function MapView({
   focusToken?: number;
   routeSteps?: PublicHouse[];
   routePanelOpen?: boolean;
+  initialCamera?: MapCamera | null;
+  onCameraChange?: (camera: MapCamera) => void;
+  sheetPosition?: SheetPosition;
+  currentPosition?: [number, number] | null;
+  recenterTarget?: { point: [number, number]; token: number } | null;
 }) {
   const el = useRef<HTMLDivElement>(null),
     map = useRef<MapType | null>(null),
@@ -40,7 +51,17 @@ export default function MapView({
   useEffect(() => {
     pointCallback.current = onPoint;
   }, [onPoint]);
-  const initial = useRef({ center, zoom, styleUrl });
+  const initial = useRef({ center, zoom, styleUrl, camera: initialCamera });
+  const cameraCallback = useRef(onCameraChange);
+  useEffect(() => {
+    cameraCallback.current = onCameraChange;
+  }, [onCameraChange]);
+  const framing = useRef({ origin, routeSteps, routePanelOpen });
+  useEffect(() => {
+    framing.current = { origin, routeSteps, routePanelOpen };
+  }, [origin, routeSteps, routePanelOpen]);
+  const framedGeometry = useRef(geometry);
+  const restoredCamera = useRef(!!initialCamera);
   useEffect(() => {
     let stopped = false;
     import("maplibre-gl").then((m) => {
@@ -50,11 +71,21 @@ export default function MapView({
         const g = new m.Map({
           container: el.current,
           style: initial.current.styleUrl,
-          center: initial.current.center,
-          zoom: initial.current.zoom,
+          center: initial.current.camera?.center ?? initial.current.center,
+          zoom: initial.current.camera?.zoom ?? initial.current.zoom,
+          bearing: initial.current.camera?.bearing ?? 0,
+          pitch: initial.current.camera?.pitch ?? 0,
           attributionControl: { compact: true },
         });
         map.current = g;
+        g.on("moveend", () =>
+          cameraCallback.current?.({
+            center: [g.getCenter().lng, g.getCenter().lat],
+            zoom: g.getZoom(),
+            bearing: g.getBearing(),
+            pitch: g.getPitch(),
+          }),
+        );
         const observer = new ResizeObserver(() => g.resize());
         observer.observe(el.current);
         g.on("remove", () => observer.disconnect());
@@ -196,7 +227,40 @@ export default function MapView({
     };
   }, [loaded, origin]);
   useEffect(() => {
+    const g = map.current;
+    if (!loaded || !g || !currentPosition) return;
+    let cancelled = false;
+    let marker: import("maplibre-gl").Marker | undefined;
+    import("maplibre-gl").then((m) => {
+      if (cancelled) return;
+      const point = document.createElement("div");
+      point.className = "current-position-marker";
+      point.setAttribute("role", "img");
+      point.setAttribute("aria-label", "Position GPS actuelle");
+      point.style.cssText =
+        "width:16px;height:16px;border-radius:50%;background:#6ebaff;border:3px solid white";
+      marker = new m.Marker({ element: point })
+        .setLngLat(currentPosition)
+        .addTo(g);
+    });
+    return () => {
+      cancelled = true;
+      marker?.remove();
+    };
+  }, [loaded, currentPosition]);
+  useEffect(() => {
+    const g = map.current;
+    if (!loaded || !g || !recenterTarget) return;
+    g.easeTo({
+      center: recenterTarget.point,
+      duration: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+        ? 0
+        : 450,
+    });
+  }, [loaded, recenterTarget]);
+  useEffect(() => {
     if (!loaded || !map.current || !origin || !focusToken) return;
+    const routePanelOpen = framing.current.routePanelOpen;
     map.current.easeTo({
       center: origin,
       zoom: 16,
@@ -210,9 +274,13 @@ export default function MapView({
         ? 0
         : 450,
     });
-  }, [loaded, origin, focusToken, routePanelOpen]);
+  }, [loaded, origin, focusToken]);
   useEffect(() => {
     if (!loaded || !map.current || !geometry?.length) return;
+    if (restoredCamera.current && framedGeometry.current === geometry) return;
+    restoredCamera.current = false;
+    framedGeometry.current = geometry;
+    const { origin, routeSteps, routePanelOpen } = framing.current;
     frameRoute(
       map.current,
       geometry,
@@ -223,7 +291,43 @@ export default function MapView({
       window.matchMedia("(prefers-reduced-motion: reduce)").matches,
       document.getElementById("parcours")?.getBoundingClientRect().top,
     );
-  }, [loaded, geometry, origin, routeSteps, routePanelOpen]);
+  }, [loaded, geometry]);
+  useEffect(() => {
+    const g = map.current;
+    if (!loaded || !g) return;
+    const panel = document.getElementById("parcours");
+    const resize = () => {
+      const padding = mapPadding(
+        g.getContainer(),
+        routePanelOpen && window.innerWidth < 768
+          ? panel?.getBoundingClientRect().top
+          : undefined,
+      );
+      const old = g.getPadding();
+      if (
+        old.bottom === padding.bottom &&
+        old.top === padding.top &&
+        old.left === padding.left &&
+        old.right === padding.right
+      )
+        return;
+      g.jumpTo({
+        center: g.getCenter(),
+        zoom: g.getZoom(),
+        bearing: g.getBearing(),
+        pitch: g.getPitch(),
+        padding,
+      });
+    };
+    resize();
+    const observer = new ResizeObserver(resize);
+    if (panel) observer.observe(panel);
+    window.addEventListener("resize", resize);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", resize);
+    };
+  }, [loaded, routePanelOpen, sheetPosition]);
   return (
     <div className="map-shell">
       <div

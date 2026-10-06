@@ -39,10 +39,12 @@ import {
   instanceSchema,
   credentials,
   routeSchema,
+  routeAvailabilitySchema,
 } from "./validation";
 import { planRoute, validateRouteWindow } from "./routing";
 import { RoutingError } from "./walking-router";
-import { houseRouteKey } from "./route-state";
+import { houseRouteKey, houseTravelKey } from "./route-state";
+import type { RouteAvailability } from "./active-route";
 import { publicPrivacySettings } from "./privacy";
 import { publicProjectLinks } from "./project-links";
 import {
@@ -396,6 +398,7 @@ export async function publicState(
       seasonState(actualSeason) !== "MAP_OPEN",
     mapAccessible: !!user,
     instance: {
+      id: i.id,
       public_name: i.public_name,
       territory: i.territory,
       timezone: i.timezone,
@@ -408,6 +411,7 @@ export async function publicState(
     },
     season: s
       ? {
+          id: s.id,
           year: s.year,
           purge_at: s.purge_at,
           opens_at: s.opens_at,
@@ -773,6 +777,7 @@ export async function route(
   const s = rawSeason && context.preview ? demoSeason(rawSeason) : rawSeason;
   if (!s || seasonState(s, context.now) !== "MAP_OPEN")
     throw new HttpError(403, "La carte est fermée");
+  await validateAcceptance(db(), i.id, input.acceptance);
   try {
     validateRouteWindow(s, input, context.now);
   } catch (e) {
@@ -783,7 +788,12 @@ export async function route(
     const candidates = context.preview
       ? await demoHouses(i, s)
       : await routeCandidates(db(), i, s, input.start, input.end);
-    result = await planRoute(candidates, s, input, context.now);
+    result = await planRoute(
+      candidates.filter((h) => !input.excludedHouseIds.includes(h.id)),
+      s,
+      input,
+      context.now,
+    );
   } catch (e) {
     if (e instanceof RoutingError)
       throw new HttpError(e.reason === "no_route" ? 422 : 503, e.message);
@@ -793,6 +803,7 @@ export async function route(
   }
   // Network calls have completed before acquiring this short consistency lock.
   await transaction(async (c) => {
+    await validateAcceptance(c, i.id, input.acceptance);
     const current = (
       await c.query(
         "SELECT * FROM seasons WHERE id=$1 AND instance_id=$2 FOR UPDATE",
@@ -841,6 +852,95 @@ export async function route(
       );
   });
   return result;
+}
+export async function routeAvailability(
+  user: User | null,
+  userInput: unknown,
+  context: TimeContext = realTime(),
+): Promise<RouteAvailability> {
+  if (!user) throw new HttpError(401, "Connexion requise");
+  if (context.preview && user.role_name !== "SUPER_ADMIN")
+    throw new HttpError(403, "Super Admin requis");
+  const input = routeAvailabilitySchema.parse(userInput);
+  const i = await instance();
+  const raw = i && (await activeSeason(i));
+  const s = raw && context.preview ? demoSeason(raw) : raw;
+  const checkedAt = context.now.toISOString();
+  if (
+    !i ||
+    user.instance_id !== i.id ||
+    input.instanceId !== i.id ||
+    !s ||
+    input.seasonId !== s.id ||
+    seasonState(s, context.now) !== "MAP_OPEN"
+  )
+    return {
+      valid: false,
+      checkedAt,
+      steps: input.steps.map(({ id }) => ({
+        id,
+        available: false,
+        reason: "unavailable",
+      })),
+    };
+  // Missing, hidden, deleted and ineligible owners deliberately share one generic result.
+  const houses = context.preview
+    ? (await demoHouses(i, s)).filter((h) =>
+        input.steps.some((step) => step.id === h.id),
+      )
+    : ((
+        await db().query(
+          "SELECT p.* FROM participations p WHERE p.instance_id=$1 AND p.season_id=$2 AND p.id=ANY($3::uuid[]) AND p.status='VISIBLE' AND EXISTS(SELECT 1 FROM users u WHERE u.id=p.user_id AND u.account_status='ACTIVE' AND (u.email_status='VERIFIED' OR p.legacy_imported)) AND NOT EXISTS(SELECT 1 FROM legal_documents d WHERE d.instance_id=p.instance_id AND d.active AND d.requires_reaccept AND ((d.kind='TERMS' AND p.terms_version IS DISTINCT FROM d.version) OR (d.kind='GUIDELINES' AND p.guidelines_version IS DISTINCT FROM d.version)))",
+          [i.id, s.id, input.steps.map((step) => step.id)],
+        )
+      ).rows as unknown as House[]);
+  return {
+    valid: true,
+    checkedAt,
+    steps: input.steps.map((step) => {
+      const h = houses.find((h) => h.id === step.id);
+      if (!h)
+        return {
+          id: step.id,
+          available: false,
+          reason: "unavailable" as const,
+        };
+      const activities = effectiveActivities(h);
+      let reason: RouteAvailability["steps"][number]["reason"];
+      const arrival = Math.max(
+        +context.now,
+        +new Date(step.arrival),
+        +new Date(h.starts_at),
+      );
+      const departure = Math.max(+new Date(step.departure), arrival + 300000);
+      if (h.activity === "PAUSED") reason = "paused";
+      else if (h.activity === "ENDED") reason = "ended";
+      else if (
+        departure > +new Date(h.ends_at) ||
+        +context.now >= +new Date(h.ends_at)
+      )
+        reason = "expired";
+      else if (
+        !activities.length ||
+        (input.activities.length &&
+          !input.activities.some((a) => activities.includes(a)))
+      )
+        reason = "activities";
+      else if (
+        (!h.adaptable &&
+          input.maxFear !== undefined &&
+          h.fear > input.maxFear) ||
+        houseTravelKey(publicHouse(h)) !== step.key
+      )
+        reason = "changed";
+      return {
+        id: step.id,
+        available: !reason,
+        ...(reason ? { reason } : {}),
+        activities,
+      };
+    }),
+  };
 }
 export async function adminRead(user: User | null, section: string) {
   const permission: Record<string, string> = {
