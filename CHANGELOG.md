@@ -1,5 +1,13 @@
 # Changelog
 
+## V0.5.9 — Accueil, menus et bonnes pratiques
+
+- Accueil desktop corrigé, avec une scène étendue et un bloc central centré.
+- Menus mobile et desktop compactés et alignés.
+- Liens légaux déplacés dans les footers.
+- Ajout de « Signaler un bug » et « Soutenir le projet ».
+- Bonnes pratiques simplifiées, en vue dédiée avec validation unique obligatoire.
+
 ## V0.5.8 — Inscrire ma maison et Ma participation
 
 - Formulaire commun de création et d’édition, en plein écran mobile et desktop.
