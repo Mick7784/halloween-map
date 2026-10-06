@@ -491,8 +491,9 @@ export default function useActiveRoute({
       setState((s) => ({
         ...s,
         selectedHouse: house,
-        selectedStepId:
-          house && s.result?.stops.some((stop) => stop.house.id === house.id)
+        selectedStepId: !house
+          ? s.selectedStepId
+          : s.result?.stops.some((stop) => stop.house.id === house.id)
             ? house.id
             : null,
       })),

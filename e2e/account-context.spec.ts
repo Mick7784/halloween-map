@@ -258,17 +258,12 @@ test("desktop email change uses current password and keeps context", async ({
   ).toBeVisible();
   await expect(page).toHaveURL(/\/$/);
 });
-test("map canvas, filters and route form remain mounted across account", async ({
+test("map canvas, filters and active route remain mounted across account", async ({
   page,
 }) => {
-  await arrange(page, "/map#parcours");
-  const canvas = page.locator("canvas.maplibregl-canvas");
-  await expect(canvas).toBeVisible();
-  await canvas.evaluate((el) => el.setAttribute("data-preserved", "yes"));
-  await page.getByLabel("Frayeur maximale").selectOption("3");
-  await page.getByRole("button", { name: "Bonbons", exact: true }).click();
+  await arrange(page, "/map");
   const house = {
-    id: "retained-house",
+    id: "11111111-1111-4111-8111-111111111111",
     name: "Les lanternes",
     address: "1 rue des Lanternes",
     latitude: 48.802,
@@ -288,19 +283,42 @@ test("map canvas, filters and route form remain mounted across account", async (
         state: "MAP_OPEN",
         houses: [house],
         routeCandidates: [house],
+        instance: {
+          ...state.instance,
+          id: "22222222-2222-4222-8222-222222222222",
+        },
+        documents: {
+          ...state.documents,
+          GUIDELINES: {
+            title: "Bonnes pratiques",
+            version: "1",
+            body: "Respecter les lieux.",
+          },
+        },
         season: {
           ...state.season,
-          opens_at: new Date(Date.now() - 3600000).toISOString(),
-          closes_at: new Date(Date.now() + 86400000).toISOString(),
+          id: "33333333-3333-4333-8333-333333333333",
+          opens_at: house.starts_at,
+          closes_at: house.ends_at,
         },
       },
     }),
   );
-  await page.reload();
   await page.context().grantPermissions(["geolocation"]);
   await page
     .context()
     .setGeolocation({ latitude: 48.8, longitude: 2.8, accuracy: 10 });
+  await page.route("**/api/route/availability*", (r) =>
+    r.fulfill({
+      json: {
+        valid: true,
+        checkedAt: new Date().toISOString(),
+        steps: [
+          { id: house.id, available: true, activities: house.activities },
+        ],
+      },
+    }),
+  );
   await page.route("**/api/route*", (r) => {
     const input = r.request().postDataJSON();
     const arrival = new Date(+new Date(input.start) + 120000).toISOString();
@@ -329,33 +347,38 @@ test("map canvas, filters and route form remain mounted across account", async (
       },
     });
   });
+  await page.reload();
+  await page
+    .getByRole("button", { name: "Préparer mon parcours", exact: true })
+    .click();
+  const canvas = page.locator("canvas.maplibregl-canvas");
   await expect(canvas).toBeVisible();
   await canvas.evaluate((el) => el.setAttribute("data-preserved", "yes"));
-  await page.getByLabel("Frayeur maximale").selectOption("3");
-  await page.getByRole("button", { name: "Bonbons", exact: true }).click();
-  const start = page.getByLabel("Départ : heure");
-  await start.fill("16:00");
-  await page.getByRole("button", { name: "Ma position", exact: true }).click();
+  await page.getByRole("slider", { name: "Niveau de frayeur" }).fill("3");
+  await page.getByRole("button", { name: "Me localiser", exact: true }).click();
+  await page.getByRole("checkbox", { name: /J’ai pris connaissance/ }).check();
   await page
     .getByRole("button", { name: "Créer mon parcours", exact: true })
     .click();
-  await expect(page.locator(".route-result")).toBeVisible();
-  const resultBefore = await page.locator(".route-result").textContent();
-  const before = await canvas.boundingBox();
-  await page.locator(".account-name").click();
+  await expect(page.locator(".route-sheet")).toBeVisible();
+  await page.waitForTimeout(500);
+  const resultBefore = await page.locator(".route-sheet").textContent();
+  const read = () =>
+    page.evaluate(() =>
+      JSON.parse(localStorage.getItem("halloween.active-route")!),
+    );
+  const routeBefore = await read();
+  await page.locator(".route-account-link").click();
   await expect(page.locator(".account-dialog")).toBeVisible();
   await page.getByRole("button", { name: "Fermer Mon compte" }).click();
   await expect(page.locator(".account-dialog")).toHaveCount(0);
   await expect(canvas).toHaveAttribute("data-preserved", "yes");
-  await expect(start).toHaveValue("16:00");
-  await expect(page.locator(".route-result")).toHaveText(resultBefore!);
-  await expect(page.getByLabel("Frayeur maximale")).toHaveValue("3");
-  await expect(
-    page.getByRole("button", { name: "Bonbons", exact: true }),
-  ).toHaveClass("active");
-  expect(await canvas.boundingBox()).toEqual(before);
-  await expect(page).toHaveURL(/\/map#parcours$/);
+  await expect(page.locator(".route-sheet")).toHaveText(resultBefore!);
+  expect((await read()).camera).toEqual(routeBefore.camera);
+  expect((await read()).parameters).toEqual(routeBefore.parameters);
+  await expect(page).toHaveURL(/\/map$/);
 });
+
 test("account native PWA offer and installed hiding", async ({ page }) => {
   await arrange(page);
   await page.evaluate(() => {

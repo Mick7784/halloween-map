@@ -25,6 +25,8 @@ export default function MapView({
   sheetPosition,
   currentPosition,
   recenterTarget,
+  unavailableIds = [],
+  selectedStepId,
 }: {
   houses: (PublicHouse & { status?: string })[];
   center: [number, number];
@@ -42,6 +44,8 @@ export default function MapView({
   sheetPosition?: SheetPosition;
   currentPosition?: [number, number] | null;
   recenterTarget?: { point: [number, number]; token: number } | null;
+  unavailableIds?: string[];
+  selectedStepId?: string | null;
 }) {
   const el = useRef<HTMLDivElement>(null),
     map = useRef<MapType | null>(null),
@@ -62,6 +66,12 @@ export default function MapView({
   }, [origin, routeSteps, routePanelOpen]);
   const framedGeometry = useRef(geometry);
   const restoredCamera = useRef(!!initialCamera);
+  const livePosition = useRef(currentPosition);
+  const liveMarker = useRef<import("maplibre-gl").Marker | null>(null);
+  const hasCurrentPosition = !!currentPosition;
+  useEffect(() => {
+    livePosition.current = currentPosition;
+  }, [currentPosition]);
   useEffect(() => {
     let stopped = false;
     import("maplibre-gl").then((m) => {
@@ -135,7 +145,9 @@ export default function MapView({
         button.className =
           "house-marker" +
           (h.status === "HIDDEN" ? " hidden-house" : "") +
-          (step >= 0 ? " route-house" : "");
+          (step >= 0 ? " route-house" : "") +
+          (unavailableIds.includes(h.id) ? " is-unavailable" : "") +
+          (selectedStepId === h.id ? " is-selected" : "");
         if (h.status === "HIDDEN") button.title = "Masquée · " + h.name;
         button.setAttribute(
           "aria-label",
@@ -166,7 +178,7 @@ export default function MapView({
       cancelled = true;
       markers.forEach((m) => m.remove());
     };
-  }, [houses, loaded, onSelect, routeSteps]);
+  }, [houses, loaded, onSelect, routeSteps, unavailableIds, selectedStepId]);
   useEffect(() => {
     const g = map.current;
     if (!loaded || !g) return;
@@ -228,26 +240,29 @@ export default function MapView({
   }, [loaded, origin]);
   useEffect(() => {
     const g = map.current;
-    if (!loaded || !g || !currentPosition) return;
+    if (!loaded || !g || !hasCurrentPosition) return;
     let cancelled = false;
     let marker: import("maplibre-gl").Marker | undefined;
     import("maplibre-gl").then((m) => {
-      if (cancelled) return;
+      if (cancelled || !livePosition.current) return;
       const point = document.createElement("div");
       point.className = "current-position-marker";
       point.setAttribute("role", "img");
       point.setAttribute("aria-label", "Position GPS actuelle");
-      point.style.cssText =
-        "width:16px;height:16px;border-radius:50%;background:#6ebaff;border:3px solid white";
       marker = new m.Marker({ element: point })
-        .setLngLat(currentPosition)
+        .setLngLat(livePosition.current)
         .addTo(g);
+      liveMarker.current = marker;
     });
     return () => {
       cancelled = true;
       marker?.remove();
+      liveMarker.current = null;
     };
-  }, [loaded, currentPosition]);
+  }, [loaded, hasCurrentPosition]);
+  useEffect(() => {
+    if (currentPosition) liveMarker.current?.setLngLat(currentPosition);
+  }, [currentPosition]);
   useEffect(() => {
     const g = map.current;
     if (!loaded || !g || !recenterTarget) return;
@@ -290,6 +305,7 @@ export default function MapView({
       window.innerWidth < 768,
       window.matchMedia("(prefers-reduced-motion: reduce)").matches,
       document.getElementById("parcours")?.getBoundingClientRect().top,
+      document.getElementById("parcours")?.getBoundingClientRect().right,
     );
   }, [loaded, geometry]);
   useEffect(() => {
@@ -301,6 +317,9 @@ export default function MapView({
         g.getContainer(),
         routePanelOpen && window.innerWidth < 768
           ? panel?.getBoundingClientRect().top
+          : undefined,
+        routePanelOpen && window.innerWidth >= 768
+          ? panel?.getBoundingClientRect().right
           : undefined,
       );
       const old = g.getPadding();

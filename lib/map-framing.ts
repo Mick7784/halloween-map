@@ -1,9 +1,16 @@
 import type { Map } from "maplibre-gl";
-export function mapPadding(container: HTMLElement, panelTop?: number) {
+export function mapPadding(
+  container: HTMLElement,
+  panelTop?: number,
+  panelRight?: number,
+) {
   const box = container.getBoundingClientRect();
   return {
     top: 45,
-    left: 45,
+    left:
+      panelRight === undefined
+        ? 45
+        : Math.max(45, Math.min(box.width - 100, panelRight - box.left + 20)),
     right: 45,
     bottom:
       panelTop === undefined
@@ -20,6 +27,7 @@ export function frameRoute(
   mobile: boolean,
   reducedMotion: boolean,
   panelTop?: number,
+  panelRight?: number,
 ) {
   const points = [
     ...geometry,
@@ -38,6 +46,7 @@ export function frameRoute(
       padding: mapPadding(
         map.getContainer(),
         mobile && panelOpen ? panelTop : undefined,
+        !mobile && panelOpen ? panelRight : undefined,
       ),
       maxZoom: 16,
       // MapLibre 6 otherwise adds fit padding to an in-flight GPS recenter's

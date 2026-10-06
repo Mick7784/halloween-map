@@ -170,17 +170,39 @@ test("Super Admin enters demo in one click and plans a route without changing st
   await expect(
     page.getByText("MODE DÉMONSTRATION", { exact: false }),
   ).toBeVisible();
-  await page.getByRole("button", { name: "Liste", exact: true }).click();
-  await page.locator(".house-list button").first().click();
+  await page.context().grantPermissions(["geolocation"]);
   await page
-    .getByRole("button", { name: "Choisir comme point de départ" })
+    .context()
+    .setGeolocation({ latitude: 48.1, longitude: -1.67, accuracy: 10 });
+  await page
+    .getByRole("button", { name: "Préparer mon parcours", exact: true })
     .click();
-  await page.getByRole("button", { name: "Créer mon parcours" }).click();
-  await expect(page.locator(".route-result")).toContainText("2 étapes");
+  await page.getByRole("button", { name: "Me localiser", exact: true }).click();
+  await page
+    .getByRole("checkbox", {
+      name: "Je m’adapte à tous les niveaux",
+      exact: true,
+    })
+    .check();
+  await page.getByRole("checkbox", { name: /J’ai pris connaissance/ }).check();
+  await page
+    .getByRole("button", { name: "Créer mon parcours", exact: true })
+    .click();
+  await expect(page.locator(".route-sheet")).toContainText("2 maisons");
   expect(
     (await pool.query("SELECT routes_count,opens_at,closes_at FROM seasons"))
       .rows[0],
   ).toEqual(before);
+  await page
+    .getByRole("button", { name: "Position du panneau parcours", exact: true })
+    .press("ArrowUp");
+  await page
+    .getByRole("button", { name: "Position du panneau parcours", exact: true })
+    .press("ArrowUp");
+  await page
+    .getByRole("button", { name: "Arrêter le parcours", exact: true })
+    .click();
+  await page.getByRole("button", { name: "Arrêter", exact: true }).click();
   await page.getByRole("button", { name: "Quitter le mode démo" }).click();
   await page.waitForURL("/");
   await expect(page.locator(".demo-banner")).toHaveCount(0);
