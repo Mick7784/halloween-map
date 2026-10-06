@@ -1,5 +1,13 @@
 # Changelog
 
+## V0.5.6 — Mon compte premium et confidentialité
+
+- Refonte premium de Mon compte : plein écran mobile, sous-vues internes et modal desktop conservant le contexte actif.
+- Animations sobres d’ouverture, de fermeture et de retour, avec respect du mouvement réduit.
+- Vue Confidentialité et données : informations réelles, prochaine purge, politique existante et points de branchement du contact et des règles de conservation.
+- Intégration PWA dans le compte et le menu, avec installation native, aide iOS et masquage en standalone.
+- Finitions : badge vert Email vérifié, déconnexion neutre et suppression rouge avec confirmation existante.
+
 ## V0.5.5 — installation PWA depuis le menu
 
 - Action secondaire « Ajouter l’application » dans le menu de l’accueil, pour les visiteurs et tous les rôles connectés.

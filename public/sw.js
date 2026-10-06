@@ -1,5 +1,5 @@
 /* Only immutable static resources. Never persist HTML pages, API, tiles or user data. */
-const CACHE = "halloween-static-V0.5.5";
+const CACHE = "halloween-static-V0.5.6";
 const FALLBACK = "/offline.html";
 self.addEventListener("install", (event) => {
   event.waitUntil(
