@@ -78,15 +78,15 @@ describe("walking plan", () => {
     expect(router.directions).toHaveBeenCalledWith([input.origin, b, a]);
     expect(r.geometry).toEqual(geometry);
     expect(r.distanceMeters).toBe(1130);
-    expect(r.walkingSeconds).toBe(680);
-    expect(r.durationMinutes).toBe(22);
+    expect(r.walkingSeconds).toBe(1130);
+    expect(r.durationMinutes).toBe(29);
     expect(r.stops[0]).toMatchObject({
       distanceMeters: 510,
-      walkingSeconds: 310,
-      arrival: "2026-10-31T18:05:10.000Z",
-      departure: "2026-10-31T18:10:10.000Z",
+      walkingSeconds: 510,
+      arrival: "2026-10-31T18:08:30.000Z",
+      departure: "2026-10-31T18:13:30.000Z",
     });
-    expect(r.estimatedEnd).toBe("2026-10-31T18:21:20.000Z");
+    expect(r.estimatedEnd).toBe("2026-10-31T18:28:50.000Z");
     expect(r.disclaimer).not.toContain("vol d’oiseau");
     expect(routeIsCurrent(r, [a, b].map(publicHouse), +now)).toBe(true);
     expect(routeIsCurrent(r, [a].map(publicHouse), +now)).toBe(false);
@@ -118,7 +118,7 @@ describe("walking plan", () => {
     };
     const r = await planRoute([h], season, input, now, router);
     expect(r.durationMinutes).toBe(65);
-    expect(r.walkingMinutes).toBe(5);
+    expect(r.walkingMinutes).toBe(9);
     expect(r.stops[0].departure).toBe("2026-10-31T19:05:00.000Z");
     expect(
       (
@@ -133,7 +133,7 @@ describe("walking plan", () => {
     ).toEqual([]);
   });
   it("reroutes and recomputes the whole schedule if final directions make a stop infeasible", async () => {
-    const a = { ...house("a"), ends_at: "2026-10-31T18:06Z" },
+    const a = { ...house("a"), ends_at: "2026-10-31T18:08Z" },
       b = house("b");
     const directions = vi
       .fn()
@@ -161,7 +161,7 @@ describe("walking plan", () => {
     });
     expect(r.stops.map((s) => s.house.id)).toEqual(["b"]);
     expect(r.distanceMeters).toBe(700);
-    expect(r.durationMinutes).toBe(9);
+    expect(r.durationMinutes).toBe(17);
     expect(directions).toHaveBeenCalledTimes(2);
   });
   it("never creates a straight-line fallback on provider failure or disconnected graph", async () => {

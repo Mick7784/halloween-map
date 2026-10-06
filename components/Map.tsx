@@ -27,6 +27,7 @@ export default function MapView({
   recenterTarget,
   unavailableIds = [],
   selectedStepId,
+  visitedIds = [],
 }: {
   houses: (PublicHouse & { status?: string })[];
   center: [number, number];
@@ -46,6 +47,7 @@ export default function MapView({
   recenterTarget?: { point: [number, number]; token: number } | null;
   unavailableIds?: string[];
   selectedStepId?: string | null;
+  visitedIds?: string[];
 }) {
   const el = useRef<HTMLDivElement>(null),
     map = useRef<MapType | null>(null),
@@ -146,23 +148,26 @@ export default function MapView({
           "house-marker" +
           (h.status === "HIDDEN" ? " hidden-house" : "") +
           (step >= 0 ? " route-house" : "") +
-          (unavailableIds.includes(h.id) ? " is-unavailable" : "") +
+          (visitedIds.includes(h.id)
+            ? " is-visited"
+            : unavailableIds.includes(h.id)
+              ? " is-unavailable"
+              : "") +
           (selectedStepId === h.id ? " is-selected" : "");
         if (h.status === "HIDDEN") button.title = "Masquée · " + h.name;
         button.setAttribute(
           "aria-label",
-          step >= 0 ? `Étape ${step + 1} · ${h.name}` : h.name,
+          h.name +
+            (visitedIds.includes(h.id)
+              ? " · Visitée"
+              : unavailableIds.includes(h.id)
+                ? " · Indisponible"
+                : ""),
         );
         const visual = document.createElement("span");
         visual.className = "house-marker-visual";
         visual.innerHTML = houseSVG;
         button.append(visual);
-        if (step >= 0) {
-          const badge = document.createElement("span");
-          badge.className = "route-marker-number";
-          badge.textContent = String(step + 1);
-          visual.append(badge);
-        }
         button.onclick = (e) => {
           e.stopPropagation();
           onSelect?.(h);
@@ -178,10 +183,19 @@ export default function MapView({
       cancelled = true;
       markers.forEach((m) => m.remove());
     };
-  }, [houses, loaded, onSelect, routeSteps, unavailableIds, selectedStepId]);
+  }, [
+    houses,
+    loaded,
+    onSelect,
+    routeSteps,
+    unavailableIds,
+    selectedStepId,
+    visitedIds,
+  ]);
   useEffect(() => {
     const g = map.current;
     if (!loaded || !g) return;
+    if (!geometry?.length && !g.getSource("route")) return;
     const data: Feature<LineString> = {
       type: "Feature",
       properties: {},
@@ -308,6 +322,37 @@ export default function MapView({
       document.getElementById("parcours")?.getBoundingClientRect().right,
     );
   }, [loaded, geometry]);
+  const selectionKey = routeSteps
+      .map((h) => h.id)
+      .sort()
+      .join("|"),
+    framedSelection = useRef(initialCamera ? selectionKey : "");
+  useEffect(() => {
+    if (
+      !loaded ||
+      !map.current ||
+      geometry?.length ||
+      !selectionKey ||
+      framedSelection.current === selectionKey
+    )
+      return;
+    framedSelection.current = selectionKey;
+    const points = framing.current.routeSteps.map((h) => [
+      h.longitude,
+      h.latitude,
+    ]);
+    frameRoute(
+      map.current,
+      points,
+      framing.current.origin,
+      framing.current.routeSteps,
+      framing.current.routePanelOpen,
+      window.innerWidth < 768,
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+      document.getElementById("parcours")?.getBoundingClientRect().top,
+      document.getElementById("parcours")?.getBoundingClientRect().right,
+    );
+  }, [loaded, selectionKey, geometry]);
   useEffect(() => {
     const g = map.current;
     if (!loaded || !g) return;

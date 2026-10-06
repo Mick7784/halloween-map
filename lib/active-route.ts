@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { routeSchema } from "./validation";
 import type { Activity } from "./domain";
+import { emptyCollection } from "./collection";
 import type { RouteResult } from "./routing";
 
 export const ACTIVE_ROUTE_KEY = "halloween.active-route";
@@ -23,6 +24,7 @@ export type RouteAvailability = {
     available: boolean;
     reason?: AvailabilityReason;
     activities?: Activity[];
+    house?: RouteResult["stops"][number]["house"];
   }[];
 };
 const point = z.tuple([
@@ -65,12 +67,19 @@ const result = z.object({
   walkingSeconds: metric,
   durationMinutes: metric,
   estimatedEnd: date,
-  geometry: z.array(point).min(2).max(100000),
+  geometry: z.array(point).max(100000),
   disclaimer: z.string(),
   message: z.string().optional(),
 });
 export const storedRouteSchema = z.object({
-  format: z.literal(1),
+  format: z.literal(2),
+  phase: z.enum(["calculated", "active", "completed"]),
+  collection: z.object({
+    startedAt: date.nullable(),
+    endedAt: date.nullable(),
+    distanceMeters: metric,
+    visitedIds: z.array(z.string().uuid()).max(30),
+  }),
   ownerId: z.string(),
   instanceId: z.string().uuid(),
   seasonId: z.string().uuid(),
@@ -99,15 +108,48 @@ export function restoreRoute(
 ): StoredRoute | null {
   try {
     if (!raw || raw.length > 5000000) return null;
-    const value = storedRouteSchema.parse(JSON.parse(raw));
+    const parsed = JSON.parse(raw);
+    if (parsed.format === 1) {
+      parsed.format = 2;
+      parsed.phase = "calculated";
+      parsed.collection = emptyCollection();
+    }
+    const value = storedRouteSchema.parse(parsed);
     if (
       value.ownerId !== identity.ownerId ||
       value.instanceId !== identity.instanceId ||
       value.seasonId !== identity.seasonId ||
-      +new Date(value.expiresAt) <= now ||
-      +new Date(value.parameters.end) <= now
+      (value.phase === "calculated" &&
+        (+new Date(value.expiresAt) <= now ||
+          +new Date(value.parameters.end) <= now)) ||
+      value.collection.visitedIds.some(
+        (id) => !value.result.stops.some((s) => s.house.id === id),
+      ) ||
+      new Set(value.collection.visitedIds).size !==
+        value.collection.visitedIds.length ||
+      (value.phase === "active" &&
+        (!value.collection.startedAt || !!value.collection.endedAt)) ||
+      (value.phase === "completed" &&
+        (!value.collection.startedAt || !value.collection.endedAt)) ||
+      (value.phase === "calculated" &&
+        (value.collection.startedAt !== null ||
+          value.collection.visitedIds.length > 0 ||
+          value.collection.distanceMeters !== 0))
     )
       return null;
+    if (
+      value.phase === "active" &&
+      Math.min(+new Date(value.expiresAt), +new Date(value.parameters.end)) <=
+        now
+    ) {
+      value.phase = "completed";
+      value.collection.endedAt = new Date(
+        Math.max(
+          +new Date(value.collection.startedAt!),
+          Math.min(+new Date(value.expiresAt), +new Date(value.parameters.end)),
+        ),
+      ).toISOString();
+    }
     return value;
   } catch {
     return null;
@@ -123,9 +165,11 @@ export function annotateAvailability(
     stops: route.stops.map((s) => ({
       ...s,
       unavailable: status.get(s.house.id)?.available !== true,
-      house: status.get(s.house.id)?.activities
-        ? { ...s.house, activities: status.get(s.house.id)!.activities! }
-        : s.house,
+      house:
+        status.get(s.house.id)?.house ??
+        (status.get(s.house.id)?.activities
+          ? { ...s.house, activities: status.get(s.house.id)!.activities! }
+          : s.house),
     })),
   };
 }

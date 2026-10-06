@@ -6,10 +6,11 @@ import {
   Trash2,
   Footprints,
   Play,
-  Route as RouteIcon,
+  Check,
+  Bookmark,
 } from "lucide-react";
 import type { PublicHouse, RouteResult } from "./common";
-import { fears, time } from "./common";
+import { fears } from "./common";
 import type { SheetPosition } from "../lib/active-route";
 import ManorMark from "./ManorMark";
 export function routeSummary(result: RouteResult) {
@@ -31,12 +32,12 @@ export default function RouteSheet({
   onHouse,
   onEnd,
   onStart,
-  timezone,
-  nextStepId,
+  onSave,
+  visitedIds,
+  remaining,
+  elapsedSeconds,
   onHeight,
   selectedStepId,
-  onRecalculate,
-  recalculating,
 }: {
   result: RouteResult;
   phase: "calculated" | "active";
@@ -45,12 +46,12 @@ export default function RouteSheet({
   onHouse: (house: PublicHouse) => void;
   onEnd: () => void;
   onStart: () => void;
-  timezone: string;
-  nextStepId?: string;
+  onSave: () => void;
+  visitedIds: string[];
+  remaining: number;
+  elapsedSeconds: number;
   onHeight: (height: number) => void;
   selectedStepId: string | null;
-  onRecalculate: () => void;
-  recalculating: boolean;
 }) {
   const panel = useRef<HTMLElement>(null),
     drag = useRef<{
@@ -74,14 +75,10 @@ export default function RouteSheet({
     measure();
     return () => observer.disconnect();
   }, [onHeight]);
-  const nextIndex = Math.max(
-    0,
-    result.stops.findIndex((s) => s.house.id === nextStepId),
-  );
-  const visible =
-    position === "intermediate"
-      ? result.stops.slice(nextIndex, nextIndex + 3)
-      : result.stops;
+  const ordered = result.stops
+    .slice()
+    .sort((a, b) => a.house.name.localeCompare(b.house.name, "fr"));
+  const visible = position === "intermediate" ? ordered.slice(0, 3) : ordered;
   return (
     <aside
       id="parcours"
@@ -175,39 +172,54 @@ export default function RouteSheet({
         </span>
         <span>
           <strong>Mon parcours</strong>
-          <small>{routeSummary(result)}</small>
+          <small>
+            {phase === "active"
+              ? visitedIds.length +
+                " visitées · " +
+                remaining +
+                " restantes · " +
+                Math.floor(elapsedSeconds / 60) +
+                " min"
+              : routeSummary(result)}
+          </small>
         </span>
         <ChevronUp className="route-sheet-chevron" size={19} />
       </button>
       <div className="route-sheet-content" inert={position === "collapsed"}>
-        {position === "intermediate" && <h2>Prochaine étape</h2>}
+        {position === "intermediate" && <h2>Ma sélection · ordre libre</h2>}
         {position === "expanded" && (
-          <h2>{result.stops.length} étapes à découvrir</h2>
+          <h2>{result.stops.length} maisons · ordre libre</h2>
         )}
-        <ol className="route-steps">
+        <ul className="route-steps">
           {visible.map((stop) => {
-            const number =
-              result.stops.findIndex((s) => s.house.id === stop.house.id) + 1;
+            const visited = visitedIds.includes(stop.house.id);
             return (
               <li key={stop.house.id}>
                 <button
                   type="button"
                   className={
                     "route-step" +
-                    (stop.unavailable ? " is-unavailable" : "") +
+                    (visited
+                      ? " is-visited"
+                      : stop.unavailable
+                        ? " is-unavailable"
+                        : "") +
                     (selectedStepId === stop.house.id ? " is-selected" : "")
                   }
-                  aria-label={`Voir l’étape ${number} : ${stop.house.name}`}
+                  aria-label={`Voir la maison : ${stop.house.name}`}
                   onClick={() => onHouse(stop.house)}
                 >
-                  <span className="route-step-number">{number}</span>
+                  {visited && <Check size={18} aria-label="Visitée" />}
                   <span className="route-step-image" />
                   <span className="route-step-info">
                     <strong>{stop.house.name}</strong>
                     <small>
                       <Footprints size={11} />
-                      {stop.walkingMinutes} min ·{" "}
-                      {Math.round(stop.distanceMeters)} m
+                      {visited
+                        ? "Visitée"
+                        : stop.unavailable
+                          ? "Indisponible"
+                          : "À découvrir"}
                     </small>
                     <span
                       className={
@@ -223,33 +235,26 @@ export default function RouteSheet({
                       </span>
                     )}
                   </span>
-                  <time dateTime={stop.arrival}>
-                    {time(stop.arrival, timezone)}
-                  </time>
                 </button>
               </li>
             );
           })}
-        </ol>
+        </ul>
         {result.message && <p className="route-status">{result.message}</p>}
         <p className="route-disclaimer">{result.disclaimer}</p>
       </div>
       {position !== "collapsed" && (
         <footer className="route-sheet-footer">
-          {result.stops.some((stop) => stop.unavailable) && (
-            <button
-              type="button"
-              disabled={recalculating}
-              onClick={onRecalculate}
-            >
-              <RouteIcon size={15} />
-              {recalculating ? "Recalcul…" : "Recalculer mon parcours"}
+          {phase === "calculated" && (
+            <button type="button" onClick={onSave}>
+              <Bookmark size={16} />
+              Garder pour plus tard
             </button>
           )}
           {phase === "calculated" && !!result.stops.length && (
             <button type="button" className="primary" onClick={onStart}>
               <Play size={16} />
-              Démarrer le parcours
+              Lancer le parcours
             </button>
           )}
           <button

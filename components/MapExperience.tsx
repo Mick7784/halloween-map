@@ -1,11 +1,5 @@
 "use client";
-import {
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type CSSProperties,
-} from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import Link from "next/link";
 import {
   X,
@@ -19,6 +13,7 @@ import {
   Map as MapIcon,
 } from "lucide-react";
 import type { User, Activity } from "../lib/domain";
+import { collectionStats } from "../lib/collection";
 import type { RouteParameters } from "../lib/active-route";
 import { Notice, labels, type PublicState } from "./common";
 import useActiveRoute from "./useActiveRoute";
@@ -56,9 +51,9 @@ export default function MapExperience({
     [filters, setFilters] = useState<Activity[]>([]),
     [list, setList] = useState(false),
     [confirmation, setConfirmation] = useState(false),
+    [launch, setLaunch] = useState(false),
     [dismissedNotification, setDismissedNotification] = useState(""),
     [sheetHeight, setSheetHeight] = useState(96);
-  const startAfterCalculation = useRef(false);
   const route = controller.result,
     routeShown = !!route,
     focused = routeShown && !!route.stops.length;
@@ -77,25 +72,9 @@ export default function MapExperience({
     window.addEventListener("hashchange", open);
     return () => window.removeEventListener("hashchange", open);
   }, [controller.ready, controller.phase]);
-  const startRoute = controller.startRoute;
-  const setSheet = controller.setSheet;
-  useEffect(() => {
-    if (
-      controller.phase !== "calculated" ||
-      !startAfterCalculation.current ||
-      !route
-    )
-      return;
-    startAfterCalculation.current = false;
-    if (route.stops.length) {
-      startRoute();
-      setSheet("collapsed");
-      setPreparing(false);
-      setList(false);
-    }
-  }, [controller.phase, route, startRoute, setSheet]);
   const selected = controller.selectedHouse;
-  const locked = focused || preparing || pick || !!selected || confirmation;
+  const locked =
+    focused || preparing || pick || !!selected || confirmation || launch;
   useEffect(() => {
     if (!locked) return;
     const body = document.body,
@@ -144,16 +123,28 @@ export default function MapExperience({
     ? route?.stops.find((s) => s.house.id === selected.id)
     : undefined;
   const selectedHouse = selectedStop?.house ?? selected;
-  const blocked = preparing || !!selected || confirmation;
+  const blocked =
+    preparing ||
+    !!selected ||
+    confirmation ||
+    launch ||
+    controller.phase === "completed";
   async function calculate(parameters: RouteParameters) {
-    startAfterCalculation.current = true;
-    try {
-      await controller.calculateRoute(parameters);
-    } catch (e) {
-      startAfterCalculation.current = false;
-      throw e;
-    }
+    await controller.calculateRoute(parameters);
+    setPreparing(false);
+    setList(false);
   }
+  const [clock, setClock] = useState(() => Date.now());
+  useEffect(() => {
+    if (controller.phase !== "active") return;
+    const timer = setInterval(() => setClock(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [controller.phase]);
+  const stats = collectionStats(
+    controller.collection,
+    route?.stops.length ?? 0,
+    clock,
+  );
   function chooseOrigin(point: [number, number], accuracy?: number) {
     controller.invalidate();
     setOrigin(point);
@@ -182,12 +173,12 @@ export default function MapExperience({
       <div className="route-map-layer" inert={blocked}>
         {controller.ready && (
           <MapView
-            houses={houses}
+            houses={focused ? [] : houses}
             center={[state.instance!.longitude, state.instance!.latitude]}
             zoom={state.instance!.zoom}
             styleUrl={mapStyle}
             onSelect={selectHouse}
-            geometry={preparing ? undefined : route?.geometry}
+            visitedIds={controller.collection.visitedIds}
             origin={(pick ? draftOrigin : retainedOrigin) ?? undefined}
             focusToken={pick ? 0 : focusToken}
             routeSteps={steps}
@@ -319,7 +310,7 @@ export default function MapExperience({
             <LocateFixed size={22} />
           </button>
         )}
-        {focused &&
+        {controller.phase === "active" &&
           (controller.gpsState !== "tracking" || !controller.verified) && (
             <p className="route-gps-status" role="status">
               {!controller.verified
@@ -339,20 +330,12 @@ export default function MapExperience({
               <AlertTriangle size={23} />
               <div>
                 <strong>
-                  Une maison de votre parcours n’est plus disponible.
+                  Une maison de votre sélection n’est plus disponible.
                 </strong>
-                <small>Son étape reste visible jusqu’au recalcul.</small>
-                <button
-                  className="primary"
-                  type="button"
-                  disabled={controller.recalculating}
-                  onClick={() => void controller.recalculateRoute()}
-                >
-                  <Route size={15} />
-                  {controller.recalculating
-                    ? "Recalcul…"
-                    : "Recalculer mon parcours"}
-                </button>
+                <small>
+                  Elle ne compte plus parmi les maisons restantes. Vous restez
+                  libre de poursuivre.
+                </small>
               </div>
               <button
                 type="button"
@@ -416,23 +399,26 @@ export default function MapExperience({
             </div>
           </div>
         )}
-        {routeShown && !preparing && !pick && (
-          <RouteSheet
-            result={route!}
-            phase={controller.phase === "active" ? "active" : "calculated"}
-            position={controller.sheet}
-            onPosition={controller.setSheet}
-            onHouse={selectHouse}
-            onEnd={() => setConfirmation(true)}
-            onStart={controller.startRoute}
-            timezone={state.instance!.timezone}
-            nextStepId={controller.nextStep?.house.id}
-            selectedStepId={controller.selectedStepId}
-            onHeight={setSheetHeight}
-            onRecalculate={() => void controller.recalculateRoute()}
-            recalculating={controller.recalculating}
-          />
-        )}
+        {routeShown &&
+          controller.phase !== "completed" &&
+          !preparing &&
+          !pick && (
+            <RouteSheet
+              result={route!}
+              phase={controller.phase === "active" ? "active" : "calculated"}
+              position={controller.sheet}
+              onPosition={controller.setSheet}
+              onHouse={selectHouse}
+              onEnd={() => setConfirmation(true)}
+              onStart={() => setLaunch(true)}
+              onSave={controller.savePreparedRoute}
+              visitedIds={controller.collection.visitedIds}
+              remaining={controller.remaining}
+              elapsedSeconds={stats.durationSeconds}
+              selectedStepId={controller.selectedStepId}
+              onHeight={setSheetHeight}
+            />
+          )}
       </div>
       {(preparing || pick) && state.season && (
         <div hidden={!preparing} inert={!preparing}>
@@ -463,18 +449,119 @@ export default function MapExperience({
         <VisitorHouse
           house={selectedHouse}
           stop={selectedStop}
-          number={
-            route
-              ? route.stops.findIndex((s) => s.house.id === selectedHouse.id) +
-                1
+          visited={controller.collection.visitedIds.includes(selectedHouse.id)}
+          onVisit={
+            controller.phase === "active" &&
+            selectedStop &&
+            !selectedStop.unavailable
+              ? () => controller.markVisited(selectedHouse.id)
               : undefined
           }
-          total={route?.stops.length}
           timezone={state.instance!.timezone}
           onClose={() => controller.selectHouse(null)}
         />
       )}
-      {confirmation && (
+      {launch && (
+        <div className="route-confirm-backdrop">
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="route-launch-title"
+            className="route-confirm route-dialog"
+          >
+            <h2 id="route-launch-title">Avant de commencer 🎃</h2>
+            <p>
+              Halloween Map vous aide à repérer les maisons participantes
+              correspondant à votre sélection.
+            </p>
+            <p>
+              Vous restez libre de choisir les maisons que vous souhaitez
+              visiter, leur ordre, votre chemin et le moment où vous souhaitez
+              arrêter votre parcours.
+            </p>
+            <p>
+              Les distances et durées affichées sont uniquement indicatives.
+            </p>
+            <p>
+              Les déplacements restent sous votre responsabilité. Les enfants
+              doivent rester sous la surveillance d’un adulte. Respectez la
+              circulation, les propriétés privées et les consignes indiquées par
+              les habitants.
+            </p>
+            <div>
+              <button onClick={() => setLaunch(false)}>Annuler</button>
+              <button
+                className="primary"
+                onClick={() => {
+                  controller.startRoute();
+                  setLaunch(false);
+                }}
+              >
+                J’ai compris — lancer le parcours
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
+      {controller.phase === "completed" && (
+        <div className="route-confirm-backdrop">
+          <section
+            className="route-confirm route-dialog collection-summary"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="collection-summary-title"
+          >
+            <h2 id="collection-summary-title">Parcours terminé 🎃</h2>
+            <p className="collection-result">
+              {stats.visited} / {stats.selected} maisons visitées ·{" "}
+              {stats.completion} %
+            </p>
+            <dl>
+              <dt>Distance réellement observée</dt>
+              <dd>
+                {(stats.distanceMeters / 1000).toLocaleString("fr-FR", {
+                  maximumFractionDigits: 2,
+                })}{" "}
+                km
+              </dd>
+              <dt>Durée réelle</dt>
+              <dd>
+                {Math.floor(stats.durationSeconds / 60)} min{" "}
+                {stats.durationSeconds % 60} s
+              </dd>
+              <dt>Début</dt>
+              <dd>
+                {new Date(controller.collection.startedAt!).toLocaleTimeString(
+                  "fr-FR",
+                  { timeZone: state.instance!.timezone },
+                )}
+              </dd>
+              <dt>Fin</dt>
+              <dd>
+                {new Date(controller.collection.endedAt!).toLocaleTimeString(
+                  "fr-FR",
+                  { timeZone: state.instance!.timezone },
+                )}
+              </dd>
+            </dl>
+            <p>
+              La distance couvre uniquement les déplacements GPS exploitables
+              observés pendant la collecte. Sans signal ou en arrière-plan, elle
+              peut être partielle.
+            </p>
+            <button
+              className="primary"
+              onClick={() => {
+                setConfirmation(false);
+                controller.deletePreparedRoute();
+              }}
+            >
+              Revenir à la carte
+            </button>
+          </section>
+        </div>
+      )}
+      {confirmation && controller.phase !== "completed" && (
         <div className="route-confirm-backdrop">
           <section
             role="dialog"
@@ -495,7 +582,11 @@ export default function MapExperience({
                 ? "Arrêter ce parcours ?"
                 : "Supprimer ce parcours ?"}
             </h2>
-            <p>Vous retrouverez la carte des maisons.</p>
+            <p>
+              {controller.phase === "active"
+                ? "Votre durée, votre distance observée et vos visites seront conservées dans le récapitulatif."
+                : "Cette sélection sera supprimée de cet appareil."}
+            </p>
             <div>
               <button type="button" onClick={() => setConfirmation(false)}>
                 Continuer

@@ -2490,3 +2490,88 @@ it("migration 007 upgrades recorded legacy provisioning and replays without chan
     ]),
   ).rejects.toThrow();
 });
+
+it("collection availability refreshes houses at real time without technical visit order or recalculation", async () => {
+  const now = new Date("2026-10-31T18:00Z");
+  await db().query("UPDATE seasons SET activated=true WHERE id=$1", [
+    season.id,
+  ]);
+  await db().query(
+    "UPDATE participations SET activities=ARRAY['CANDY','ACTING'],candy_available=false,rp='Nouvelle ambiance' WHERE id=$1",
+    [house.id],
+  );
+  const input = {
+    instanceId: admin.instance_id,
+    seasonId: season.id,
+    mode: "COLLECTION",
+    end: "2026-10-31T20:00:00Z",
+    activities: [],
+    steps: [
+      {
+        id: house.id,
+        arrival: "2026-10-31T22:00:00Z",
+        departure: "2026-10-31T22:05:00Z",
+        key: "old technical schedule",
+      },
+    ],
+  };
+  expect(
+    (
+      await service.routeAvailability(participant, input, {
+        now,
+        earlyAccess: false,
+      })
+    ).steps[0],
+  ).toMatchObject({
+    available: true,
+    activities: ["ACTING"],
+    house: { rp: "Nouvelle ambiance" },
+  });
+  expect(
+    (
+      await service.routeAvailability(
+        participant,
+        { ...input, activities: ["CANDY"] },
+        { now, earlyAccess: false },
+      )
+    ).steps[0],
+  ).toMatchObject({ available: false, reason: "activities" });
+  await db().query(
+    "UPDATE participations SET starts_at='2026-10-31T18:10Z',ends_at='2026-10-31T19:00Z' WHERE id=$1",
+    [house.id],
+  );
+  expect(
+    (
+      await service.routeAvailability(participant, input, {
+        now,
+        earlyAccess: false,
+      })
+    ).steps[0],
+  ).toMatchObject({
+    available: true,
+    house: { ends_at: "2026-10-31T19:00:00.000Z" },
+  });
+  await db().query("UPDATE participations SET activity='ENDED' WHERE id=$1", [
+    house.id,
+  ]);
+  expect(
+    (
+      await service.routeAvailability(participant, input, {
+        now,
+        earlyAccess: false,
+      })
+    ).steps[0],
+  ).toMatchObject({ available: false, reason: "ended" });
+  await db().query(
+    "UPDATE participations SET activity='ACTIVE',status='HIDDEN' WHERE id=$1",
+    [house.id],
+  );
+  expect(
+    (
+      await service.routeAvailability(participant, input, {
+        now,
+        earlyAccess: false,
+      })
+    ).steps[0],
+  ).not.toHaveProperty("house");
+});

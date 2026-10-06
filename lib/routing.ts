@@ -13,6 +13,10 @@ import {
   type WalkingRouter,
 } from "./walking-router";
 export type { Point } from "./walking-router";
+const familyWalkingSeconds = (cost: {
+  durationSeconds: number;
+  distanceMeters: number;
+}) => Math.max(cost.durationSeconds, cost.distanceMeters); // 1 m/s, with five minutes per house.
 export type RouteInput = {
   start: string;
   end: string;
@@ -94,7 +98,7 @@ export async function planRoute(
     geometry: [],
     disclaimer: "",
     message:
-      "Aucun parcours piéton compatible. Vérifiez les filtres et les horaires.",
+      "Aucune sélection de maisons compatible. Vérifiez les filtres et les horaires.",
   };
   if (!eligible.length) return empty;
   const engine = router ?? createWalkingRouter(),
@@ -115,7 +119,7 @@ export async function planRoute(
         const cost = matrix[current][c.index];
         if (!cost) return [];
         const arrival = Math.max(
-            time + cost.durationSeconds * 1000,
+            time + familyWalkingSeconds(cost) * 1000,
             +new Date(c.h.starts_at),
           ),
           departure = arrival + 300000;
@@ -153,7 +157,7 @@ export async function planRoute(
       const h = selected[i],
         leg = routed.legs[i];
       const arrival = Math.max(
-        time + leg.durationSeconds * 1000,
+        time + familyWalkingSeconds(leg) * 1000,
         +new Date(h.starts_at),
       );
       time = arrival + 300000;
@@ -165,8 +169,8 @@ export async function planRoute(
         house: publicHouse(h),
         arrival: new Date(arrival).toISOString(),
         departure: new Date(time).toISOString(),
-        walkingMinutes: Math.ceil(leg.durationSeconds / 60),
-        walkingSeconds: leg.durationSeconds,
+        walkingMinutes: Math.ceil(familyWalkingSeconds(leg) / 60),
+        walkingSeconds: familyWalkingSeconds(leg),
         distanceMeters: leg.distanceMeters,
       });
     }
@@ -184,7 +188,7 @@ export async function planRoute(
       estimatedEnd: new Date(time).toISOString(),
       geometry: routed.geometry,
       disclaimer:
-        "Parcours à pied · openrouteservice / © OpenStreetMap contributors. Les accès et conditions sur place peuvent changer. 5 minutes de visite par maison.",
+        "Estimation indicative à pied · openrouteservice / © OpenStreetMap contributors. Allure familiale et 5 minutes par maison. Choisissez librement votre chemin et l’ordre des visites.",
     };
   }
   return empty;

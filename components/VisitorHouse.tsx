@@ -1,10 +1,10 @@
 "use client";
+import { useState, useEffect } from "react";
 import {
   X,
   MapPin,
   Clock3,
   Ghost,
-  Footprints,
   Info,
   Candy,
   Sparkles,
@@ -15,18 +15,23 @@ import { fearLabel } from "./RouteSheet";
 export default function VisitorHouse({
   house,
   stop,
-  number,
-  total,
+  visited = false,
+  onVisit,
   timezone,
   onClose,
 }: {
   house: PublicHouse;
   stop?: RouteResult["stops"][number];
-  number?: number;
-  total?: number;
+  visited?: boolean;
+  onVisit?: () => void;
   timezone: string;
   onClose: () => void;
 }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
   const activities = { DECORATION: Sparkles, CANDY: Candy, ACTING: Drama };
   const shorten = (text: string, max: number) =>
     text.length > max ? text.slice(0, max - 1).trimEnd() + "…" : text;
@@ -82,32 +87,30 @@ export default function VisitorHouse({
           <p className="visitor-description">
             {shorten(house.rp || "Pas de description particulière.", 180)}
           </p>
-          {stop && (
-            <div className="visitor-step">
-              <span>
-                <Footprints size={20} />
-                <span>
-                  Étape n° {number}
-                  <small>sur {total}</small>
-                </span>
-              </span>
-              <span>
-                <Clock3 size={19} />
-                <span>
-                  Arrivée estimée : {time(stop.arrival, timezone)}
-                  <small>
-                    ~{stop.walkingMinutes} min ·{" "}
-                    {Math.round(stop.distanceMeters)} m
-                  </small>
-                </span>
-              </span>
-            </div>
-          )}
-          {stop?.unavailable && (
-            <p className="visitor-unavailable" role="status">
-              Indisponible · étape conservée jusqu’au recalcul
-            </p>
-          )}
+          <p
+            className={
+              "visitor-collection-state" + (visited ? " is-visited" : "")
+            }
+            role="status"
+          >
+            {visited
+              ? "Visitée"
+              : stop?.unavailable
+                ? "Indisponible"
+                : +new Date(house.starts_at) > now
+                  ? "Ouvre plus tard"
+                  : +new Date(house.ends_at) <= now
+                    ? "Fermée"
+                    : "Disponible"}
+          </p>
+          {!visited &&
+            onVisit &&
+            +new Date(house.starts_at) <= now &&
+            +new Date(house.ends_at) > now && (
+              <button type="button" onClick={onVisit}>
+                Marquer comme visitée
+              </button>
+            )}
           <div className="visitor-practical">
             <h2>
               <Info size={15} />

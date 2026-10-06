@@ -11,7 +11,14 @@ const identity = {
   seasonId: "30000000-0000-4000-8000-000000000001",
 };
 const saved: StoredRoute = {
-  format: 1,
+  format: 2,
+  phase: "calculated",
+  collection: {
+    startedAt: null,
+    endedAt: null,
+    distanceMeters: 0,
+    visitedIds: [],
+  },
   ...identity,
   createdAt: "2026-10-31T18:00:00Z",
   updatedAt: "2026-10-31T18:00:00Z",
@@ -71,7 +78,7 @@ describe("local active route", () => {
     const now = +new Date("2026-10-31T18:30Z");
     expect(restoreRoute(JSON.stringify(saved), identity, now)).toEqual(saved);
     for (const value of [
-      { ...saved, format: 2 },
+      { ...saved, format: 3 },
       { ...saved, expiresAt: "2026-10-31T18:00:00Z" },
       { ...saved, ownerId: "other" },
       { ...saved, seasonId: "00000000-0000-4000-8000-000000000000" },
@@ -170,5 +177,156 @@ describe("continuous GPS using the same position validation", () => {
     expect(error.mock.calls[0][0].code).toBe(1);
     watchCurrentPosition(undefined, vi.fn(), error)();
     expect(error.mock.calls[1][0].code).toBe(2);
+  });
+});
+
+import {
+  collectGPS,
+  emptyTracker,
+  emptyCollection,
+  collectionStats,
+  finishCollection,
+  remainingHouses,
+} from "../lib/collection";
+describe("free collection GPS and persistence", () => {
+  const now = +new Date("2026-10-31T18:30Z"),
+    first = saved.result.stops[0],
+    second = {
+      ...first,
+      house: {
+        ...first.house,
+        id: "10000000-0000-4000-8000-000000000002",
+        longitude: -1.668,
+      },
+    };
+  const fix = (timestamp: number, longitude = -1.668, accuracy = 8) => ({
+    point: [longitude, 48.1] as [number, number],
+    accuracy,
+    timestamp,
+  });
+  it("visits any selected house after three accurate positions over six seconds, without duplicates", () => {
+    let tracker = emptyTracker(),
+      visited: string[] = [];
+    for (const delta of [0, 3000, 6000]) {
+      const next = collectGPS(
+        tracker,
+        fix(now + delta),
+        [first, second],
+        visited,
+        now + delta,
+      );
+      tracker = next.tracker;
+      visited = next.visitedIds;
+      if (delta < 6000) expect(visited).toEqual([]);
+    }
+    expect(visited).toEqual([second.house.id]);
+    expect(remainingHouses([first, second], visited)).toEqual([first]);
+    expect(
+      collectGPS(tracker, fix(now + 9000), [first, second], visited, now + 9000)
+        .visitedIds,
+    ).toEqual(visited);
+  });
+  it("ignores inaccurate, duplicate, stale and jumping fixes and never bridges a background gap", () => {
+    const initial = collectGPS(
+      emptyTracker(),
+      fix(now),
+      [first, second],
+      [],
+      now,
+    );
+    expect(
+      collectGPS(
+        initial.tracker,
+        fix(now + 3000, -1.668, 100),
+        [first, second],
+        [],
+        now + 3000,
+      ),
+    ).toMatchObject({ accepted: false, distanceDelta: 0, visitedIds: [] });
+    expect(collectGPS(initial.tracker, fix(now), [], [], now).accepted).toBe(
+      false,
+    );
+    expect(
+      collectGPS(initial.tracker, fix(now + 1000, 10), [], [], now + 1000),
+    ).toMatchObject({ accepted: false, distanceDelta: 0 });
+    expect(
+      collectGPS(initial.tracker, fix(now + 3000), [], [], now + 30000)
+        .accepted,
+    ).toBe(false);
+    expect(
+      collectGPS(
+        initial.tracker,
+        fix(now + 70000, -1.67),
+        [first, second],
+        [],
+        now + 70000,
+      ),
+    ).toMatchObject({ distanceDelta: 0, visitedIds: [] });
+  });
+  it("accumulates observed walking distance only and freezes the real duration and aggregate statistics", () => {
+    const initial = collectGPS(emptyTracker(), fix(now, -1.67), [], [], now),
+      next = collectGPS(
+        initial.tracker,
+        fix(now + 10000, -1.6698),
+        [],
+        [],
+        now + 10000,
+      );
+    expect(next.distanceDelta).toBeGreaterThan(10);
+    expect(next.distanceDelta).toBeLessThan(20);
+    const collection = finishCollection(
+      {
+        ...emptyCollection(),
+        startedAt: new Date(now).toISOString(),
+        distanceMeters: next.distanceDelta,
+        visitedIds: [second.house.id],
+      },
+      now + 72000,
+    );
+    expect(collectionStats(collection, 2, now + 999999)).toMatchObject({
+      selected: 2,
+      visited: 1,
+      completion: 50,
+      durationSeconds: 72,
+      distanceMeters: next.distanceDelta,
+    });
+    expect(finishCollection(collection, now + 999999)).toEqual(collection);
+  });
+  it("restores saved, active and finished collections; legacy routes require confirmation and no GPS trace is persisted", () => {
+    expect(
+      restoreRoute(JSON.stringify({ ...saved, format: 1 }), identity, now)
+        ?.phase,
+    ).toBe("calculated");
+    const active = {
+      ...saved,
+      phase: "active",
+      collection: {
+        startedAt: "2026-10-31T18:00:00Z",
+        endedAt: null,
+        distanceMeters: 22,
+        visitedIds: [first.house.id],
+      },
+      result: { ...saved.result, geometry: [] },
+    };
+    expect(restoreRoute(JSON.stringify(active), identity, now)).toMatchObject({
+      phase: "active",
+      collection: active.collection,
+    });
+    expect(
+      restoreRoute(
+        JSON.stringify(active),
+        identity,
+        +new Date("2026-10-31T21:00Z"),
+      ),
+    ).toMatchObject({
+      phase: "completed",
+      collection: { distanceMeters: 22, endedAt: "2026-10-31T20:00:00.000Z" },
+    });
+    expect(Object.keys(active.collection).sort()).toEqual([
+      "distanceMeters",
+      "endedAt",
+      "startedAt",
+      "visitedIds",
+    ]);
   });
 });

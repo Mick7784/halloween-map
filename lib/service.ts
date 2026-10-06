@@ -1069,7 +1069,10 @@ export async function routeAvailability(
       if (h.activity === "PAUSED") reason = "paused";
       else if (h.activity === "ENDED") reason = "ended";
       else if (
-        departure > +new Date(h.ends_at) ||
+        (input.mode !== "COLLECTION" && departure > +new Date(h.ends_at)) ||
+        (input.mode === "COLLECTION" &&
+          input.end !== undefined &&
+          +new Date(h.starts_at) >= +new Date(input.end)) ||
         +context.now >= +new Date(h.ends_at)
       )
         reason = "expired";
@@ -1083,7 +1086,8 @@ export async function routeAvailability(
         (!h.adaptable &&
           input.maxFear !== undefined &&
           h.fear > input.maxFear) ||
-        houseTravelKey(publicHouse(h)) !== step.key
+        (input.mode !== "COLLECTION" &&
+          houseTravelKey(publicHouse(h)) !== step.key)
       )
         reason = "changed";
       return {
@@ -1091,6 +1095,7 @@ export async function routeAvailability(
         available: !reason,
         ...(reason ? { reason } : {}),
         activities,
+        ...(input.mode === "COLLECTION" ? { house: publicHouse(h) } : {}),
       };
     }),
   };

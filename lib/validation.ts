@@ -91,6 +91,8 @@ export const routeSchema = z.object({
   maxFear: z.number().int().min(1).max(5).optional(),
 });
 export const routeAvailabilitySchema = z.object({
+  mode: z.literal("COLLECTION").optional(),
+  end: z.iso.datetime({ offset: true }).optional(),
   instanceId: z.string().uuid(),
   seasonId: z.string().uuid(),
   activities: z.array(z.enum(["DECORATION", "CANDY", "ACTING"])).max(3),

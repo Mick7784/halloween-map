@@ -1,4 +1,8 @@
-export type LocatedOrigin = { point: [number, number]; accuracy: number };
+export type LocatedOrigin = {
+  point: [number, number];
+  accuracy: number;
+  timestamp?: number;
+};
 const positionOptions = {
   enableHighAccuracy: true,
   timeout: 15000,
@@ -76,7 +80,7 @@ export function watchCurrentPosition(
       (p) => {
         if (stopped) return;
         try {
-          onPosition(readPosition(p));
+          onPosition({ ...readPosition(p), timestamp: p.timestamp });
         } catch {
           onError({
             code: 2,

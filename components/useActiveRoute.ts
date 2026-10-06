@@ -4,6 +4,14 @@ import { api, type PublicHouse, type RouteResult } from "./common";
 import { houseTravelKey } from "../lib/route-state";
 import { watchCurrentPosition } from "../lib/geolocation";
 import {
+  emptyCollection,
+  emptyTracker,
+  collectGPS,
+  remainingHouses,
+  finishCollection,
+  type Collection,
+} from "../lib/collection";
+import {
   ACTIVE_ROUTE_KEY,
   ROUTE_POLL_MS,
   annotateAvailability,
@@ -15,12 +23,12 @@ import {
   type SheetPosition,
   type StoredRoute,
 } from "../lib/active-route";
-
 type Controller = {
   identityKey: string;
-  phase: "preparation" | "calculated" | "active";
+  phase: "preparation" | "calculated" | "active" | "completed";
   parameters: RouteParameters | null;
   result: RouteResult | null;
+  collection: Collection;
   selectedHouse: PublicHouse | null;
   selectedStepId: string | null;
   sheet: SheetPosition;
@@ -28,7 +36,6 @@ type Controller = {
   unavailable: RouteAvailability["steps"];
   checking: boolean;
   verified: boolean;
-  recalculating: boolean;
   error: string;
   storageError: string;
   createdAt: string;
@@ -51,6 +58,7 @@ const initial = (): Controller => ({
   phase: "preparation",
   parameters: null,
   result: null,
+  collection: emptyCollection(),
   selectedHouse: null,
   selectedStepId: null,
   sheet: "collapsed",
@@ -58,7 +66,6 @@ const initial = (): Controller => ({
   unavailable: [],
   checking: false,
   verified: false,
-  recalculating: false,
   error: "",
   storageError: "",
   createdAt: new Date().toISOString(),
@@ -80,39 +87,55 @@ export default function useActiveRoute({
   seasonId: string;
   closesAt: string;
 }) {
-  const [state, setState] = useState(initial);
+  const [state, setState] = useState(initial),
+    current = useRef(state),
+    revision = useRef(0),
+    inputRevision = useRef(0),
+    checking = useRef(false),
+    pendingCheck = useRef(false),
+    checkCallback = useRef<() => Promise<void>>(async () => {}),
+    tracker = useRef(emptyTracker());
   const identityKey = JSON.stringify([ownerId, instanceId, seasonId]);
-  const current = useRef(state);
   useEffect(() => {
     current.current = state;
   }, [state]);
-  const revision = useRef(0),
-    checking = useRef(false),
-    pendingCheck = useRef(false);
-  const inputRevision = useRef(0);
-  const checkCallback = useRef<() => Promise<void>>(async () => {});
-  const checkingGeometry = useRef<number[][] | null>(null);
   const bumpRevision = useCallback(() => {
     revision.current++;
   }, []);
-  const now = useCallback(() => Date.now(), []);
   const reset = useCallback(() => {
     revision.current++;
+    inputRevision.current++;
     clearStoredRoute();
-    setState((previous) => ({
+    setState((s) => ({
       ...initial(),
-      identityKey: previous.identityKey,
+      identityKey: s.identityKey,
       ready: true,
-      camera: previous.camera,
+      camera: s.camera,
     }));
+  }, []);
+  const stopActiveRoute = useCallback(() => {
+    revision.current++;
+    setState((s) =>
+      s.phase === "active"
+        ? {
+            ...s,
+            phase: "completed",
+            selectedHouse: null,
+            selectedStepId: null,
+            collection: finishCollection(s.collection, Date.now()),
+            gpsState: "idle",
+            checking: false,
+          }
+        : s,
+    );
   }, []);
   useEffect(() => {
     revision.current++;
-    let saved: StoredRoute | null = null;
-    let storageError = "";
+    let saved: StoredRoute | null = null,
+      storageError = "";
     try {
       const raw = localStorage.getItem(ACTIVE_ROUTE_KEY);
-      saved = restoreRoute(raw, { ownerId, instanceId, seasonId }, now());
+      saved = restoreRoute(raw, { ownerId, instanceId, seasonId }, Date.now());
       if (raw && !saved) clearStoredRoute();
     } catch {
       storageError = "La sauvegarde locale est indisponible sur cet appareil.";
@@ -124,9 +147,10 @@ export default function useActiveRoute({
       storageError,
       ...(saved
         ? {
-            phase: "active" as const,
+            phase: saved.phase,
             parameters: saved.parameters,
             result: saved.result,
+            collection: saved.collection,
             sheet: saved.sheet,
             camera: saved.camera,
             createdAt: saved.createdAt,
@@ -134,12 +158,11 @@ export default function useActiveRoute({
         : {}),
     });
     return bumpRevision;
-  }, [ownerId, instanceId, seasonId, now, bumpRevision, identityKey]);
-
+  }, [ownerId, instanceId, seasonId, identityKey, bumpRevision]);
   useEffect(() => {
     if (!state.ready || state.identityKey !== identityKey) return;
     if (
-      state.phase !== "active" ||
+      state.phase === "preparation" ||
       !state.parameters ||
       !state.result?.stops.length
     ) {
@@ -147,12 +170,14 @@ export default function useActiveRoute({
       return;
     }
     const saved: StoredRoute = {
-      format: 1,
+      format: 2,
+      phase: state.phase,
+      collection: state.collection,
       ownerId,
       instanceId,
       seasonId,
       parameters: state.parameters,
-      result: state.result,
+      result: { ...state.result, geometry: [] },
       createdAt: state.createdAt,
       updatedAt: new Date().toISOString(),
       expiresAt: new Date(
@@ -176,49 +201,51 @@ export default function useActiveRoute({
     }
   }, [
     state.ready,
+    state.identityKey,
     state.phase,
     state.parameters,
     state.result,
+    state.collection,
     state.createdAt,
     state.sheet,
     state.camera,
+    identityKey,
     ownerId,
     instanceId,
     seasonId,
     closesAt,
-    state.identityKey,
-    identityKey,
   ]);
-
   const checkAvailability = useCallback(async () => {
     if (document.visibilityState === "hidden") return;
+    if (checking.current) {
+      pendingCheck.current = true;
+      return;
+    }
     const snapshot = current.current;
     if (
       snapshot.identityKey !== identityKey ||
-      snapshot.phase !== "active" ||
+      !["calculated", "active"].includes(snapshot.phase) ||
       !snapshot.result?.stops.length ||
       !snapshot.parameters
     )
       return;
-    if (checking.current) {
-      if (snapshot.result.geometry !== checkingGeometry.current)
-        pendingCheck.current = true;
-      return;
-    }
     if (
-      now() >= Math.min(+new Date(snapshot.parameters.end), +new Date(closesAt))
+      Date.now() >=
+      Math.min(+new Date(snapshot.parameters.end), +new Date(closesAt))
     ) {
-      reset();
+      if (snapshot.phase === "active") stopActiveRoute();
+      else reset();
       return;
     }
     const token = revision.current;
     checking.current = true;
-    checkingGeometry.current = snapshot.result.geometry;
     setState((s) => ({ ...s, checking: true }));
     try {
       const availability = await api<RouteAvailability>("route/availability", {
         instanceId,
         seasonId,
+        mode: "COLLECTION",
+        end: snapshot.parameters.end,
         activities: snapshot.parameters.activities,
         maxFear: snapshot.parameters.maxFear,
         steps: snapshot.result.stops.map((s) => ({
@@ -230,7 +257,8 @@ export default function useActiveRoute({
       });
       if (token !== revision.current) return;
       if (!availability.valid) {
-        reset();
+        if (snapshot.phase === "active") stopActiveRoute();
+        else reset();
         return;
       }
       if (
@@ -240,23 +268,17 @@ export default function useActiveRoute({
         )
       )
         throw new Error("Vérification du parcours incomplète. Réessayez.");
-      setState((s) => {
-        if (!s.result) return s;
-        const annotated = annotateAvailability(s.result, availability);
-        const changed = annotated.stops.some(
-          (stop, n) =>
-            !!stop.unavailable !== !!s.result!.stops[n].unavailable ||
-            JSON.stringify(stop.house.activities) !==
-              JSON.stringify(s.result!.stops[n].house.activities),
-        );
-        return {
-          ...s,
-          result: changed ? annotated : s.result,
-          unavailable: availability.steps.filter((s) => !s.available),
-          verified: true,
-          error: "",
-        };
-      });
+      setState((s) =>
+        !s.result
+          ? s
+          : {
+              ...s,
+              result: annotateAvailability(s.result, availability),
+              unavailable: availability.steps.filter((a) => !a.available),
+              verified: true,
+              error: "",
+            },
+      );
     } catch (e) {
       if (token === revision.current)
         setState((s) => ({
@@ -266,63 +288,23 @@ export default function useActiveRoute({
         }));
     } finally {
       checking.current = false;
-      if (token === revision.current)
-        setState((s) => ({ ...s, checking: false }));
       if (pendingCheck.current) {
         pendingCheck.current = false;
         queueMicrotask(() => void checkCallback.current());
       }
+      setState((s) =>
+        s.identityKey === identityKey ? { ...s, checking: false } : s,
+      );
     }
-  }, [instanceId, seasonId, closesAt, now, reset, identityKey]);
+  }, [instanceId, seasonId, closesAt, identityKey, stopActiveRoute, reset]);
   useEffect(() => {
     checkCallback.current = checkAvailability;
   }, [checkAvailability]);
-
   useEffect(() => {
-    if (state.phase !== "active") return;
-    let stopWatch: (() => void) | undefined;
-    const syncGPS = () => {
-      stopWatch?.();
-      stopWatch = undefined;
-      if (document.visibilityState === "hidden") {
-        setState((s) => ({ ...s, gpsState: "paused" }));
-        return;
-      }
-      setState((s) => ({ ...s, gpsState: "searching", gpsError: "" }));
-      stopWatch = watchCurrentPosition(
-        navigator.geolocation,
-        (position) =>
-          setState((s) => ({
-            ...s,
-            currentPosition: position.point,
-            accuracy: position.accuracy,
-            gpsState: position.accuracy > 50 ? "low-accuracy" : "tracking",
-            gpsError: "",
-          })),
-        (error) =>
-          setState((s) => ({
-            ...s,
-            gpsState: error.code === 1 ? "denied" : "unavailable",
-            gpsError: error.message,
-          })),
-      );
-    };
-    syncGPS();
-    document.addEventListener("visibilitychange", syncGPS);
-    window.addEventListener("pageshow", syncGPS);
-    return () => {
-      stopWatch?.();
-      document.removeEventListener("visibilitychange", syncGPS);
-      window.removeEventListener("pageshow", syncGPS);
-    };
-  }, [state.phase]);
-
-  useEffect(() => {
-    if (state.phase !== "active") return;
+    if (!["calculated", "active"].includes(state.phase)) return;
     let interval: ReturnType<typeof setInterval> | undefined;
     const sync = () => {
       if (interval) clearInterval(interval);
-      interval = undefined;
       if (document.visibilityState === "hidden") return;
       void checkAvailability();
       interval = setInterval(() => void checkAvailability(), ROUTE_POLL_MS);
@@ -336,20 +318,107 @@ export default function useActiveRoute({
       window.removeEventListener("pageshow", sync);
     };
   }, [state.phase, checkAvailability]);
-
-  // Expiration is independent of the network and also applies to prepared routes.
   useEffect(() => {
-    if (!state.parameters || !state.result) return;
-    const expire = () => {
-      if (
-        now() >= Math.min(+new Date(state.parameters!.end), +new Date(closesAt))
-      )
-        reset();
+    if (state.phase !== "active") return;
+    let stopWatch: (() => void) | undefined;
+    const sync = () => {
+      stopWatch?.();
+      stopWatch = undefined;
+      tracker.current = emptyTracker();
+      if (document.visibilityState === "hidden") {
+        setState((s) => ({ ...s, gpsState: "paused" }));
+        return;
+      }
+      setState((s) => ({ ...s, gpsState: "searching", gpsError: "" }));
+      stopWatch = watchCurrentPosition(
+        navigator.geolocation,
+        (position) => {
+          const snapshot = current.current;
+          if (snapshot.phase !== "active") return;
+          const update = collectGPS(
+            tracker.current,
+            { ...position, timestamp: position.timestamp ?? Date.now() },
+            snapshot.verified ? (snapshot.result?.stops ?? []) : [],
+            snapshot.collection.visitedIds,
+            Date.now(),
+          );
+          tracker.current = update.tracker;
+          setState((s) =>
+            s.phase !== "active"
+              ? s
+              : {
+                  ...s,
+                  currentPosition: update.accepted
+                    ? position.point
+                    : s.currentPosition,
+                  accuracy: position.accuracy,
+                  gpsState:
+                    position.accuracy > 35
+                      ? "low-accuracy"
+                      : update.accepted
+                        ? "tracking"
+                        : s.gpsState,
+                  gpsError: "",
+                  collection: {
+                    ...s.collection,
+                    distanceMeters:
+                      s.collection.distanceMeters + update.distanceDelta,
+                    visitedIds: [
+                      ...new Set([
+                        ...s.collection.visitedIds,
+                        ...update.visitedIds,
+                      ]),
+                    ],
+                  },
+                },
+          );
+        },
+        (error) =>
+          setState((s) => ({
+            ...s,
+            gpsState: error.code === 1 ? "denied" : "unavailable",
+            gpsError: error.message,
+          })),
+      );
     };
-    const timer = setInterval(expire, 1000);
+    sync();
+    document.addEventListener("visibilitychange", sync);
+    window.addEventListener("pageshow", sync);
+    return () => {
+      stopWatch?.();
+      document.removeEventListener("visibilitychange", sync);
+      window.removeEventListener("pageshow", sync);
+    };
+  }, [state.phase]);
+  useEffect(() => {
+    if (
+      state.phase === "active" &&
+      state.verified &&
+      state.result &&
+      !remainingHouses(state.result.stops, state.collection.visitedIds).length
+    )
+      stopActiveRoute();
+  }, [
+    state.phase,
+    state.verified,
+    state.result,
+    state.collection.visitedIds,
+    stopActiveRoute,
+  ]);
+  useEffect(() => {
+    if (!state.parameters || !["active", "calculated"].includes(state.phase))
+      return;
+    const timer = setInterval(() => {
+      if (
+        Date.now() >=
+        Math.min(+new Date(state.parameters!.end), +new Date(closesAt))
+      ) {
+        if (state.phase === "active") stopActiveRoute();
+        else reset();
+      }
+    }, 1000);
     return () => clearInterval(timer);
-  }, [state.parameters, state.result, closesAt, now, reset]);
-
+  }, [state.phase, state.parameters, closesAt, stopActiveRoute, reset]);
   const invalidate = useCallback(() => {
     inputRevision.current++;
     if (current.current.phase === "active") return;
@@ -360,28 +429,28 @@ export default function useActiveRoute({
         : {
             ...s,
             phase: "preparation",
-            result: null,
             parameters: null,
+            result: null,
+            collection: emptyCollection(),
             error: "",
           },
     );
   }, []);
   const calculateRoute = useCallback(async (parameters: RouteParameters) => {
-    const token = ++inputRevision.current;
-    const generation = revision.current;
-    const result = await api<RouteResult>("route", parameters);
+    const token = ++inputRevision.current,
+      generation = revision.current,
+      result = await api<RouteResult>("route", parameters);
     if (token !== inputRevision.current || generation !== revision.current)
       return;
     revision.current++;
-    clearStoredRoute();
     setState((s) => ({
       ...s,
       phase: "calculated",
       parameters,
-      result,
+      result: { ...result, geometry: [] },
+      collection: emptyCollection(),
       unavailable: [],
       verified: false,
-      checking: false,
       error: "",
       createdAt: new Date().toISOString(),
       sheet: "expanded",
@@ -390,83 +459,53 @@ export default function useActiveRoute({
       gpsState: "idle",
       gpsError: "",
       recenterTarget: null,
-      recalculating: false,
     }));
   }, []);
   const startRoute = useCallback(() => {
-    if (!current.current.result?.stops.length) return;
+    if (
+      current.current.phase !== "calculated" ||
+      !current.current.result?.stops.length
+    )
+      return;
+    revision.current++;
     setState((s) => ({
       ...s,
       phase: "active",
+      collection: { ...emptyCollection(), startedAt: new Date().toISOString() },
       verified: false,
       sheet: "intermediate",
     }));
   }, []);
-  const recalculateRoute = useCallback(async () => {
-    const snapshot = current.current;
-    if (!snapshot.parameters || !snapshot.result || snapshot.recalculating)
-      return;
-    const token = ++revision.current;
-    setState((s) => ({ ...s, recalculating: true, error: "" }));
-    try {
-      const parameters: RouteParameters = {
-        ...snapshot.parameters,
-        start: new Date(
-          Math.max(+new Date(snapshot.parameters.start), now()),
-        ).toISOString(),
-        excludedHouseIds: [
-          ...new Set([
-            ...snapshot.parameters.excludedHouseIds,
-            ...snapshot.unavailable.map((s) => s.id),
-          ]),
-        ],
-      };
-      const result = await api<RouteResult>("route", parameters);
-      if (token !== revision.current) return;
-      // One update replaces the entire result: no old geometry with new stops.
-      setState((s) => ({
-        ...s,
-        parameters,
-        result,
-        unavailable: [],
-        error: "",
-        verified: false,
-        checking: false,
-        selectedHouse: null,
-        selectedStepId: null,
-        phase: result.stops.length ? s.phase : "calculated",
-        ...(result.stops.length
-          ? {}
-          : {
-              currentPosition: null,
-              accuracy: null,
-              gpsState: "idle" as const,
-              gpsError: "",
-              recenterTarget: null,
-            }),
-      }));
-    } catch (e) {
-      if (token === revision.current)
-        setState((s) => ({ ...s, error: (e as Error).message }));
-    } finally {
-      if (token === revision.current)
-        setState((s) => ({ ...s, recalculating: false }));
-    }
-  }, [now]);
-  // Replacements during an active route must be checked without waiting a minute.
-  useEffect(() => {
-    if (state.phase === "active") void checkAvailability();
-  }, [state.result?.geometry, state.phase, checkAvailability]);
+  const markVisited = useCallback(
+    (id: string) =>
+      setState((s) => {
+        const stop = s.result?.stops.find((t) => t.house.id === id),
+          now = Date.now();
+        if (
+          s.phase !== "active" ||
+          !stop ||
+          stop.unavailable ||
+          +new Date(stop.house.starts_at) > now ||
+          +new Date(stop.house.ends_at) <= now ||
+          s.collection.visitedIds.includes(id)
+        )
+          return s;
+        return {
+          ...s,
+          collection: {
+            ...s.collection,
+            visitedIds: [...s.collection.visitedIds, id],
+          },
+        };
+      }),
+    [],
+  );
   const selectHouse = useCallback(
     (house: PublicHouse | null) =>
       setState((s) => ({
         ...s,
         selectedHouse: house,
-        selectedStepId: !house
-          ? s.selectedStepId
-          : s.result?.stops.some((stop) => stop.house.id === house.id)
-            ? house.id
-            : null,
+        selectedStepId: house?.id ?? s.selectedStepId,
       })),
     [],
   );
@@ -493,15 +532,28 @@ export default function useActiveRoute({
       ),
     [],
   );
+  const savePreparedRoute = useCallback(
+    () =>
+      setState((s) =>
+        s.phase === "calculated" ? { ...s, sheet: "collapsed" } : s,
+      ),
+    [],
+  );
   return {
     ...state,
-    notification: state.unavailable.length
-      ? "Une maison de votre parcours n’est plus disponible"
+    remaining: remainingHouses(
+      state.result?.stops ?? [],
+      state.collection.visitedIds,
+    ).length,
+    notification: state.unavailable.some(
+      (a) => !state.collection.visitedIds.includes(a.id),
+    )
+      ? "Une maison de votre sélection n’est plus disponible"
       : "",
-    nextStep: state.result?.stops.find((s) => !s.unavailable) ?? null,
     calculateRoute,
     startRoute,
-    recalculateRoute,
+    savePreparedRoute,
+    markVisited,
     checkAvailability,
     invalidate,
     selectHouse,
@@ -509,7 +561,7 @@ export default function useActiveRoute({
     setCamera,
     recenterCurrentPosition,
     deletePreparedRoute: reset,
-    stopActiveRoute: reset,
+    stopActiveRoute,
     getRevision: () => revision.current,
   };
 }

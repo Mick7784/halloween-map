@@ -1311,3 +1311,13 @@
     visibility: hidden;
   }
 }
+
+/* Free collection: no order or route line, with durable visited markers. */
+.route-experience .house-marker.is-visited .house-marker-visual {filter:grayscale(1);opacity:.65;}
+.route-step.is-visited {filter:grayscale(1);opacity:.65;}
+.visitor-collection-state {padding:10px;border:1px solid #8e6eab;border-radius:8px;}
+.visitor-collection-state.is-visited {color:#b9bac1;border-color:#787984;}
+.collection-summary dl {display:grid;grid-template-columns:1fr auto;gap:12px;text-align:left;}
+.collection-summary dd {margin:0;color:#ffad68;}
+.collection-result {font-size:20px;font-weight:700;}
+.route-confirm {max-height:90dvh;overflow:auto;}
