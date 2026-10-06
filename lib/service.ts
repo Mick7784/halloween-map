@@ -43,6 +43,7 @@ import {
 import { planRoute, validateRouteWindow } from "./routing";
 import { RoutingError } from "./walking-router";
 import { houseRouteKey } from "./route-state";
+import { publicPrivacySettings } from "./privacy";
 import { z } from "zod";
 export async function audit(
   client: Database,
@@ -368,6 +369,7 @@ export async function publicState(
       ]),
     ),
     documents: await legalState(i.id),
+    privacy: publicPrivacySettings(i.config.privacy),
     preview,
     demoAvailable:
       user?.role_name === "SUPER_ADMIN" &&

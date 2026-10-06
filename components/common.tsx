@@ -8,6 +8,7 @@ export type PublicHouse = ReturnType<
   typeof import("../lib/domain").publicHouse
 >;
 export type PublicState = {
+  privacy?: import("../lib/privacy").PrivacySettings;
   setupRequired: boolean;
   contents?: Record<string, string>;
   documents?: Record<

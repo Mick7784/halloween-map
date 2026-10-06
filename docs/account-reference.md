@@ -1,5 +1,7 @@
 # Mon compte — refonte contextuelle
 
+Ce document décrit la refonte initiale du commit `75476a5`. La passe de finition et les sources de confidentialité actuelles sont décrites dans [account-privacy-finish.md](account-privacy-finish.md).
+
 Référence : planche UX « Mon compte » fournie le 6 octobre 2026.
 Base : `main` actuel, commit `01f4244` (VERSION V0.5.5). Les corrections postérieures à la baseline fonctionnelle V0.5.3 sont conservées. Aucun changement de modèle, de migration ou de cascade de suppression.
 

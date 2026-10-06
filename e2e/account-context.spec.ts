@@ -198,9 +198,11 @@ test("mobile information, security, verification, privacy and deletion confirmat
   await page
     .getByRole("button", { name: /Confidentialité et données/ })
     .click();
-  await expect(page.getByRole("dialog")).toContainText("02 novembre 2026");
-  await page.getByText("Lire la politique de confidentialité").click();
-  await expect(page.getByRole("dialog")).toContainText(
+  await expect(page.getByRole("dialog")).toContainText("2 novembre 2026");
+  await expect(
+    page.getByRole("link", { name: /Politique de confidentialité/ }),
+  ).toHaveAttribute("href", "/privacy");
+  await expect(page.getByRole("dialog")).not.toContainText(
     "La participation est éphémère",
   );
   await page.getByRole("button", { name: "Revenir à Mon compte" }).click();
@@ -429,4 +431,147 @@ test("logout reuses authentication action", async ({ page }) => {
   await page.getByRole("button", { name: /Se déconnecter/ }).click();
   await expect.poll(() => logout).toBe(1);
   await expect(page).toHaveURL(/\/$/);
+});
+
+for (const width of [390, 1440]) {
+  test(`privacy real data, contact, same modal and shared deletion ${width}`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
+    const calls = await arrange(page);
+    await page.route("**/api/house", (r) =>
+      r.fulfill({
+        json: {
+          name: "Les lanternes",
+          address: "1 rue des Lanternes",
+          latitude: 48.802,
+          longitude: 2.802,
+          starts_at: "2026-10-31T17:00:00Z",
+          ends_at: "2026-10-31T20:00:00Z",
+          activities: ["CANDY", "DECORATION"],
+          rp: "Un jardin de citrouilles.",
+          practical: "Entrée par le portail.",
+          fear: 2,
+          adaptable: true,
+          status: "VISIBLE",
+          activity: "ACTIVE",
+          candy_available: true,
+          password_hash: "do-not-display-this",
+        },
+      }),
+    );
+    await page.route("**/api/public*", (r) =>
+      r.fulfill({
+        json: {
+          ...state,
+          privacy: {
+            contactEmail: "organisateur@example.invalid",
+            accountRetention:
+              "Votre compte reste disponible pour les prochaines éditions.",
+          },
+        },
+      }),
+    );
+    await page.reload();
+    await open(page);
+    const dialog = page.locator(".account-dialog");
+    await dialog.evaluate((el) => el.setAttribute("data-preserved", "yes"));
+    if (width === 1440) {
+      await expect(
+        page.locator(".account-email-status.is-verified"),
+      ).toHaveText("Email vérifié");
+      expect(
+        await page
+          .locator(".account-session button")
+          .evaluate((el) => getComputedStyle(el).borderColor),
+      ).not.toBe(
+        await page
+          .locator(".account-danger .account-row")
+          .evaluate((el) => getComputedStyle(el).borderColor),
+      );
+    }
+    await page
+      .getByRole("button", { name: /Confidentialité et données/ })
+      .click();
+    await expect(dialog).toHaveAttribute("data-preserved", "yes");
+    await expect(page.getByRole("dialog")).toHaveCount(1);
+    await expect(dialog).toContainText("Les lanternes");
+    await expect(dialog).toContainText("18:00 – 21:00");
+    await expect(dialog).toContainText("Bonbons, Décoration");
+    await expect(dialog).toContainText("Un jardin de citrouilles");
+    await page.locator(".account-participation-details summary").click();
+    await expect(
+      dialog.getByText("Un jardin de citrouilles.", { exact: true }),
+    ).toBeVisible();
+    await page.locator(".account-participation-details summary").click();
+    await page.locator(".account-scroll").evaluate((el) => (el.scrollTop = 0));
+    await expect(dialog).toContainText("2 novembre 2026 à 12:00");
+    await expect(dialog).not.toContainText("do-not-display-this");
+    await expect(
+      dialog.getByRole("link", { name: /Nous contacter/ }),
+    ).toHaveAttribute("href", "mailto:organisateur@example.invalid");
+    await expect(
+      dialog.getByRole("link", { name: /Politique de confidentialité/ }),
+    ).toHaveAttribute("target", "_blank");
+    await page.locator(".account-subview").evaluate(async (el) => {
+      await Promise.all(
+        el.getAnimations({ subtree: true }).map((a) => a.finished),
+      );
+    });
+    await page.screenshot({ path: `${output}/confidentialite-${width}.png` });
+    await page
+      .locator(".account-scroll")
+      .evaluate((el) => (el.scrollTop = el.scrollHeight));
+    await page.screenshot({
+      path: `${output}/confidentialite-actions-${width}.png`,
+    });
+    await dialog
+      .getByRole("button", { name: /Supprimer mon compte Action/ })
+      .click();
+    await expect(dialog).toContainText("Confirmation de suppression");
+    expect(calls.filter((c) => c.action === "delete")).toHaveLength(0);
+    await dialog.getByRole("button", { name: "Annuler" }).click();
+    await dialog
+      .getByRole("button", { name: /Confidentialité et données/ })
+      .click();
+    await dialog.getByRole("button", { name: "Revenir à Mon compte" }).click();
+    await expect(dialog).toHaveAttribute("data-preserved", "yes");
+    await expect(
+      dialog.getByRole("button", { name: /Confidentialité et données/ }),
+    ).toBeVisible();
+    await dialog.getByRole("button", { name: "Fermer Mon compte" }).click();
+    await expect(dialog).toHaveCount(0);
+    await expect(page).toHaveURL(/\/$/);
+  });
+}
+test("privacy honest fallbacks without house, contact or valid purge date", async ({
+  page,
+}) => {
+  await arrange(page);
+  await page.route("**/api/public*", (r) =>
+    r.fulfill({
+      json: {
+        ...state,
+        season: { ...state.season, purge_at: "invalid" },
+        privacy: { contactEmail: "invalid", policyUrl: "javascript:alert(1)" },
+      },
+    }),
+  );
+  await page.reload();
+  await open(page);
+  await page
+    .getByRole("button", { name: /Confidentialité et données/ })
+    .click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog).toContainText("Aucune participation enregistrée");
+  await expect(dialog).toContainText("Date non encore disponible");
+  await page.locator(".account-contact summary").click();
+  await expect(dialog).toContainText("ne sont pas encore renseignées");
+  await expect(
+    dialog.getByRole("link", { name: /mentions légales/ }),
+  ).toHaveAttribute("href", "/legal");
+  await expect(
+    dialog.getByRole("link", { name: /Politique de confidentialité/ }),
+  ).toHaveAttribute("href", "/privacy");
+  await expect(dialog).not.toContainText("Invalid DateTime");
 });

@@ -1,8 +1,8 @@
 "use client";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { DateTime } from "luxon";
 import {
   ArrowLeft,
+  Check,
   ChevronRight,
   Eye,
   EyeOff,
@@ -23,8 +23,9 @@ import {
   values,
   type PublicState,
 } from "./common";
-import type { House, User } from "../lib/domain";
+import type { User } from "../lib/domain";
 import InstallApp from "./InstallApp";
+import AccountPrivacy from "./AccountPrivacy";
 import Editorial from "./Editorial";
 import "./AccountOverlay.css";
 
@@ -49,6 +50,7 @@ export default function AccountOverlay({
   onClose: () => void;
 }) {
   const [view, setView] = useState<View>("main");
+  const [returning, setReturning] = useState(false);
   const [closing, setClosing] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -85,6 +87,10 @@ export default function AccountOverlay({
       previousView.current = view;
     }
   }, [view]);
+  function navigate(next: View) {
+    setReturning(next === "main");
+    setView(next);
+  }
   function close() {
     if (closing) return;
     setClosing(true);
@@ -108,7 +114,15 @@ export default function AccountOverlay({
       </h2>
       <IdentityForm user={user} action={action} refresh={refresh} />
       <div className="account-verification">
-        <span className="account-email-status">
+        <span
+          className={
+            "account-email-status" +
+            (user.email_status === "VERIFIED" ? " is-verified" : "")
+          }
+        >
+          {user.email_status === "VERIFIED" && (
+            <Check size={13} aria-hidden="true" />
+          )}
           {user.email_status === "VERIFIED"
             ? "Email vérifié"
             : "Email non vérifié"}
@@ -185,7 +199,7 @@ export default function AccountOverlay({
             <button
               className="account-back"
               aria-label="Revenir à Mon compte"
-              onClick={() => setView("main")}
+              onClick={() => navigate("main")}
             >
               <ArrowLeft size={20} />
             </button>
@@ -199,7 +213,12 @@ export default function AccountOverlay({
             <X size={23} />
           </button>
         </header>
-        <div className="account-scroll">
+        <div
+          className={
+            "account-scroll" +
+            (view === "main" && returning ? " is-returning" : "")
+          }
+        >
           <Notice error={error} />
           {view === "main" ? (
             <>
@@ -229,13 +248,13 @@ export default function AccountOverlay({
                   icon={<UserRound />}
                   title="Mes informations"
                   subtitle="Nom, email et profil"
-                  onClick={() => setView("information")}
+                  onClick={() => navigate("information")}
                 />
                 <AccountRow
                   icon={<LockKeyhole />}
                   title="Mot de passe"
                   subtitle="Modifier votre mot de passe"
-                  onClick={() => setView("security")}
+                  onClick={() => navigate("security")}
                 />
               </div>
               <div className="account-forms">
@@ -248,12 +267,11 @@ export default function AccountOverlay({
                   icon={<ShieldCheck />}
                   title="Confidentialité et données"
                   subtitle="Voir et gérer vos données personnelles"
-                  onClick={() => setView("privacy")}
+                  onClick={() => navigate("privacy")}
                 />
               </div>
               <div className="account-session">
                 <AsyncButton
-                  danger
                   onClick={async () => {
                     await api("logout", {});
                     window.location.href = "/";
@@ -275,7 +293,7 @@ export default function AccountOverlay({
                   icon={<Trash2 />}
                   title="Supprimer mon compte"
                   subtitle="Action irréversible · confirmation requise"
-                  onClick={() => setView("delete")}
+                  onClick={() => navigate("delete")}
                 />
               </div>
             </>
@@ -283,7 +301,13 @@ export default function AccountOverlay({
             <div key={view} className="account-subview">
               {view === "information" && information}
               {view === "security" && security}
-              {view === "privacy" && <Privacy user={user} state={state} />}
+              {view === "privacy" && (
+                <AccountPrivacy
+                  user={user}
+                  state={state}
+                  onDelete={() => navigate("delete")}
+                />
+              )}
               {view === "delete" && (
                 <section className="account-card account-delete-confirm">
                   <h2 tabIndex={-1}>
@@ -314,7 +338,7 @@ export default function AccountOverlay({
                   </AccountForm>
                   <button
                     className="account-cancel"
-                    onClick={() => setView("main")}
+                    onClick={() => navigate("main")}
                   >
                     Annuler
                   </button>
@@ -562,119 +586,5 @@ function AccountForm({
         {busy ? "Veuillez patienter…" : label}
       </button>
     </form>
-  );
-}
-function Privacy({ user, state }: { user: User; state: PublicState }) {
-  const [house, setHouse] = useState<House | null>(null),
-    [loaded, setLoaded] = useState(false),
-    [error, setError] = useState("");
-  async function load() {
-    setError("");
-    try {
-      setHouse(await api<House | null>("house"));
-      setLoaded(true);
-    } catch (e) {
-      setError((e as Error).message);
-    }
-  }
-  useEffect(() => {
-    let active = true;
-    void api<House | null>("house")
-      .then((h) => {
-        if (active) {
-          setHouse(h);
-          setLoaded(true);
-        }
-      })
-      .catch((e) => {
-        if (active) setError(e.message);
-      });
-    return () => {
-      active = false;
-    };
-  }, []);
-  const policy = state.documents?.PRIVACY;
-  const purge = state.season?.purge_at
-    ? DateTime.fromISO(state.season.purge_at)
-        .setZone(state.instance?.timezone ?? "Europe/Paris")
-        .setLocale("fr")
-        .toFormat("dd LLLL yyyy à HH:mm")
-    : null;
-  return (
-    <section className="account-card account-privacy">
-      <h2 tabIndex={-1}>
-        <ShieldCheck /> Vos données personnelles
-      </h2>
-      <Editorial
-        text={(
-          state.contents?.["privacy.account"] ??
-          "Votre compte est conservé pour les prochaines éditions. Les données de votre maison sont supprimées à la purge de la saison."
-        ).replace(/\{\{user_name\}\}/g, user.display_name)}
-      />
-      <dl>
-        <div>
-          <dt>Compte durable</dt>
-          <dd>
-            Nom, email, vérification, empreinte sécurisée du mot de passe et
-            rôle.
-          </dd>
-        </div>
-        <div>
-          <dt>Maison, adresse et position</dt>
-          <dd>
-            {loaded ? (
-              house ? (
-                <>
-                  {house.name}
-                  <br />
-                  {house.address}
-                  <br />
-                  {Number(house.latitude).toFixed(5)},{" "}
-                  {Number(house.longitude).toFixed(5)}
-                </>
-              ) : (
-                "Aucune maison enregistrée pour la saison active."
-              )
-            ) : (
-              "Chargement des données de votre maison…"
-            )}
-          </dd>
-        </div>
-        <div>
-          <dt>Parcours</dt>
-          <dd>
-            Le parcours courant reste dans la vue carte. Aucun historique
-            personnel des parcours n’est enregistré ; seul un total anonyme est
-            conservé.
-          </dd>
-        </div>
-        <div>
-          <dt>Prochaine purge de participation</dt>
-          <dd>
-            {purge ??
-              "La date sera affichée dès que la prochaine saison sera configurée."}
-          </dd>
-        </div>
-      </dl>
-      <Notice error={error} />
-      {error && <AsyncButton onClick={load}>Réessayer</AsyncButton>}
-      {policy ? (
-        <details className="account-policy">
-          <summary>Lire la politique de confidentialité</summary>
-          <h3>{policy.title}</h3>
-          <small>Version {policy.version}</small>
-          <Editorial text={policy.body} />
-        </details>
-      ) : (
-        <a
-          className="account-policy-link"
-          href="/privacy"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Lire la politique de confidentialité
-        </a>
-      )}
-    </section>
   );
 }

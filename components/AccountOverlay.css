@@ -217,6 +217,17 @@
 .account-email-status {
   color: #b8b0c9;
 }
+.account-email-status.is-verified {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #a9d8b7;
+  background: #19332888;
+  border: 1px solid #385e47;
+  border-radius: 6px;
+  padding: 3px 8px;
+  font-size: 11px;
+}
 .account-verification p {
   margin: 8px 0;
 }
@@ -334,19 +345,37 @@
   margin-top: 12px;
   padding-top: 12px;
 }
-.account-row.danger,
-.account-session button {
+.account-row.danger {
   border-color: #713647;
   color: #ff8c99;
   background: linear-gradient(110deg, #261922aa, #16141de8);
 }
-.account-danger .account-row-icon,
+.account-session button {
+  border-color: #363346;
+  color: var(--text);
+  background: linear-gradient(110deg, #1b1e2ac9, #131720e8);
+}
+.account-danger .account-row-copy small {
+  color: #d99aa3;
+}
+.account-danger .account-row:hover {
+  border-color: #a14f60;
+  background: #321b25;
+}
 .account-session .account-row-icon {
+  color: #d48b79;
+  background: #38262b;
+}
+.account-session button > svg {
+  color: #aba4b7;
+}
+.account-danger .account-row-icon,
+.account-delete-confirm .account-row-icon {
   background: #421e2b;
   color: #ff7181;
 }
 .account-danger .account-row > svg,
-.account-session button > svg {
+.account-delete-confirm .account-row > svg {
   color: #ff7181;
 }
 .account-subview {
@@ -354,6 +383,130 @@
 }
 .account-subview h2:focus {
   outline: none;
+}
+.account-scroll.is-returning {
+  animation: account-return 200ms ease-out both;
+}
+@keyframes account-return {
+  from {
+    opacity: 0;
+    transform: translateX(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.account-privacy-title {
+  font-size: 16px;
+  margin: 0 0 10px;
+}
+.account-privacy-intro {
+  color: #bfb7cc;
+  font-size: 13px;
+  margin-bottom: 18px;
+}
+.account-privacy-blocks {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  align-items: start;
+}
+.account-participation-details {
+  margin-top: 8px;
+}
+.account-participation-details summary {
+  cursor: pointer;
+  font-size: 12px;
+  color: #d0bbeb;
+}
+.account-participation-details[open] .account-data {
+  margin-top: 8px;
+}
+.account-privacy-blocks h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 12px;
+  font-size: 14px;
+}
+.account-privacy-blocks h3 svg {
+  color: #b58be8;
+  flex-shrink: 0;
+}
+.account-privacy-blocks p {
+  color: #bfb7cc;
+  font-size: 12px;
+  line-height: 1.6;
+  margin: 10px 0 0;
+}
+.account-privacy .account-data {
+  margin: 0;
+}
+.account-privacy .account-data > div {
+  border: 0;
+  padding: 4px 0;
+}
+.account-privacy .account-data dt {
+  color: #b4a9c2;
+  font-size: 11px;
+}
+.account-privacy .account-data dd {
+  color: #eee7f0;
+  margin: 2px 0 0;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+  white-space: pre-line;
+}
+.account-privacy .account-retention {
+  border-top: 1px solid #363346;
+  padding-top: 10px;
+}
+.account-purge {
+  border-color: #6a4a38;
+}
+.account-purge h3 svg {
+  color: #ed9b65;
+}
+.account-purge > strong {
+  color: #f1c39d;
+  font-size: 15px;
+}
+.account-privacy-actions {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+.account-privacy-actions .account-row:hover {
+  color: var(--text);
+}
+.account-contact summary {
+  cursor: pointer;
+  list-style: none;
+}
+.account-contact summary::-webkit-details-marker {
+  display: none;
+}
+.account-contact[open] summary > svg {
+  transform: rotate(90deg);
+}
+.account-contact > p {
+  margin: 8px 0 0;
+  padding: 12px 14px;
+  border: 1px solid #363346;
+  border-radius: 10px;
+  background: #171923;
+  font-size: 12px;
+  color: #bfb7cc;
+}
+.account-contact a {
+  text-decoration: underline;
+  color: #cdb3e7;
+}
+@media (max-width: 767px) {
+  .account-privacy-blocks {
+    grid-template-columns: 1fr;
+  }
 }
 .account-privacy dl {
   margin: 22px 0;
