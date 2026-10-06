@@ -1,5 +1,13 @@
 # Changelog
 
+## V0.6.2 — Saisons TEST et environnement isolé
+
+- Saisons nommées REAL / TEST et environnement TEST isolé.
+- Création de comptes TEST sans invitation et de maisons depuis l’admin.
+- Saison TEST distincte de la saison publique.
+- Suppression transactionnelle complète d’une saison TEST.
+- Suppression de l’ancien seed automatique Mr Test.
+
 ## V0.6.1 — Mode démo réel et back-office bêta
 
 - Suppression des anciennes maisons simulées.
