@@ -1,5 +1,12 @@
 # Changelog
 
+## V0.6.1 — Mode démo réel et back-office bêta
+
+- Suppression des anciennes maisons simulées.
+- Peuplement idempotent de cinq vrais profils et maisons de test, dans une saison de test réelle.
+- Mode démo : accès anticipé sécurisé à la vraie carte, sans simulation.
+- Premier back-office bêta de gestion et modération des maisons.
+
 ## V0.6.0 — Carte & Parcours
 
 - Nouvelle expérience Carte & Parcours, avec préparation et bonnes pratiques.
