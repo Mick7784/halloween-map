@@ -372,6 +372,10 @@ test("new house starts blank and requires explicit coordinate confirmation", asy
   await confirm.click();
   await expect(
     page.getByRole("button", { name: "Envoyer ma participation" }),
+  ).toBeDisabled();
+  await page.getByRole("checkbox", { name: /J’ai pris connaissance/ }).check();
+  await expect(
+    page.getByRole("button", { name: "Envoyer ma participation" }),
   ).toBeEnabled();
   await page.getByRole("spinbutton", { name: "Latitude" }).fill("48.2");
   await expect(
