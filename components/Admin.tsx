@@ -7,6 +7,14 @@ import {
   House as HouseIcon,
   Users,
   CalendarDays,
+  Route,
+  FileText,
+  Settings,
+  ShieldCheck,
+  Menu,
+  SunMoon,
+  RefreshCw,
+  ExternalLink,
 } from "lucide-react";
 import type { House, User, Season } from "../lib/domain";
 import {
@@ -21,6 +29,9 @@ import AdminUsers, { type ManagedUser } from "./AdminUsers";
 import HouseForm from "./HouseForm";
 import SeasonManager from "./SeasonManager";
 import ParticipationForm from "./ParticipationForm";
+import AdminDashboard, { type AdminAudit } from "./AdminDashboard";
+import AdminExistingPage from "./AdminExistingPage";
+import { seasonState } from "../lib/domain";
 import "./AdminBeta.css";
 type ManagedHouse = House & {
   email: string;
@@ -35,7 +46,7 @@ type Dashboard = {
   routes: number;
   users: number;
 };
-type Audit = { id: string; action: string; actor: string; created_at: string };
+type Audit = AdminAudit;
 function dateLabel(value: string, zone: string) {
   return new Intl.DateTimeFormat("fr-FR", {
     dateStyle: "short",
@@ -74,7 +85,9 @@ export default function Admin({
     [search, setSearch] = useState(""),
     [review, setReview] = useState("ALL"),
     [availability, setAvailability] = useState("ALL"),
-    [theme, setTheme] = useState("dark"),
+    [theme, setTheme] = useState("system"),
+    [menuOpen, setMenuOpen] = useState(false),
+    [loading, setLoading] = useState(true),
     [users, setUsers] = useState<ManagedUser[]>([]),
     [roles, setRoles] = useState<
       { id: string; name: string; permissions: string[] }[]
@@ -92,25 +105,43 @@ export default function Admin({
     generation = useRef(0),
     currentSeason = useRef(seasonId);
   currentSeason.current = seasonId;
+  const seasonStorageKey =
+    "halloween.admin.season." + state.instance?.id + "." + user.id;
   const reloadSeasons = useCallback(async () => {
     const rows =
       await api<(Season & { public_active?: boolean; test_used?: boolean })[]>(
         "admin/seasons",
       );
     setSeasons(rows);
+    if (!rows.length) setLoading(false);
+    let stored = "";
+    try {
+      stored = localStorage.getItem(seasonStorageKey) ?? "";
+    } catch {}
     setSeasonId((id) =>
       rows.some((s) => s.id === id)
         ? id
-        : (rows.find((s) => s.public_active)?.id ?? rows[0]?.id ?? ""),
+        : (rows.find((s) => s.id === stored)?.id ??
+          rows.find((s) => s.public_active)?.id ??
+          rows[0]?.id ??
+          ""),
     );
-  }, []);
+  }, [seasonStorageKey]);
   useEffect(() => {
     void reloadSeasons().catch((e) => setError(e.message));
   }, [reloadSeasons]);
+  useEffect(() => {
+    if (seasonId) {
+      try {
+        localStorage.setItem(seasonStorageKey, seasonId);
+      } catch {}
+    }
+  }, [seasonId, seasonStorageKey]);
   const reload = useCallback(async () => {
     if (!seasonId) return;
     const revision = ++generation.current,
       query = "?seasonId=" + encodeURIComponent(seasonId);
+    setLoading(true);
     try {
       const [h, d, a] = await Promise.all([
         has(user, "participants.read")
@@ -129,6 +160,8 @@ export default function Admin({
       setError("");
     } catch (e) {
       if (revision === generation.current) setError((e as Error).message);
+    } finally {
+      if (revision === generation.current) setLoading(false);
     }
   }, [user, seasonId]);
   const reloadUsers = useCallback(async () => {
@@ -175,7 +208,10 @@ export default function Admin({
     setCreating(true);
   }
   useEffect(() => {
-    const stored = localStorage.getItem("halloween.admin.theme");
+    let stored = null;
+    try {
+      stored = localStorage.getItem("halloween.admin.theme");
+    } catch {}
     if (stored && ["dark", "light", "system"].includes(stored))
       setTheme(stored);
   }, []);
@@ -294,132 +330,249 @@ export default function Admin({
   }
   return (
     <div className="admin-beta" data-theme={theme}>
-      <aside className="beta-sidebar">
+      {menuOpen && (
+        <button
+          className="beta-menu-backdrop"
+          aria-label="Fermer la navigation"
+          onClick={() => setMenuOpen(false)}
+        />
+      )}
+      <aside
+        className={"beta-sidebar" + (menuOpen ? " is-open" : "")}
+        id="admin-navigation"
+      >
         <a
           className="beta-logo"
           href="https://github.com/Mick7784/halloween-map"
           target="_blank"
           rel="noreferrer"
         >
-          Halloween Map <span>BÊTA</span>
+          <HouseIcon size={26} />
+          <span>
+            Halloween Map<small>Administration</small>
+          </span>
         </a>
-        <nav>
+        <nav aria-label="Navigation administration">
           {(
             [
               ["dashboard", "Tableau de bord", "stats.read", LayoutDashboard],
               ["houses", "Maisons", "participants.read", HouseIcon],
               ["users", "Utilisateurs", "users.read", Users],
-              ["seasons", "Saisons", "season.read", CalendarDays],
+              ["routes", "Parcours", "stats.read", Route],
+              ["seasons", "Saison", "season.read", CalendarDays],
+              ["content", "Textes & documents", "content.manage", FileText],
+              ["settings", "Paramètres", "settings.read", Settings],
+              ["roles", "Rôles & permissions", "roles.manage", ShieldCheck],
             ] as const
           ).map(
-            ([id, title, p, Icon]) =>
-              has(user, p as string) && (
+            ([id, title, permission, Icon]) =>
+              has(user, permission) &&
+              (id !== "roles" || user.role_name === "SUPER_ADMIN") && (
                 <button
-                  key={id as string}
-                  className={section === id ? "active" : ""}
-                  onClick={() => setSection(id as string)}
+                  key={id}
+                  className={section === id ? "is-current" : ""}
+                  aria-current={section === id ? "page" : undefined}
+                  onClick={() => {
+                    setSection(id);
+                    setMenuOpen(false);
+                  }}
                 >
                   <Icon size={18} />
-                  {title as string}
+                  {title}
                 </button>
               ),
           )}
         </nav>
-        <label>
-          Apparence
-          <select
-            aria-label="Apparence"
-            value={theme}
-            onChange={(e) => {
-              setTheme(e.target.value);
-              localStorage.setItem("halloween.admin.theme", e.target.value);
-            }}
-          >
-            <option value="dark">Sombre</option>
-            <option value="light">Clair</option>
-            <option value="system">Système</option>
-          </select>
-        </label>
-        <Link href="/map">Voir la carte publique ↗</Link>
+        <Link className="beta-public-link" href="/map">
+          <ExternalLink size={17} />
+          Voir la carte publique
+        </Link>
       </aside>
       <main className="beta-content">
-        <header>
-          <div>
-            <p>Administration</p>
+        <header className="beta-header">
+          <button
+            className="beta-menu-toggle"
+            aria-label="Ouvrir la navigation"
+            aria-expanded={menuOpen}
+            aria-controls="admin-navigation"
+            onClick={() => setMenuOpen(!menuOpen)}
+          >
+            <Menu size={20} />
+          </button>
+          <div className="beta-page-title">
             <h1>
-              {section === "dashboard"
-                ? "Tableau de bord"
-                : section === "houses"
-                  ? "Maisons"
-                  : section === "seasons"
-                    ? "Saisons"
-                    : "Utilisateurs"}
+              {
+                {
+                  dashboard: "Tableau de bord",
+                  houses: "Maisons",
+                  users: "Utilisateurs",
+                  routes: "Parcours",
+                  seasons: "Saison",
+                  content: "Textes & documents",
+                  settings: "Paramètres",
+                  roles: "Rôles & permissions",
+                }[section]
+              }
             </h1>
+            <p>
+              {section === "dashboard"
+                ? "Vue d’ensemble de la saison sélectionnée"
+                : ["content", "settings", "roles"].includes(section)
+                  ? "Configuration globale de l’instance"
+                  : "Données de la saison sélectionnée"}
+            </p>
           </div>
-          <label className="beta-season-select">
-            Saison
-            <select
-              aria-label="Saison du back-office"
-              value={seasonId}
-              onChange={(e) => {
-                generation.current++;
-                setLoadedSeason("");
-                setSeasonId(e.target.value);
+          <div className="beta-header-controls">
+            <label className="beta-season-select">
+              Saison consultée
+              <select
+                aria-label="Saison du back-office"
+                value={seasonId}
+                onChange={(e) => {
+                  generation.current++;
+                  setLoadedSeason("");
+                  setSeasonId(e.target.value);
+                }}
+              >
+                {seasons.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name ?? "Halloween " + s.year}
+                    {s.is_test ? " · TEST" : " · REAL"}
+                    {s.public_active && s.activated ? " · ACTIVE" : ""}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="beta-theme-select">
+              <SunMoon size={17} />
+              <select
+                aria-label="Apparence"
+                value={theme}
+                onChange={(e) => {
+                  setTheme(e.target.value);
+                  try {
+                    localStorage.setItem(
+                      "halloween.admin.theme",
+                      e.target.value,
+                    );
+                  } catch {}
+                }}
+              >
+                <option value="dark">Sombre</option>
+                <option value="light">Clair</option>
+                <option value="system">Système</option>
+              </select>
+            </label>
+            <span className="beta-profile">
+              <span>{user.display_name.slice(0, 1).toUpperCase()}</span>
+              <div>
+                <strong>{user.display_name}</strong>
+                <small>
+                  {user.role_name === "SUPER_ADMIN"
+                    ? "Super administrateur"
+                    : "Administrateur"}
+                </small>
+              </div>
+            </span>
+          </div>
+        </header>
+        <div className="beta-context">
+          <div>
+            {selectedSeason && (
+              <>
+                <span className="beta-status">
+                  {selectedSeason.is_test ? "TEST" : "REAL"}
+                </span>
+                <strong>{selectedSeason.name}</strong>
+                {selectedSeason.public_active && selectedSeason.activated && (
+                  <span className="beta-status public-active">ACTIVE</span>
+                )}
+                {selectedSeason.test_used && (
+                  <span className="beta-status">Utilisée pour les tests</span>
+                )}
+              </>
+            )}
+          </div>
+          <div>
+            <span>
+              Saison publique :{" "}
+              <strong>
+                {seasons.find((s) => s.public_active)?.name ?? "Aucune"}
+              </strong>
+            </span>
+            <span className="beta-service">
+              Carte :{" "}
+              {
+                {
+                  MAP_OPEN: "ouverte",
+                  COUNTDOWN: "ouverture programmée",
+                  PREPARATION: "en préparation",
+                  CLOSED: "fermée",
+                  ARCHIVED: "archivée",
+                }[seasonState(seasons.find((s) => s.public_active) ?? null)]
+              }
+            </span>
+            <button
+              aria-label="Actualiser les données"
+              onClick={() => {
+                void reloadSeasons().catch((e) => setError(e.message));
+                void reload();
               }}
             >
-              {seasons.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name ?? "Halloween " + s.year}
-                  {s.is_test ? " · TEST" : ""}
-                  {s.public_active ? " · Publique" : ""}
-                </option>
-              ))}
-            </select>
-          </label>
-          <button className="secondary" onClick={() => void reload()}>
-            Actualiser
-          </button>
-        </header>
+              <RefreshCw size={15} />
+            </button>
+          </div>
+        </div>
         <Notice error={error} />
         {section === "dashboard" && (
-          <>
-            {dashboard && (
-              <div className="beta-kpis">
-                {[
-                  ["Maisons validées", dashboard.approved],
-                  ["En attente", dashboard.pending],
-                  ["Parcours créés", dashboard.routes],
-                  ["Utilisateurs", dashboard.users],
-                ].map(([title, count]) => (
-                  <article key={title}>
-                    <span>{title}</span>
-                    <strong>{count}</strong>
-                  </article>
-                ))}
-              </div>
+          <AdminDashboard
+            metrics={loadedSeason === seasonId ? dashboard : null}
+            pending={pending
+              .slice()
+              .sort(
+                (a, b) =>
+                  +new Date(b.submitted_at ?? 0) -
+                  +new Date(a.submitted_at ?? 0),
+              )}
+            audit={loadedSeason === seasonId ? audit : []}
+            loading={
+              (loading && !error) ||
+              (!!seasonId && loadedSeason !== seasonId && !error)
+            }
+            zone={state.instance?.timezone ?? "Europe/Paris"}
+            onHouse={(id) => {
+              setSection("houses");
+              const house = scopedHouses.find((h) => h.id === id);
+              if (house) select(house);
+            }}
+          />
+        )}
+        {section === "routes" && (
+          <section className="beta-card">
+            <h2>Parcours créés</h2>
+            {loadedSeason !== seasonId ? (
+              <p role="status">Chargement…</p>
+            ) : (
+              <>
+                <strong className="beta-route-total">
+                  {dashboard?.routes ?? 0}
+                </strong>
+                <p>
+                  Créations enregistrées pour cette saison. Les parcours et les
+                  traces GPS individuels restent sur le terminal des visiteurs.
+                </p>
+              </>
             )}
-            <section className="beta-card">
-              <h2>Maisons à modérer</h2>
-              {table(pending, true)}
-            </section>
-            {audit.length > 0 && (
-              <section className="beta-card">
-                <h2>Activité récente</h2>
-                {audit.slice(0, 8).map((a) => (
-                  <p className="beta-audit" key={a.id}>
-                    <strong>{a.actor ?? "Système"}</strong>
-                    <span>{a.action}</span>
-                    <time>
-                      {dateLabel(
-                        a.created_at,
-                        state.instance?.timezone ?? "Europe/Paris",
-                      )}
-                    </time>
-                  </p>
-                ))}
-              </section>
-            )}
-          </>
+          </section>
+        )}
+        {["content", "settings", "roles"].includes(section) && (
+          <AdminExistingPage
+            key={section}
+            section={section}
+            mapStyle={mapStyle}
+            user={user}
+            refresh={refresh}
+          />
         )}
         {section === "houses" && (
           <section className="beta-card">
@@ -477,15 +630,49 @@ export default function Admin({
           />
         )}
         {section === "seasons" && (
-          <SeasonManager
-            key={seasonId}
-            seasons={seasons}
-            selectedId={seasonId}
-            testSeasonId={seasons.find((s) => s.test_used)?.id}
-            user={user}
-            zone={state.instance?.timezone ?? "Europe/Paris"}
-            act={seasonAction}
-          />
+          <>
+            {selectedSeason &&
+              !selectedSeason.is_test &&
+              !selectedSeason.archived &&
+              !selectedSeason.purged_at &&
+              seasonState(selectedSeason) !== "CLOSED" &&
+              !(selectedSeason.public_active && selectedSeason.activated) &&
+              has(user, "season.manage") && (
+                <section className="beta-card">
+                  <h2>Activation publique</h2>
+                  <p>
+                    La consultation d’une saison ne modifie jamais la carte
+                    publique.
+                  </p>
+                  <AsyncButton
+                    onClick={async () => {
+                      if (
+                        window.confirm(
+                          (selectedSeason.name ?? "Cette saison") +
+                            " deviendra la saison publique active. La saison actuellement active sera automatiquement désactivée.",
+                        )
+                      )
+                        await seasonAction(
+                          "activateSeason",
+                          "ACTIVER",
+                          selectedSeason.id,
+                        );
+                    }}
+                  >
+                    Activer cette saison
+                  </AsyncButton>
+                </section>
+              )}
+            <SeasonManager
+              key={seasonId}
+              seasons={seasons}
+              selectedId={seasonId}
+              testSeasonId={seasons.find((s) => s.test_used)?.id}
+              user={user}
+              zone={state.instance?.timezone ?? "Europe/Paris"}
+              act={seasonAction}
+            />
+          </>
         )}
       </main>
       {creating && selectedSeason && state.instance && (

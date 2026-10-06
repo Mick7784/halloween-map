@@ -86,7 +86,9 @@ function SeasonForm({
               name: v.name,
               is_test: test,
               registrations_open: v.registrations_open === "on",
-              activated: !!season && v.activated === "on",
+              activated: test
+                ? !!season && v.activated === "on"
+                : !!season?.activated,
             },
             season?.id,
           );
@@ -143,10 +145,10 @@ function SeasonForm({
           label="Autoriser les inscriptions"
           checked={season?.registrations_open ?? true}
         />
-        {season && (
+        {season && test && (
           <Check
             name="activated"
-            label="Activer cette saison"
+            label="Ouvrir l’environnement TEST"
             checked={season.activated}
           />
         )}
@@ -206,7 +208,7 @@ export default function SeasonManager({
                     : s.archived
                       ? "Archivée"
                       : s.activated
-                        ? "Active"
+                        ? "Ouverte"
                         : "Préparation"}
                 </span>
               </div>

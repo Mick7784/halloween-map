@@ -105,8 +105,8 @@ test("beta desktop exposes only useful navigation, pending moderation and normal
   await expect(
     page.getByRole("heading", { name: "Tableau de bord", exact: true }),
   ).toBeVisible();
-  await expect(page.locator(".beta-sidebar nav button")).toHaveCount(2);
-  await expect(page.locator(".beta-content table tbody tr")).toHaveCount(1);
+  await expect(page.locator(".beta-sidebar nav button")).toHaveCount(3);
+  await expect(page.locator(".beta-pending-list li")).toHaveCount(1);
   await page
     .locator(".beta-sidebar")
     .getByRole("button", { name: "Maisons", exact: true })
@@ -260,7 +260,7 @@ test("season context enables direct accounts only in TEST and shows season contr
     });
   await page
     .locator(".beta-sidebar")
-    .getByRole("button", { name: "Saisons", exact: true })
+    .getByRole("button", { name: "Saison", exact: true })
     .click();
   await expect(
     page.getByRole("button", { name: "Utilisée pour les tests" }),

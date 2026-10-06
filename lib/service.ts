@@ -1159,7 +1159,7 @@ export async function adminRead(
     case "audit":
       return (
         await db().query(
-          "SELECT a.id,a.action,a.created_at,a.target_id,u.display_name actor FROM audit_logs a LEFT JOIN users u ON u.id=a.actor_id WHERE a.instance_id=$1 AND a.season_id=$2 ORDER BY a.created_at DESC LIMIT 200",
+          "SELECT a.id,a.action,a.created_at,a.target_id,u.display_name actor,COALESCE(h.name,s.name,t.display_name) target_label FROM audit_logs a LEFT JOIN users u ON u.id=a.actor_id LEFT JOIN participations h ON h.id=a.target_id AND h.instance_id=a.instance_id LEFT JOIN seasons s ON s.id=a.target_id AND s.instance_id=a.instance_id LEFT JOIN users t ON t.id=a.target_id AND t.instance_id=a.instance_id WHERE a.instance_id=$1 AND a.season_id=$2 ORDER BY a.created_at DESC LIMIT 200",
           [u.instance_id, scoped?.id ?? null],
         )
       ).rows;
@@ -1239,6 +1239,42 @@ export async function adminAction(user: User | null, input: unknown) {
       payload.participation,
       { actor: u, seasonId: context.id },
     );
+  }
+  if (data.action === "activateSeason") {
+    requirePermission(u, "season.manage");
+    const id = z.uuid().parse(data.id);
+    if (data.payload !== "ACTIVER")
+      throw new HttpError(400, "Confirmation requise");
+    return transaction(async (c) => {
+      await c.query("SELECT id FROM instances WHERE id=$1 FOR UPDATE", [
+        u.instance_id,
+      ]);
+      const target = (
+        await c.query(
+          "SELECT * FROM seasons WHERE id=$1 AND instance_id=$2 FOR UPDATE",
+          [id, u.instance_id],
+        )
+      ).rows[0] as unknown as Season;
+      if (
+        !target ||
+        target.is_test ||
+        target.archived ||
+        target.purged_at ||
+        +new Date(target.closes_at) <= Date.now()
+      )
+        throw new HttpError(400, "Choisissez une saison REAL disponible");
+      await c.query(
+        "UPDATE seasons SET activated=false WHERE instance_id=$1 AND NOT is_test AND id<>$2",
+        [u.instance_id, id],
+      );
+      await c.query("UPDATE seasons SET activated=true WHERE id=$1", [id]);
+      await c.query("UPDATE instances SET active_season_id=$1 WHERE id=$2", [
+        id,
+        u.instance_id,
+      ]);
+      await audit(c, u.instance_id, u, "season.activated", id);
+      return { ok: true, activeSeasonId: id };
+    });
   }
   if (data.action === "useForTests") {
     if (u.role_name !== "SUPER_ADMIN")
@@ -1437,7 +1473,7 @@ export async function adminAction(user: User | null, input: unknown) {
             opens,
             closes,
             p.registrations_open,
-            p.activated,
+            p.is_test ? p.activated : !s.is_test && s.activated,
             s.id,
             registrations,
             purge,

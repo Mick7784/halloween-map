@@ -1,3 +1,4 @@
+import { auditLabel } from "../lib/admin-presentation";
 import { effectiveTime } from "../lib/time";
 import { houseTravelKey } from "../lib/route-state";
 import manifest from "../app/manifest";
@@ -2574,4 +2575,181 @@ it("collection availability refreshes houses at real time without technical visi
       })
     ).steps[0],
   ).not.toHaveProperty("house");
+});
+
+describe("back office phase one", () => {
+  it("activates only one REAL season explicitly and leaves the TEST reference independent", async () => {
+    await service.adminAction(admin, {
+      action: "season",
+      payload: {
+        ...setupData().season,
+        name: "Autre saison",
+        year: 2027,
+        opens_at: "2027-10-31T12:00",
+        closes_at: "2027-11-01T00:00",
+      },
+    });
+    const other = (await db().query("SELECT * FROM seasons WHERE year=2027"))
+      .rows[0] as unknown as Season;
+    const initial = (await service.instance())!;
+    await service.adminRead(admin, "dashboard", other.id);
+    await service.adminRead(admin, "houses", other.id);
+    expect((await service.instance())!.active_season_id).toBe(
+      initial.active_season_id,
+    );
+    await service.adminAction(admin, {
+      action: "season",
+      id: other.id,
+      payload: {
+        ...setupData().season,
+        year: 2027,
+        opens_at: "2027-10-31T12:00",
+        closes_at: "2027-11-01T00:00",
+        activated: true,
+      },
+    });
+    expect(
+      (
+        await db().query("SELECT activated FROM seasons WHERE id=$1", [
+          other.id,
+        ])
+      ).rows[0].activated,
+    ).toBe(false);
+    const regular = { ...admin, role_name: "ADMIN" } as User;
+    await service.adminAction(regular, {
+      action: "activateSeason",
+      id: season.id,
+      payload: "ACTIVER",
+    });
+    await service.adminAction(admin, {
+      action: "activateSeason",
+      id: other.id,
+      payload: "ACTIVER",
+    });
+    expect((await service.instance())!.active_season_id).toBe(other.id);
+    expect(
+      (
+        await db().query(
+          "SELECT id FROM seasons WHERE activated AND NOT is_test",
+        )
+      ).rows.map((r) => r.id),
+    ).toEqual([other.id]);
+    expect(
+      (
+        await db().query("SELECT activated FROM seasons WHERE id=$1", [
+          season.id,
+        ])
+      ).rows[0].activated,
+    ).toBe(false);
+    await service.adminAction(admin, {
+      action: "season",
+      payload: { ...setupData().season, name: "TEST isolé", is_test: true },
+    });
+    const testSeason = (
+      await db().query("SELECT id FROM seasons WHERE is_test")
+    ).rows[0];
+    await service.adminAction(admin, {
+      action: "useForTests",
+      id: testSeason.id,
+    });
+    await expect(
+      service.adminAction(admin, {
+        action: "activateSeason",
+        id: testSeason.id,
+        payload: "ACTIVER",
+      }),
+    ).rejects.toMatchObject({ status: 400 });
+    await expect(
+      service.adminAction(participant, {
+        action: "activateSeason",
+        id: season.id,
+        payload: "ACTIVER",
+      }),
+    ).rejects.toMatchObject({ status: 403 });
+    await expect(
+      service.adminAction(admin, { action: "activateSeason", id: season.id }),
+    ).rejects.toMatchObject({ status: 400 });
+    await expect(
+      service.adminAction(regular, {
+        action: "useForTests",
+        id: testSeason.id,
+      }),
+    ).rejects.toMatchObject({ status: 403 });
+    await service.adminAction(regular, {
+      action: "activateSeason",
+      id: season.id,
+      payload: "ACTIVER",
+    });
+    expect((await service.instance())!.active_season_id).toBe(season.id);
+    expect((await service.instance())!.test_season_id).toBe(testSeason.id);
+    expect(
+      (
+        await db().query(
+          "SELECT id FROM seasons WHERE activated AND NOT is_test",
+        )
+      ).rows.map((r) => r.id),
+    ).toEqual([season.id]);
+  });
+  it("scopes metrics, pending moderation and named audit targets to the consulted season", async () => {
+    await db().query(
+      "UPDATE participations SET review_status='PENDING' WHERE id=$1",
+      [house.id],
+    );
+    await service.audit(
+      db(),
+      admin.instance_id,
+      admin,
+      "house.review.pending",
+      house.id,
+    );
+    await service.adminAction(admin, {
+      action: "season",
+      payload: { ...setupData().season, name: "TEST vide", is_test: true },
+    });
+    const testId = String(
+      (await db().query("SELECT id FROM seasons WHERE is_test")).rows[0].id,
+    );
+    const realMetrics = (await service.adminRead(
+      admin,
+      "dashboard",
+      season.id,
+    )) as unknown as { pending: number; users: number };
+    const testMetrics = (await service.adminRead(
+      admin,
+      "dashboard",
+      testId,
+    )) as unknown as { pending: number; users: number; routes: number };
+    expect(realMetrics.pending).toBe(1);
+    expect(realMetrics.users).toBeGreaterThan(0);
+    expect(testMetrics).toMatchObject({ pending: 0, users: 0, routes: 0 });
+    expect(await service.adminRead(admin, "houses", testId)).toEqual([]);
+    expect(await service.adminRead(admin, "audit", testId)).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ target_label: house.name }),
+      ]),
+    );
+    expect(await service.adminRead(admin, "audit", season.id)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          action: "house.review.pending",
+          target_label: house.name,
+        }),
+      ]),
+    );
+    await expect(
+      service.adminRead(participant, "dashboard", season.id),
+    ).rejects.toMatchObject({ status: 403 });
+    await expect(
+      service.adminRead(
+        { ...admin, role_name: "ADMIN" },
+        "settings",
+        season.id,
+      ),
+    ).rejects.toMatchObject({ status: 403 });
+  });
+  it("presents stored audit events without displaying technical action codes", () => {
+    expect(auditLabel("participant.deplete")).toBe("Bonbons épuisés");
+    expect(auditLabel("season.test.selected")).toBe("Saison TEST sélectionnée");
+    expect(auditLabel("future.unrecognized.event")).not.toContain("future.");
+  });
 });
