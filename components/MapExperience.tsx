@@ -366,6 +366,11 @@ export default function MapExperience({
               </button>
             </section>
           )}
+        {state.demoError && (
+          <div className="route-map-error">
+            <Notice error={state.demoError} />
+          </div>
+        )}
         {controller.error && (
           <div className="route-map-error">
             <Notice error={controller.error} />

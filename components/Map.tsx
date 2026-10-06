@@ -312,7 +312,21 @@ export default function MapView({
     const g = map.current;
     if (!loaded || !g) return;
     const panel = document.getElementById("parcours");
+    let pendingResize = false;
+    const afterMovement = () => {
+      pendingResize = false;
+      resize();
+    };
     const resize = () => {
+      // Updating padding with jumpTo during fitBounds cancels its animation.
+      // Preserve the current camera adjustment and apply panel padding afterward.
+      if (g.isMoving()) {
+        if (!pendingResize) {
+          pendingResize = true;
+          g.once("moveend", afterMovement);
+        }
+        return;
+      }
       const padding = mapPadding(
         g.getContainer(),
         routePanelOpen && window.innerWidth < 768
@@ -345,6 +359,7 @@ export default function MapView({
     return () => {
       observer.disconnect();
       window.removeEventListener("resize", resize);
+      g.off("moveend", afterMovement);
     };
   }, [loaded, routePanelOpen, sheetPosition]);
   return (
