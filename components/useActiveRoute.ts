@@ -74,18 +74,14 @@ export default function useActiveRoute({
   instanceId,
   seasonId,
   closesAt,
-  preview = false,
-  previewTime,
 }: {
   ownerId: string;
   instanceId: string;
   seasonId: string;
   closesAt: string;
-  preview?: boolean;
-  previewTime?: string;
 }) {
   const [state, setState] = useState(initial);
-  const identityKey = JSON.stringify([ownerId, instanceId, seasonId, preview]);
+  const identityKey = JSON.stringify([ownerId, instanceId, seasonId]);
   const current = useRef(state);
   useEffect(() => {
     current.current = state;
@@ -96,20 +92,10 @@ export default function useActiveRoute({
   const inputRevision = useRef(0);
   const checkCallback = useRef<() => Promise<void>>(async () => {});
   const checkingGeometry = useRef<number[][] | null>(null);
-  const simulatedTime = useRef(previewTime);
-  useEffect(() => {
-    simulatedTime.current = previewTime;
-  }, [previewTime]);
   const bumpRevision = useCallback(() => {
     revision.current++;
   }, []);
-  const now = useCallback(
-    () =>
-      preview && simulatedTime.current
-        ? +new Date(simulatedTime.current)
-        : Date.now(),
-    [preview],
-  );
+  const now = useCallback(() => Date.now(), []);
   const reset = useCallback(() => {
     revision.current++;
     clearStoredRoute();
@@ -126,9 +112,7 @@ export default function useActiveRoute({
     let storageError = "";
     try {
       const raw = localStorage.getItem(ACTIVE_ROUTE_KEY);
-      saved = !preview
-        ? restoreRoute(raw, { ownerId, instanceId, seasonId }, now())
-        : null;
+      saved = restoreRoute(raw, { ownerId, instanceId, seasonId }, now());
       if (raw && !saved) clearStoredRoute();
     } catch {
       storageError = "La sauvegarde locale est indisponible sur cet appareil.";
@@ -150,10 +134,10 @@ export default function useActiveRoute({
         : {}),
     });
     return bumpRevision;
-  }, [ownerId, instanceId, seasonId, preview, now, bumpRevision, identityKey]);
+  }, [ownerId, instanceId, seasonId, now, bumpRevision, identityKey]);
 
   useEffect(() => {
-    if (!state.ready || state.identityKey !== identityKey || preview) return;
+    if (!state.ready || state.identityKey !== identityKey) return;
     if (
       state.phase !== "active" ||
       !state.parameters ||
@@ -202,7 +186,6 @@ export default function useActiveRoute({
     instanceId,
     seasonId,
     closesAt,
-    preview,
     state.identityKey,
     identityKey,
   ]);
@@ -233,21 +216,18 @@ export default function useActiveRoute({
     checkingGeometry.current = snapshot.result.geometry;
     setState((s) => ({ ...s, checking: true }));
     try {
-      const availability = await api<RouteAvailability>(
-        preview ? "route/availability?preview=1" : "route/availability",
-        {
-          instanceId,
-          seasonId,
-          activities: snapshot.parameters.activities,
-          maxFear: snapshot.parameters.maxFear,
-          steps: snapshot.result.stops.map((s) => ({
-            id: s.house.id,
-            arrival: s.arrival,
-            departure: s.departure,
-            key: houseTravelKey(s.house),
-          })),
-        },
-      );
+      const availability = await api<RouteAvailability>("route/availability", {
+        instanceId,
+        seasonId,
+        activities: snapshot.parameters.activities,
+        maxFear: snapshot.parameters.maxFear,
+        steps: snapshot.result.stops.map((s) => ({
+          id: s.house.id,
+          arrival: s.arrival,
+          departure: s.departure,
+          key: houseTravelKey(s.house),
+        })),
+      });
       if (token !== revision.current) return;
       if (!availability.valid) {
         reset();
@@ -293,7 +273,7 @@ export default function useActiveRoute({
         queueMicrotask(() => void checkCallback.current());
       }
     }
-  }, [instanceId, seasonId, closesAt, preview, now, reset, identityKey]);
+  }, [instanceId, seasonId, closesAt, now, reset, identityKey]);
   useEffect(() => {
     checkCallback.current = checkAvailability;
   }, [checkAvailability]);
@@ -386,39 +366,33 @@ export default function useActiveRoute({
           },
     );
   }, []);
-  const calculateRoute = useCallback(
-    async (parameters: RouteParameters) => {
-      const token = ++inputRevision.current;
-      const generation = revision.current;
-      const result = await api<RouteResult>(
-        preview ? "route?preview=1" : "route",
-        parameters,
-      );
-      if (token !== inputRevision.current || generation !== revision.current)
-        return;
-      revision.current++;
-      clearStoredRoute();
-      setState((s) => ({
-        ...s,
-        phase: "calculated",
-        parameters,
-        result,
-        unavailable: [],
-        verified: false,
-        checking: false,
-        error: "",
-        createdAt: new Date().toISOString(),
-        sheet: "expanded",
-        currentPosition: null,
-        accuracy: null,
-        gpsState: "idle",
-        gpsError: "",
-        recenterTarget: null,
-        recalculating: false,
-      }));
-    },
-    [preview],
-  );
+  const calculateRoute = useCallback(async (parameters: RouteParameters) => {
+    const token = ++inputRevision.current;
+    const generation = revision.current;
+    const result = await api<RouteResult>("route", parameters);
+    if (token !== inputRevision.current || generation !== revision.current)
+      return;
+    revision.current++;
+    clearStoredRoute();
+    setState((s) => ({
+      ...s,
+      phase: "calculated",
+      parameters,
+      result,
+      unavailable: [],
+      verified: false,
+      checking: false,
+      error: "",
+      createdAt: new Date().toISOString(),
+      sheet: "expanded",
+      currentPosition: null,
+      accuracy: null,
+      gpsState: "idle",
+      gpsError: "",
+      recenterTarget: null,
+      recalculating: false,
+    }));
+  }, []);
   const startRoute = useCallback(() => {
     if (!current.current.result?.stops.length) return;
     setState((s) => ({
@@ -447,10 +421,7 @@ export default function useActiveRoute({
           ]),
         ],
       };
-      const result = await api<RouteResult>(
-        preview ? "route?preview=1" : "route",
-        parameters,
-      );
+      const result = await api<RouteResult>("route", parameters);
       if (token !== revision.current) return;
       // One update replaces the entire result: no old geometry with new stops.
       setState((s) => ({
@@ -481,7 +452,7 @@ export default function useActiveRoute({
       if (token === revision.current)
         setState((s) => ({ ...s, recalculating: false }));
     }
-  }, [preview, now]);
+  }, [now]);
   // Replacements during an active route must be checked without waiting a minute.
   useEffect(() => {
     if (state.phase === "active") void checkAvailability();

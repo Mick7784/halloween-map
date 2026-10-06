@@ -1,5 +1,6 @@
+import { seed } from "../scripts/seed";
+import { effectiveTime } from "../lib/time";
 import { houseTravelKey } from "../lib/route-state";
-import { publicHouse } from "../lib/domain";
 import manifest from "../app/manifest";
 import { runInNewContext } from "node:vm";
 import {
@@ -34,15 +35,12 @@ import {
 } from "../lib/domain";
 import { planRoute } from "../lib/routing";
 import { nextVersion } from "../scripts/version.mjs";
-import { seed } from "../scripts/seed";
 import {
   ensureBootstrap,
   exchangeBootstrap,
   setupAuthorized,
 } from "../lib/bootstrap";
-import { effectiveTime } from "../lib/time";
 import { requestPasswordReset, resetPassword } from "../lib/accounts";
-import { demoSeason, demoTime } from "../lib/demo";
 import { mailLayout } from "../lib/mail-layout";
 import { dispatchEmails, campaignAction, campaignAdmin } from "../lib/mail";
 import {
@@ -128,6 +126,9 @@ beforeAll(async () => {
     await pool.query(
       await readFile("migrations/005_participation_address.sql", "utf8"),
     );
+    await pool.query(
+      await readFile("migrations/006_real_test_profiles_beta.sql", "utf8"),
+    );
   } else {
     const pg = new PGlite();
     engine = pg;
@@ -143,6 +144,9 @@ beforeAll(async () => {
     );
     await pg.exec(
       await readFile("migrations/005_participation_address.sql", "utf8"),
+    );
+    await pg.exec(
+      await readFile("migrations/006_real_test_profiles_beta.sql", "utf8"),
     );
     globalDb.testDb = {
       async query(sql, values) {
@@ -284,10 +288,10 @@ describe("V0.4 privacy, roles, demo and recovery", () => {
       activities: [],
     };
     await expect(
-      service.route(input, { now: before, preview: false }, null),
+      service.route(input, { now: before, earlyAccess: false }, null),
     ).rejects.toMatchObject({ status: 401 });
     await expect(
-      service.route(input, { now: before, preview: false }, participant),
+      service.route(input, { now: before, earlyAccess: false }, participant),
     ).rejects.toMatchObject({ status: 403 });
   });
   it("hides and restores houses server-side; owner resume cannot override admin hiding", async () => {
@@ -300,7 +304,7 @@ describe("V0.4 privacy, roles, demo and recovery", () => {
       payload: "HIDDEN",
     });
     await service.participantAction(participant, { action: "resume" });
-    const context = { now: new Date("2026-10-31T18:00Z"), preview: false };
+    const context = { now: new Date("2026-10-31T18:00Z"), earlyAccess: false };
     const state = await service.publicState(context, participant);
     expect(state.houses).toEqual([]);
     expect(JSON.stringify(state)).not.toContain(house.address);
@@ -357,100 +361,7 @@ describe("V0.4 privacy, roles, demo and recovery", () => {
       JSON.stringify((await db().query("SELECT * FROM audit_logs")).rows),
     ).not.toContain(house.address);
   });
-  it("uses five ephemeral demo houses below two real houses and real data otherwise, without statistics or purge", async () => {
-    const i = (await service.instance())!;
-    const demo = demoSeason(season);
-    const simulated = await service.demoHouses(i, demo);
-    expect(simulated).toHaveLength(5);
-    expect(
-      simulated.every(
-        (h) => h.address === `Maison de démonstration · ${i.territory}`,
-      ),
-    ).toBe(true);
-    expect(await service.demoHouses(i, demo)).toEqual(simulated);
-    expect(
-      (
-        await service.publicState(
-          { now: demoTime(i, demo, []), preview: true },
-          admin,
-        )
-      ).houses,
-    ).toHaveLength(5);
-    expect(
-      (await db().query("SELECT * FROM participations")).rows,
-    ).toHaveLength(1);
-    const second = await service.register({
-      display_name: "Deux",
-      email: "two@example.invalid",
-      password: "valid-password-1234",
-    });
-    await verifyQueued("two@example.invalid");
-    const u = (await getUser(second.token))!;
-    await service.createParticipation(u, {
-      house: { ...houseData(), name: "Deuxième maison" },
-      acceptance: acceptance(),
-    });
-    expect((await service.demoHouses(i, demo)).map((h) => h.demo)).toEqual([
-      false,
-      false,
-    ]);
-    const context = {
-      now: demoTime(i, demo, await service.demoHouses(i, demo)),
-      preview: true,
-    };
-    const before = await service.activeSeason(i);
-    expect((await service.publicState(context, admin)).houses).toHaveLength(2);
-    const r = await service.route(
-      {
-        acceptance: {
-          mode: "GUIDELINES_ONLY",
-          guidelines: true,
-          guidelines_version: "2026.1",
-        },
-        start: context.now.toISOString(),
-        end: new Date(demo.closes_at).toISOString(),
-        origin: { latitude: 48.1, longitude: -1.67 },
-        activities: [],
-      },
-      context,
-      admin,
-    );
-    expect(r.stops).toHaveLength(2);
-    expect(await service.activeSeason(i)).toEqual(before);
-    await expect(
-      service.publicState(context, participant),
-    ).rejects.toMatchObject({ status: 403 });
-    await service.purgeSeason(season.id, i.id, admin, true);
-    expect(await service.demoHouses(i, demo)).toHaveLength(5);
-  });
-  it("disallows demo during official opening even for a previously enabled session", async () => {
-    const session = (
-      await service.login({
-        email: admin.email,
-        password: "valid-password-1234",
-      })
-    ).token;
-    await db().query("UPDATE sessions SET preview_at=$1 WHERE token_hash=$2", [
-      "2026-10-31T18:00Z",
-      hashToken(session),
-    ]);
-    vi.setSystemTime(new Date("2026-10-31T18:00Z"));
-    await db().query("UPDATE seasons SET activated=true WHERE id=$1", [
-      season.id,
-    ]);
-    await expect(effectiveTime(true, admin, session)).rejects.toMatchObject({
-      status: 403,
-    });
-    expect(
-      (
-        await service.publicState(
-          { now: new Date("2026-10-31T18:00Z"), preview: false },
-          admin,
-        )
-      ).demoAvailable,
-    ).toBe(false);
-    vi.setSystemTime(new Date("2026-10-04T12:00Z"));
-  });
+
   it("sends a neutral reset response, hashed expiring single-use tokens and invalidates sessions", async () => {
     const unknown = await requestPasswordReset({
       email: "unknown@example.invalid",
@@ -983,7 +894,7 @@ describe("Routing, demo and canonical versions", () => {
     ).rejects.toMatchObject({ status: 400 });
   });
   it("releases database locks before routing and rejects a house changed during the network call", async () => {
-    const context = { now: new Date("2026-10-31T18:00Z"), preview: false };
+    const context = { now: new Date("2026-10-31T18:00Z"), earlyAccess: false };
     await db().query("UPDATE seasons SET activated=true WHERE id=$1", [
       season.id,
     ]);
@@ -1144,26 +1055,14 @@ describe("Routing, demo and canonical versions", () => {
         origin: { latitude: 48.1, longitude: -1.67 },
         activities: [],
       },
-      { now, preview: false },
+      { now, earlyAccess: false },
       participant,
     );
     expect(result.stops).toHaveLength(1);
     expect(result.stops[0].house.id).toBe(house.id);
     vi.setSystemTime(new Date("2026-10-04T12:00:00Z"));
   });
-  it("seeds 12 synthetic houses idempotently and removes only demo participants", async () => {
-    process.env.DEMO_PASSWORD = "demo-password-1234";
-    await seed();
-    await seed();
-    expect(
-      (await db().query("SELECT * FROM participations WHERE demo=true")).rows,
-    ).toHaveLength(12);
-    await seed("off");
-    expect(
-      (await db().query("SELECT * FROM participations WHERE demo=true")).rows,
-    ).toEqual([]);
-    expect(await service.ownHouse(participant)).not.toBeNull();
-  });
+
   it("increments patches once and permits explicit milestone overrides", () => {
     expect(nextVersion("V0.1")).toBe("V0.101");
     expect(nextVersion("V0.101")).toBe("V0.102");
@@ -1360,29 +1259,6 @@ describe("V0.2 bootstrap, dates, preview and reminders", () => {
       ).toHaveLength(2);
     } finally {
       await legacy.close();
-    }
-  });
-});
-describe("Synthetic bootstrap", () => {
-  it("creates a fresh synthetic instance without a SETUP_TOKEN override", async () => {
-    await db().query("TRUNCATE instances,bootstrap,setup_sessions CASCADE");
-    const override = process.env.SETUP_TOKEN;
-    delete process.env.SETUP_TOKEN;
-    process.env.DEMO_PASSWORD = "synthetic-password-1234";
-    try {
-      await seed();
-      expect((await db().query("SELECT id FROM instances")).rows).toHaveLength(
-        1,
-      );
-      expect(
-        (await db().query("SELECT id FROM participations WHERE demo=true"))
-          .rows,
-      ).toHaveLength(12);
-      expect(
-        (await db().query("SELECT * FROM setup_sessions")).rows,
-      ).toHaveLength(0);
-    } finally {
-      process.env.SETUP_TOKEN = override;
     }
   });
 });
@@ -1664,15 +1540,11 @@ describe("V0.3 campaigns and outbox", () => {
       ).rows[0].status,
     ).toBe("FAILED");
   });
-  it.each(["UNVERIFIED", "BOUNCED", "INVALID", "DEMO", "DISABLED"])(
+  it.each(["UNVERIFIED", "BOUNCED", "INVALID", "DISABLED"])(
     "excludes %s recipients",
     async (status) => {
       await newCampaign();
-      if (status === "DEMO")
-        await db().query("UPDATE users SET demo=true WHERE id=$1", [
-          participant.id,
-        ]);
-      else if (status === "DISABLED")
+      if (status === "DISABLED")
         await db().query(
           "UPDATE users SET account_status='DISABLED' WHERE id=$1",
           [participant.id],
@@ -1991,243 +1863,264 @@ describe("V0.3 content, legal versions and installation", () => {
   });
 });
 
-it("calculates preview time without ORS and returns explicit demo errors in the preview shell", async () => {
-  const { RoutingError } = await import("../lib/walking-router");
-  const configured = (await service.instance())!;
-  const simulated = demoSeason(season);
-  const previousBase = process.env.ORS_BASE_URL;
-  process.env.ORS_BASE_URL = "http://preview-unavailable-test.invalid";
-  const snap = vi
-    .spyOn(fixtureRouter, "snap")
-    .mockRejectedValue(new RoutingError("unavailable"));
-  try {
-    const clockHouses = await service.demoHouses(configured, season, db(), {
-      generate: false,
-    });
-    expect(clockHouses).toEqual([]);
-    expect(snap).not.toHaveBeenCalled();
-    const now = demoTime(configured, season, clockHouses);
-    const preview = await service.publicState({ now, preview: true }, admin);
-    expect(preview.preview).toBe(true);
-    expect(preview.houses).toEqual([]);
-    expect(preview.routeCandidates).toEqual([]);
-    expect(preview.demoError).toContain(
-      "service de parcours piéton est indisponible",
-    );
-    await expect(
-      service.route(
-        {
-          acceptance: {
-            mode: "GUIDELINES_ONLY",
-            guidelines: true,
-            guidelines_version: "2026.1",
-          },
-          origin: {
-            latitude: configured.latitude,
-            longitude: configured.longitude,
-          },
-          start: now.toISOString(),
-          end: new Date(simulated.closes_at).toISOString(),
-          activities: [],
-        },
-        { now, preview: true },
-        admin,
-      ),
-    ).rejects.toMatchObject({
-      status: 503,
-      message: expect.stringContaining(
-        "service de parcours piéton est indisponible",
-      ),
-    });
-  } finally {
-    snap.mockRestore();
-    if (previousBase === undefined) delete process.env.ORS_BASE_URL;
-    else process.env.ORS_BASE_URL = previousBase;
-  }
-});
-
-describe("active route phase 1 contracts", () => {
-  const context = { now: new Date("2026-10-31T18:00Z"), preview: false };
-  const parameters = () => ({
-    start: context.now.toISOString(),
-    end: "2026-10-31T20:00Z",
-    origin: { latitude: 48.1, longitude: -1.67 },
-    activities: [],
+const seedOptions = {
+  router: fixtureRouter,
+  address: async (lat: number, lng: number) => ({
+    label: "12 rue des Tests, 35000 Rennes",
+    street: "rue des Tests",
+    number: "12",
+    postalCode: "35000",
+    city: "Rennes",
+    cityCode: "35238",
+    point: [lng, lat] as [number, number],
+  }),
+};
+it("real test profiles use normal routing, moderation, closure and polling with idempotent provisioning", async () => {
+  const migration = await readFile(
+    "migrations/006_real_test_profiles_beta.sql",
+    "utf8",
+  );
+  if (engine instanceof PGlite) await engine.exec(migration);
+  else await engine.query(migration);
+  const official = (
+    await db().query("SELECT * FROM seasons WHERE id=$1", [season.id])
+  ).rows[0];
+  await seed("on", seedOptions);
+  const first = (
+    await db().query("SELECT * FROM participations WHERE is_test ORDER BY name")
+  ).rows;
+  expect(first).toHaveLength(5);
+  expect(
+    JSON.stringify(await service.publicState(new Date(), participant)),
+  ).not.toContain("is_test");
+  first.forEach((h) => expect(h.id).toMatch(/^[a-f0-9-]{36}$/));
+  await seed("on", seedOptions);
+  expect(
+    (
+      await db().query(
+        "SELECT id FROM participations WHERE is_test ORDER BY name",
+      )
+    ).rows.map((h) => h.id),
+  ).toEqual(first.map((h) => h.id));
+  expect(
+    (await db().query("SELECT * FROM seasons WHERE id=$1", [season.id]))
+      .rows[0],
+  ).toEqual(official);
+  const i = (await service.instance())!,
+    s = (await service.activeSeason(i))!,
+    now = new Date();
+  expect(seasonState(s, now)).toBe("MAP_OPEN");
+  expect((await service.publicState(now, participant)).houses).toHaveLength(5);
+  const input = {
     acceptance: {
       mode: "GUIDELINES_ONLY",
       guidelines: true,
       guidelines_version: "2026.1",
     },
-  });
-  const check = () => ({
-    instanceId: participant.instance_id,
-    seasonId: season.id,
+    origin: { latitude: i.latitude, longitude: i.longitude },
+    start: now.toISOString(),
+    end: new Date(+now + 7200000).toISOString(),
     activities: [],
-    steps: [
-      {
-        id: house.id,
-        arrival: "2026-10-31T18:10:00Z",
-        departure: "2026-10-31T18:15:00Z",
-        key: houseTravelKey(publicHouse(house)),
-      },
-    ],
+  };
+  const route = await service.route(
+    input,
+    { now, earlyAccess: false },
+    participant,
+  );
+  expect(route.stops).toHaveLength(5);
+  const availabilityInput = {
+    instanceId: i.id,
+    seasonId: s.id,
+    activities: [],
+    steps: route.stops.map((stop) => ({
+      id: stop.house.id,
+      arrival: stop.arrival,
+      departure: stop.departure,
+      key: houseTravelKey(stop.house),
+    })),
+  };
+  await expect(
+    service.adminAction(participant, {
+      action: "houseActivity",
+      id: first[3].id,
+      payload: { action: "end" },
+    }),
+  ).rejects.toMatchObject({ status: 403 });
+  await service.adminAction(admin, {
+    action: "houseActivity",
+    id: first[2].id,
+    payload: { action: "deplete", choice: "continue" },
   });
-  it("requires the current guidelines and excludes specified houses without invoking another engine", async () => {
-    await db().query("UPDATE seasons SET activated=true WHERE id=$1", [
-      season.id,
-    ]);
-    const missing = { ...parameters(), acceptance: undefined };
-    await expect(
-      service.route(missing, context, participant),
-    ).rejects.toThrow();
-    await expect(
-      service.route(
-        {
-          ...parameters(),
-          acceptance: { ...parameters().acceptance, guidelines: false },
-        },
-        context,
-        participant,
-      ),
-    ).rejects.toThrow();
-    await expect(
-      service.route(
-        {
-          ...parameters(),
-          acceptance: {
-            ...parameters().acceptance,
-            guidelines_version: "2025.1",
-          },
-        },
-        context,
-        participant,
-      ),
-    ).rejects.toMatchObject({ status: 409 });
-    expect(
-      (
-        await service.route(
-          { ...parameters(), excludedHouseIds: [house.id] },
-          context,
-          participant,
-        )
-      ).stops,
-    ).toEqual([]);
-    expect(
-      (await service.route(parameters(), context, participant)).stops,
-    ).toHaveLength(1);
-  });
-  it("batches minimal statuses, distinguishes closure and protects admin-hidden houses", async () => {
-    await db().query("UPDATE seasons SET activated=true WHERE id=$1", [
-      season.id,
-    ]);
-    expect(
-      (await service.routeAvailability(participant, check(), context)).steps[0],
-    ).toMatchObject({ available: true });
-    await service.participantAction(participant, { action: "pause" });
-    expect(
-      (await service.routeAvailability(participant, check(), context)).steps[0],
-    ).toMatchObject({ available: false, reason: "paused" });
-    await service.participantAction(participant, { action: "end" });
-    expect(
-      (await service.routeAvailability(participant, check(), context)).steps[0]
-        .reason,
-    ).toBe("ended");
-    await service.adminAction(admin, {
-      action: "visibility",
-      id: house.id,
-      payload: "HIDDEN",
-    });
-    const hidden = (
-      await service.routeAvailability(participant, check(), context)
-    ).steps[0];
-    const absent = (
-      await service.routeAvailability(
-        participant,
-        {
-          ...check(),
-          steps: [
-            { ...check().steps[0], id: "00000000-0000-4000-8000-000000000099" },
-          ],
-        },
-        context,
+  expect((await service.publicState(now, participant)).houses).toHaveLength(5);
+  expect(
+    (
+      await db().query(
+        "SELECT candy_available,activity FROM participations WHERE id=$1",
+        [first[2].id],
       )
-    ).steps[0];
-    expect(hidden).toEqual({
-      id: house.id,
-      available: false,
-      reason: "unavailable",
-    });
-    expect({ ...absent, id: house.id }).toEqual(hidden);
-    expect(
-      await service.routeAvailability(
-        participant,
-        { ...check(), seasonId: "00000000-0000-4000-8000-000000000099" },
-        context,
-      ),
-    ).toMatchObject({ valid: false });
-    await expect(
-      service.routeAvailability(null, check(), context),
-    ).rejects.toMatchObject({ status: 401 });
-    await expect(
-      service.routeAvailability(
-        participant,
-        {
-          ...check(),
-          steps: Array.from({ length: 31 }, () => check().steps[0]),
-        },
-        context,
-      ),
-    ).rejects.toThrow();
+    ).rows[0],
+  ).toEqual({ candy_available: false, activity: "ACTIVE" });
+  await service.adminAction(admin, {
+    action: "houseActivity",
+    id: first[3].id,
+    payload: { action: "end" },
   });
-  it("keeps adaptable houses compatible and checks changed coordinates, activities and expiry", async () => {
-    await db().query("UPDATE seasons SET activated=true WHERE id=$1", [
-      season.id,
-    ]);
-    await db().query("UPDATE participations SET adaptable=true WHERE id=$1", [
-      house.id,
-    ]);
-    house = (await service.ownHouse(participant)) as House;
-    expect(
-      (
-        await service.routeAvailability(
-          participant,
-          { ...check(), maxFear: 1 },
-          context,
-        )
-      ).steps[0].available,
-    ).toBe(true);
-    await db().query(
-      "UPDATE participations SET candy_available=false WHERE id=$1",
-      [house.id],
-    );
-    expect(
-      (await service.routeAvailability(participant, check(), context)).steps[0]
-        .available,
-    ).toBe(true);
-    expect(
-      (
-        await service.routeAvailability(
-          participant,
-          { ...check(), activities: ["CANDY"] },
-          context,
-        )
-      ).steps[0].reason,
-    ).toBe("activities");
-    await db().query(
-      "UPDATE participations SET longitude=longitude+0.01 WHERE id=$1",
-      [house.id],
-    );
-    expect(
-      (await service.routeAvailability(participant, check(), context)).steps[0]
-        .reason,
-    ).toBe("changed");
-    expect(
-      (
-        await service.routeAvailability(participant, check(), {
-          ...context,
-          now: new Date("2026-10-31T21:31Z"),
-        })
-      ).steps[0].reason,
-    ).toBe("expired");
+  expect(
+    (
+      await service.routeAvailability(participant, availabilityInput, {
+        now,
+        earlyAccess: false,
+      })
+    ).steps.find((h) => h.id === first[3].id),
+  ).toMatchObject({ available: false, reason: "ended" });
+  expect(
+    (await service.route(input, { now, earlyAccess: false }, participant))
+      .stops,
+  ).toHaveLength(4);
+  await service.adminAction(admin, {
+    action: "houseActivity",
+    id: first[3].id,
+    payload: { action: "resume" },
   });
+  expect(
+    (await service.route(input, { now, earlyAccess: false }, participant))
+      .stops,
+  ).toHaveLength(5);
+  await service.adminAction(admin, {
+    action: "visibility",
+    id: first[0].id,
+    payload: "HIDDEN",
+  });
+  expect((await service.publicState(now, participant)).houses).toHaveLength(4);
+  const owner = { ...participant, id: first[0].user_id as string };
+  expect(await service.ownHouse(owner)).toMatchObject({ status: "VISIBLE" });
+  await service.adminAction(admin, {
+    action: "reviewHouse",
+    id: first[1].id,
+    payload: { status: "PENDING" },
+  });
+  expect(await service.adminRead(admin, "dashboard")).toMatchObject({
+    pending: 1,
+    approved: 4,
+  });
+  expect((await service.publicState(now, participant)).houses).toHaveLength(3);
+  await expect(
+    service.adminAction(admin, {
+      action: "reviewHouse",
+      id: first[1].id,
+      payload: { status: "REFUSED" },
+    }),
+  ).rejects.toMatchObject({ status: 400 });
+  await service.adminAction(admin, {
+    action: "reviewHouse",
+    id: first[1].id,
+    payload: { status: "REFUSED", reason: "Adresse à vérifier" },
+  });
+  await service.adminAction(admin, {
+    action: "houseActivity",
+    id: first[2].id,
+    payload: { action: "candy", available: true },
+  });
+  await seed("on", seedOptions);
+  expect(
+    (
+      await db().query("SELECT status FROM participations WHERE id=$1", [
+        first[0].id,
+      ])
+    ).rows[0].status,
+  ).toBe("HIDDEN");
+  await service.adminAction(admin, {
+    action: "houseActivity",
+    id: first[4].id,
+    payload: { action: "deplete", choice: "close" },
+  });
+  expect(
+    (
+      await service.routeAvailability(participant, availabilityInput, {
+        now,
+        earlyAccess: false,
+      })
+    ).steps.find((h) => h.id === first[4].id),
+  ).toMatchObject({ available: false, reason: "ended" });
+  await service.adminAction(admin, {
+    action: "houseActivity",
+    id: first[4].id,
+    payload: { action: "resume" },
+  });
+  const h = first[3];
+  await service.adminAction(admin, {
+    action: "editHouse",
+    id: h.id,
+    payload: {
+      name: h.name,
+      address: h.address,
+      latitude: h.latitude,
+      longitude: h.longitude,
+      position_confirmed: true,
+      activities: h.activities,
+      starts_at: new Date(+now - 3600000).toISOString(),
+      ends_at: new Date(+now + 60000).toISOString(),
+      fear: h.fear,
+      adaptable: h.adaptable,
+      rp: "",
+      practical: "",
+    },
+  });
+  expect(
+    (
+      await service.routeAvailability(participant, availabilityInput, {
+        now,
+        earlyAccess: false,
+      })
+    ).steps.find((h) => h.id === first[3].id)?.available,
+  ).toBe(false);
+  await expect(
+    service.adminAction(admin, {
+      action: "deleteHouse",
+      id: first[3].id,
+      payload: "bad",
+    }),
+  ).rejects.toMatchObject({ status: 400 });
+  await service.adminAction(admin, {
+    action: "deleteHouse",
+    id: first[3].id,
+    payload: "SUPPRIMER LA MAISON",
+  });
+  expect(
+    (
+      await service.routeAvailability(participant, availabilityInput, {
+        now,
+        earlyAccess: false,
+      })
+    ).steps.find((h) => h.id === first[3].id),
+  ).toMatchObject({ available: false, reason: "unavailable" });
+  await seed("restore");
+  expect((await service.instance())?.active_season_id).toBe(season.id);
+});
+it("early access is session secured and never replaces the real clock or creates houses", async () => {
+  const token = (
+    await service.login({ email: admin.email, password: "valid-password-1234" })
+  ).token;
+  await expect(effectiveTime(true, participant, token)).rejects.toMatchObject({
+    status: 403,
+  });
+  await expect(effectiveTime(true, admin, token)).rejects.toMatchObject({
+    status: 403,
+  });
+  await db().query(
+    "UPDATE sessions SET early_access=true WHERE token_hash=$1",
+    [hashToken(token)],
+  );
+  const context = await effectiveTime(false, admin, token);
+  expect(context).toEqual({ now: new Date(), earlyAccess: true });
+  expect((await service.publicState(context, admin)).houses).toEqual([]);
+  expect((await db().query("SELECT id FROM participations")).rows).toHaveLength(
+    1,
+  );
+  await expect(service.publicState(context, participant)).rejects.toMatchObject(
+    { status: 403 },
+  );
+  expect((await effectiveTime(false, participant, token)).earlyAccess).toBe(
+    false,
+  );
 });

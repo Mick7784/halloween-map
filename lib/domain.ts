@@ -36,7 +36,10 @@ export type House = {
   candy_available: boolean;
   status: string;
   activity: string;
-  demo: boolean;
+  is_test?: boolean;
+  refusal_reason?: string;
+  submitted_at?: string;
+  updated_at?: string;
 };
 export type Instance = {
   id: string;
@@ -115,9 +118,28 @@ export function seasonState(s: Season | null, now = new Date()) {
 export function effectiveActivities(h: House) {
   return h.activities.filter((a) => a !== "CANDY" || h.candy_available);
 }
-export function visible(h: House, s: Season, now = new Date()) {
+export function mapAccessible(
+  s: Season | null,
+  now = new Date(),
+  earlyAccess = false,
+) {
   return (
-    seasonState(s, now) === "MAP_OPEN" &&
+    !!s &&
+    !s.archived &&
+    !s.purged_at &&
+    +now < +new Date(s.closes_at) &&
+    (earlyAccess || seasonState(s, now) === "MAP_OPEN")
+  );
+}
+export function visible(
+  h: House,
+  s: Season,
+  now = new Date(),
+  earlyAccess = false,
+) {
+  return (
+    mapAccessible(s, now, earlyAccess) &&
+    (h.review_status ?? "VALIDATED") === "VALIDATED" &&
     h.status === "VISIBLE" &&
     h.activity === "ACTIVE" &&
     effectiveActivities(h).length > 0 &&

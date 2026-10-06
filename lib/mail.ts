@@ -225,7 +225,7 @@ async function prepareCampaigns(now: Date) {
       if (!campaign) return;
       await c.query(
         `INSERT INTO email_outbox(user_id,season_id,campaign_id,kind,scheduled_at,idempotency_key)
- SELECT u.id,p.season_id,$1::uuid,'CAMPAIGN',$3,($1::uuid)::text||':'||u.id::text FROM participations p JOIN users u ON u.id=p.user_id WHERE p.season_id=$2 AND NOT u.demo AND NOT p.demo AND u.account_status='ACTIVE' AND u.email_status='VERIFIED'
+ SELECT u.id,p.season_id,$1::uuid,'CAMPAIGN',$3,($1::uuid)::text||':'||u.id::text FROM participations p JOIN users u ON u.id=p.user_id WHERE p.season_id=$2 AND u.account_status='ACTIVE' AND u.email_status='VERIFIED'
  AND ($4='ALL' OR ($4='ACTIVE' AND p.activity='ACTIVE') OR p.status=$4) ON CONFLICT DO NOTHING`,
         [campaign.id, campaign.season_id, now, campaign.audience],
       );
@@ -262,7 +262,6 @@ async function claimJob(now: Date) {
       (job.kind === "VERIFY" && u.email_status === "VERIFIED") ||
       (campaign &&
         (u.email_status !== "VERIFIED" ||
-          u.demo ||
           campaign.purged_at ||
           +new Date(String(campaign.purge_at)) <= +now))
     ) {

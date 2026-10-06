@@ -19,7 +19,6 @@ import {
   frenchAddressSearch,
   frenchAddressReverse,
 } from "../../../lib/french-address";
-import { demoTime } from "../../../lib/demo";
 import { NextRequest, NextResponse } from "next/server";
 import { getUser, HttpError, hashToken, rateLimit } from "../../../lib/auth";
 import { db } from "../../../lib/db";
@@ -288,7 +287,7 @@ async function handle(
         user,
         req.cookies.get(cookie)?.value,
       );
-      if (!context.preview) await service.tick();
+      await service.tick();
       return response(await service.route(input, context, user));
     }
     if (path === "admin") {
@@ -304,17 +303,17 @@ async function handle(
         if (previewInput.enabled) {
           if (!season || seasonState(season) === "MAP_OPEN")
             throw new HttpError(403, "Mode démo indisponible");
-          at = demoTime(
-            configured,
-            season,
-            await service.demoHouses(configured, season, db(), {
-              generate: false,
-            }),
-          ).toISOString();
+          if (
+            season.archived ||
+            season.purged_at ||
+            +new Date() >= +new Date(season.closes_at)
+          )
+            throw new HttpError(403, "Saison fermée");
+          at = new Date().toISOString();
         }
         await db().query(
-          "UPDATE sessions SET preview_at=$1 WHERE token_hash=$2 AND user_id=$3",
-          [at, hashToken(req.cookies.get(cookie)!.value), user.id],
+          "UPDATE sessions SET early_access=$1 WHERE token_hash=$2 AND user_id=$3",
+          [!!at, hashToken(req.cookies.get(cookie)!.value), user.id],
         );
         await service.audit(
           db(),

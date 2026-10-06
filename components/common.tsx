@@ -19,9 +19,7 @@ export type PublicState = {
     import("../lib/content").LegalKind,
     import("../lib/content").LegalDocument
   >;
-  preview?: boolean;
   demoAvailable?: boolean;
-  demoError?: string;
   mapAccessible?: boolean;
   instance?: Pick<
     Instance,

@@ -47,7 +47,7 @@ La purge transactionnelle/idempotente supprime réellement participations, adres
 
 Politique de comptes inactifs : aucun nettoyage automatique implicite. L’exploitant doit définir/publier un délai justifié, informer les utilisateurs avant suppression puis utiliser la suppression de compte, avec rétention limitée des sauvegardes. Les jetons expirés sont supprimés ; les états d’emails d’identité terminés sont effacés après 30 jours.
 
-**Mode démonstration** : Super Admin uniquement, activé en un clic sur l’accueil hors ouverture publique. Moins de deux maisons réelles disponibles : cinq maisons fictives éphémères sans écriture en base. Sinon : vraies maisons au temps simulé choisi automatiquement. Aucun compteur ni purge simulée.
+**Mode démo** : accès anticipé réservé à la session du Super Admin, sans horloge ni maisons simulées. Les API de carte et parcours utilisent les participations réelles.
 
 ## SMTP et communications
 
@@ -105,7 +105,7 @@ Même image pour app/worker/migrate, mêmes secrets DB. **Ne jamais utiliser dow
 
 ## Environnement et vérification
 
-Autres variables existantes : `POSTGRES_PASSWORD` requis, `DATABASE_URL` hors Compose, `APP_PORT` (3000), `APP_ORIGIN`, `COOKIE_SECURE`, `SETUP_TOKEN` facultatif, `DEMO_PASSWORD` facultatif, `MAP_STYLE_URL`, `HALLOWEEN_IMAGE`. Ne jamais committer `.env`. Changer .env ne change pas le mot de passe d’un PostgreSQL déjà créé. La DB n’a pas de port public dans Compose ; le proxy est configuré par l’exploitant.
+Autres variables existantes : `POSTGRES_PASSWORD` requis, `DATABASE_URL` hors Compose, `APP_PORT` (3000), `APP_ORIGIN`, `COOKIE_SECURE`, `SETUP_TOKEN` facultatif, `TEST_PROFILE_PASSWORD` facultatif, `MAP_STYLE_URL`, `HALLOWEEN_IMAGE`. Ne jamais committer `.env`. Changer .env ne change pas le mot de passe d’un PostgreSQL déjà créé. La DB n’a pas de port public dans Compose ; le proxy est configuré par l’exploitant.
 
 ```sh
 npm ci
@@ -143,7 +143,7 @@ La géométrie et les métriques finales proviennent de Directions ; la matrice 
 
 Au maximum 200 maisons candidates après filtres/horaires (au-delà, demande explicite d’affiner, jamais de troncature silencieuse). Matrices par blocs de 50 sources/destinations, au plus 2500 paires par requête. Pour 30 maisons : normalement 1 Snap + 1 Matrix + 1 Directions. Pour 200 : au plus 1 + 25 + 1, hors recalcul exceptionnel si les métriques Directions invalident un horaire. Timeout 12 s par requête et 60 s pour toute la session fournisseur, aucun retry automatique. Dimensionner les quotas journaliers/par minute de la clé pour l’événement ; un quota dépassé affiche une indisponibilité, jamais une fausse route.
 
-Données transmises au fournisseur : coordonnées de départ et des maisons candidates (pas de noms, emails ou adresses textuelles). Aucune persistance/caching des routes dans l’application. L’exploitant doit informer les participants et visiteurs de ce prestataire dans sa politique de confidentialité. Les maisons ouvrant plus tard peuvent être utilisées dans la fenêtre demandée, uniquement pendant l’ouverture globale de la saison et après connexion ; la carte des maisons disponibles conserve son filtre d’ouverture immédiate. Les données de démonstration sont synthétiques et ne garantissent pas un raccordement au réseau.
+Données transmises au fournisseur : coordonnées de départ et des maisons candidates (pas de noms, emails ou adresses textuelles). Aucune persistance/caching des routes dans l’application. L’exploitant doit informer les participants et visiteurs de ce prestataire dans sa politique de confidentialité. Les maisons ouvrant plus tard peuvent être utilisées dans la fenêtre demandée, uniquement pendant l’ouverture globale de la saison et après connexion ; la carte des maisons disponibles conserve son filtre d’ouverture immédiate. Le peuplement des profils de test vérifie leur raccordement au réseau ORS avant écriture.
 
 Départ explicitement choisi, acquisition GPS haute précision sans cache, précision affichée, marqueur lavande, recentrage, étapes orange numérotées et cadrage automatique. Modifier départ/filtres/frayeur/horaires efface le résultat. Un changement de maison invalide l’intégralité du résultat lors de l’actualisation (30 s), sans conserver d’anciens totaux. Une nouvelle maison commence sans coordonnées et exige confirmation explicite du point côté UI/API.
 
@@ -164,3 +164,9 @@ L’activation de la session preview ne dépend plus du fournisseur : le choix d
 ### V0.5.3 — segments Directions
 
 La requête Directions ne désactive plus les instructions : ORS retourne ainsi les segments nécessaires aux distances et durées de chaque liaison. Seuls la géométrie LineString et les couples distance/durée sont conservés. Les éventuelles instructions/steps sont ignorées ; aucune navigation turn-by-turn ni métrique calculée à vol d’oiseau. La validation du nombre de segments (points moins un) reste obligatoire.
+
+### Profils de test et saison ouverte
+
+Après les migrations, exécuter `npm run seed -- on` sur la base configurée. ORS et le géocodage français doivent être accessibles : les cinq positions sont vérifiées avant toute écriture. Le script crée cinq comptes UUID Mr Test 1 à 5 et une saison normale ouverte pendant 14 jours, sans modifier la saison Halloween 2026. Le champ année prend la première année libre (contrainte existante), les dates effectives sont celles du test immédiat. Leurs identifiants sont mr-test-1@example.invalid à mr-test-5@example.invalid. Définir TEST_PROFILE_PASSWORD pour se connecter à ces comptes ; sinon un mot de passe aléatoire non affiché est créé. Une seconde exécution conserve les états modifiés et les identifiants. `npm run seed -- restore` remet la saison précédente comme saison active sans effacer les tests.
+
+Le badge Test est informatif dans le back-office ; il ne modifie aucune règle publique. Le back-office bêta expose Tableau de bord, Maisons et Utilisateurs selon les permissions existantes.

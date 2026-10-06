@@ -54,9 +54,7 @@ export default function RoutePreparation({
     [guidelinesOpen, setGuidelinesOpen] = useState(false);
   const zone = state.instance!.timezone,
     guideline = state.documents?.GUIDELINES;
-  const now = (
-    state.preview ? DateTime.fromISO(state.serverTime!) : DateTime.now()
-  ).setZone(zone);
+  const now = DateTime.now().setZone(zone);
   const end = DateTime.fromISO(state.season!.closes_at).setZone(zone);
   const accepted = !!guideline && acceptedVersion === guideline.version;
   const alive = useRef(true);

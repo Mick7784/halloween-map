@@ -1,538 +1,594 @@
 "use client";
-import AdminUsers, { type ManagedUser } from "./AdminUsers";
-import ContentAdmin from "./ContentAdmin";
-import EventSettings from "./EventSettings";
-import SeasonManager from "./SeasonManager";
-import DashboardVisuals from "./DashboardVisuals";
-import { useCallback, useEffect, useState, useRef } from "react";
-import {
-  LayoutDashboard,
-  House as HouseIcon,
-  Users,
-  CalendarDays,
-  ChartNoAxesCombined,
-  Settings,
-  ScrollText,
-  X,
-  ArrowRight,
-} from "lucide-react";
-import type { Instance, Season, House, User } from "../lib/domain";
-import Campaigns from "./Campaigns";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { X, LayoutDashboard, House as HouseIcon, Users } from "lucide-react";
+import type { House, User } from "../lib/domain";
 import {
   api,
   has,
   labels,
   Notice,
   AsyncButton,
-  Badges,
-  localDate,
   type PublicState,
 } from "./common";
+import AdminUsers, { type ManagedUser } from "./AdminUsers";
 import HouseForm from "./HouseForm";
-type Role = { id: string; name: string; permissions: string[] };
+import "./AdminBeta.css";
+type ManagedHouse = House & {
+  email: string;
+  owner_name: string;
+  season_opens_at: string;
+  season_closes_at: string;
+};
 type Dashboard = {
   approved: number;
-  hidden: number;
-  users: number;
+  pending: number;
   routes: number;
-  state: string;
-  season: Season | null;
+  users: number;
 };
-type Audit = {
-  id: string;
-  actor: string | null;
-  action: string;
-  created_at: string;
-  target_id: string | null;
+type Audit = { id: string; action: string; actor: string; created_at: string };
+function dateLabel(value: string, zone: string) {
+  return new Intl.DateTimeFormat("fr-FR", {
+    dateStyle: "short",
+    timeStyle: "short",
+    timeZone: zone,
+  }).format(new Date(value));
+}
+const reviews: Record<string, string> = {
+  VALIDATED: "Validée",
+  PENDING: "En attente",
+  REFUSED: "Refusée",
 };
-const sections = [
-  {
-    id: "dashboard",
-    name: "Tableau de bord",
-    p: "stats.read",
-    Icon: LayoutDashboard,
-  },
-  { id: "houses", name: "Maisons", p: "participants.read", Icon: HouseIcon },
-  { id: "users", name: "Utilisateurs", p: "users.read", Icon: Users },
-  { id: "seasons", name: "Saison", p: "season.read", Icon: CalendarDays },
-  {
-    id: "communications",
-    name: "Communications",
-    p: "communications.read",
-    Icon: ScrollText,
-  },
-  {
-    id: "stats",
-    name: "Statistiques",
-    p: "stats.read",
-    Icon: ChartNoAxesCombined,
-  },
-  { id: "settings", name: "Paramètres", p: "settings.read", Icon: Settings },
-  { id: "content", name: "Contenus", p: "content.manage", Icon: ScrollText },
-  {
-    id: "audit",
-    name: "Journal d’activité",
-    p: "audit.read",
-    Icon: ScrollText,
-  },
-];
+const open = (h: House) =>
+  h.activity === "ACTIVE" &&
+  new Date(h.starts_at).getTime() <= Date.now() &&
+  new Date(h.ends_at).getTime() > Date.now();
 export default function Admin({
   user,
   state,
   refresh,
-  mapStyle,
 }: {
   user: User;
   state: PublicState;
   refresh: () => Promise<void>;
   mapStyle: string;
 }) {
-  const available = sections.filter((s) => has(user, s.p));
-  const [section, setSection] = useState(available[0]?.id ?? ""),
-    [data, setData] = useState<unknown>(null),
-    [loadedSection, setLoadedSection] = useState(""),
+  const [section, setSection] = useState("dashboard"),
+    [houses, setHouses] = useState<ManagedHouse[]>([]),
+    [dashboard, setDashboard] = useState<Dashboard | null>(null),
+    [audit, setAudit] = useState<Audit[]>([]),
     [error, setError] = useState(""),
-    [roles, setRoles] = useState<Role[]>([]),
-    [editing, setEditing] = useState<House | null>(null),
-    [filter, setFilter] = useState("ALL");
-  const [activeAdminSeason, setActiveAdminSeason] = useState<Season | null>(
-    null,
-  );
-  const currentSection = useRef(section);
-  useEffect(() => {
-    currentSection.current = section;
-  }, [section]);
+    [selected, setSelected] = useState<string | null>(null),
+    [edit, setEdit] = useState(false),
+    [reason, setReason] = useState(""),
+    [search, setSearch] = useState(""),
+    [review, setReview] = useState("ALL"),
+    [test, setTest] = useState("ALL"),
+    [availability, setAvailability] = useState("ALL"),
+    [theme, setTheme] = useState("dark"),
+    [users, setUsers] = useState<ManagedUser[]>([]),
+    [roles, setRoles] = useState<
+      { id: string; name: string; permissions: string[] }[]
+    >([]);
   const reload = useCallback(async () => {
-    if (!section) return;
-    const result = await api("admin/" + section);
-    if (currentSection.current === section) {
-      setLoadedSection(section);
-      setData(result);
+    try {
+      const [h, d, a] = await Promise.all([
+        has(user, "participants.read")
+          ? api<ManagedHouse[]>("admin/houses")
+          : [],
+        has(user, "stats.read") ? api<Dashboard>("admin/dashboard") : null,
+        has(user, "audit.read") ? api<Audit[]>("admin/audit") : [],
+      ]);
+      setHouses(h);
+      setDashboard(d);
+      setAudit(a);
+      setError("");
+    } catch (e) {
+      setError((e as Error).message);
     }
-  }, [section]);
-  useEffect(() => {
-    let active = true;
-    setError("");
-    if (section)
-      void api("admin/" + section)
-        .then((result) => {
-          if (active) {
-            setData(result);
-            setLoadedSection(section);
-          }
-        })
-        .catch((e) => {
-          if (active) setError(e.message);
-        });
-    return () => {
-      active = false;
-    };
-  }, [section]);
-  useEffect(() => {
-    void api<Season[]>("admin/seasons")
-      .then((rows) =>
-        setActiveAdminSeason(
-          rows.find((row) => !row.archived) ?? rows[0] ?? null,
-        ),
-      )
-      .catch((e) => setError(e.message));
-    if (has(user, "users.read"))
-      void api<Role[]>("admin/roles")
-        .then(setRoles)
-        .catch((e) => setError(e.message));
   }, [user]);
-  async function act(action: string, payload?: unknown, id?: string) {
-    await api("admin", { action, payload, id });
+  const reloadUsers = useCallback(async () => {
+    const [u, r] = await Promise.all([
+      api<ManagedUser[]>("admin/users"),
+      api<{ id: string; name: string; permissions: string[] }[]>("admin/roles"),
+    ]);
+    setUsers(u);
+    setRoles(r);
+  }, []);
+  useEffect(() => {
+    void reload();
+  }, [reload]);
+  useEffect(() => {
+    if (section === "users")
+      void reloadUsers().catch((e) => setError(e.message));
+  }, [section, reloadUsers]);
+  useEffect(() => {
+    const stored = localStorage.getItem("halloween.admin.theme");
+    if (stored && ["dark", "light", "system"].includes(stored))
+      setTheme(stored);
+  }, []);
+  const current = houses.find((h) => h.id === selected);
+  async function act(action: string, payload?: unknown) {
+    await api("admin", { action, id: selected, payload });
     await reload();
     await refresh();
   }
-  const title =
-    sections.find((s) => s.id === section)?.name ?? "Administration";
-  const i = state.instance!,
-    s = state.season;
-  return (
-    <main className="admin-layout">
-      <aside className="admin-sidebar">
-        <div className="eyebrow">BACK-OFFICE</div>
-        <p>
-          {user.display_name}
-          <small>{labels[user.role_name ?? ""] ?? user.role_name}</small>
-        </p>
-        <Link href="/">Retour au site</Link>
-        <nav>
-          {available.map(({ id, name, Icon }) => (
-            <button
-              key={id}
-              className={section === id ? "active" : ""}
-              onClick={() => setSection(id)}
-            >
-              <Icon size={18} />
-              {name}
-            </button>
-          ))}
-        </nav>
-      </aside>
-      <section className="admin-content">
-        <div className="admin-title">
-          <div>
-            <h1>{title}</h1>
-            <p className="muted">
-              {i.public_name} · {s?.year ?? "Préparation"}
-            </p>
-          </div>
-          <span className="season-chip">
-            <i />
-            {labels[state.state ?? ""]}
-          </span>
-        </div>
-        <Notice error={error} />
-        {!section ? (
-          <p className="panel">
-            Ce rôle ne dispose d’aucune permission de lecture.
-          </p>
-        ) : data === null || loadedSection !== section ? (
-          <p className="muted">Chargement…</p>
-        ) : (
-          <>
-            {section === "dashboard" && (
-              <>
-                <div className="metrics">
-                  {[
-                    [
-                      HouseIcon,
-                      "Maisons visibles",
-                      (data as Dashboard).approved,
-                    ],
-                    [
-                      CalendarDays,
-                      "Maisons masquées",
-                      (data as Dashboard).hidden,
-                    ],
-                    [
-                      ChartNoAxesCombined,
-                      "Parcours créés",
-                      (data as Dashboard).routes,
-                    ],
-                    [Users, "Utilisateurs", (data as Dashboard).users],
-                  ].map(([Icon, label, value]) => {
-                    const C = Icon as typeof HouseIcon;
-                    return (
-                      <div className="panel metric" key={String(label)}>
-                        <C />
-                        <div>
-                          <span>{String(label)}</span>
-                          <strong>{Number(value)}</strong>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-                <DashboardVisuals
-                  user={user}
-                  center={[i.longitude, i.latitude]}
-                  zoom={i.zoom}
-                  mapStyle={mapStyle}
-                />
-                <div className="grid two">
-                  <section className="panel">
-                    <h2>Cette saison</h2>
-                    <p>
-                      État :{" "}
-                      <strong>{labels[(data as Dashboard).state]}</strong>
-                    </p>
-                    <p>
-                      Les adresses restent masquées avant l’ouverture. À la
-                      purge programmée, le traitement conserve les totaux
-                      anonymes et supprime les données participantes.
-                    </p>
-                    {has(user, "season.read") && (
-                      <button onClick={() => setSection("seasons")}>
-                        Gérer la saison
-                        <ArrowRight size={16} />
-                      </button>
-                    )}
-                  </section>
-                  <section className="panel admin-message">
-                    <h2>Une commune plus vivante.</h2>
-                    <p>
-                      Découvrir, préparer, partager.
-                      <br />
-                      Un Halloween à accueillir ensemble.
-                    </p>
-                    <span className="eyebrow">
-                      UNE EXPÉRIENCE DOMOTIK STUDIO
-                    </span>
-                  </section>
-                </div>
-              </>
-            )}
-            {section === "houses" && (
-              <section className="panel">
-                <div className="table-toolbar">
-                  <h2>Gestion des maisons</h2>
-                  <select
-                    aria-label="Filtrer les maisons"
-                    value={filter}
-                    onChange={(e) => setFilter(e.target.value)}
-                  >
-                    <option value="ALL">Toutes</option>
-                    {["VISIBLE", "HIDDEN"].map((st) => (
-                      <option key={st} value={st}>
-                        {labels[st]}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="table-wrap">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Maison</th>
-                        <th>Adresse</th>
-                        <th>Statut</th>
-                        <th>Activités</th>
-                        <th>Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(data as House[])
-                        .filter((h) => filter === "ALL" || h.status === filter)
-                        .map((h) => (
-                          <tr key={h.id}>
-                            <td>
-                              <strong>{h.name}</strong>
-                              <small>{labels[h.activity]}</small>
-                            </td>
-                            <td>{h.address}</td>
-                            <td>
-                              <span className={"status " + h.status}>
-                                {labels[h.status]}
-                              </span>
-                            </td>
-                            <td>
-                              <Badges activities={h.activities} />
-                            </td>
-                            <td>
-                              <div className="table-actions">
-                                <button onClick={() => setEditing(h)}>
-                                  Consulter
-                                  {has(user, "participants.edit")
-                                    ? " / modifier"
-                                    : ""}
-                                </button>
-                                <AsyncButton
-                                  onClick={() =>
-                                    act(
-                                      "visibility",
-                                      h.status === "HIDDEN"
-                                        ? "VISIBLE"
-                                        : "HIDDEN",
-                                      h.id,
-                                    )
-                                  }
-                                >
-                                  {h.status === "HIDDEN"
-                                    ? "Rendre visible"
-                                    : "Masquer"}
-                                </AsyncButton>
-                                {has(user, "participants.delete") && (
-                                  <AsyncButton
-                                    danger
-                                    onClick={async () => {
-                                      if (
-                                        window.prompt(
-                                          "Suppression définitive de la maison, de son adresse et de ses données. Le compte reste disponible. Saisissez SUPPRIMER LA MAISON.",
-                                        ) === "SUPPRIMER LA MAISON"
-                                      )
-                                        await act(
-                                          "deleteHouse",
-                                          "SUPPRIMER LA MAISON",
-                                          h.id,
-                                        );
-                                    }}
-                                  >
-                                    Supprimer
-                                  </AsyncButton>
-                                )}
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
-                    </tbody>
-                  </table>
-                </div>
-                {!(data as House[]).length && (
-                  <p className="empty">Aucune maison pour cette saison.</p>
-                )}
-              </section>
-            )}
-            {section === "users" && (
-              <AdminUsers
-                users={data as ManagedUser[]}
-                roles={roles}
-                user={user}
-                reload={reload}
-              />
-            )}
-            {section === "content" && (
-              <ContentAdmin
-                data={data as Parameters<typeof ContentAdmin>[0]["data"]}
-                reload={reload}
-              />
-            )}
-            {section === "seasons" && (
-              <SeasonManager
-                seasons={data as Season[]}
-                user={user}
-                zone={i.timezone}
-                act={act}
-              />
-            )}
-            {section === "communications" && activeAdminSeason && (
-              <Campaigns
-                season={activeAdminSeason}
-                zone={i.timezone}
-                user={user}
-              />
-            )}
-            {section === "stats" && (
-              <>
-                {(data as Season[]).map((season) => (
-                  <section className="panel" key={season.id}>
-                    <h2>
-                      Saison {season.year} ·{" "}
-                      {season.purged_at ? "Bilan anonyme" : "En cours"}
-                    </h2>
-                    <div className="stat-grid">
-                      {Object.entries(season.stats).map(([k, v]) => (
-                        <div key={k}>
-                          <span>
-                            {{
-                              houses: "Maisons inscrites",
-                              approved: "Maisons validées",
-                              decoration: "Décoration",
-                              candy: "Bonbons",
-                              acting: "Mise en scène",
-                              routes: "Parcours",
-                            }[k] ?? k}
-                          </span>
-                          <strong>{v}</strong>
-                        </div>
-                      ))}
-                    </div>
-                    {!Object.keys(season.stats).length && (
-                      <p>
-                        {season.routes_count} parcours créés. Le bilan est
-                        agrégé à la purge.
-                      </p>
-                    )}
-                  </section>
-                ))}
-              </>
-            )}
-            {section === "settings" &&
-              (has(user, "settings.manage") ? (
-                <EventSettings
-                  instance={data as Instance}
-                  mapStyle={mapStyle}
-                  save={(p) => act("settings", p)}
-                />
+  const pending = houses.filter(
+    (h) => h.review_status === "PENDING" && h.season_id === state.season?.id,
+  );
+  const list = houses.filter(
+    (h) =>
+      (h.name + " " + h.owner_name + " " + h.email + " " + h.address)
+        .toLocaleLowerCase()
+        .includes(search.toLocaleLowerCase()) &&
+      (review === "ALL" ||
+        (review === "HIDDEN"
+          ? h.status === "HIDDEN"
+          : h.review_status === review)) &&
+      (test === "ALL" || Boolean(h.is_test) === (test === "TEST")) &&
+      (availability === "ALL" || open(h) === (availability === "OPEN")),
+  );
+  function select(h: ManagedHouse) {
+    setSelected(h.id);
+    setEdit(false);
+    setReason(h.refusal_reason ?? "");
+  }
+  function table(items: ManagedHouse[], moderation = false) {
+    return (
+      <div className="beta-table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Maison / propriétaire</th>
+              <th>Adresse</th>
+              <th>Statut</th>
+              {moderation ? (
+                <th>Soumission</th>
               ) : (
-                <section className="panel">
-                  <h2>{(data as Instance).public_name}</h2>
-                  <p>
-                    {(data as Instance).territory} ·{" "}
-                    {(data as Instance).timezone}
+                <>
+                  <th>Disponibilité</th>
+                  <th>Activités</th>
+                  <th>Modification</th>
+                </>
+              )}
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {items.map((h) => (
+              <tr key={h.id}>
+                <td>
+                  <strong>{h.name}</strong>
+                  {h.is_test && <span className="beta-badge">Test</span>}
+                  <small>
+                    {h.owner_name} · {h.email}
+                  </small>
+                </td>
+                <td>{h.address}</td>
+                <td>
+                  {reviews[h.review_status ?? "VALIDATED"]}
+                  {h.status === "HIDDEN" && <small>Masquée</small>}
+                </td>
+                {moderation ? (
+                  <td>
+                    {h.submitted_at
+                      ? dateLabel(
+                          h.submitted_at,
+                          state.instance?.timezone ?? "Europe/Paris",
+                        )
+                      : "—"}
+                  </td>
+                ) : (
+                  <>
+                    <td>
+                      {open(h) ? "Ouverte" : "Fermée"}
+                      <small>
+                        {h.candy_available
+                          ? "Bonbons disponibles"
+                          : "Plus de bonbons"}
+                      </small>
+                    </td>
+                    <td>{h.activities.map((a) => labels[a]).join(" · ")}</td>
+                    <td>
+                      {h.updated_at
+                        ? dateLabel(
+                            h.updated_at,
+                            state.instance?.timezone ?? "Europe/Paris",
+                          )
+                        : "—"}
+                    </td>
+                  </>
+                )}
+                <td>
+                  <button className="secondary" onClick={() => select(h)}>
+                    {moderation ? "Voir / Modérer" : "Gérer"}
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {!items.length && (
+          <p className="beta-empty">
+            {moderation
+              ? "Aucune maison en attente."
+              : "Aucune maison ne correspond aux filtres."}
+          </p>
+        )}
+      </div>
+    );
+  }
+  return (
+    <div className="admin-beta" data-theme={theme}>
+      <aside className="beta-sidebar">
+        <a
+          className="beta-logo"
+          href="https://github.com/Mick7784/halloween-map"
+          target="_blank"
+          rel="noreferrer"
+        >
+          Halloween Map <span>BÊTA</span>
+        </a>
+        <nav>
+          {(
+            [
+              ["dashboard", "Tableau de bord", "stats.read", LayoutDashboard],
+              ["houses", "Maisons", "participants.read", HouseIcon],
+              ["users", "Utilisateurs", "users.read", Users],
+            ] as const
+          ).map(
+            ([id, title, p, Icon]) =>
+              has(user, p as string) && (
+                <button
+                  key={id as string}
+                  className={section === id ? "active" : ""}
+                  onClick={() => setSection(id as string)}
+                >
+                  <Icon size={18} />
+                  {title as string}
+                </button>
+              ),
+          )}
+        </nav>
+        <label>
+          Apparence
+          <select
+            aria-label="Apparence"
+            value={theme}
+            onChange={(e) => {
+              setTheme(e.target.value);
+              localStorage.setItem("halloween.admin.theme", e.target.value);
+            }}
+          >
+            <option value="dark">Sombre</option>
+            <option value="light">Clair</option>
+            <option value="system">Système</option>
+          </select>
+        </label>
+        <Link href="/map">Voir la carte publique ↗</Link>
+      </aside>
+      <main className="beta-content">
+        <header>
+          <div>
+            <p>Administration</p>
+            <h1>
+              {section === "dashboard"
+                ? "Tableau de bord"
+                : section === "houses"
+                  ? "Maisons"
+                  : "Utilisateurs"}
+            </h1>
+          </div>
+          <button className="secondary" onClick={() => void reload()}>
+            Actualiser
+          </button>
+        </header>
+        <Notice error={error} />
+        {section === "dashboard" && (
+          <>
+            {dashboard && (
+              <div className="beta-kpis">
+                {[
+                  ["Maisons validées", dashboard.approved],
+                  ["En attente", dashboard.pending],
+                  ["Parcours créés", dashboard.routes],
+                  ["Utilisateurs", dashboard.users],
+                ].map(([title, count]) => (
+                  <article key={title}>
+                    <span>{title}</span>
+                    <strong>{count}</strong>
+                  </article>
+                ))}
+              </div>
+            )}
+            <section className="beta-card">
+              <h2>Maisons à modérer</h2>
+              {table(pending, true)}
+            </section>
+            {audit.length > 0 && (
+              <section className="beta-card">
+                <h2>Activité récente</h2>
+                {audit.slice(0, 8).map((a) => (
+                  <p className="beta-audit" key={a.id}>
+                    <strong>{a.actor ?? "Système"}</strong>
+                    <span>{a.action}</span>
+                    <time>
+                      {dateLabel(
+                        a.created_at,
+                        state.instance?.timezone ?? "Europe/Paris",
+                      )}
+                    </time>
                   </p>
-                </section>
-              ))}
-            {section === "audit" && (
-              <section className="panel">
-                <h2>Dernières actions</h2>
-                <div className="table-wrap">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Date</th>
-                        <th>Utilisateur</th>
-                        <th>Action</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(data as Audit[]).map((a) => (
-                        <tr key={a.id}>
-                          <td>
-                            {localDate(a.created_at, i.timezone).replace(
-                              "T",
-                              " ",
-                            )}
-                          </td>
-                          <td>{a.actor ?? "Système / participant"}</td>
-                          <td>{a.action}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                <p className="muted small">
-                  200 dernières actions. Aucun email, adresse ou texte
-                  participant n’est conservé dans ce journal.
-                </p>
+                ))}
               </section>
             )}
           </>
         )}
-      </section>
-      {editing && (
-        <div className="modal-backdrop" onClick={() => setEditing(null)}>
+        {section === "houses" && (
+          <section className="beta-card">
+            <div className="beta-filters">
+              <input
+                aria-label="Rechercher une maison"
+                placeholder="Maison, propriétaire, adresse…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+              <select
+                aria-label="Statut"
+                value={review}
+                onChange={(e) => setReview(e.target.value)}
+              >
+                <option value="ALL">Tous les statuts</option>
+                {Object.entries(reviews).map(([v, l]) => (
+                  <option key={v} value={v}>
+                    {l}
+                  </option>
+                ))}
+                <option value="HIDDEN">Masquées</option>
+              </select>
+              <select
+                aria-label="Profils"
+                value={test}
+                onChange={(e) => setTest(e.target.value)}
+              >
+                <option value="ALL">Test et normal</option>
+                <option value="TEST">Test</option>
+                <option value="NORMAL">Normal</option>
+              </select>
+              <select
+                aria-label="Disponibilité"
+                value={availability}
+                onChange={(e) => setAvailability(e.target.value)}
+              >
+                <option value="ALL">Ouvertes et fermées</option>
+                <option value="OPEN">Ouvertes</option>
+                <option value="CLOSED">Fermées</option>
+              </select>
+            </div>
+            {table(list)}
+          </section>
+        )}
+        {section === "users" && (
+          <AdminUsers
+            users={users}
+            roles={roles}
+            user={user}
+            reload={reloadUsers}
+          />
+        )}
+      </main>
+      {current && (
+        <div className="beta-overlay">
           <section
-            className="panel house-detail edit-house"
+            className="beta-panel"
             role="dialog"
             aria-modal="true"
-            aria-label="Maison"
-            onClick={(e) => e.stopPropagation()}
+            aria-label={current.name}
           >
-            <button
-              className="close"
-              aria-label="Fermer"
-              onClick={() => setEditing(null)}
-            >
-              <X />
-            </button>
-            <h2>{editing.name}</h2>
-            {has(user, "participants.edit") && s ? (
+            <header>
+              <h2>{current.name}</h2>
+              <button
+                aria-label="Fermer"
+                className="secondary"
+                onClick={() => setSelected(null)}
+              >
+                <X size={20} />
+              </button>
+            </header>
+            <p>
+              {current.owner_name} · {current.email}
+            </p>
+            <p>{current.address}</p>
+            <p>
+              {reviews[current.review_status ?? "VALIDATED"]} ·{" "}
+              {current.status === "HIDDEN" ? "Masquée" : "Visible"} ·{" "}
+              {open(current) ? "Ouverte" : "Fermée"}{" "}
+              {current.is_test && <span className="beta-badge">Test</span>}
+            </p>
+            <p>{current.activities.map((a) => labels[a]).join(" · ")}</p>
+            <p>
+              Accueil :{" "}
+              {dateLabel(
+                new Date(current.starts_at).toISOString(),
+                state.instance?.timezone ?? "Europe/Paris",
+              )}{" "}
+              →{" "}
+              {dateLabel(
+                new Date(current.ends_at).toISOString(),
+                state.instance?.timezone ?? "Europe/Paris",
+              )}
+            </p>
+            <p>
+              {current.adaptable
+                ? "Adapté aux visiteurs"
+                : "Niveau de frayeur : " + current.fear}{" "}
+              ·{" "}
+              {current.candy_available
+                ? "Bonbons disponibles"
+                : "Plus de bonbons"}
+            </p>
+            <p>{current.rp}</p>
+            <p>{current.practical}</p>
+            {has(user, "participants.edit") && (
+              <div className="beta-actions">
+                <button className="secondary" onClick={() => setEdit(!edit)}>
+                  {edit
+                    ? "Consulter / gérer"
+                    : "Modifier les informations et horaires"}
+                </button>
+              </div>
+            )}
+            {edit && state.instance ? (
               <HouseForm
-                house={editing}
-                zone={i.timezone}
-                opens={s.opens_at}
-                closes={s.closes_at}
-                center={[i.longitude, i.latitude]}
-                onSave={async (p) => {
-                  await act("editHouse", p, editing.id);
-                  setEditing(null);
+                key={current.updated_at}
+                house={current}
+                center={[state.instance.longitude, state.instance.latitude]}
+                zone={state.instance.timezone}
+                opens={current.season_opens_at}
+                closes={current.season_closes_at}
+                onSave={async (payload) => {
+                  await act("editHouse", payload);
+                  setEdit(false);
                 }}
               />
             ) : (
               <>
-                <p>{editing.address}</p>
-                <Badges activities={editing.activities} />
-                <p>
-                  {localDate(editing.starts_at, i.timezone)} →{" "}
-                  {localDate(editing.ends_at, i.timezone)}
-                </p>
-                <p>
-                  {editing.adaptable
-                    ? "Frayeur adaptable"
-                    : "Frayeur " + editing.fear}
-                </p>
-                <p>{editing.rp}</p>
-                <p className="practical">{editing.practical}</p>
+                {has(user, "participants.edit") && (
+                  <>
+                    <section>
+                      <h3>Modération</h3>
+                      <div className="beta-actions">
+                        <AsyncButton
+                          onClick={() =>
+                            act("reviewHouse", { status: "VALIDATED" })
+                          }
+                        >
+                          Valider
+                        </AsyncButton>
+                        <AsyncButton
+                          onClick={() =>
+                            act("reviewHouse", { status: "PENDING" })
+                          }
+                        >
+                          Mettre en attente
+                        </AsyncButton>
+                      </div>
+                      <label>
+                        Motif du refus
+                        <textarea
+                          maxLength={500}
+                          value={reason}
+                          onChange={(e) => setReason(e.target.value)}
+                        />
+                      </label>
+                      <AsyncButton
+                        onClick={() =>
+                          act("reviewHouse", { status: "REFUSED", reason })
+                        }
+                      >
+                        Refuser avec motif
+                      </AsyncButton>
+                    </section>
+                    <section>
+                      <h3>Disponibilité</h3>
+                      <div className="beta-actions">
+                        <AsyncButton
+                          onClick={() =>
+                            act("houseActivity", {
+                              action:
+                                current.activity === "ACTIVE"
+                                  ? "end"
+                                  : "resume",
+                            })
+                          }
+                        >
+                          {current.activity === "ACTIVE"
+                            ? "Fermer la maison"
+                            : "Rouvrir la maison"}
+                        </AsyncButton>
+                        {current.candy_available &&
+                        current.activities.includes("CANDY") ? (
+                          <>
+                            <AsyncButton
+                              onClick={() =>
+                                act("houseActivity", {
+                                  action: "deplete",
+                                  choice: "close",
+                                })
+                              }
+                            >
+                              Plus de bonbons et fermer
+                            </AsyncButton>
+                            {current.activities.includes("ACTING") && (
+                              <AsyncButton
+                                onClick={() =>
+                                  act("houseActivity", {
+                                    action: "deplete",
+                                    choice: "continue",
+                                  })
+                                }
+                              >
+                                Plus de bonbons, continuer la mise en scène
+                              </AsyncButton>
+                            )}
+                          </>
+                        ) : (
+                          <AsyncButton
+                            onClick={() =>
+                              act("houseActivity", {
+                                action: "candy",
+                                available: true,
+                              })
+                            }
+                          >
+                            Remettre les bonbons disponibles
+                          </AsyncButton>
+                        )}
+                      </div>
+                    </section>
+                  </>
+                )}
+                {has(user, "participants.edit") && (
+                  <section>
+                    <h3>Visibilité administrative</h3>
+                    <p>La visibilité est indépendante de la modération.</p>
+                    <AsyncButton
+                      onClick={() =>
+                        act(
+                          "visibility",
+                          current.status === "HIDDEN" ? "VISIBLE" : "HIDDEN",
+                        )
+                      }
+                    >
+                      {current.status === "HIDDEN" ? "Réafficher" : "Masquer"}
+                    </AsyncButton>
+                  </section>
+                )}
+                {has(user, "participants.delete") && (
+                  <section>
+                    <h3>Suppression</h3>
+                    <AsyncButton
+                      danger
+                      onClick={async () => {
+                        if (
+                          !window.confirm(
+                            "Supprimer définitivement cette maison ?",
+                          )
+                        )
+                          return;
+                        await act("deleteHouse", "SUPPRIMER LA MAISON");
+                        setSelected(null);
+                      }}
+                    >
+                      Supprimer la maison
+                    </AsyncButton>
+                  </section>
+                )}
               </>
             )}
           </section>
         </div>
       )}
-    </main>
+    </div>
   );
 }

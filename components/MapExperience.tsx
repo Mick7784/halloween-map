@@ -45,8 +45,6 @@ export default function MapExperience({
     instanceId: state.instance!.id,
     seasonId: state.season?.id ?? "",
     closesAt: state.season?.closes_at ?? new Date(0).toISOString(),
-    preview: state.preview,
-    previewTime: state.serverTime,
   });
   const [preparing, setPreparing] = useState(false),
     [pick, setPick] = useState(false),
@@ -366,11 +364,6 @@ export default function MapExperience({
               </button>
             </section>
           )}
-        {state.demoError && (
-          <div className="route-map-error">
-            <Notice error={state.demoError} />
-          </div>
-        )}
         {controller.error && (
           <div className="route-map-error">
             <Notice error={controller.error} />

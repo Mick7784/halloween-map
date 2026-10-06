@@ -5,7 +5,6 @@ import {
   validateAcceptance,
   interpolate,
 } from "./content";
-import { demoSeason, fictionalHouses } from "./demo";
 import { recomputeCampaigns } from "./mail";
 import { createAccount, adminUsers } from "./accounts";
 import { setupAuthorized, finishBootstrap } from "./bootstrap";
@@ -26,6 +25,7 @@ import {
   localISO,
   publicHouse,
   seasonState,
+  mapAccessible,
   visible,
   type Instance,
   type Season,
@@ -287,7 +287,7 @@ async function routeCandidates(
   end: Date | string,
 ) {
   const { rows } = await client.query(
-    "SELECT * FROM participations WHERE instance_id=$1 AND season_id=$2 AND status='VISIBLE' AND activity='ACTIVE' AND EXISTS(SELECT 1 FROM users u WHERE u.id=participations.user_id AND u.account_status='ACTIVE' AND (u.email_status='VERIFIED' OR participations.legacy_imported)) AND NOT EXISTS(SELECT 1 FROM legal_documents d WHERE d.instance_id=participations.instance_id AND d.active AND d.requires_reaccept AND ((d.kind='TERMS' AND participations.terms_version IS DISTINCT FROM d.version) OR (d.kind='GUIDELINES' AND participations.guidelines_version IS DISTINCT FROM d.version))) AND starts_at<$4 AND ends_at>$3",
+    "SELECT * FROM participations WHERE instance_id=$1 AND season_id=$2 AND status='VISIBLE' AND review_status='VALIDATED' AND activity='ACTIVE' AND EXISTS(SELECT 1 FROM users u WHERE u.id=participations.user_id AND u.account_status='ACTIVE' AND (u.email_status='VERIFIED' OR participations.legacy_imported)) AND NOT EXISTS(SELECT 1 FROM legal_documents d WHERE d.instance_id=participations.instance_id AND d.active AND d.requires_reaccept AND ((d.kind='TERMS' AND participations.terms_version IS DISTINCT FROM d.version) OR (d.kind='GUIDELINES' AND participations.guidelines_version IS DISTINCT FROM d.version))) AND starts_at<$4 AND ends_at>$3",
     [i.id, s.id, start, end],
   );
   return rows as unknown as House[];
@@ -297,60 +297,47 @@ export async function publicState(
   context: TimeContext | Date = realTime(),
   user: User | null = null,
 ) {
-  const { now, preview } =
-    context instanceof Date ? { now: context, preview: false } : context;
-  if (preview && user?.role_name !== "SUPER_ADMIN")
+  const { now, earlyAccess } =
+    context instanceof Date ? { now: context, earlyAccess: false } : context;
+  if (earlyAccess && user?.role_name !== "SUPER_ADMIN")
     throw new HttpError(403, "Super Admin requis");
-  if (!preview) await tick(now);
+  await tick(now);
   const i = await instance();
   if (!i) return { setupRequired: true };
   const actualSeason = await activeSeason(i);
-  const s = actualSeason && preview ? demoSeason(actualSeason) : actualSeason,
-    state = seasonState(s, now);
+  const s = actualSeason,
+    state = mapAccessible(s, now, earlyAccess)
+      ? "MAP_OPEN"
+      : seasonState(s, now);
   let count = 0,
     houses: ReturnType<typeof publicHouse>[] = [];
   let upcoming: ReturnType<typeof publicHouse>[] = [];
-  let demoError: string | undefined;
-  let previewHouses: House[] = [];
   let closedHouseIds: string[] = [];
   if (s && state !== "CLOSED" && state !== "ARCHIVED") {
     const { rows } = await db().query(
-      "SELECT count(*)::int n FROM participations WHERE instance_id=$1 AND season_id=$2 AND status=$3 AND EXISTS(SELECT 1 FROM users u WHERE u.id=participations.user_id AND u.account_status='ACTIVE' AND (u.email_status='VERIFIED' OR participations.legacy_imported)) AND NOT EXISTS(SELECT 1 FROM legal_documents d WHERE d.instance_id=participations.instance_id AND d.active AND d.requires_reaccept AND ((d.kind='TERMS' AND participations.terms_version IS DISTINCT FROM d.version) OR (d.kind='GUIDELINES' AND participations.guidelines_version IS DISTINCT FROM d.version)))",
+      "SELECT count(*)::int n FROM participations WHERE instance_id=$1 AND season_id=$2 AND status=$3 AND review_status='VALIDATED' AND EXISTS(SELECT 1 FROM users u WHERE u.id=participations.user_id AND u.account_status='ACTIVE' AND (u.email_status='VERIFIED' OR participations.legacy_imported)) AND NOT EXISTS(SELECT 1 FROM legal_documents d WHERE d.instance_id=participations.instance_id AND d.active AND d.requires_reaccept AND ((d.kind='TERMS' AND participations.terms_version IS DISTINCT FROM d.version) OR (d.kind='GUIDELINES' AND participations.guidelines_version IS DISTINCT FROM d.version)))",
       [i.id, s.id, "VISIBLE"],
     );
     count = Number(rows[0].n);
     if (state === "MAP_OPEN" && user) {
       const { rows } = await db().query(
-        "SELECT * FROM participations WHERE instance_id=$1 AND season_id=$2 AND status='VISIBLE' AND activity='ACTIVE' AND EXISTS(SELECT 1 FROM users u WHERE u.id=participations.user_id AND u.account_status='ACTIVE' AND (u.email_status='VERIFIED' OR participations.legacy_imported)) AND NOT EXISTS(SELECT 1 FROM legal_documents d WHERE d.instance_id=participations.instance_id AND d.active AND d.requires_reaccept AND ((d.kind='TERMS' AND participations.terms_version IS DISTINCT FROM d.version) OR (d.kind='GUIDELINES' AND participations.guidelines_version IS DISTINCT FROM d.version))) AND starts_at<=$3 AND ends_at>$3",
+        "SELECT * FROM participations WHERE instance_id=$1 AND season_id=$2 AND status='VISIBLE' AND review_status='VALIDATED' AND activity='ACTIVE' AND EXISTS(SELECT 1 FROM users u WHERE u.id=participations.user_id AND u.account_status='ACTIVE' AND (u.email_status='VERIFIED' OR participations.legacy_imported)) AND NOT EXISTS(SELECT 1 FROM legal_documents d WHERE d.instance_id=participations.instance_id AND d.active AND d.requires_reaccept AND ((d.kind='TERMS' AND participations.terms_version IS DISTINCT FROM d.version) OR (d.kind='GUIDELINES' AND participations.guidelines_version IS DISTINCT FROM d.version))) AND starts_at<=$3 AND ends_at>$3",
         [i.id, s.id, now],
       );
       houses = (rows as unknown as House[])
-        .filter((h) => visible(h, s, now))
+        .filter((h) => visible(h, s, now, earlyAccess))
         .map(publicHouse);
     }
   }
-  if (s && user && !preview && ["PREPARATION", "COUNTDOWN"].includes(state)) {
+  if (s && user && ["PREPARATION", "COUNTDOWN"].includes(state)) {
     const own = await db().query(
       "SELECT * FROM participations WHERE instance_id=$1 AND season_id=$2 AND user_id=$3 AND status='VISIBLE'",
       [i.id, s.id, user.id],
     );
     houses = (own.rows as unknown as House[]).map(publicHouse);
   }
-  if (s && preview) {
-    try {
-      previewHouses = await demoHouses(i, s);
-    } catch (e) {
-      if (!(e instanceof RoutingError)) throw e;
-      demoError = `Maisons de démonstration indisponibles : ${e.message}`;
-    }
-    houses = previewHouses.filter((h) => visible(h, s, now)).map(publicHouse);
-  }
   if (s && state === "MAP_OPEN" && user)
-    upcoming = (
-      preview
-        ? previewHouses
-        : await routeCandidates(db(), i, s, now, s.closes_at)
-    )
+    upcoming = (await routeCandidates(db(), i, s, now, s.closes_at))
       .filter(
         (h) =>
           h.status === "VISIBLE" &&
@@ -359,10 +346,10 @@ export async function publicState(
           +new Date(h.ends_at) > +now,
       )
       .map(publicHouse);
-  if (s && state === "MAP_OPEN" && user && !preview) {
+  if (s && state === "MAP_OPEN" && user) {
     closedHouseIds = (
       await db().query(
-        "SELECT id FROM participations WHERE instance_id=$1 AND season_id=$2 AND status='VISIBLE' AND activity IN ('ENDED','PAUSED') AND ends_at>$3 AND EXISTS(SELECT 1 FROM users u WHERE u.id=participations.user_id AND u.account_status='ACTIVE' AND (u.email_status='VERIFIED' OR participations.legacy_imported)) AND NOT EXISTS(SELECT 1 FROM legal_documents d WHERE d.instance_id=participations.instance_id AND d.active AND d.requires_reaccept AND ((d.kind='TERMS' AND participations.terms_version IS DISTINCT FROM d.version) OR (d.kind='GUIDELINES' AND participations.guidelines_version IS DISTINCT FROM d.version)))",
+        "SELECT id FROM participations WHERE instance_id=$1 AND season_id=$2 AND status='VISIBLE' AND review_status='VALIDATED' AND activity IN ('ENDED','PAUSED') AND ends_at>$3 AND EXISTS(SELECT 1 FROM users u WHERE u.id=participations.user_id AND u.account_status='ACTIVE' AND (u.email_status='VERIFIED' OR participations.legacy_imported)) AND NOT EXISTS(SELECT 1 FROM legal_documents d WHERE d.instance_id=participations.instance_id AND d.active AND d.requires_reaccept AND ((d.kind='TERMS' AND participations.terms_version IS DISTINCT FROM d.version) OR (d.kind='GUIDELINES' AND participations.guidelines_version IS DISTINCT FROM d.version)))",
         [i.id, s.id, now],
       )
     ).rows.map((row) => String(row.id));
@@ -370,7 +357,6 @@ export async function publicState(
   return {
     routeCandidates: upcoming,
     closedHouseIds,
-    demoError,
     setupRequired: false,
     contents: Object.fromEntries(
       Object.entries(await contentState(i.id)).map(([k, v]) => [
@@ -391,11 +377,10 @@ export async function publicState(
     privacy: publicPrivacySettings(i.config.privacy),
     projectLinks: publicProjectLinks(i.config.projectLinks, i.config.privacy),
     participation: publicParticipationSettings(i.config.participation),
-    preview,
     demoAvailable:
       user?.role_name === "SUPER_ADMIN" &&
       !!actualSeason &&
-      seasonState(actualSeason) !== "MAP_OPEN",
+      ["PREPARATION", "COUNTDOWN"].includes(seasonState(actualSeason)),
     mapAccessible: !!user,
     instance: {
       id: i.id,
@@ -598,7 +583,12 @@ export async function ownHouse(user: User | null) {
     "SELECT p.* FROM participations p JOIN instances i ON i.active_season_id=p.season_id WHERE p.user_id=$1 AND p.instance_id=$2",
     [user.id, user.instance_id],
   );
-  return rows[0] ?? null;
+  return rows[0]
+    ? ({ ...rows[0], status: "VISIBLE", is_test: undefined } as Record<
+        string,
+        unknown
+      >)
+    : null;
 }
 export async function updateHouse(
   user: User | null,
@@ -619,7 +609,14 @@ export async function updateHouse(
     if (!old || (!admin && old.user_id !== user.id))
       throw new HttpError(404, "Maison introuvable");
     const i = (await instance(c))!,
-      s = await activeSeason(i, c);
+      s = admin
+        ? ((
+            await c.query(
+              "SELECT * FROM seasons WHERE id=$1 AND instance_id=$2",
+              [old.season_id, user.instance_id],
+            )
+          ).rows[0] as unknown as Season)
+        : await activeSeason(i, c);
     if (!s || s.purged_at || +new Date() >= +new Date(s.closes_at))
       throw new HttpError(403, "Saison fermée");
     if (!admin) {
@@ -687,10 +684,15 @@ export async function updateHouse(
           : null,
       id,
     ]);
-    return { status };
+    return { status: admin ? status : "VISIBLE" };
   });
 }
-export async function participantAction(user: User | null, input: unknown) {
+export async function participantAction(
+  user: User | null,
+  input: unknown,
+  managedId?: string,
+) {
+  if (managedId) requirePermission(user, "participants.edit");
   if (!user) throw new HttpError(403, "Compte participant requis");
   const data = z
     .object({
@@ -700,10 +702,14 @@ export async function participantAction(user: User | null, input: unknown) {
       confirm: z.literal("SUPPRIMER").optional(),
     })
     .parse(input);
+  if (managedId && data.action === "delete")
+    throw new HttpError(400, "Utilisez la suppression admin confirmée");
   return transaction(async (c) => {
     const { rows } = await c.query(
-      "SELECT h.*,s.purged_at,s.closes_at FROM participations h JOIN seasons s ON s.id=h.season_id WHERE user_id=$1 AND h.instance_id=$2 FOR UPDATE OF h,s",
-      [user.id, user.instance_id],
+      "SELECT h.*,s.purged_at,s.closes_at FROM participations h JOIN seasons s ON s.id=h.season_id WHERE " +
+        (managedId ? "h.id" : "user_id") +
+        "=$1 AND h.instance_id=$2 FOR UPDATE OF h,s",
+      [managedId ?? user.id, user.instance_id],
     );
     const h = rows[0] as unknown as House & {
       purged_at: unknown;
@@ -751,7 +757,7 @@ export async function participantAction(user: User | null, input: unknown) {
         [data.available, h.id],
       );
     } else {
-      if (h.activity === "ENDED" && data.action === "resume")
+      if (!managedId && h.activity === "ENDED" && data.action === "resume")
         throw new HttpError(400, "Cette activité est terminée");
       await c.query("UPDATE participations SET activity=$1 WHERE id=$2", [
         { pause: "PAUSED", resume: "ACTIVE", end: "ENDED" }[data.action],
@@ -768,31 +774,37 @@ export async function route(
   user: User | null = null,
 ) {
   if (!user) throw new HttpError(401, "Connexion requise");
-  if (context.preview && user.role_name !== "SUPER_ADMIN")
+  if (context.earlyAccess && user.role_name !== "SUPER_ADMIN")
     throw new HttpError(403, "Super Admin requis");
   const input = routeSchema.parse(userInput);
   const i = await instance();
   if (!i) throw new HttpError(404, "Instance manquante");
   const rawSeason = await activeSeason(i);
-  const s = rawSeason && context.preview ? demoSeason(rawSeason) : rawSeason;
-  if (!s || seasonState(s, context.now) !== "MAP_OPEN")
+  const s = rawSeason;
+  if (!s || !mapAccessible(s, context.now, context.earlyAccess))
     throw new HttpError(403, "La carte est fermée");
   await validateAcceptance(db(), i.id, input.acceptance);
   try {
-    validateRouteWindow(s, input, context.now);
+    validateRouteWindow(s, input, context.now, context.earlyAccess);
   } catch (e) {
     throw new HttpError(400, (e as Error).message);
   }
   let result;
   try {
-    const candidates = context.preview
-      ? await demoHouses(i, s)
-      : await routeCandidates(db(), i, s, input.start, input.end);
+    const candidates = await routeCandidates(
+      db(),
+      i,
+      s,
+      input.start,
+      input.end,
+    );
     result = await planRoute(
       candidates.filter((h) => !input.excludedHouseIds.includes(h.id)),
       s,
       input,
       context.now,
+      undefined,
+      context.earlyAccess,
     );
   } catch (e) {
     if (e instanceof RoutingError)
@@ -825,12 +837,10 @@ export async function route(
       currentInstance?.active_season_id !== s.id ||
       +new Date(current.opens_at) !== +new Date(rawSeason!.opens_at) ||
       +new Date(current.closes_at) !== +new Date(rawSeason!.closes_at) ||
-      (!context.preview && seasonState(current, context.now) !== "MAP_OPEN")
+      !mapAccessible(current, context.now, context.earlyAccess)
     )
       throw new HttpError(409, "La saison a changé. Recalculez le parcours.");
-    const latest = context.preview
-      ? await demoHouses(i, s, c)
-      : await routeCandidates(c, i, current, input.start, input.end);
+    const latest = await routeCandidates(c, i, current, input.start, input.end);
     if (
       result.stops.some(
         (stop) =>
@@ -845,7 +855,7 @@ export async function route(
         409,
         "Les maisons ont changé. Recalculez le parcours.",
       );
-    if (!context.preview && result.stops.length)
+    if (result.stops.length)
       await c.query(
         "UPDATE seasons SET routes_count=routes_count+1 WHERE id=$1",
         [s.id],
@@ -859,12 +869,12 @@ export async function routeAvailability(
   context: TimeContext = realTime(),
 ): Promise<RouteAvailability> {
   if (!user) throw new HttpError(401, "Connexion requise");
-  if (context.preview && user.role_name !== "SUPER_ADMIN")
+  if (context.earlyAccess && user.role_name !== "SUPER_ADMIN")
     throw new HttpError(403, "Super Admin requis");
   const input = routeAvailabilitySchema.parse(userInput);
   const i = await instance();
   const raw = i && (await activeSeason(i));
-  const s = raw && context.preview ? demoSeason(raw) : raw;
+  const s = raw;
   const checkedAt = context.now.toISOString();
   if (
     !i ||
@@ -872,7 +882,7 @@ export async function routeAvailability(
     input.instanceId !== i.id ||
     !s ||
     input.seasonId !== s.id ||
-    seasonState(s, context.now) !== "MAP_OPEN"
+    !mapAccessible(s, context.now, context.earlyAccess)
   )
     return {
       valid: false,
@@ -884,16 +894,12 @@ export async function routeAvailability(
       })),
     };
   // Missing, hidden, deleted and ineligible owners deliberately share one generic result.
-  const houses = context.preview
-    ? (await demoHouses(i, s)).filter((h) =>
-        input.steps.some((step) => step.id === h.id),
-      )
-    : ((
-        await db().query(
-          "SELECT p.* FROM participations p WHERE p.instance_id=$1 AND p.season_id=$2 AND p.id=ANY($3::uuid[]) AND p.status='VISIBLE' AND EXISTS(SELECT 1 FROM users u WHERE u.id=p.user_id AND u.account_status='ACTIVE' AND (u.email_status='VERIFIED' OR p.legacy_imported)) AND NOT EXISTS(SELECT 1 FROM legal_documents d WHERE d.instance_id=p.instance_id AND d.active AND d.requires_reaccept AND ((d.kind='TERMS' AND p.terms_version IS DISTINCT FROM d.version) OR (d.kind='GUIDELINES' AND p.guidelines_version IS DISTINCT FROM d.version)))",
-          [i.id, s.id, input.steps.map((step) => step.id)],
-        )
-      ).rows as unknown as House[]);
+  const houses = (
+    await db().query(
+      "SELECT p.* FROM participations p WHERE p.instance_id=$1 AND p.season_id=$2 AND p.id=ANY($3::uuid[]) AND p.status='VISIBLE' AND p.review_status='VALIDATED' AND EXISTS(SELECT 1 FROM users u WHERE u.id=p.user_id AND u.account_status='ACTIVE' AND (u.email_status='VERIFIED' OR p.legacy_imported)) AND NOT EXISTS(SELECT 1 FROM legal_documents d WHERE d.instance_id=p.instance_id AND d.active AND d.requires_reaccept AND ((d.kind='TERMS' AND p.terms_version IS DISTINCT FROM d.version) OR (d.kind='GUIDELINES' AND p.guidelines_version IS DISTINCT FROM d.version)))",
+      [i.id, s.id, input.steps.map((step) => step.id)],
+    )
+  ).rows as unknown as House[];
   return {
     valid: true,
     checkedAt,
@@ -960,7 +966,7 @@ export async function adminRead(user: User | null, section: string) {
     case "houses":
       return (
         await db().query(
-          "SELECT h.*,u.email FROM participations h JOIN users u ON u.id=h.user_id WHERE h.instance_id=$1 ORDER BY h.status,h.name",
+          "SELECT h.*,u.email,u.display_name owner_name,s.opens_at season_opens_at,s.closes_at season_closes_at,s.year season_year FROM participations h JOIN users u ON u.id=h.user_id JOIN seasons s ON s.id=h.season_id WHERE h.instance_id=$1 ORDER BY h.status,h.name",
           [u.instance_id],
         )
       ).rows;
@@ -970,7 +976,7 @@ export async function adminRead(user: User | null, section: string) {
     case "stats":
       return (
         await db().query(
-          "SELECT s.*,(SELECT count(*)::int FROM email_campaigns ec WHERE ec.season_id=s.id AND ec.schedule_mode='RELATIVE' AND ec.active AND ec.status='SCHEDULED') relative_campaign_count,(SELECT count(DISTINCT u.id)::int FROM participations h JOIN users u ON u.id=h.user_id WHERE h.season_id=s.id AND u.demo=false AND u.account_status='ACTIVE' AND u.email_status='VERIFIED') reminder_recipient_estimate FROM seasons s WHERE s.instance_id=$1 ORDER BY s.year DESC",
+          "SELECT s.*,(SELECT count(*)::int FROM email_campaigns ec WHERE ec.season_id=s.id AND ec.schedule_mode='RELATIVE' AND ec.active AND ec.status='SCHEDULED') relative_campaign_count,(SELECT count(DISTINCT u.id)::int FROM participations h JOIN users u ON u.id=h.user_id WHERE h.season_id=s.id AND u.account_status='ACTIVE' AND u.email_status='VERIFIED') reminder_recipient_estimate FROM seasons s WHERE s.instance_id=$1 ORDER BY s.year DESC",
           [u.instance_id],
         )
       ).rows.map((s) => redactSeason(s, u));
@@ -994,7 +1000,7 @@ export async function adminRead(user: User | null, section: string) {
       const i = (await instance())!,
         s = await activeSeason(i);
       const { rows } = await db().query(
-        "SELECT count(*)::int total,count(*) FILTER(WHERE status='VISIBLE')::int approved,count(*) FILTER(WHERE status='HIDDEN')::int hidden FROM participations WHERE instance_id=$1 AND season_id=$2",
+        "SELECT count(*)::int total,count(*) FILTER(WHERE review_status='VALIDATED')::int approved,count(*) FILTER(WHERE review_status='PENDING')::int pending,count(*) FILTER(WHERE status='HIDDEN')::int hidden FROM participations WHERE instance_id=$1 AND season_id=$2",
         [i.id, s?.id ?? null],
       );
       const { rows: users } = await db().query(
@@ -1028,6 +1034,39 @@ export async function adminAction(user: User | null, input: unknown) {
     })
     .parse(input);
   const u = user;
+  if (data.action === "houseActivity")
+    return participantAction(u, data.payload, z.uuid().parse(data.id));
+  if (data.action === "reviewHouse") {
+    requirePermission(u, "participants.edit");
+    const payload = z
+      .object({
+        status: z.enum(["PENDING", "VALIDATED", "REFUSED"]),
+        reason: z.string().trim().max(500).default(""),
+      })
+      .parse(data.payload);
+    if (payload.status === "REFUSED" && !payload.reason)
+      throw new HttpError(400, "Précisez le motif du refus");
+    return transaction(async (c) => {
+      const result = await c.query(
+        "UPDATE participations SET review_status=$1,refusal_reason=$2 WHERE id=$3 AND instance_id=$4 RETURNING id",
+        [
+          payload.status,
+          payload.status === "REFUSED" ? payload.reason : "",
+          data.id,
+          u.instance_id,
+        ],
+      );
+      if (!result.rows.length) throw new HttpError(404, "Maison introuvable");
+      await audit(
+        c,
+        u.instance_id,
+        u,
+        "house.review." + payload.status.toLowerCase(),
+        data.id,
+      );
+      return { ok: true };
+    });
+  }
   if (data.action === "visibility") {
     requirePermission(u, "participants.edit");
     const status = z.enum(["VISIBLE", "HIDDEN"]).parse(data.payload);
@@ -1195,27 +1234,4 @@ export async function adminAction(user: User | null, input: unknown) {
     });
   }
   throw new HttpError(400, "Action inconnue");
-}
-
-export async function demoHouses(
-  i: Instance,
-  s: Season,
-  c: Database = db(),
-  options: { generate?: boolean } = {},
-) {
-  const total = (
-    await c.query(
-      "SELECT count(*)::int n FROM participations p JOIN users u ON u.id=p.user_id WHERE p.instance_id=$1 AND p.season_id=$2 AND NOT p.demo AND NOT u.demo",
-      [i.id, s.id],
-    )
-  ).rows[0];
-  if (Number(total.n) < 2)
-    return options.generate === false ? [] : fictionalHouses(i, s);
-  const rows = (
-    await c.query(
-      "SELECT p.* FROM participations p JOIN users u ON u.id=p.user_id WHERE p.instance_id=$1 AND p.season_id=$2 AND NOT p.demo AND NOT u.demo AND p.status='VISIBLE' AND u.account_status='ACTIVE' AND (u.email_status='VERIFIED' OR p.legacy_imported)",
-      [i.id, s.id],
-    )
-  ).rows as unknown as House[];
-  return rows;
 }

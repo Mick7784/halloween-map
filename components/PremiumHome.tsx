@@ -325,7 +325,7 @@ export default function PremiumHome({
                             action: "preview",
                             payload: { enabled: true },
                           });
-                          window.location.href = "/preview";
+                          window.location.href = "/map";
                         }}
                       >
                         <Ghost />

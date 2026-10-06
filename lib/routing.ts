@@ -1,7 +1,7 @@
 import {
   effectiveActivities,
   publicHouse,
-  seasonState,
+  mapAccessible,
   type Activity,
   type House,
   type Season,
@@ -43,8 +43,9 @@ export function validateRouteWindow(
   season: Season,
   input: RouteInput,
   now: Date,
+  earlyAccess = false,
 ) {
-  if (seasonState(season, now) !== "MAP_OPEN")
+  if (!mapAccessible(season, now, earlyAccess))
     throw new Error("La carte est fermée");
   const start = +new Date(input.start),
     end = +new Date(input.end);
@@ -64,14 +65,16 @@ export async function planRoute(
   input: RouteInput,
   now = new Date(),
   router?: WalkingRouter,
+  earlyAccess = false,
 ): Promise<RouteResult> {
-  validateRouteWindow(season, input, now);
+  validateRouteWindow(season, input, now, earlyAccess);
   const end = +new Date(input.end),
     start = +new Date(input.start);
   const eligible = houses
     .filter(
       (h) =>
         h.status === "VISIBLE" &&
+        (h.review_status ?? "VALIDATED") === "VALIDATED" &&
         h.activity === "ACTIVE" &&
         effectiveActivities(h).length &&
         (!input.activities.length ||

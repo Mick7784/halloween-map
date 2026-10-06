@@ -1930,29 +1930,8 @@ legend {
   border-color: #af7146;
   color: var(--orange);
 }
-.reminder-panel,
-.demo-panel {
+.reminder-panel {
   min-width: 0;
-}
-.demo-panel {
-  border-color: #655077;
-  background: linear-gradient(130deg, #272030, #161923) !important;
-}
-.demo-banner {
-  display: flex;
-  gap: 14px;
-  align-items: center;
-  justify-content: center;
-  padding: 15px 24px;
-  background: #352445;
-  border-bottom: 1px solid #856b9d;
-  color: #f0ddff;
-  font-size: 14px;
-  flex-wrap: wrap;
-}
-.demo-banner a {
-  border-bottom: 1px solid #c7ade0;
-  font-size: 12px;
 }
 .mail-preview {
   position: relative;
@@ -2314,14 +2293,7 @@ footer {
   .section-heading h2 {
     font-size: 17px;
   }
-  .demo-banner {
-    font-size: 11px;
-    padding: 12px;
-  }
-  .demo-banner svg {
-    width: 18px;
-  }
-  footer {
+      footer {
     font-size: 10px;
     padding: 24px 20px;
     gap: 12px;
@@ -2915,11 +2887,6 @@ body {
 .application .admin-sidebar {
   min-height: 0;
   overflow: auto;
-}
-.application .demo-banner {
-  flex-shrink: 0;
-  padding: 6px 16px;
-  font-size: 12px;
 }
 .application .house-detail,
 .application .dialog {

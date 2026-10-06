@@ -442,7 +442,8 @@ describe("location and framing", () => {
 // Corrective demo discovery: seeds are never returned as house positions.
 describe("V0.5.1 demo network discovery", () => {
   it("uses deterministic spaced snapped points and validates a connected itinerary", async () => {
-    const { demoPositions } = await import("../lib/demo");
+    const { discoverTestPositions } =
+      await import("../scripts/test-profile-positions");
     const points = Array.from({ length: 5 }, (_, n) => ({
       latitude: 48.1 + n * 0.001,
       longitude: -1.67,
@@ -467,14 +468,15 @@ describe("V0.5.1 demo network discovery", () => {
       longitude: -1.67,
     } as import("../lib/domain").Instance;
     const router = { snap, matrix, directions };
-    expect(await demoPositions(instance, router)).toEqual(points);
-    expect(await demoPositions(instance, router)).toEqual(points);
+    expect(await discoverTestPositions(instance, router)).toEqual(points);
+    expect(await discoverTestPositions(instance, router)).toEqual(points);
     expect(snap.mock.calls[0][1]).toBe(300);
     expect(matrix).toHaveBeenCalledWith(points);
     expect(directions).toHaveBeenCalledWith(points);
   });
   it("rejects insufficient, disconnected and unroutable points without fallback", async () => {
-    const { demoPositions } = await import("../lib/demo");
+    const { discoverTestPositions } =
+      await import("../scripts/test-profile-positions");
     const points = Array.from({ length: 5 }, (_, n) => ({
       latitude: 48.1 + n * 0.001,
       longitude: -1.67,
@@ -491,19 +493,25 @@ describe("V0.5.1 demo network discovery", () => {
       matrix: async () => points.map(() => points.map(() => null)),
       directions,
     };
-    await expect(demoPositions(instance, router)).rejects.toMatchObject({
-      reason: "no_route",
-    });
+    await expect(discoverTestPositions(instance, router)).rejects.toMatchObject(
+      {
+        reason: "no_route",
+      },
+    );
     expect(directions).not.toHaveBeenCalled();
     router.matrix = async () =>
       points.map(() => points.map(() => cost(150, 120)));
-    await expect(demoPositions(instance, router)).rejects.toMatchObject({
-      reason: "no_route",
-    });
+    await expect(discoverTestPositions(instance, router)).rejects.toMatchObject(
+      {
+        reason: "no_route",
+      },
+    );
     router.snap = async () => [points[0], points[0]];
-    await expect(demoPositions(instance, router)).rejects.toMatchObject({
-      reason: "no_route",
-    });
+    await expect(discoverTestPositions(instance, router)).rejects.toMatchObject(
+      {
+        reason: "no_route",
+      },
+    );
   });
   it("accepts the requested corrective release and increments dotted patches", async () => {
     const { nextVersion } = await import("../scripts/version.mjs");
@@ -630,8 +638,9 @@ describe("V0.5.2 independent Snap entries", () => {
     ]);
     expect(JSON.parse(fetcher.mock.calls[1][1].body).locations).toHaveLength(5);
   });
-  it("discovers five demo points despite two invalid seeds and keeps provider street geometry", async () => {
-    const { demoPositions } = await import("../lib/demo");
+  it("discovers five test profile points despite two invalid seeds and keeps provider street geometry", async () => {
+    const { discoverTestPositions } =
+      await import("../scripts/test-profile-positions");
     vi.stubEnv("ORS_API_KEY", "test-key");
     let geometry: number[][] = [];
     const fetcher = vi.fn(async (url: string, options: RequestInit) => {
@@ -673,7 +682,7 @@ describe("V0.5.2 independent Snap entries", () => {
     });
     vi.stubGlobal("fetch", fetcher);
     const router = createWalkingRouter();
-    const result = await demoPositions(
+    const result = await discoverTestPositions(
       { latitude: 48.1, longitude: -1.67 } as import("../lib/domain").Instance,
       router,
     );
@@ -684,7 +693,7 @@ describe("V0.5.2 independent Snap entries", () => {
     expect((await router.directions(result)).geometry).toEqual(geometry);
     expect(geometry).toHaveLength(10);
     const finalRoute = await planRoute(
-      result.map((point, n) => ({ ...house(`demo-${n}`), ...point })),
+      result.map((point, n) => ({ ...house(`10000000-0000-4000-8000-00000000000${n}`), ...point })),
       season,
       input,
       now,

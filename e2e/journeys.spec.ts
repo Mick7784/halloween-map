@@ -137,11 +137,15 @@ test("admin hides a house publicly, retains it in administration, and restores i
   await login(page);
   await page.goto("/admin");
   await page
-    .locator(".admin-sidebar")
+    .locator(".beta-sidebar")
     .getByRole("button", { name: "Maisons", exact: true })
     .click();
   const row = page.getByRole("row").filter({ hasText: "Maison 0" });
-  await row.getByRole("button", { name: "Masquer", exact: true }).click();
+  await row.getByRole("button", { name: "Gérer", exact: true }).click();
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "Masquer", exact: true })
+    .click();
   await expect(row.getByText("Masquée", { exact: true })).toBeVisible();
   const context = await browser.newContext({ baseURL: origin }),
     visitor = await context.newPage();
@@ -153,63 +157,32 @@ test("admin hides a house publicly, retains it in administration, and restores i
   expect(houses.find((h: { id: string }) => h.id === houseId).status).toBe(
     "HIDDEN",
   );
-  await row.getByRole("button", { name: "Rendre visible" }).click();
-  await expect(row.getByText("Visible", { exact: true })).toBeVisible();
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "Réafficher", exact: true })
+    .click();
+  await expect(page.getByRole("dialog")).toContainText("Visible");
   await context.close();
 });
-test("Super Admin enters demo in one click and plans a route without changing statistics", async ({
+test("Super Admin early access uses the real map and clock without decoration", async ({
   page,
 }) => {
   await login(page);
   await page.goto("/");
-  const before = (
-    await pool.query("SELECT routes_count,opens_at,closes_at FROM seasons")
-  ).rows[0];
   await page
     .getByRole("button", { name: "Menu utilisateur", exact: true })
     .click();
   await page.getByRole("button", { name: "Mode démo", exact: true }).click();
-  await page.waitForURL("/preview");
-  await expect(
-    page.getByText("MODE DÉMONSTRATION", { exact: false }),
-  ).toBeVisible();
-  await page.context().grantPermissions(["geolocation"]);
-  await page
-    .context()
-    .setGeolocation({ latitude: 48.1, longitude: -1.67, accuracy: 10 });
-  await page
-    .getByRole("button", { name: "Préparer mon parcours", exact: true })
-    .click();
-  await page.getByRole("button", { name: "Me localiser", exact: true }).click();
-  await page
-    .getByRole("checkbox", {
-      name: "Je m’adapte à tous les niveaux",
-      exact: true,
-    })
-    .check();
-  await page.getByRole("checkbox", { name: /J’ai pris connaissance/ }).check();
-  await page
-    .getByRole("button", { name: "Créer mon parcours", exact: true })
-    .click();
-  await expect(page.locator(".route-sheet")).toContainText("2 maisons");
-  expect(
-    (await pool.query("SELECT routes_count,opens_at,closes_at FROM seasons"))
-      .rows[0],
-  ).toEqual(before);
-  await page
-    .getByRole("button", { name: "Position du panneau parcours", exact: true })
-    .press("ArrowUp");
-  await page
-    .getByRole("button", { name: "Position du panneau parcours", exact: true })
-    .press("ArrowUp");
-  await page
-    .getByRole("button", { name: "Arrêter le parcours", exact: true })
-    .click();
-  await page.getByRole("button", { name: "Arrêter", exact: true }).click();
-  await page.getByRole("button", { name: "Quitter le mode démo" }).click();
-  await page.waitForURL("/");
+  await page.waitForURL("/map");
   await expect(page.locator(".demo-banner")).toHaveCount(0);
+  const response = await page.request.get("/api/public");
+  const state = await response.json();
+  expect(state.houses).toEqual([]);
+  expect(Math.abs(+new Date(state.serverTime) - Date.now())).toBeLessThan(
+    60000,
+  );
 });
+
 test("forgot password → email CTA → one-use reset → login", async ({
   page,
 }) => {
@@ -250,50 +223,4 @@ test("forgot password → email CTA → one-use reset → login", async ({
     });
   expect(replay.status()).toBe(400);
   await login(page, "visitor0@example.invalid", "replacement-password-1234");
-});
-
-test("preview activation succeeds when ORS fails and displays the precise error", async ({
-  page,
-  request,
-}) => {
-  await pool.query("UPDATE participations SET demo=true");
-  await request.post("http://127.0.0.1:3106/test-only/snap-failure", {
-    data: { enabled: true },
-  });
-  try {
-    await login(page);
-    await page.goto("/");
-    const activated = page.waitForResponse(
-      (r) => r.url().endsWith("/api/admin") && r.request().method() === "POST",
-    );
-    await page
-      .getByRole("button", { name: "Menu utilisateur", exact: true })
-      .click();
-    await page.getByRole("button", { name: "Mode démo", exact: true }).click();
-    expect((await activated).status()).toBe(200);
-    await page.waitForURL("/preview");
-    await expect(
-      page.getByText("MODE DÉMONSTRATION", { exact: false }),
-    ).toBeVisible();
-    await expect(page.locator(".notice[role=alert]")).toBeVisible();
-    await expect(page.locator(".notice[role=alert]")).toContainText(
-      "Maisons de démonstration indisponibles",
-    );
-    await expect(page.locator(".notice[role=alert]")).toContainText(
-      "service de parcours piéton est indisponible",
-    );
-    await expect(
-      page.getByText("Service temporairement indisponible", { exact: true }),
-    ).toHaveCount(0);
-    expect((await page.request.get("/api/public?preview=1")).status()).toBe(
-      200,
-    );
-    await page.getByRole("button", { name: "Quitter le mode démo" }).click();
-    await page.waitForURL("/");
-  } finally {
-    await request.post("http://127.0.0.1:3106/test-only/snap-failure", {
-      data: { enabled: false },
-    });
-    await pool.query("UPDATE participations SET demo=false");
-  }
 });

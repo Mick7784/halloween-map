@@ -19,7 +19,6 @@ import {
   Route,
   CircleUserRound,
   ArrowRight,
-  Ghost,
   LogOut,
   Bug,
 } from "lucide-react";
@@ -58,13 +57,13 @@ export default function Application({
     [now, setNow] = useState(() => Date.now());
   const refresh = useCallback(async () => {
     const [s, u] = await Promise.all([
-      api<PublicState>(view === "preview" ? "public?preview=1" : "public"),
+      api<PublicState>("public"),
       api<User | null>("me"),
     ]);
     setState(s);
     setUser(u);
     setError("");
-  }, [view]);
+  }, []);
   useEffect(() => {
     void refresh().catch((e) => setError(e.message));
     const clock = setInterval(() => setNow(Date.now()), 1000);
@@ -166,7 +165,7 @@ export default function Application({
     </>
   );
 
-  const effectiveNow = state?.preview ? +new Date(state.serverTime!) : now;
+  const effectiveNow = now;
   const closed =
     !!state?.season && effectiveNow >= +new Date(state.season.closes_at);
   const liveState = state
@@ -336,7 +335,10 @@ export default function Application({
     <div
       className={
         "application " +
-        (["map", "preview"].includes(view) && user ? "map-app" : "")
+        (["map", "preview"].includes(view) && user ? "map-app" : "") +
+        (view === "admin" && user?.permissions.includes("admin.access")
+          ? " admin-app"
+          : "")
       }
     >
       <header
@@ -457,26 +459,6 @@ export default function Application({
           >
             Réessayer
           </button>
-        </div>
-      )}
-      {state?.preview && (
-        <div className="demo-banner" role="status">
-          <Ghost /> MODE DÉMONSTRATION — heure simulée :{" "}
-          {DateTime.fromISO(state.serverTime!)
-            .setZone(state.instance!.timezone)
-            .setLocale("fr")
-            .toFormat("dd LLLL yyyy · HH:mm")}{" "}
-          <AsyncButton
-            onClick={async () => {
-              await api("admin", {
-                action: "preview",
-                payload: { enabled: false },
-              });
-              window.location.href = "/";
-            }}
-          >
-            Quitter le mode démo
-          </AsyncButton>
         </div>
       )}
       {content}
@@ -661,7 +643,7 @@ function PublicMap({
               <span>{state.contents?.["home.count"]}</span>
             </p>
           )}
-          {!closed && s?.registrations_open && !state.preview && (
+          {!closed && s?.registrations_open && (
             <Link
               href={user ? "/participant" : "/register"}
               className="button primary"
@@ -681,7 +663,7 @@ function PublicMap({
                     action: "preview",
                     payload: { enabled: true },
                   });
-                  window.location.href = "/preview";
+                  window.location.href = "/map";
                 }}
               >
                 Mode démo
