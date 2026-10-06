@@ -1,0 +1,686 @@
+.account-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 150;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: #03050ac2;
+  backdrop-filter: blur(5px);
+  animation: account-fade 220ms ease-out both;
+}
+.account-dialog {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  width: min(980px, 100%);
+  max-height: 85dvh;
+  overflow: hidden;
+  border: 1px solid #6b607d;
+  border-radius: 20px;
+  background: #10131c;
+  box-shadow:
+    0 28px 100px #000a,
+    0 0 0 4px #ffffff03;
+  animation: account-arrive 240ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.account-dialog::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: 0 0 auto;
+  height: 220px;
+  background:
+    linear-gradient(0deg, #10131c, #10131c55),
+    url("/art/home-reference-v2.webp") center 27% / cover;
+  opacity: 0.8;
+  pointer-events: none;
+}
+.account-header {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 20px 26px 8px;
+}
+.account-header h1 {
+  flex: 1;
+  font-family: var(--font-editorial);
+  font-size: 38px;
+  margin: 0;
+  line-height: 1.1;
+}
+.account-header .account-close {
+  position: static;
+  width: 44px;
+  height: 44px;
+  padding: 8px;
+  background: #11131cbb;
+  border-color: #ffffff12;
+}
+.account-back {
+  width: 44px;
+  height: 44px;
+  padding: 8px;
+}
+.account-scroll {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  min-height: 0;
+  padding: 14px 26px 26px;
+}
+.account-identity {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  margin: 0 0 24px;
+  animation: account-block 240ms ease-out both;
+}
+.account-avatar {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 72px;
+  height: 72px;
+  border: 2px solid #ff883f;
+  border-radius: 50%;
+  color: #c5a5ff;
+  background: radial-gradient(circle at 30% 20%, #42304e, #171721);
+  font-size: 26px;
+}
+.account-identity > div {
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  flex-direction: column;
+  gap: 3px;
+}
+.account-identity strong {
+  font-family: var(--font-editorial);
+  font-size: 26px;
+  line-height: 1.15;
+}
+.account-identity span:not(.account-avatar) {
+  color: #bbb5d1;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.account-role {
+  padding: 2px 9px;
+  border: 1px solid #715797;
+  border-radius: 6px;
+  background: #38245099;
+  color: #d0b0f4;
+  font-size: 11px;
+}
+.account-mobile-settings {
+  display: none;
+}
+.account-forms {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+.account-card {
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid #353345;
+  border-radius: 12px;
+  background: linear-gradient(130deg, #1c1f2bdb, #11141deb);
+}
+.account-card h2 {
+  font-size: 15px;
+  margin: 0 0 12px;
+  gap: 10px;
+}
+.account-card h2 svg {
+  width: 20px;
+  height: 20px;
+  color: #b58be8;
+}
+.account-forms .account-card:first-child h2 svg {
+  color: #ff944b;
+}
+.account-card form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.account-card .field {
+  margin: 0;
+  gap: 5px;
+}
+.account-card .field > span:first-child {
+  font-size: 12px;
+}
+.account-card input:not([type="checkbox"]) {
+  width: 100%;
+  min-width: 0;
+  height: 38px;
+  border: 1px solid #49425c;
+  background: #11131ccb;
+  border-radius: 7px;
+  padding: 9px 11px;
+  font-size: 13px;
+  color: #f1ebe6;
+}
+.account-password-input {
+  position: relative;
+  display: block;
+}
+.account-password-input input {
+  padding-right: 44px !important;
+}
+.account-password-input button {
+  position: absolute;
+  right: 0;
+  top: 0;
+  height: 38px;
+  width: 42px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #c2afd9;
+}
+.account-hint {
+  color: #b9b1c7;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.account-save {
+  width: 100%;
+  min-height: 42px;
+  font-size: 12px;
+  margin-top: 10px;
+}
+.account-save.purple {
+  background: linear-gradient(110deg, #402466, #593080);
+  border-color: #805bb2;
+  color: #ecdfff;
+}
+.account-save.danger {
+  background: #361a23;
+  border-color: #8e4356;
+}
+.account-success {
+  font-size: 12px;
+  margin: 0;
+  color: #c3dac0;
+}
+.account-verification {
+  margin-top: 14px;
+  font-size: 12px;
+}
+.account-email-status {
+  color: #b8b0c9;
+}
+.account-verification p {
+  margin: 8px 0;
+}
+.account-verification button {
+  margin: 8px 0;
+  font-size: 12px;
+}
+.account-verification small {
+  display: block;
+  color: var(--muted);
+}
+.account-secondary {
+  display: grid;
+  gap: 10px;
+}
+.account-row,
+.account-session button,
+.account-install .install-cta {
+  display: flex;
+  width: 100%;
+  min-height: 64px;
+  text-align: left;
+  justify-content: flex-start;
+  padding: 11px 15px;
+  gap: 14px;
+  background: linear-gradient(110deg, #1b1e2ac9, #131720e8);
+  border: 1px solid #363346;
+  border-radius: 10px;
+}
+.account-row-icon,
+.account-install .install-cta > svg {
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  color: #bc90ee;
+  background: #342245;
+}
+.account-row-icon svg {
+  width: 19px;
+  height: 19px;
+}
+.account-mobile-settings .account-row:first-child .account-row-icon {
+  color: #ff9b52;
+  background: #422a23;
+}
+.account-row-copy,
+.account-install .install-cta > span {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.account-row-copy strong {
+  font-size: 13px;
+  font-weight: 500;
+}
+.account-row-copy small,
+.account-install small {
+  font-size: 11px;
+  color: #b5afc9;
+  font-weight: 400;
+}
+.account-row > svg {
+  color: #c2a0ed;
+  flex-shrink: 0;
+}
+.account-install .install-cta {
+  font-size: 13px;
+}
+.account-install .install-cta > svg {
+  padding: 8px;
+}
+.account-install .install-cta:after {
+  content: "›";
+  margin-left: auto;
+  color: #c2a0ed;
+  font-size: 24px;
+}
+.account-install .install-help {
+  position: relative;
+  margin: 8px 0 0;
+  padding: 16px;
+  border: 1px solid #594d71;
+  border-radius: 10px;
+  background: #211c30;
+}
+.account-install .install-help-close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+}
+.account-install .install-help strong {
+  display: block;
+  padding-right: 30px;
+  font-size: 13px;
+}
+.account-install .install-help p {
+  font-size: 12px;
+  margin: 10px 0 0;
+}
+.account-session {
+  border-top: 1px solid #353345;
+  margin-top: 18px;
+  padding-top: 16px;
+}
+.account-danger {
+  border-top: 1px solid #353345;
+  margin-top: 12px;
+  padding-top: 12px;
+}
+.account-row.danger,
+.account-session button {
+  border-color: #713647;
+  color: #ff8c99;
+  background: linear-gradient(110deg, #261922aa, #16141de8);
+}
+.account-danger .account-row-icon,
+.account-session .account-row-icon {
+  background: #421e2b;
+  color: #ff7181;
+}
+.account-danger .account-row > svg,
+.account-session button > svg {
+  color: #ff7181;
+}
+.account-subview {
+  animation: account-subview 200ms ease-out both;
+}
+.account-subview h2:focus {
+  outline: none;
+}
+.account-privacy dl {
+  margin: 22px 0;
+}
+.account-privacy dl > div {
+  padding: 12px 0;
+  border-top: 1px solid #363346;
+}
+.account-privacy dt {
+  color: #d9c0f5;
+  font-size: 13px;
+  font-weight: 500;
+}
+.account-privacy dd {
+  margin: 5px 0 0;
+  color: #c1bacb;
+  font-size: 13px;
+}
+.account-privacy p {
+  font-size: 13px;
+}
+.account-policy summary,
+.account-policy-link {
+  color: #e8c7b3;
+  font-size: 13px;
+  cursor: pointer;
+}
+.account-policy h3 {
+  margin-top: 16px;
+}
+.account-delete-confirm {
+  max-width: 620px;
+  margin: 0 auto;
+}
+.account-delete-confirm h2 svg {
+  color: #ff7d8c;
+}
+.account-consent {
+  display: flex;
+  gap: 10px;
+  font-size: 12px;
+  align-items: flex-start;
+}
+.account-consent input {
+  accent-color: #c981a5;
+  margin-top: 4px;
+}
+.account-cancel {
+  width: 100%;
+  margin-top: 12px;
+}
+.account-scene {
+  display: none;
+}
+.account-dialog button {
+  transition:
+    background 180ms ease,
+    border-color 180ms ease,
+    transform 180ms ease;
+}
+.account-dialog button:active {
+  transform: translateY(1px);
+}
+.account-row:hover,
+.account-session button:hover,
+.account-install button:hover {
+  background: #272434;
+  border-color: #8e709f;
+}
+.account-overlay.is-closing {
+  animation: account-fade-out 200ms ease-in both;
+}
+.is-closing .account-dialog {
+  animation: account-depart 200ms ease-in both;
+}
+@keyframes account-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes account-fade-out {
+  to {
+    opacity: 0;
+  }
+}
+@keyframes account-arrive {
+  from {
+    opacity: 0;
+    transform: scale(0.98) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes account-depart {
+  to {
+    opacity: 0;
+    transform: scale(0.985) translateY(4px);
+  }
+}
+@keyframes account-block {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes account-subview {
+  from {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (min-width: 768px) {
+  .account-header {
+    padding: 16px 24px 4px;
+  }
+  .account-scroll {
+    padding: 10px 24px 20px;
+  }
+  .account-identity {
+    margin-bottom: 16px;
+  }
+  .account-avatar {
+    width: 60px;
+    height: 60px;
+  }
+  .account-card {
+    padding: 14px;
+  }
+  .account-card .field {
+    gap: 3px;
+  }
+  .account-card input:not([type="checkbox"]) {
+    min-height: 36px;
+    height: 36px;
+  }
+  .account-password-input button {
+    height: 36px;
+  }
+  .account-card .account-save {
+    min-height: 38px;
+    margin-top: 4px;
+  }
+  .account-row,
+  .account-session button,
+  .account-install .install-cta {
+    min-height: 56px;
+    padding: 8px 14px;
+  }
+  .account-session {
+    margin-top: 12px;
+    padding-top: 12px;
+  }
+}
+@media (max-width: 767px) {
+  .account-overlay {
+    padding: 0;
+    backdrop-filter: none;
+  }
+  .account-dialog {
+    width: 100%;
+    height: var(--app-height, 100dvh);
+    max-height: 100dvh;
+    border: 0;
+    border-radius: 0;
+    animation-name: account-fade;
+  }
+  .is-closing .account-dialog {
+    animation-name: account-fade-out;
+  }
+  .account-dialog::before {
+    height: 220px;
+    background-position: center 24%;
+  }
+  .account-header {
+    padding: calc(12px + env(safe-area-inset-top)) 18px 10px;
+  }
+  .account-header h1 {
+    font-size: 31px;
+  }
+  .account-view-privacy .account-header h1 {
+    font-size: 26px;
+  }
+  .account-scroll {
+    padding: 12px 18px calc(18px + env(safe-area-inset-bottom));
+    z-index: 1;
+  }
+  .account-identity {
+    gap: 14px;
+    margin-bottom: 20px;
+  }
+  .account-avatar {
+    width: 62px;
+    height: 62px;
+    font-size: 24px;
+  }
+  .account-identity strong {
+    font-size: 25px;
+  }
+  .account-identity span:not(.account-avatar) {
+    font-size: 12px;
+  }
+  .account-forms {
+    display: none;
+  }
+  .account-mobile-settings {
+    display: grid;
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+  .account-card {
+    padding: 18px;
+  }
+  .account-card input:not([type="checkbox"]) {
+    font-size: 16px;
+    height: 44px;
+  }
+  .account-password-input button {
+    height: 44px;
+  }
+  .account-row,
+  .account-session button,
+  .account-install .install-cta {
+    min-height: 64px;
+    padding: 10px 12px;
+    gap: 12px;
+  }
+  .account-session {
+    margin-top: 16px;
+    padding-top: 12px;
+  }
+  .account-session small {
+    display: none;
+  }
+  .account-danger {
+    margin-top: 12px;
+    padding-top: 12px;
+  }
+  .account-scene {
+    display: block;
+    position: absolute;
+    z-index: 0;
+    inset: auto 0 0;
+    height: 200px;
+    pointer-events: none;
+    opacity: 0.42;
+    background:
+      linear-gradient(#10131c, #10131c11),
+      url("/art/home-reference-v2.webp") center bottom / cover;
+  }
+  .account-view-main .account-mobile-settings .account-row,
+  .account-view-main .account-secondary > *,
+  .account-view-main .account-session,
+  .account-view-main .account-danger {
+    animation: account-block 240ms ease-out both;
+  }
+  .account-mobile-settings .account-row:nth-child(1) {
+    animation-delay: 35ms;
+  }
+  .account-mobile-settings .account-row:nth-child(2) {
+    animation-delay: 70ms;
+  }
+  .account-secondary > *:first-child {
+    animation-delay: 105ms;
+  }
+  .account-secondary > *:last-child {
+    animation-delay: 140ms;
+  }
+  .account-session {
+    animation-delay: 175ms !important;
+  }
+  .account-danger {
+    animation-delay: 210ms !important;
+  }
+}
+@media (max-width: 767px) and (max-height: 700px) {
+  .account-header {
+    padding-top: calc(8px + env(safe-area-inset-top));
+    padding-bottom: 4px;
+  }
+  .account-scroll {
+    padding-top: 8px;
+  }
+  .account-identity {
+    margin-bottom: 12px;
+  }
+  .account-row,
+  .account-session button,
+  .account-install .install-cta {
+    min-height: 57px;
+  }
+  .account-row-copy small,
+  .account-install small {
+    font-size: 10px;
+  }
+  .account-mobile-settings,
+  .account-secondary {
+    gap: 8px;
+  }
+  .account-session {
+    margin-top: 12px;
+    padding-top: 10px;
+  }
+  .account-danger {
+    margin-top: 10px;
+    padding-top: 10px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .account-overlay,
+  .account-dialog,
+  .account-dialog *,
+  .account-overlay.is-closing,
+  .is-closing .account-dialog {
+    animation: none !important;
+    transition: none !important;
+  }
+}

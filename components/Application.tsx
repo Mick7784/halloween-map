@@ -63,6 +63,7 @@ export default function Application({
     [user, setUser] = useState<User | null>(null),
     [error, setError] = useState(""),
     [menu, setMenu] = useState(false),
+    [accountOpen, setAccountOpen] = useState(view === "account"),
     [now, setNow] = useState(() => Date.now());
   const refresh = useCallback(async () => {
     const [s, u] = await Promise.all([
@@ -96,6 +97,76 @@ export default function Application({
     viewport?.addEventListener("resize", resize);
     return () => viewport?.removeEventListener("resize", resize);
   }, []);
+
+  const background = useRef<HTMLDivElement>(null);
+  const accountOrigin = useRef<HTMLElement | null>(null);
+  const accountVisible = accountOpen && !!user;
+  useEffect(() => {
+    if (!accountVisible) return;
+    const previousBackground = background.current;
+    const body = document.body,
+      html = document.documentElement;
+    const y = window.scrollY,
+      x = window.scrollX;
+    const oldBody = body.style.overflow,
+      oldHtml = html.style.overflow;
+    const oldPadding = body.style.paddingRight;
+    const gap = window.innerWidth - html.clientWidth;
+    body.style.overflow = "hidden";
+    html.style.overflow = "hidden";
+    if (gap) body.style.paddingRight = gap + "px";
+    return () => {
+      body.style.overflow = oldBody;
+      html.style.overflow = oldHtml;
+      body.style.paddingRight = oldPadding;
+      window.scrollTo({ left: x, top: y, behavior: "instant" });
+      const origin = accountOrigin.current;
+      if (origin?.isConnected) origin.focus({ preventScroll: true });
+      else
+        previousBackground
+          ?.querySelector<HTMLElement>('[aria-label="Menu utilisateur"]')
+          ?.focus({ preventScroll: true });
+    };
+  }, [accountVisible]);
+  const contextual = (children: React.ReactNode) => (
+    <>
+      <div
+        ref={background}
+        inert={accountOpen && !!user}
+        onClickCapture={(e) => {
+          const link = (e.target as HTMLElement).closest<HTMLAnchorElement>(
+            "a[href]",
+          );
+          if (
+            !user ||
+            !link ||
+            new URL(link.href).pathname !== "/account" ||
+            e.button !== 0 ||
+            e.ctrlKey ||
+            e.metaKey ||
+            e.shiftKey ||
+            e.altKey
+          )
+            return;
+          e.preventDefault();
+          accountOrigin.current = document.activeElement as HTMLElement;
+          setMenu(false);
+          setAccountOpen(true);
+        }}
+      >
+        {children}
+      </div>
+      {accountOpen && user && state && (
+        <Account
+          user={user}
+          state={state}
+          refresh={refresh}
+          onClose={() => setAccountOpen(false)}
+        />
+      )}
+    </>
+  );
+
   const effectiveNow = state?.preview ? +new Date(state.serverTime!) : now;
   const closed =
     !!state?.season && effectiveNow >= +new Date(state.season.closes_at);
@@ -142,12 +213,7 @@ export default function Application({
     content = <PasswordRecovery reset={view === "reset-password"} />;
   else if (view === "register") content = <Signup state={state} />;
   else if (view === "activation") content = <Activation state={state} />;
-  else if (view === "account")
-    content = user ? (
-      <Account user={user} state={state} refresh={refresh} />
-    ) : (
-      <Login />
-    );
+  else if (view === "account") content = user ? null : <Login />;
   else if (["terms", "privacy", "guidelines", "legal"].includes(view)) {
     const kind = (
       {
@@ -252,8 +318,12 @@ export default function Application({
           user={user}
         />
       );
-  if (view === "home" && state && !state.setupRequired)
-    return (
+  if (
+    (view === "home" || (view === "account" && user)) &&
+    state &&
+    !state.setupRequired
+  )
+    return contextual(
       <PremiumHome
         state={liveState!}
         user={user}
@@ -262,9 +332,9 @@ export default function Application({
         login={<LoginForm destination="/map" />}
         error={error}
         onRetry={refresh}
-      />
+      />,
     );
-  return (
+  return contextual(
     <div
       className={
         "application " +
@@ -329,25 +399,27 @@ export default function Application({
             <Link href="/map#parcours" onClick={() => setMenu(false)}>
               Préparer mon parcours
             </Link>
-            {user && (
-              <Link href="/account" onClick={() => setMenu(false)}>
-                Informations personnelles
-              </Link>
-            )}
-            <InstallApp />
             {user?.permissions.includes("admin.access") && (
               <Link href="/admin">Administration</Link>
             )}
-            {user && (
-              <AsyncButton
-                onClick={async () => {
-                  await api("logout", {});
-                  window.location.href = "/";
-                }}
-              >
-                <LogOut size={16} /> Déconnexion
-              </AsyncButton>
-            )}
+            <div className="user-menu-account">
+              {user && (
+                <Link href="/account" onClick={() => setMenu(false)}>
+                  Mon compte
+                </Link>
+              )}
+              <InstallApp />
+              {user && (
+                <AsyncButton
+                  onClick={async () => {
+                    await api("logout", {});
+                    window.location.href = "/";
+                  }}
+                >
+                  <LogOut size={16} /> Déconnexion
+                </AsyncButton>
+              )}
+            </div>
           </nav>
         )}
       </header>
@@ -396,7 +468,7 @@ export default function Application({
           © {DateTime.now().setZone("Europe/Paris").year} DomotiK Studio
         </span>
       </footer>
-    </div>
+    </div>,
   );
 }
 function SetupGate() {

@@ -2717,6 +2717,28 @@ body {
   min-height: 40px;
   font-size: 14px;
 }
+.application .site-header nav.user-menu .user-menu-account {
+  display: grid;
+  gap: 4px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+.application .site-header nav.user-menu .user-menu-account > a,
+.application .site-header nav.user-menu .user-menu-account > button,
+.application .site-header nav.user-menu .user-menu-account .install-cta {
+  display: flex;
+  justify-content: flex-start;
+  width: 100%;
+  margin: 0;
+  padding: 10px 12px;
+  min-height: 40px;
+  font-size: 14px;
+  text-align: left;
+}
+.application .site-header nav.user-menu .user-menu-account > button {
+  color: var(--red);
+}
 .login-fields {
   display: flex;
   align-items: center;

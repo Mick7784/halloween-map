@@ -92,13 +92,13 @@ export function InstallAppProvider({ children }: { children: ReactNode }) {
   );
 }
 
-export default function InstallApp() {
+export default function InstallApp({ account = false }: { account?: boolean }) {
   const state = useContext(InstallContext);
   const [help, setHelp] = useState("");
   const [busy, setBusy] = useState(false);
   if (!state || (!state.available && !help)) return null;
   return (
-    <div className="install-action">
+    <div className={"install-action" + (account ? " account-install" : "")}>
       {state.available && (
         <button
           className="install-cta"
@@ -123,7 +123,12 @@ export default function InstallApp() {
           }}
         >
           <Download size={18} />
-          <span>Ajouter l’application</span>
+          <span>
+            Ajouter l’application
+            {account && (
+              <small>Halloween Map sur votre appareil, à portée de main.</small>
+            )}
+          </span>
         </button>
       )}
       {help && (

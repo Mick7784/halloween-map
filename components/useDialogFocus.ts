@@ -7,7 +7,10 @@ export function useDialogFocus() {
     const selector =
       'button:not([disabled]),a[href],input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex="0"]';
     function sync() {
-      const current = document.querySelector<HTMLElement>('[role="dialog"]');
+      const current =
+        Array.from(
+          document.querySelectorAll<HTMLElement>('[role="dialog"]'),
+        ).findLast((el) => !el.closest("[inert]")) ?? null;
       if (current === active) return;
       if (active && !current) previous?.focus();
       if (current) {

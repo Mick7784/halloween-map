@@ -295,8 +295,8 @@ export default function PremiumHome({
                     </div>
                   )}
                   <div className="home-menu-group">
-                    <InstallApp />
                     {entry("/account", "Mon compte", <Settings />)}
+                    <InstallApp />
                     <AsyncButton
                       onClick={async () => {
                         await api("logout", {});
