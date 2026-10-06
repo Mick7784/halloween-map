@@ -2739,6 +2739,30 @@ body {
 .application .site-header nav.user-menu .user-menu-account > button {
   color: var(--red);
 }
+.application .site-header nav.user-menu .user-menu-group {
+  border-top: 1px solid var(--line);
+  padding-top: 8px;
+  margin-top: 8px;
+}
+.application .site-header nav.user-menu > a,
+.application .site-header nav.user-menu .user-menu-group > a,
+.application .site-header nav.user-menu .user-menu-account > a,
+.application .site-header nav.user-menu .user-menu-account > button,
+.application .site-header nav.user-menu .install-cta {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) 16px;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  text-align: left;
+  justify-content: stretch;
+  width: 100%;
+  min-height: 44px;
+  margin: 0;
+}
+.application .site-header nav.user-menu .user-menu-account > button {
+  color: var(--text);
+}
 .login-fields {
   display: flex;
   align-items: center;

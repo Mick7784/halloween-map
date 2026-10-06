@@ -5,12 +5,21 @@ export type PrivacySettings = {
   participationRetention?: string;
   routeRetention?: string;
   contactEmail?: string;
+  contactSubject?: string;
+  policyBody?: string;
   policyUrl?: string;
 };
 export function publicPrivacySettings(value: unknown): PrivacySettings {
   if (!value || typeof value !== "object") return {};
   const input = value as Record<string, unknown>;
   const result: PrivacySettings = {};
+  if (typeof input.policyBody === "string" && input.policyBody.trim())
+    result.policyBody = input.policyBody.trim().slice(0, 30000);
+  if (typeof input.contactSubject === "string" && input.contactSubject.trim())
+    result.contactSubject = input.contactSubject
+      .trim()
+      .replace(/[\r\n]/g, " ")
+      .slice(0, 160);
   for (const key of [
     "intro",
     "accountRetention",
@@ -31,7 +40,7 @@ export function publicPrivacySettings(value: unknown): PrivacySettings {
       if (url.protocol === "https:" && !url.username && !url.password)
         result.policyUrl = url.href;
     } catch {
-      /* Default to the existing /privacy page. */
+      /* Invalid optional source URLs are omitted. The account stays internal. */
     }
   }
   return result;

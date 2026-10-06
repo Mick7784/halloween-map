@@ -449,35 +449,39 @@
     letter-spacing: 3px;
   }
   .home-art {
-    background-image:
-      linear-gradient(90deg, #090b11b3, transparent 70%),
-      url("/art/halloween-village-v2.png");
-    background-position:
-      center,
-      right center;
-    background-size: cover, cover;
+    background-image: url("/art/home-reference-v2.webp");
+    background-size: cover;
+    background-position: center 53%;
   }
-  .home-art:after {
-    background: linear-gradient(
-      180deg,
-      #090b1100 15%,
-      #090b1144 45%,
-      #090b11dd 70%,
-      #090b1100 100%
-    );
+  .home-art::before {
+    content: "";
+    position: absolute;
+    inset: 0 0 auto;
+    height: 43%;
+    background: url("/art/home-reference-v2.webp") center top / 100% auto
+      no-repeat;
+    mask-image: linear-gradient(#000 55%, transparent);
   }
   .home-bottom-art {
     display: block;
     inset: auto 0 0;
-    height: 30%;
-    background-size: auto 750px;
+    height: 35%;
+    background-size: auto 90dvh;
     background-position: center bottom;
-    mask-image: linear-gradient(transparent, #000 45%);
-    opacity: 0.85;
+    mask-image:
+      linear-gradient(transparent, #000 32%),
+      linear-gradient(
+        90deg,
+        transparent 26%,
+        #000 37%,
+        #000 63%,
+        transparent 74%
+      );
+    mask-composite: intersect;
   }
   .home-stage {
-    place-items: center start;
-    padding: 0 0 0 10vw;
+    place-items: center;
+    padding: 0 24px;
   }
   .home-center {
     max-width: 420px;
@@ -501,15 +505,16 @@
   }
   .home-drawer {
     top: 96px;
-    bottom: 24px;
+    bottom: auto;
     right: 32px;
-    width: 390px;
-    padding: 65px 26px 22px;
+    width: 350px;
+    max-height: calc(100dvh - 120px);
+    padding: 52px 20px 16px;
   }
 }
 @media (min-width: 1400px) {
   .home-stage {
-    padding-left: 15vw;
+    padding: 0 24px;
   }
   .home-center {
     max-width: 450px;
@@ -517,10 +522,6 @@
   }
   .home-center h1 {
     font-size: 48px;
-  }
-  .home-bottom-art {
-    background-size: auto 950px;
-    height: 30%;
   }
 }
 @media (max-height: 740px) and (max-width: 759px) {
@@ -585,26 +586,7 @@
     animation: none;
   }
 }
-@media (min-width: 760px) {
-  .home-bottom-art {
-    left: auto;
-    right: 0;
-    width: 64%;
-    height: 38%;
-    background-size: auto 850px;
-    mask-image:
-      linear-gradient(transparent, #000 26%),
-      linear-gradient(90deg, transparent, #000 18%, #000 82%, transparent);
-    mask-composite: intersect;
-    opacity: 0.95;
-  }
-}
-@media (min-width: 1400px) {
-  .home-bottom-art {
-    background-size: auto 950px;
-    height: 38%;
-  }
-}
+
 @media (max-height: 740px) and (max-width: 759px) {
   .home-center {
     transform: translateY(-28px);
@@ -618,15 +600,6 @@
   background: linear-gradient(140deg, #ffc083, #e88c75);
   border-radius: 50%;
   padding: 4px;
-}
-@media (min-width: 760px) {
-  .home-bottom-art {
-    width: min(64%, 634px);
-    right: 8vw;
-    mask-image:
-      linear-gradient(transparent, #000 26%),
-      linear-gradient(90deg, transparent, #000 14%, #000 86%, transparent);
-  }
 }
 
 /* Secondary installation action: no extra home CTA or document scrolling. */
@@ -672,4 +645,54 @@
 
 .home-install-guest:not(:has(.install-action)) {
   display: none;
+}
+
+/* One icon/text/action grid for all menu actions, including the PWA offer. */
+.home-drawer-links a,
+.home-drawer-links button:not(.install-help-close) {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) 16px;
+  gap: 14px;
+  justify-content: stretch;
+  text-align: left;
+}
+.home-drawer-links button > span {
+  grid-column: 2;
+}
+.home-drawer-links button > svg:first-child {
+  grid-column: 1;
+}
+.home-drawer-links button > svg:last-child:not(:first-child) {
+  grid-column: 3;
+}
+.home-drawer-links .install-cta {
+  margin: 0;
+}
+.home-menu-group button {
+  color: var(--home-text);
+}
+@media (min-width: 760px) {
+  .home-user {
+    margin: 0 0 10px;
+  }
+  .home-drawer-links a,
+  .home-drawer-links button:not(.install-help-close) {
+    min-height: 42px;
+    padding: 7px 5px;
+    gap: 10px;
+  }
+  .home-menu-group {
+    margin-top: 8px;
+    padding-top: 8px;
+  }
+  .home-legal {
+    margin-top: 12px;
+    padding-top: 8px;
+  }
+  .home-legal a {
+    min-height: 28px;
+  }
+  .home-install-guest {
+    margin-top: 20px;
+  }
 }

@@ -127,6 +127,54 @@ for (const size of [
     });
   });
 }
+test("desktop compact menu uses the same grid for account, install and logout", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await arrange(page, "admin");
+  await page.evaluate(() => {
+    const event = new Event("beforeinstallprompt");
+    Object.assign(event, {
+      prompt: async () => {},
+      userChoice: Promise.resolve({ outcome: "accepted" }),
+    });
+    window.dispatchEvent(event);
+  });
+  await page
+    .getByRole("button", { name: "Menu utilisateur", exact: true })
+    .click();
+  const dialog = page.getByRole("dialog");
+  await dialog.evaluate(async (el) => {
+    await Promise.all(
+      el.getAnimations({ subtree: true }).map((a) => a.finished),
+    );
+  });
+  const actions = [
+    dialog.getByRole("link", { name: "Mon compte", exact: true }),
+    dialog.getByRole("button", { name: "Ajouter l’application", exact: true }),
+    dialog.getByRole("button", { name: "Se déconnecter", exact: true }),
+  ];
+  const positions = [];
+  for (const action of actions) {
+    await expect(action).toBeVisible();
+    positions.push(
+      await action
+        .locator("span")
+        .evaluate((el) => el.getBoundingClientRect().x),
+    );
+  }
+  expect(Math.max(...positions) - Math.min(...positions)).toBeLessThan(1);
+  expect((await dialog.boundingBox())!.height).toBeLessThan(650);
+  const center = (await page.locator(".home-clock").boundingBox())!;
+  expect(Math.abs(center.x + center.width / 2 - 720)).toBeLessThan(1);
+  await page.screenshot({
+    animations: "disabled",
+    path: `${output}/menu-desktop.png`,
+  });
+  await page.evaluate(() => window.dispatchEvent(new Event("appinstalled")));
+  await expect(actions[1]).toHaveCount(0);
+});
+
 for (const mode of ["guest", "member", "house", "admin"]) {
   test(`right overlay menu ${mode}`, async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });

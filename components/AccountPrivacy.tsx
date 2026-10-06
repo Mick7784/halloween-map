@@ -27,10 +27,12 @@ export default function AccountPrivacy({
   user,
   state,
   onDelete,
+  onPolicy,
 }: {
   user: User;
   state: PublicState;
   onDelete: () => void;
+  onPolicy: () => void;
 }) {
   const [house, setHouse] = useState<House | null>(null),
     [loaded, setLoaded] = useState(false),
@@ -234,13 +236,7 @@ export default function AccountPrivacy({
         </section>
       </div>
       <div className="account-privacy-actions">
-        <a
-          className="account-row"
-          href={settings.policyUrl ?? "/privacy"}
-          target="_blank"
-          rel="noopener noreferrer"
-          aria-label="Politique de confidentialité — nouvel onglet"
-        >
+        <button className="account-row" onClick={onPolicy}>
           <span className="account-row-icon">
             <LockKeyhole />
           </span>
@@ -249,9 +245,12 @@ export default function AccountPrivacy({
             <small>Consulter la politique complète</small>
           </span>
           <ChevronRight size={19} />
-        </a>
+        </button>
         {settings.contactEmail ? (
-          <a className="account-row" href={`mailto:${settings.contactEmail}`}>
+          <a
+            className="account-row"
+            href={`mailto:${settings.contactEmail}?subject=${encodeURIComponent(settings.contactSubject ?? "Halloween Map — Contact")}`}
+          >
             <span className="account-row-icon">
               <Mail />
             </span>

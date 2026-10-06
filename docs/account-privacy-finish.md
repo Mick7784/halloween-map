@@ -1,5 +1,7 @@
 # Mon compte — finitions et confidentialité
 
+Historique de la V0.5.6. Pour le parcours de politique désormais intégré au compte et les paramètres supplémentaires, voir [le lot de corrections ciblées](targeted-menu-privacy-home.md).
+
 Passe ciblée réalisée depuis `75476a5`, sur `codex/account-context`. La composition principale mobile/desktop et la logique destructive sont conservées.
 
 ## Fichiers modifiés

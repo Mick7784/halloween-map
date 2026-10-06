@@ -12,6 +12,9 @@ import Link from "next/link";
 import { DateTime } from "luxon";
 import {
   House as HouseIcon,
+  Map,
+  ShieldCheck,
+  Settings,
   Route,
   CircleUserRound,
   X,
@@ -388,24 +391,38 @@ export default function Application({
               </div>
             )}
             <Link href="/map" onClick={() => setMenu(false)}>
-              La carte
+              <Map size={20} />
+              <span>La carte</span>
+              <ArrowRight size={15} />
             </Link>
             <Link
               href={user ? "/participant" : "/login?next=/participant"}
               onClick={() => setMenu(false)}
             >
-              Inscrire ma maison
+              <HouseIcon size={20} />
+              <span>Inscrire ma maison</span>
+              <ArrowRight size={15} />
             </Link>
             <Link href="/map#parcours" onClick={() => setMenu(false)}>
-              Préparer mon parcours
+              <Route size={20} />
+              <span>Préparer mon parcours</span>
+              <ArrowRight size={15} />
             </Link>
             {user?.permissions.includes("admin.access") && (
-              <Link href="/admin">Administration</Link>
+              <div className="user-menu-group">
+                <Link href="/admin">
+                  <ShieldCheck size={20} />
+                  <span>Administration</span>
+                  <ArrowRight size={15} />
+                </Link>
+              </div>
             )}
             <div className="user-menu-account">
               {user && (
                 <Link href="/account" onClick={() => setMenu(false)}>
-                  Mon compte
+                  <Settings size={20} />
+                  <span>Mon compte</span>
+                  <ArrowRight size={15} />
                 </Link>
               )}
               <InstallApp />
@@ -416,7 +433,8 @@ export default function Application({
                     window.location.href = "/";
                   }}
                 >
-                  <LogOut size={16} /> Déconnexion
+                  <LogOut size={20} />
+                  <span>Se déconnecter</span>
                 </AsyncButton>
               )}
             </div>

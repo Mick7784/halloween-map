@@ -26,15 +26,18 @@ import {
 import type { User } from "../lib/domain";
 import InstallApp from "./InstallApp";
 import AccountPrivacy from "./AccountPrivacy";
+import AccountPolicy from "./AccountPolicy";
 import Editorial from "./Editorial";
 import "./AccountOverlay.css";
 
-type View = "main" | "information" | "security" | "privacy" | "delete";
+type View =
+  "main" | "information" | "security" | "privacy" | "policy" | "delete";
 const titles: Record<View, string> = {
   main: "Mon compte",
   information: "Mes informations",
   security: "Mot de passe",
   privacy: "Confidentialité et données",
+  policy: "Politique de confidentialité",
   delete: "Supprimer mon compte",
 };
 
@@ -198,8 +201,12 @@ export default function AccountOverlay({
           {view !== "main" && (
             <button
               className="account-back"
-              aria-label="Revenir à Mon compte"
-              onClick={() => navigate("main")}
+              aria-label={
+                view === "policy"
+                  ? "Revenir à Confidentialité et données"
+                  : "Revenir à Mon compte"
+              }
+              onClick={() => navigate(view === "policy" ? "privacy" : "main")}
             >
               <ArrowLeft size={20} />
             </button>
@@ -306,8 +313,10 @@ export default function AccountOverlay({
                   user={user}
                   state={state}
                   onDelete={() => navigate("delete")}
+                  onPolicy={() => navigate("policy")}
                 />
               )}
+              {view === "policy" && <AccountPolicy state={state} />}
               {view === "delete" && (
                 <section className="account-card account-delete-confirm">
                   <h2 tabIndex={-1}>

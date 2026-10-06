@@ -200,8 +200,8 @@ test("mobile information, security, verification, privacy and deletion confirmat
     .click();
   await expect(page.getByRole("dialog")).toContainText("2 novembre 2026");
   await expect(
-    page.getByRole("link", { name: /Politique de confidentialité/ }),
-  ).toHaveAttribute("href", "/privacy");
+    page.getByRole("button", { name: /Politique de confidentialité/ }),
+  ).toBeVisible();
   await expect(page.getByRole("dialog")).not.toContainText(
     "La participation est éphémère",
   );
@@ -466,6 +466,13 @@ for (const width of [390, 1440]) {
           ...state,
           privacy: {
             contactEmail: "organisateur@example.invalid",
+            contactSubject: "Halloween Map — Question",
+            ...(width === 1440
+              ? {
+                  policyBody:
+                    "## Politique configurée\n\nTexte administré depuis les paramètres.",
+                }
+              : {}),
             accountRetention:
               "Votre compte reste disponible pour les prochaines éditions.",
           },
@@ -509,10 +516,33 @@ for (const width of [390, 1440]) {
     await expect(dialog).not.toContainText("do-not-display-this");
     await expect(
       dialog.getByRole("link", { name: /Nous contacter/ }),
-    ).toHaveAttribute("href", "mailto:organisateur@example.invalid");
+    ).toHaveAttribute(
+      "href",
+      `mailto:organisateur@example.invalid?subject=${encodeURIComponent("Halloween Map — Question")}`,
+    );
     await expect(
-      dialog.getByRole("link", { name: /Politique de confidentialité/ }),
-    ).toHaveAttribute("target", "_blank");
+      dialog.getByRole("button", { name: /Politique de confidentialité/ }),
+    ).toBeVisible();
+    const accountUrl = page.url();
+    await dialog
+      .getByRole("button", { name: /Politique de confidentialité/ })
+      .click();
+    await expect(dialog).toHaveAttribute("data-preserved", "yes");
+    await expect(page.getByRole("dialog")).toHaveCount(1);
+    await expect(page).toHaveURL(accountUrl);
+    await expect(dialog).toContainText(
+      width === 1440
+        ? "Texte administré depuis les paramètres."
+        : state.documents.PRIVACY.body,
+    );
+    await page.screenshot({
+      animations: "disabled",
+      path: `${output}/politique-${width}.png`,
+    });
+    await dialog
+      .getByRole("button", { name: "Revenir à Confidentialité et données" })
+      .click();
+    await expect(dialog).toContainText("Vos données personnelles");
     await page.locator(".account-subview").evaluate(async (el) => {
       await Promise.all(
         el.getAnimations({ subtree: true }).map((a) => a.finished),
@@ -571,7 +601,7 @@ test("privacy honest fallbacks without house, contact or valid purge date", asyn
     dialog.getByRole("link", { name: /mentions légales/ }),
   ).toHaveAttribute("href", "/legal");
   await expect(
-    dialog.getByRole("link", { name: /Politique de confidentialité/ }),
-  ).toHaveAttribute("href", "/privacy");
+    dialog.getByRole("button", { name: /Politique de confidentialité/ }),
+  ).toBeVisible();
   await expect(dialog).not.toContainText("Invalid DateTime");
 });
