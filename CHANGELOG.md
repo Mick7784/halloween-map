@@ -1,5 +1,13 @@
 # Changelog
 
+## V0.6.0 — Carte & Parcours
+
+- Nouvelle expérience Carte & Parcours, avec préparation et bonnes pratiques.
+- Carte plein écran et GPS temps réel, avec recentrage volontaire.
+- Bottom sheet à trois états et fiche maison plein écran.
+- Persistance du parcours et reprise au retour dans l’application.
+- Détection des maisons indisponibles et recalcul du parcours.
+
 ## V0.5.9 — Accueil, menus et bonnes pratiques
 
 - Accueil desktop corrigé, avec une scène étendue et un bloc central centré.
