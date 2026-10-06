@@ -1,5 +1,5 @@
 "use client";
-import { routeIsCurrent } from "../lib/route-state";
+import { retainClosedRoute } from "../lib/route-state";
 import { locateOrigin } from "../lib/geolocation";
 import PasswordRecovery from "./PasswordRecovery";
 import Account, { Signup, Activation } from "./Account";
@@ -24,14 +24,8 @@ import {
   Clock,
   LogOut,
   Navigation,
-  CheckCircle2,
-  Candy,
-  Pause,
-  Play,
-  Power,
-  Trash2,
 } from "lucide-react";
-import type { House, User, Activity } from "../lib/domain";
+import type { User, Activity } from "../lib/domain";
 import {
   api,
   labels,
@@ -50,7 +44,7 @@ import Setup from "./Setup";
 import Scene from "./Scene";
 import PremiumHome from "./PremiumHome";
 import MapView from "./Map";
-import HouseForm from "./HouseForm";
+import ParticipationOverlay from "./ParticipationOverlay";
 import Admin from "./Admin";
 export default function Application({
   view,
@@ -67,6 +61,9 @@ export default function Application({
     [error, setError] = useState(""),
     [menu, setMenu] = useState(false),
     [accountOpen, setAccountOpen] = useState(view === "account"),
+    [participationOpen, setParticipationOpen] = useState(
+      view === "participant",
+    ),
     [now, setNow] = useState(() => Date.now());
   const refresh = useCallback(async () => {
     const [s, u] = await Promise.all([
@@ -103,7 +100,7 @@ export default function Application({
 
   const background = useRef<HTMLDivElement>(null);
   const accountOrigin = useRef<HTMLElement | null>(null);
-  const accountVisible = accountOpen && !!user;
+  const accountVisible = (accountOpen || participationOpen) && !!user;
   useEffect(() => {
     if (!accountVisible) return;
     const previousBackground = background.current;
@@ -135,7 +132,7 @@ export default function Application({
     <>
       <div
         ref={background}
-        inert={accountOpen && !!user}
+        inert={(accountOpen || participationOpen) && !!user}
         onClickCapture={(e) => {
           const link = (e.target as HTMLElement).closest<HTMLAnchorElement>(
             "a[href]",
@@ -143,7 +140,9 @@ export default function Application({
           if (
             !user ||
             !link ||
-            new URL(link.href).pathname !== "/account" ||
+            !["/account", "/participant"].includes(
+              new URL(link.href).pathname,
+            ) ||
             e.button !== 0 ||
             e.ctrlKey ||
             e.metaKey ||
@@ -154,11 +153,22 @@ export default function Application({
           e.preventDefault();
           accountOrigin.current = document.activeElement as HTMLElement;
           setMenu(false);
-          setAccountOpen(true);
+          if (new URL(link.href).pathname === "/participant")
+            setParticipationOpen(true);
+          else setAccountOpen(true);
         }}
       >
         {children}
       </div>
+      {participationOpen && user && state && (
+        <ParticipationOverlay
+          user={user}
+          state={state}
+          refresh={refresh}
+          styleUrl={mapStyle}
+          onClose={() => setParticipationOpen(false)}
+        />
+      )}
       {accountOpen && user && state && (
         <Account
           user={user}
@@ -245,9 +255,7 @@ export default function Application({
       </main>
     );
   } else if (view === "participant")
-    content = user ? (
-      <Participant user={user} state={liveState!} refresh={refresh} />
-    ) : (
+    content = user ? null : (
       <main className="narrow">
         <h1>Ma participation</h1>
         <p>Connectez-vous pour retrouver votre maison.</p>
@@ -322,7 +330,7 @@ export default function Application({
         />
       );
   if (
-    (view === "home" || (view === "account" && user)) &&
+    (view === "home" || (["account", "participant"].includes(view) && user)) &&
     state &&
     !state.setupRequired
   )
@@ -641,12 +649,28 @@ function PublicMap({
         (h) => h.id === selected.id,
       ) ?? null)
     : null;
-  const safeRoute =
-    route &&
-    routeIsCurrent(route, state.routeCandidates ?? state.houses ?? [], now) &&
-    (!s || +new Date(route.estimatedEnd) <= +new Date(s.closes_at))
-      ? route
-      : null;
+  const routeInWindow =
+    !!route &&
+    route.stops.every((stop) => +new Date(stop.house.ends_at) > now) &&
+    (!s || +new Date(route.estimatedEnd) <= +new Date(s.closes_at));
+  const safeRoute = useMemo(
+    () =>
+      route && routeInWindow
+        ? retainClosedRoute(
+            route,
+            state.routeCandidates ?? state.houses ?? [],
+            state.closedHouseIds ?? [],
+            0,
+          )
+        : null,
+    [
+      route,
+      routeInWindow,
+      state.routeCandidates,
+      state.houses,
+      state.closedHouseIds,
+    ],
+  );
   const routeHouses = useMemo(
     () => safeRoute?.stops.map((stop) => stop.house) ?? [],
     [safeRoute],
@@ -996,6 +1020,12 @@ function PublicMap({
                       <span>{n + 1}</span>
                       <div>
                         <strong>{stop.house.name}</strong>
+                        {stop.unavailable && (
+                          <small>
+                            Accueil fermé · étape conservée temporairement.
+                            Exclue du prochain recalcul.
+                          </small>
+                        )}
                         <small>
                           {time(stop.arrival, i.timezone)} ·{" "}
                           {stop.walkingMinutes} min à pied ·{" "}
@@ -1070,7 +1100,9 @@ function PublicMap({
                 <strong>{fears[(selectedLive.fear ?? 1) - 1]}</strong>
               </div>
             )}
-            {selectedLive.rp && <p className="rp">{selectedLive.rp}</p>}
+            <p className="rp">
+              {selectedLive.rp || "Pas de description particulière."}
+            </p>
             <div className="practical detail-row">
               <Info />
               <div>
@@ -1291,183 +1323,5 @@ function RouteForm({
         <ArrowRight size={18} />
       </button>
     </form>
-  );
-}
-function Participant({
-  user,
-  state,
-  refresh,
-}: {
-  user: User;
-  state: PublicState;
-  refresh: () => Promise<void>;
-}) {
-  const [house, setHouse] = useState<House | null>(null),
-    [error, setError] = useState(""),
-    [saved, setSaved] = useState(false);
-  const reload = useCallback(async () => {
-    setHouse(await api<House | null>("house"));
-    await refresh();
-  }, [refresh]);
-  useEffect(() => {
-    void api<House | null>("house")
-      .then(setHouse)
-      .catch((e) => setError(e.message));
-  }, [user.id]);
-  const i = state.instance!,
-    s = state.season;
-  if (!house || !s)
-    return (
-      <main className="narrow">
-        <h1>Ma participation</h1>
-        <Notice error={error} />
-        {!s?.registrations_open ? (
-          <p>
-            Les inscriptions sont fermées. Votre compte reste disponible pour la
-            prochaine édition.
-          </p>
-        ) : user.email_status !== "VERIFIED" ? (
-          <section className="panel">
-            <p>{state.contents?.["account.verify"]}</p>
-            <Link href="/account" className="button primary">
-              Vérifier mon email
-            </Link>
-          </section>
-        ) : (
-          <section className="panel">
-            <h2>{state.contents?.["participation.title"]}</h2>
-            <Editorial text={state.contents?.["participation.intro"] ?? ""} />
-            <HouseForm
-              zone={i.timezone}
-              opens={s.opens_at}
-              closes={s.closes_at}
-              center={[i.longitude, i.latitude]}
-              documents={state.documents}
-              onSave={async (p) => {
-                await api("participation", p);
-                setSaved(true);
-                await reload();
-              }}
-            />
-          </section>
-        )}
-      </main>
-    );
-  async function action(a: string, extra: Record<string, unknown> = {}) {
-    await api("participant", { action: a, ...extra });
-    await reload();
-  }
-  return (
-    <main className="narrow participant">
-      <div className="eyebrow">PARTAGER</div>
-      <h1>Ma participation</h1>
-      <div className="status-line">
-        <span className={"status " + house.status}>{labels[house.status]}</span>
-        <span className="badge">{labels[house.activity]}</span>
-      </div>
-      {house.status === "HIDDEN" && (
-        <p className="notice info">
-          Votre maison est masquée par l’administration.
-        </p>
-      )}
-      {saved && (
-        <p className="success" role="status">
-          <CheckCircle2 size={18} /> Modifications enregistrées
-        </p>
-      )}
-      <section className="panel">
-        <HouseForm
-          key={house.id + house.status}
-          house={house}
-          zone={i.timezone}
-          opens={s.opens_at}
-          closes={s.closes_at}
-          center={[i.longitude, i.latitude]}
-          onSave={async (p) => {
-            await api("house", p);
-            setSaved(true);
-            await reload();
-          }}
-        />
-        <hr />
-        <h2>Gérer mon accueil en direct</h2>
-        {house.activities.includes("CANDY") && (
-          <>
-            <AsyncButton
-              onClick={async () => {
-                await action("candy", { available: !house.candy_available });
-              }}
-            >
-              <Candy size={18} />
-              {house.candy_available
-                ? "Je n’ai plus de bonbons"
-                : "J’ai de nouveau des bonbons"}
-            </AsyncButton>
-            {!house.candy_available && house.activities.length === 1 && (
-              <p className="notice info">
-                Votre maison est masquée car elle proposait uniquement des
-                bonbons. Vous pouvez terminer votre accueil ci-dessous ou
-                rétablir les bonbons.
-              </p>
-            )}
-          </>
-        )}
-        {house.activity !== "ENDED" && (
-          <div className="actions">
-            <AsyncButton
-              onClick={() =>
-                action(house.activity === "PAUSED" ? "resume" : "pause")
-              }
-            >
-              {house.activity === "PAUSED" ? (
-                <Play size={18} />
-              ) : (
-                <Pause size={18} />
-              )}
-              {house.activity === "PAUSED"
-                ? "Reprendre mon accueil"
-                : "Mettre en pause"}
-            </AsyncButton>
-            <AsyncButton
-              onClick={async () => {
-                if (
-                  window.confirm(
-                    "Terminer définitivement votre accueil pour cette saison ?",
-                  )
-                )
-                  await action("end");
-              }}
-            >
-              <Power size={18} />
-              Terminer mon activité
-            </AsyncButton>
-          </div>
-        )}
-        <hr />
-        <AsyncButton
-          danger
-          onClick={async () => {
-            if (
-              window.confirm(
-                "Supprimer définitivement votre participation et les données de votre maison ? Votre compte reste disponible.",
-              )
-            ) {
-              await api("participant", {
-                action: "delete",
-                confirm: "SUPPRIMER",
-              });
-              window.location.href = "/";
-            }
-          }}
-        >
-          <Trash2 size={18} />
-          Supprimer ma participation
-        </AsyncButton>
-      </section>
-      <p className="muted small">
-        Les modifications et les actions en direct prennent effet immédiatement
-        sur le serveur.
-      </p>
-    </main>
   );
 }

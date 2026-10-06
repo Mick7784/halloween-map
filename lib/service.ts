@@ -44,6 +44,12 @@ import { planRoute, validateRouteWindow } from "./routing";
 import { RoutingError } from "./walking-router";
 import { houseRouteKey } from "./route-state";
 import { publicPrivacySettings } from "./privacy";
+import {
+  publicParticipationSettings,
+  formatAddress,
+  type AddressParts,
+} from "./participation-settings";
+import { frenchCommunes, frenchAddressReverse } from "./french-address";
 import { z } from "zod";
 export async function audit(
   client: Database,
@@ -303,6 +309,7 @@ export async function publicState(
   let upcoming: ReturnType<typeof publicHouse>[] = [];
   let demoError: string | undefined;
   let previewHouses: House[] = [];
+  let closedHouseIds: string[] = [];
   if (s && state !== "CLOSED" && state !== "ARCHIVED") {
     const { rows } = await db().query(
       "SELECT count(*)::int n FROM participations WHERE instance_id=$1 AND season_id=$2 AND status=$3 AND EXISTS(SELECT 1 FROM users u WHERE u.id=participations.user_id AND u.account_status='ACTIVE' AND (u.email_status='VERIFIED' OR participations.legacy_imported)) AND NOT EXISTS(SELECT 1 FROM legal_documents d WHERE d.instance_id=participations.instance_id AND d.active AND d.requires_reaccept AND ((d.kind='TERMS' AND participations.terms_version IS DISTINCT FROM d.version) OR (d.kind='GUIDELINES' AND participations.guidelines_version IS DISTINCT FROM d.version)))",
@@ -349,8 +356,17 @@ export async function publicState(
           +new Date(h.ends_at) > +now,
       )
       .map(publicHouse);
+  if (s && state === "MAP_OPEN" && user && !preview) {
+    closedHouseIds = (
+      await db().query(
+        "SELECT id FROM participations WHERE instance_id=$1 AND season_id=$2 AND status='VISIBLE' AND activity IN ('ENDED','PAUSED') AND ends_at>$3 AND EXISTS(SELECT 1 FROM users u WHERE u.id=participations.user_id AND u.account_status='ACTIVE' AND (u.email_status='VERIFIED' OR participations.legacy_imported)) AND NOT EXISTS(SELECT 1 FROM legal_documents d WHERE d.instance_id=participations.instance_id AND d.active AND d.requires_reaccept AND ((d.kind='TERMS' AND participations.terms_version IS DISTINCT FROM d.version) OR (d.kind='GUIDELINES' AND participations.guidelines_version IS DISTINCT FROM d.version)))",
+        [i.id, s.id, now],
+      )
+    ).rows.map((row) => String(row.id));
+  }
   return {
     routeCandidates: upcoming,
+    closedHouseIds,
     demoError,
     setupRequired: false,
     contents: Object.fromEntries(
@@ -370,6 +386,7 @@ export async function publicState(
     ),
     documents: await legalState(i.id),
     privacy: publicPrivacySettings(i.config.privacy),
+    participation: publicParticipationSettings(i.config.participation),
     preview,
     demoAvailable:
       user?.role_name === "SUPER_ADMIN" &&
@@ -443,11 +460,65 @@ function houseDates(data: z.infer<typeof houseSchema>, i: Instance, s: Season) {
   return [starts, ends];
 }
 export const register = createAccount;
+async function validateFrenchAddress(data: {
+  address: string;
+  address_parts?: AddressParts;
+  latitude: number;
+  longitude: number;
+  position_confirmed?: boolean;
+}) {
+  if (!data.address_parts) return; // Existing integrations and admin forms remain compatible.
+  if (!data.position_confirmed)
+    throw new HttpError(400, "Confirmez le point de votre maison.");
+  const a = data.address_parts;
+  const [communes, point] = await Promise.all([
+    frenchCommunes(a.postalCode),
+    frenchAddressReverse(data.latitude, data.longitude),
+  ]);
+  const commune = communes.find(
+    (c) => c.code === a.cityCode && c.nom === a.city,
+  );
+  if (!commune)
+    throw new HttpError(
+      400,
+      "Choisissez une commune française correspondant au code postal.",
+    );
+  if (point.cityCode !== a.cityCode)
+    throw new HttpError(
+      400,
+      "Le point de la maison doit se trouver dans la commune choisie.",
+    );
+  data.address = formatAddress(a);
+}
+function validateParticipationSettings(
+  data: { address_parts?: AddressParts; rp: string; practical: string },
+  i: Instance,
+) {
+  if (!data.address_parts) return;
+  const settings = publicParticipationSettings(i.config.participation);
+  if (
+    data.rp.length > settings.descriptionLimit ||
+    data.practical.length > settings.practicalLimit
+  )
+    throw new HttpError(
+      400,
+      "Raccourcissez la description ou les informations pratiques.",
+    );
+  if (
+    settings.allowedCommuneCodes.length &&
+    !settings.allowedCommuneCodes.includes(data.address_parts.cityCode)
+  )
+    throw new HttpError(
+      400,
+      "Cette commune n’est pas ouverte aux participations.",
+    );
+}
 export async function createParticipation(user: User | null, input: unknown) {
   if (!user) throw new HttpError(401, "Connexion requise");
   const raw = z
     .object({ house: houseSchema, acceptance: z.unknown() })
     .parse(input);
+  await validateFrenchAddress(raw.house);
   if (!raw.house.position_confirmed)
     throw new HttpError(
       400,
@@ -482,6 +553,7 @@ export async function createParticipation(user: User | null, input: unknown) {
       throw new HttpError(403, "Inscriptions fermées");
     const a = await validateAcceptance(c, i.id, raw.acceptance);
     const h = raw.house;
+    validateParticipationSettings(h, i);
     const [starts, ends] = houseDates(h, i, ss);
     await c.query(
       "INSERT INTO participations(instance_id,season_id,user_id,name,address,latitude,longitude,activities,starts_at,ends_at,fear,adaptable,rp,practical,terms_version,terms_accepted_at,guidelines_version,guidelines_accepted_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,now(),$16,now())",
@@ -505,6 +577,11 @@ export async function createParticipation(user: User | null, input: unknown) {
       ],
     );
     await audit(c, i.id, user, "participation.created");
+    if (h.address_parts)
+      await c.query(
+        "UPDATE participations SET address_parts=$1 WHERE user_id=$2 AND season_id=$3",
+        [JSON.stringify(h.address_parts), user.id, ss.id],
+      );
     return { ok: true };
   });
 }
@@ -525,6 +602,7 @@ export async function updateHouse(
   if (!user) throw new HttpError(401, "Connexion requise");
   if (admin) requirePermission(user, "participants.edit");
   const data = houseSchema.parse(input);
+  if (!admin) await validateFrenchAddress(data);
   return transaction(async (c) => {
     const { rows } = await c.query(
       "SELECT * FROM participations WHERE id=$1 AND instance_id=$2 FOR UPDATE",
@@ -567,6 +645,7 @@ export async function updateHouse(
       }
     }
     const [starts, ends] = houseDates(data, i, s);
+    if (!admin) validateParticipationSettings(data, i);
     const status = old.status;
     await c.query(
       "UPDATE participations SET name=$1,address=$2,latitude=$3,longitude=$4,activities=$5,starts_at=$6,ends_at=$7,fear=$8,adaptable=$9,rp=$10,practical=$11,status=$12 WHERE id=$13 AND instance_id=$14",
@@ -588,6 +667,14 @@ export async function updateHouse(
       ],
     );
     await audit(c, user.instance_id, user, "house.updated", id);
+    await c.query("UPDATE participations SET address_parts=$1 WHERE id=$2", [
+      data.address_parts
+        ? JSON.stringify(data.address_parts)
+        : old.address === data.address
+          ? (old.address_parts ?? null)
+          : null,
+      id,
+    ]);
     return { status };
   });
 }
@@ -595,7 +682,8 @@ export async function participantAction(user: User | null, input: unknown) {
   if (!user) throw new HttpError(403, "Compte participant requis");
   const data = z
     .object({
-      action: z.enum(["pause", "resume", "end", "candy", "delete"]),
+      action: z.enum(["pause", "resume", "end", "candy", "deplete", "delete"]),
+      choice: z.enum(["continue", "close"]).optional(),
       available: z.boolean().optional(),
       confirm: z.literal("SUPPRIMER").optional(),
     })
@@ -626,7 +714,24 @@ export async function participantAction(user: User | null, input: unknown) {
     }
     if (h.purged_at || +new Date() >= +new Date(h.closes_at))
       throw new HttpError(403, "Saison fermée");
-    if (data.action === "candy") {
+    if (data.action === "deplete") {
+      if (
+        !h.activities.includes("CANDY") ||
+        !h.candy_available ||
+        h.activity === "ENDED"
+      )
+        throw new HttpError(400, "Les bonbons ne sont plus actifs.");
+      if (data.choice === "continue" && !h.activities.includes("ACTING"))
+        throw new HttpError(
+          400,
+          "Sans mise en scène, confirmez la fermeture de la maison.",
+        );
+      if (!data.choice) throw new HttpError(400, "Confirmation requise.");
+      await c.query(
+        "UPDATE participations SET candy_available=false,activity=$1 WHERE id=$2",
+        [data.choice === "close" ? "ENDED" : h.activity, h.id],
+      );
+    } else if (data.action === "candy") {
       if (typeof data.available !== "boolean")
         throw new HttpError(400, "Disponibilité requise");
       await c.query(

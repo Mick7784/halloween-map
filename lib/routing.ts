@@ -22,6 +22,7 @@ export type RouteInput = {
 };
 export type RouteResult = {
   stops: {
+    unavailable?: boolean;
     house: ReturnType<typeof publicHouse>;
     arrival: string;
     departure: string;

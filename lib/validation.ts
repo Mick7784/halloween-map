@@ -43,6 +43,21 @@ export const houseSchema = z.object({
   position_confirmed: z.boolean().optional(),
   name: text(100),
   address: text(200),
+  address_parts: z
+    .object({
+      postalCode: z.string().regex(/^\d{5}$/),
+      city: text(100),
+      cityCode: z.string().regex(/^(?:\d{5}|2[AB]\d{3})$/),
+      number: z
+        .string()
+        .trim()
+        .regex(
+          /^\d+\s*(?:(?:bis|ter|quater)|[A-Za-z])?$/i,
+          "Numéro invalide (ex. 12 bis ou 12 A)",
+        ),
+      street: text(120),
+    })
+    .optional(),
   ...coordinates,
   activities: z
     .array(z.enum(["DECORATION", "CANDY", "ACTING"]))

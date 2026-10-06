@@ -22,6 +22,8 @@ export type House = {
   user_id: string;
   name: string;
   address: string;
+  address_parts?: import("./participation-settings").AddressParts | null;
+  review_status?: "PENDING" | "VALIDATED" | "REFUSED";
   latitude: number;
   longitude: number;
   activities: Activity[];

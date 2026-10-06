@@ -14,6 +14,11 @@ import {
 } from "../../../lib/accounts";
 import { contentAction, contentAdmin } from "../../../lib/content";
 import { seasonState } from "../../../lib/domain";
+import {
+  frenchCommunes,
+  frenchAddressSearch,
+  frenchAddressReverse,
+} from "../../../lib/french-address";
 import { demoTime } from "../../../lib/demo";
 import { NextRequest, NextResponse } from "next/server";
 import { getUser, HttpError, hashToken, rateLimit } from "../../../lib/auth";
@@ -69,6 +74,30 @@ async function handle(
         );
       if (path === "me")
         return response(await getUser(req.cookies.get(cookie)?.value));
+      if (path === "location") {
+        const u = await getUser(req.cookies.get(cookie)?.value);
+        if (!u) throw new HttpError(401, "Connexion requise");
+        await rateLimit("address:" + u.id, 120);
+        const q = req.nextUrl.searchParams;
+        if (q.get("mode") === "communes")
+          return response(await frenchCommunes(q.get("postalCode") ?? ""));
+        if (q.get("mode") === "search")
+          return response(
+            await frenchAddressSearch(
+              q.get("q") ?? "",
+              q.get("postalCode") ?? "",
+              q.get("cityCode") ?? "",
+            ),
+          );
+        if (q.get("mode") === "reverse")
+          return response(
+            await frenchAddressReverse(
+              Number(q.get("lat")),
+              Number(q.get("lon")),
+            ),
+          );
+        throw new HttpError(400, "Recherche inconnue");
+      }
       if (path === "house")
         return response(
           await service.ownHouse(await getUser(req.cookies.get(cookie)?.value)),

@@ -18,6 +18,35 @@ export function houseRouteKey(h: RouteHouse) {
   ]);
 }
 // Never remove individual stops while retaining the old geometry or totals.
+export function retainClosedRoute(
+  route: RouteResult,
+  houses: RouteHouse[],
+  closedIds: string[],
+  now: number,
+): RouteResult | null {
+  if (
+    !route.stops.every(
+      (s) =>
+        +new Date(s.house.ends_at) > now &&
+        (houses.some(
+          (h) =>
+            h.id === s.house.id && houseRouteKey(h) === houseRouteKey(s.house),
+        ) ||
+          (!houses.some((h) => h.id === s.house.id) &&
+            closedIds.includes(s.house.id))),
+    )
+  )
+    return null;
+  return {
+    ...route,
+    stops: route.stops.map((s) => ({
+      ...s,
+      unavailable:
+        closedIds.includes(s.house.id) &&
+        !houses.some((h) => h.id === s.house.id),
+    })),
+  };
+}
 export function routeIsCurrent(
   route: RouteResult,
   houses: RouteHouse[],

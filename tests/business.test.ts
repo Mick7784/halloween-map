@@ -123,6 +123,9 @@ beforeAll(async () => {
     await pool.query(
       await readFile("migrations/004_beta_simplification.sql", "utf8"),
     );
+    await pool.query(
+      await readFile("migrations/005_participation_address.sql", "utf8"),
+    );
   } else {
     const pg = new PGlite();
     engine = pg;
@@ -135,6 +138,9 @@ beforeAll(async () => {
     );
     await pg.exec(
       await readFile("migrations/004_beta_simplification.sql", "utf8"),
+    );
+    await pg.exec(
+      await readFile("migrations/005_participation_address.sql", "utf8"),
     );
     globalDb.testDb = {
       async query(sql, values) {
@@ -645,6 +651,118 @@ describe("Seasons, privacy and participant activity", () => {
     await expect(
       service.participantAction(participant, { action: "resume" }),
     ).rejects.toThrow("terminée");
+  });
+  it("confirmed depletion retains acting or closes without deleting the participation", async () => {
+    await db().query(
+      "UPDATE participations SET activities=ARRAY['CANDY','ACTING'] WHERE id=$1",
+      [house.id],
+    );
+    await expect(
+      service.participantAction(participant, { action: "deplete" }),
+    ).rejects.toThrow("Confirmation requise");
+    await service.participantAction(participant, {
+      action: "deplete",
+      choice: "continue",
+    });
+    const continued = (await service.ownHouse(participant)) as House;
+    expect(effectiveActivities(continued)).toEqual(["ACTING"]);
+    expect(continued.activity).toBe("ACTIVE");
+    expect(
+      visible(
+        continued,
+        { ...season, activated: true },
+        new Date("2026-10-31T18:00Z"),
+      ),
+    ).toBe(true);
+    await db().query(
+      "UPDATE participations SET candy_available=true,activities=ARRAY['CANDY'] WHERE id=$1",
+      [house.id],
+    );
+    await expect(
+      service.participantAction(participant, {
+        action: "deplete",
+        choice: "continue",
+      }),
+    ).rejects.toThrow("confirmez la fermeture");
+    await service.participantAction(participant, {
+      action: "deplete",
+      choice: "close",
+    });
+    const closed = (await service.ownHouse(participant)) as House;
+    expect(closed.activity).toBe("ENDED");
+    expect(closed.id).toBe(house.id);
+    expect(
+      visible(
+        closed,
+        { ...season, activated: true },
+        new Date("2026-10-31T18:00Z"),
+      ),
+    ).toBe(false);
+  });
+  it("persists a verified structured French address and the explicitly adjusted point", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (value: URL) => {
+        const url = new URL(value);
+        if (url.hostname === "geo.api.gouv.fr")
+          return Response.json([
+            {
+              nom: "Lyon 2e Arrondissement",
+              code: "69382",
+              codesPostaux: ["69002"],
+              type: "arrondissement-municipal",
+              codeParent: "69123",
+            },
+          ]);
+        return Response.json({
+          features: [
+            {
+              properties: {
+                label: "12 bis Rue de la République 69002 Lyon",
+                street: "Rue de la République",
+                housenumber: "12 bis",
+                postcode: "69002",
+                citycode: "69382",
+                city: "Lyon",
+              },
+              geometry: { coordinates: [4.8358, 45.7651] },
+            },
+          ],
+        });
+      }),
+    );
+    try {
+      const parts = {
+        postalCode: "69002",
+        city: "Lyon 2e Arrondissement",
+        cityCode: "69382",
+        number: "12 bis",
+        street: "Rue de la République",
+      };
+      await service.updateHouse(participant, house.id, {
+        ...houseData(),
+        address_parts: parts,
+        latitude: 45.7659,
+        longitude: 4.8358,
+        rp: "",
+      });
+      const saved = (await service.ownHouse(participant)) as House;
+      expect(saved.address_parts).toEqual(parts);
+      expect(Number(saved.latitude)).toBe(45.7659);
+      expect(saved.rp).toBe("");
+      expect(saved.address).toBe(
+        "12 bis Rue de la République, 69002 Lyon 2e Arrondissement",
+      );
+      await expect(
+        service.updateHouse(participant, house.id, {
+          ...houseData(),
+          address_parts: parts,
+          position_confirmed: false,
+        }),
+      ).rejects.toThrow("Confirmez le point");
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
   it("removes candy alone, and hides candy-only houses after depletion", async () => {
     await service.participantAction(participant, {

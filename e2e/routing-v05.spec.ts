@@ -329,14 +329,19 @@ test("new house starts blank and requires explicit coordinate confirmation", asy
   await page.route("**/api/house", (r) => r.fulfill({ json: null }));
   await arrange(page);
   await page.goto("/participant");
+  await page.route("**/api/location*", r => {
+    const mode = new URL(r.request().url()).searchParams.get("mode");
+    return r.fulfill({json: mode === "communes" ? [{nom:"Rennes",code:"35238",codesPostaux:["35000"]}] : {label:"12 Rue des Lanternes 35000 Rennes",street:"Rue des Lanternes",number:"12",postalCode:"35000",city:"Rennes",cityCode:"35238",point:[-1.67,48.1]}});
+  });
+  await page.locator(".participation-coordinates summary").click();
   await expect(page.getByRole("spinbutton", { name: "Latitude" })).toHaveValue(
     "",
   );
   await expect(page.getByRole("spinbutton", { name: "Longitude" })).toHaveValue(
     "",
   );
-  const confirm = page.getByRole("checkbox", {
-    name: "Je confirme que ce point correspond à ma maison.",
+  const confirm = page.getByRole("button", {
+    name: "Confirmer le point de ma maison",
   });
   await expect(confirm).toBeDisabled();
   await expect(
@@ -344,15 +349,17 @@ test("new house starts blank and requires explicit coordinate confirmation", asy
   ).toBeDisabled();
   await page.getByRole("spinbutton", { name: "Latitude" }).fill("48.1");
   await page.getByRole("spinbutton", { name: "Longitude" }).fill("-1.67");
+  await page.getByLabel("Code postal", {exact:false}).fill("35000");
+  await expect(page.getByLabel("Ville", {exact:false})).toHaveValue("35238");
   await expect(
     page.getByRole("button", { name: "Envoyer ma participation" }),
   ).toBeDisabled();
-  await confirm.check();
+  await confirm.click();
   await expect(
     page.getByRole("button", { name: "Envoyer ma participation" }),
   ).toBeEnabled();
   await page.getByRole("spinbutton", { name: "Latitude" }).fill("48.2");
-  await expect(confirm).not.toBeChecked();
+  await expect(page.getByRole("button", { name:"Envoyer ma participation" })).toBeDisabled();
 });
 
 for (const viewport of [
