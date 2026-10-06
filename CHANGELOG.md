@@ -1,5 +1,13 @@
 # Changelog
 
+## V0.5.8 — Inscrire ma maison et Ma participation
+
+- Formulaire commun de création et d’édition, en plein écran mobile et desktop.
+- Localisation et adresses françaises, avec validation explicite du point GPS.
+- Actions rapides de participation accessibles dès l’ouverture.
+- Gestion confirmée de « plus de bonbons » et de la fermeture, distincte de la suppression.
+- Préparation des réglages du futur back-office.
+
 ## V0.5.7 — Menus, confidentialité et accueil desktop
 
 - Corrections des menus desktop/mobile : panneau desktop compact et alignement commun des actions, y compris l’installation PWA.
