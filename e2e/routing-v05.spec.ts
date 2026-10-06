@@ -319,7 +319,27 @@ test("route badges remain anchored when a house is hovered", async ({
   await context.setGeolocation({ latitude: 48.105, longitude: -1.675 });
   await arrange(page);
   await generate(page);
-  await page.locator(".route-house").first().hover({ force: true });
+  // The route fit is animated; hover only after the marker is stationary and visible.
+  let previousBox = "";
+  const marker = page.locator(".route-house").first();
+  await expect
+    .poll(async () => {
+      const box = await marker.boundingBox(),
+        viewport = page.viewportSize()!;
+      const current = JSON.stringify(box);
+      const stable = current === previousBox;
+      previousBox = current;
+      return (
+        !!box &&
+        stable &&
+        box.x >= 0 &&
+        box.y >= 0 &&
+        box.x + box.width <= viewport.width &&
+        box.y + box.height <= viewport.height
+      );
+    })
+    .toBe(true);
+  await marker.hover();
   await expectRouteBadges(page);
 });
 
@@ -388,7 +408,7 @@ test("preparation gates creation, opens administrable guidelines and accepts eve
   await controlledGPS(page);
   await arrange(page);
   let payload: Record<string, unknown> | null = null;
-  page.on("request", (r) => {
+  page.on("requestfinished", (r) => {
     if (new URL(r.url()).pathname === "/api/route") payload = r.postDataJSON();
   });
   await page
@@ -616,6 +636,8 @@ test("live GPS preserves departure and camera; restoration, 60s polling, closure
     document.dispatchEvent(new Event("visibilitychange"));
   });
   await expect.poll(() => counts.availability).toBe(before + 1);
+  // Let the hook consume the completed response before advancing its next interval.
+  await page.waitForTimeout(100);
   await page.clock.fastForward(61000);
   await expect.poll(() => counts.availability).toBe(before + 2);
   await page.reload();

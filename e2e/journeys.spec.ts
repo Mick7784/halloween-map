@@ -110,9 +110,12 @@ test("login → preopening map exposes only the owner and fits the mobile viewpo
   ).toBeVisible();
   await login(page, "visitor0@example.invalid");
   await expect(
-    page.getByText("Pour le moment, seule votre maison est visible.", {
-      exact: false,
-    }),
+    page.getByText(
+      "Les autres maisons seront visibles à l’ouverture de la carte.",
+      {
+        exact: false,
+      },
+    ),
   ).toBeVisible();
   const state = await (await page.request.get("/api/public")).json();
   expect(state.houses.map((h: { id: string }) => h.id)).toEqual([houseId]);
