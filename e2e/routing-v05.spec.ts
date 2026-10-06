@@ -117,20 +117,22 @@ async function expectRouteBadges(page: Page) {
   for (const visual of await page
     .locator(".route-house .house-marker-visual")
     .all()) {
-    expect(
-      await visual.evaluate((el) => {
-        if (!(el instanceof HTMLElement)) return false;
-        const badge = el.querySelector(".route-marker-number")!;
-        const r = el.getBoundingClientRect(),
-          b = badge.getBoundingClientRect();
-        return (
-          // Hover scales the visual and its badge together; compare screen
-          // distances to the scaled 7px offsets, not unscaled CSS pixels.
-          Math.abs(b.top - r.top + 7 * (r.height / el.offsetHeight)) < 1 &&
-          Math.abs(b.right - r.right - 7 * (r.width / el.offsetWidth)) < 1
-        );
-      }),
-    ).toBe(true);
+    await expect
+      .poll(() =>
+        visual.evaluate((el) => {
+          if (!(el instanceof HTMLElement)) return false;
+          const badge = el.querySelector(".route-marker-number")!;
+          const r = el.getBoundingClientRect(),
+            b = badge.getBoundingClientRect();
+          return (
+            // Hover scales the visual and its badge together; compare screen
+            // distances to the scaled 7px offsets, not unscaled CSS pixels.
+            Math.abs(b.top - r.top + 7 * (r.height / el.offsetHeight)) < 1 &&
+            Math.abs(b.right - r.right - 7 * (r.width / el.offsetWidth)) < 1
+          );
+        }),
+      )
+      .toBe(true);
   }
 }
 test("GPS departure, numbered stops, framed route, and all input invalidations", async ({
@@ -329,9 +331,22 @@ test("new house starts blank and requires explicit coordinate confirmation", asy
   await page.route("**/api/house", (r) => r.fulfill({ json: null }));
   await arrange(page);
   await page.goto("/participant");
-  await page.route("**/api/location*", r => {
+  await page.route("**/api/location*", (r) => {
     const mode = new URL(r.request().url()).searchParams.get("mode");
-    return r.fulfill({json: mode === "communes" ? [{nom:"Rennes",code:"35238",codesPostaux:["35000"]}] : {label:"12 Rue des Lanternes 35000 Rennes",street:"Rue des Lanternes",number:"12",postalCode:"35000",city:"Rennes",cityCode:"35238",point:[-1.67,48.1]}});
+    return r.fulfill({
+      json:
+        mode === "communes"
+          ? [{ nom: "Rennes", code: "35238", codesPostaux: ["35000"] }]
+          : {
+              label: "12 Rue des Lanternes 35000 Rennes",
+              street: "Rue des Lanternes",
+              number: "12",
+              postalCode: "35000",
+              city: "Rennes",
+              cityCode: "35238",
+              point: [-1.67, 48.1],
+            },
+    });
   });
   await page.locator(".participation-coordinates summary").click();
   await expect(page.getByRole("spinbutton", { name: "Latitude" })).toHaveValue(
@@ -349,8 +364,8 @@ test("new house starts blank and requires explicit coordinate confirmation", asy
   ).toBeDisabled();
   await page.getByRole("spinbutton", { name: "Latitude" }).fill("48.1");
   await page.getByRole("spinbutton", { name: "Longitude" }).fill("-1.67");
-  await page.getByLabel("Code postal", {exact:false}).fill("35000");
-  await expect(page.getByLabel("Ville", {exact:false})).toHaveValue("35238");
+  await page.getByLabel("Code postal", { exact: false }).fill("35000");
+  await expect(page.getByLabel("Ville", { exact: false })).toHaveValue("35238");
   await expect(
     page.getByRole("button", { name: "Envoyer ma participation" }),
   ).toBeDisabled();
@@ -359,7 +374,9 @@ test("new house starts blank and requires explicit coordinate confirmation", asy
     page.getByRole("button", { name: "Envoyer ma participation" }),
   ).toBeEnabled();
   await page.getByRole("spinbutton", { name: "Latitude" }).fill("48.2");
-  await expect(page.getByRole("button", { name:"Envoyer ma participation" })).toBeDisabled();
+  await expect(
+    page.getByRole("button", { name: "Envoyer ma participation" }),
+  ).toBeDisabled();
 });
 
 for (const viewport of [
