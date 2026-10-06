@@ -303,11 +303,7 @@ for (const viewport of [
       .toBeLessThan(3);
     await page.mouse.up();
 
-    expect(
-      await marker
-        .locator(".house-marker-visual")
-        .evaluate((el) => getComputedStyle(el).position),
-    ).toBe("relative");
+    await expect(marker.locator(".house-marker-visual")).toHaveCSS("position", "relative");
   });
 }
 
