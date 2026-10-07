@@ -19,7 +19,11 @@ import {
 } from "../lib/participation-settings";
 import type { ParticipationSettings } from "../lib/participation-settings";
 import HouseLocation from "./HouseLocation";
-import { initialHouseLocation, validateHouseForm } from "../lib/house-form";
+import {
+  initialHouseLocation,
+  validateHouseForm,
+  houseScheduleBounds,
+} from "../lib/house-form";
 import {
   HouseNameField,
   HouseActivityFields,
@@ -59,6 +63,7 @@ export default function ParticipationForm({
 }) {
   const settings = publicParticipationSettings(source);
   const initial = useRef(initialHouseLocation(house));
+  const schedule = houseScheduleBounds(opens, closes, zone);
   const [location, setLocation] = useState(initial.current),
     [name, setName] = useState(house?.name ?? ""),
     [activities, setActivities] = useState<Activity[]>(
@@ -69,10 +74,10 @@ export default function ParticipationForm({
     [rp, setRp] = useState(house?.rp ?? ""),
     [practical, setPractical] = useState(house?.practical ?? ""),
     [starts, setStarts] = useState(
-      house ? localDate(house.starts_at, zone) : localDate(opens, zone),
+      house ? localDate(house.starts_at, zone) : schedule.starts,
     ),
     [ends, setEnds] = useState(
-      house ? localDate(house.ends_at, zone) : localDate(closes, zone),
+      house ? localDate(house.ends_at, zone) : schedule.ends,
     ),
     [guidelines, setGuidelines] = useState(false),
     [guidelinesOpen, setGuidelinesOpen] = useState(false),

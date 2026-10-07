@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { initialHouseLocation, validateHouseForm } from "../lib/house-form";
+import {
+  initialHouseLocation,
+  validateHouseForm,
+  houseScheduleBounds,
+} from "../lib/house-form";
 import { participationDefaults } from "../lib/participation-settings";
 const context = {
   zone: "Europe/Paris",
@@ -28,6 +32,31 @@ const house = {
   practical: "Entrée par le portail",
 };
 describe("common public / BO house validation", () => {
+  it("keeps default creation hours within exact season timestamps", () => {
+    const exact = {
+      ...context,
+      opens: "2026-10-31T16:00:35.123Z",
+      closes: "2026-11-01T01:00:35.123Z",
+    };
+    const schedule = houseScheduleBounds(exact.opens, exact.closes, exact.zone);
+    expect(schedule).toEqual({
+      starts: "2026-10-31T17:01",
+      ends: "2026-11-01T02:00",
+    });
+    for (const adminEdit of [false, true])
+      expect(() =>
+        validateHouseForm(
+          { ...house, starts_at: schedule.starts, ends_at: schedule.ends },
+          { ...exact, adminEdit },
+        ),
+      ).not.toThrow();
+    expect(() =>
+      validateHouseForm({ ...house, starts_at: "2026-10-31T17:00" }, exact),
+    ).toThrow("saison");
+    expect(
+      houseScheduleBounds(context.opens, context.closes, context.zone),
+    ).toEqual({ starts: "2026-10-31T17:00", ends: "2026-11-01T02:00" });
+  });
   it("keeps the same normalized payload for public creation, BO creation and editing", () => {
     const publicCreation = validateHouseForm(house, context);
     expect(validateHouseForm(house, { ...context, adminEdit: true })).toEqual(

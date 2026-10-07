@@ -1,3 +1,4 @@
+import { DateTime } from "luxon";
 import type { House } from "./domain";
 import { localISO } from "./domain";
 import { houseSchema } from "./validation";
@@ -12,6 +13,20 @@ export type HouseLocationValue = {
   point: [number, number] | null;
   confirmed: boolean;
 };
+// Minute-only inputs must stay inside the exact season timestamps.
+export function houseScheduleBounds(
+  opens: string,
+  closes: string,
+  zone: string,
+) {
+  const minute = 60_000;
+  const format = (time: number) =>
+    DateTime.fromMillis(time).setZone(zone).toFormat("yyyy-MM-dd'T'HH:mm");
+  return {
+    starts: format(Math.ceil(+new Date(opens) / minute) * minute),
+    ends: format(Math.floor(+new Date(closes) / minute) * minute),
+  };
+}
 export function initialHouseLocation(house?: House): HouseLocationValue {
   return {
     address: house?.address_parts ?? parseStoredAddress(house?.address ?? ""),

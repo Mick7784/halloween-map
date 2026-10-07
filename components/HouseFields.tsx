@@ -2,7 +2,7 @@
 import { Candy, Drama, Ghost, Sparkles } from "lucide-react";
 import type { Activity } from "../lib/domain";
 import { participationDefaults } from "../lib/participation-settings";
-import { localDate } from "./common";
+import { houseScheduleBounds } from "../lib/house-form";
 import "./HouseFields.css";
 export const houseActivityOptions = [
   { id: "DECORATION", label: "Décoration", Icon: Sparkles },
@@ -87,6 +87,7 @@ export function HouseScheduleFields({
   onStart: (v: string) => void;
   onEnd: (v: string) => void;
 }) {
+  const schedule = houseScheduleBounds(opens, closes, zone);
   return (
     <>
       <div className="participation-address-grid">
@@ -96,8 +97,8 @@ export function HouseScheduleFields({
             name="starts_at"
             type="datetime-local"
             required
-            min={isTest ? undefined : localDate(opens, zone)}
-            max={isTest ? undefined : localDate(closes, zone)}
+            min={isTest ? undefined : schedule.starts}
+            max={isTest ? undefined : schedule.ends}
             value={starts}
             onChange={(e) => onStart(e.target.value)}
           />
@@ -108,8 +109,8 @@ export function HouseScheduleFields({
             name="ends_at"
             type="datetime-local"
             required
-            min={starts || (isTest ? undefined : localDate(opens, zone))}
-            max={isTest ? undefined : localDate(closes, zone)}
+            min={starts || (isTest ? undefined : schedule.starts)}
+            max={isTest ? undefined : schedule.ends}
             value={ends}
             onChange={(e) => onEnd(e.target.value)}
           />

@@ -1063,8 +1063,15 @@ for (const width of [390, 1440]) {
         await expect(
           card.getByRole("button", { name: "Voir sur la carte", exact: true }),
         ).toBeVisible();
+        await card.evaluate(async (element) => {
+          await Promise.allSettled(
+            element
+              .getAnimations({ subtree: true })
+              .map((animation) => animation.finished),
+          );
+        });
         const box = await card.boundingBox();
-        expect(box!.width).toBe(width === 390 ? 390 : 820);
+        expect(box!.width).toBeCloseTo(width === 390 ? 390 : 820, 2);
         expect(
           await page.evaluate(() => document.documentElement.scrollWidth),
         ).toBeLessThanOrEqual(width);
