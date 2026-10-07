@@ -1,5 +1,16 @@
 # Changelog
 
+## V0.7.2
+
+- Corrections de modération : retour REFUSED vers PENDING après correction propriétaire et réexamen Admin explicite.
+- Horaires TEST respectés et rapports de collecte hors ligne persistants et idempotents.
+- Back-office : Communications reconnectées, Activité globale/saison, protections utilisateurs et purge manuelle REAL pour SUPER_ADMIN.
+- Blocage des emails réels associés aux saisons TEST, y compris tests, retries et anciens messages en attente.
+- Formulaires maison mutualisés, métriques Dashboard/Statistiques harmonisées, chargements ciblés et rafraîchissement après actions.
+- Fiche maison publique améliorée : hero résidentiel réaliste, adresse lisible, activités orange/gris, frayeur et adaptation, stock de bonbons distinct et desktop élargi.
+- Nettoyage du code mort confirmé, documentation actualisée et dette technique documentée.
+- Aucune nouvelle migration ; modèle Saison, collecte libre et ORS/GPS conservés.
+
 ## V0.7.1
 
 - Nouvelle page Statistiques à la place de Parcours.
