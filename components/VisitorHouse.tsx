@@ -7,11 +7,12 @@ import {
   Ghost,
   Info,
   Candy,
-  Sparkles,
-  Drama,
+  Check,
+  CircleAlert,
 } from "lucide-react";
-import { time, labels, type PublicHouse, type RouteResult } from "./common";
-import { fearLabel } from "./RouteSheet";
+import { time, type PublicHouse, type RouteResult } from "./common";
+import { FearGauge, houseActivityOptions } from "./HouseFields";
+import "./VisitorHouse.css";
 export default function VisitorHouse({
   house,
   stop,
@@ -19,6 +20,7 @@ export default function VisitorHouse({
   onVisit,
   timezone,
   onClose,
+  fearLabels,
 }: {
   house: PublicHouse;
   stop?: RouteResult["stops"][number];
@@ -26,15 +28,29 @@ export default function VisitorHouse({
   onVisit?: () => void;
   timezone: string;
   onClose: () => void;
+  fearLabels?: string[];
 }) {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
   }, []);
-  const activities = { DECORATION: Sparkles, CANDY: Candy, ACTING: Drama };
-  const shorten = (text: string, max: number) =>
-    text.length > max ? text.slice(0, max - 1).trimEnd() + "…" : text;
+  // New metadata separates offered activities from stock; old routes remain readable.
+  const offered = house.offeredActivities ?? house.activities;
+  const available =
+    !stop?.unavailable &&
+    +new Date(house.starts_at) <= now &&
+    +new Date(house.ends_at) > now;
+  const status = visited
+    ? "Visitée"
+    : stop?.unavailable
+      ? "Indisponible"
+      : +new Date(house.starts_at) > now
+        ? "Ouvre plus tard"
+        : +new Date(house.ends_at) <= now
+          ? "Fermée"
+          : "Disponible";
+  const StatusIcon = visited || available ? Check : CircleAlert;
   return (
     <div className="route-overlay visitor-overlay">
       <section
@@ -53,56 +69,103 @@ export default function VisitorHouse({
           <X />
         </button>
         <div className="visitor-house-body">
-          <h1 id="visitor-house-title">{house.name}</h1>
-          <p className="visitor-address">
-            <MapPin size={14} />
-            {house.address}
-          </p>
-          <div className="visitor-activities">
-            {house.activities.map((activity) => {
-              const Icon = activities[activity];
-              return (
-                <span
-                  key={activity}
-                  className={activity === "DECORATION" ? "orange" : ""}
-                >
-                  <Icon size={20} />
-                  {labels[activity]}
-                </span>
-              );
-            })}
+          <header className="visitor-heading">
+            <h1 id="visitor-house-title">{house.name}</h1>
+            <p className="visitor-address">
+              <MapPin size={21} />
+              <span>{house.address}</span>
+            </p>
+          </header>
+          <div className="visitor-activities" aria-label="Activités proposées">
+            {houseActivityOptions.map(({ id, label, Icon }) => (
+              <span
+                key={id}
+                className={offered.includes(id) ? "is-offered" : "is-absent"}
+                aria-label={
+                  label +
+                  (offered.includes(id) ? " : proposée" : " : non proposée")
+                }
+              >
+                <Icon size={25} />
+                {label}
+              </span>
+            ))}
           </div>
           <p className="visitor-hours">
-            <Clock3 size={17} /> Ouvert de {time(house.starts_at, timezone)} à{" "}
-            {time(house.ends_at, timezone)}
-          </p>
-          <div className="visitor-fear">
-            <Ghost size={18} />
+            <Clock3 size={19} />
             <span>
-              {house.adaptable
-                ? fearLabel(house)
-                : `Niveau de frayeur : ${fearLabel(house)}`}
+              Ouvert de {time(house.starts_at, timezone)} à{" "}
+              {time(house.ends_at, timezone)}
             </span>
-          </div>
-          <p className="visitor-description">
-            {shorten(house.rp || "Pas de description particulière.", 180)}
           </p>
-          <p
+          <section
+            className="visitor-fear-section"
+            aria-label="Niveau de frayeur"
+          >
+            <h2>
+              {house.adaptable
+                ? "Niveau de frayeur de référence"
+                : "Niveau de frayeur"}
+            </h2>
+            <FearGauge
+              value={house.referenceFear ?? house.fear}
+              labels={fearLabels}
+              disabled={house.adaptable}
+            />
+            {house.adaptable && (
+              <p className="visitor-adapt">
+                <Ghost size={21} />
+                <span>
+                  <strong>S’adapte à ses visiteurs</strong>
+                  <small>
+                    La mise en scène et la frayeur s’adaptent aux visiteurs.
+                  </small>
+                </span>
+              </p>
+            )}
+          </section>
+          <section className="visitor-description">
+            <h2>À propos de la maison</h2>
+            <p>{house.rp || "Pas de description particulière."}</p>
+          </section>
+          <div
             className={
-              "visitor-collection-state" + (visited ? " is-visited" : "")
+              "visitor-availability" +
+              (available ? " is-available" : "") +
+              (visited ? " is-visited" : "")
             }
             role="status"
           >
-            {visited
-              ? "Visitée"
-              : stop?.unavailable
-                ? "Indisponible"
-                : +new Date(house.starts_at) > now
-                  ? "Ouvre plus tard"
-                  : +new Date(house.ends_at) <= now
-                    ? "Fermée"
-                    : "Disponible"}
-          </p>
+            <div>
+              <StatusIcon size={25} />
+              <span>
+                <strong>{status}</strong>
+                {available && !visited && (
+                  <small>La maison vous attend !</small>
+                )}
+              </span>
+            </div>
+            {offered.includes("CANDY") && (
+              <div
+                className={
+                  "visitor-stock" +
+                  (house.candy_available === false ? " is-depleted" : "")
+                }
+              >
+                <Candy size={26} />
+                <span>
+                  Bonbons
+                  <strong>
+                    {house.candy_available === false
+                      ? "épuisés"
+                      : house.candy_available === true
+                        ? "disponibles"
+                        : "Stock non renseigné"}
+                  </strong>
+                </span>
+              </div>
+            )}
+          </div>
           {!visited &&
             onVisit &&
             +new Date(house.starts_at) <= now &&
@@ -111,27 +174,24 @@ export default function VisitorHouse({
                 Marquer comme visitée
               </button>
             )}
-          <div className="visitor-practical">
+          <section className="visitor-practical">
             <h2>
-              <Info size={15} />
+              <Info size={19} />
               Infos pratiques
             </h2>
-            <p>
-              {shorten(
-                house.practical || "Aucune indication particulière.",
-                120,
-              )}
-            </p>
-          </div>
+            <p>{house.practical || "Aucune indication particulière."}</p>
+          </section>
+        </div>
+        <footer className="visitor-footer">
           <button
             type="button"
             className="primary visitor-return"
             onClick={onClose}
           >
-            <MapPin size={19} />
+            <MapPin size={23} />
             Voir sur la carte
           </button>
-        </div>
+        </footer>
       </section>
     </div>
   );

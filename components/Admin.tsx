@@ -31,7 +31,10 @@ import AdminUsers, { type ManagedUser } from "./AdminUsers";
 import HouseForm from "./HouseForm";
 import SeasonManager from "./SeasonManager";
 import ParticipationForm from "./ParticipationForm";
-import AdminDashboard, { type AdminAudit } from "./AdminDashboard";
+import AdminDashboard, {
+  type AdminAudit,
+  type AdminMetrics,
+} from "./AdminDashboard";
 import AdminStatistics, { type SeasonStatistics } from "./AdminStatistics";
 import Campaigns from "./Campaigns";
 import AdminActivity from "./AdminActivity";
@@ -45,13 +48,7 @@ type ManagedHouse = House & {
   season_closes_at: string;
   season_is_test: boolean;
 };
-type Dashboard = {
-  approved: number;
-  pending: number;
-  routes: number;
-  users: number;
-  collectionStats?: Record<string, number>;
-};
+type Dashboard = AdminMetrics;
 type Audit = AdminAudit;
 function dateLabel(value: string, zone: string) {
   return new Intl.DateTimeFormat("fr-FR", {
@@ -105,10 +102,26 @@ export default function Admin({
     >([]);
   const [seasons, setSeasons] = useState<Season[]>([]),
     [seasonId, setSeasonId] = useState(""),
-    [loadedSeason, setLoadedSeason] = useState(""),
+    [loadedView, setLoadedView] = useState(""),
     [creating, setCreating] = useState(false),
     [ownerId, setOwnerId] = useState(""),
     [owners, setOwners] = useState<ManagedUser[]>([]);
+  const [seasonsLoaded, setSeasonsLoaded] = useState(false);
+  const [pendingHouseId, setPendingHouseId] = useState<string | null>(null);
+  const activeSeasonId = seasons.find((s) => s.active)?.id ?? "";
+  const seasonScoped = [
+    "houses",
+    "statistics",
+    "communications",
+    "activity",
+  ].includes(section);
+  const viewSeasonId =
+    section === "dashboard" ? activeSeasonId : seasonScoped ? seasonId : "";
+  const viewKey =
+    section +
+    ":" +
+    viewSeasonId +
+    (section === "activity" ? ":" + auditScope : "");
   const selectedSeason = seasons.find((s) => s.id === seasonId),
     scheduleRef = useRef<HTMLElement | null>(null),
     generation = useRef(0),
@@ -119,6 +132,7 @@ export default function Admin({
   const reloadSeasons = useCallback(async () => {
     const rows = await api<Season[]>("admin/seasons");
     setSeasons(rows);
+    setSeasonsLoaded(true);
     if (!rows.length) setLoading(false);
     let stored = "";
     try {
@@ -134,7 +148,10 @@ export default function Admin({
     );
   }, [seasonStorageKey]);
   useEffect(() => {
-    void reloadSeasons().catch((e) => setError(e.message));
+    void reloadSeasons().catch((e) => {
+      setError(e.message);
+      setLoading(false);
+    });
   }, [reloadSeasons]);
   useEffect(() => {
     if (seasonId) {
@@ -144,26 +161,26 @@ export default function Admin({
     }
   }, [seasonId, seasonStorageKey]);
   const reload = useCallback(async () => {
-    const revision = ++generation.current,
-      query =
-        section === "dashboard"
-          ? ""
-          : seasonId
-            ? "?seasonId=" + encodeURIComponent(seasonId)
-            : "";
+    const revision = ++generation.current;
+    const query = viewSeasonId
+      ? "?seasonId=" + encodeURIComponent(viewSeasonId)
+      : "";
     setLoading(true);
     try {
-      const [h, d, a, stats] = await Promise.all([
+      const [h, d, a, stats, u, r] = await Promise.all([
+        ["dashboard", "houses"].includes(section) &&
         has(user, "participants.read")
           ? api<ManagedHouse[]>("admin/houses" + query)
           : [],
-        has(user, "stats.read")
+        section === "dashboard" && has(user, "stats.read")
           ? api<Dashboard>("admin/dashboard" + query)
           : null,
         has(user, "audit.read") && ["dashboard", "activity"].includes(section)
           ? section === "dashboard"
             ? Promise.all([
-                api<Audit[]>("admin/audit?scope=season"),
+                api<Audit[]>(
+                  "admin/audit" + query + (query ? "&" : "?") + "scope=season",
+                ),
                 api<Audit[]>("admin/audit?scope=global"),
               ]).then((rows) =>
                 rows
@@ -183,45 +200,55 @@ export default function Admin({
         section === "statistics" && has(user, "stats.read")
           ? api<SeasonStatistics | null>("admin/statistics" + query)
           : null,
+        section === "users" && has(user, "users.read")
+          ? api<ManagedUser[]>("admin/users")
+          : [],
+        section === "users" && has(user, "users.read")
+          ? api<{ id: string; name: string; permissions: string[] }[]>(
+              "admin/roles",
+            )
+          : [],
       ]);
       if (revision !== generation.current) return;
       setStatistics(stats);
       setHouses(h);
       setDashboard(d);
       setAudit(a);
-      setLoadedSeason(seasonId);
+      setUsers(u);
+      setRoles(r);
+      setLoadedView(viewKey);
       setError("");
     } catch (e) {
       if (revision === generation.current) setError((e as Error).message);
     } finally {
       if (revision === generation.current) setLoading(false);
     }
-  }, [user, seasonId, section, auditScope]);
-  const reloadUsers = useCallback(async () => {
-    const [u, r] = await Promise.all([
-      api<ManagedUser[]>("admin/users"),
-      api<{ id: string; name: string; permissions: string[] }[]>("admin/roles"),
-    ]);
-    if (currentSeason.current !== seasonId) return;
-    setUsers(u);
-    setRoles(r);
-  }, [seasonId]);
+  }, [user, viewSeasonId, viewKey, section, auditScope]);
   useEffect(() => {
     setSelected(null);
     setCreating(false);
+    if (["dashboard", "users"].includes(section)) return;
     setHouses([]);
     setUsers([]);
     setDashboard(null);
     setAudit([]);
-    setLoadedSeason("");
-  }, [seasonId]);
+    setLoadedView("");
+  }, [seasonId, section]);
   useEffect(() => {
-    void reload();
-  }, [reload]);
+    if (seasonsLoaded) void reload();
+  }, [reload, seasonsLoaded]);
   useEffect(() => {
-    if (section === "users")
-      void reloadUsers().catch((e) => setError(e.message));
-  }, [section, reloadUsers]);
+    if (section !== "houses" || loadedView !== viewKey || !pendingHouseId)
+      return;
+    const house = houses.find((h) => h.id === pendingHouseId);
+    if (house) {
+      setSelected(house.id);
+      setEdit(false);
+      setReexamining(false);
+      setReason(house.refusal_reason ?? "");
+    }
+    setPendingHouseId(null);
+  }, [section, loadedView, viewKey, pendingHouseId, houses]);
   async function seasonAction(action: string, payload: unknown, id?: string) {
     await api("admin", { action, payload, id });
     await reloadSeasons();
@@ -246,7 +273,7 @@ export default function Admin({
     if (stored && ["dark", "light", "system"].includes(stored))
       setTheme(stored);
   }, []);
-  const current = (loadedSeason === seasonId ? houses : []).find(
+  const current = (loadedView === viewKey ? houses : []).find(
     (h) => h.id === selected,
   );
   async function act(action: string, payload?: unknown) {
@@ -254,7 +281,7 @@ export default function Admin({
     await reload();
     await refresh();
   }
-  const scopedHouses = loadedSeason === seasonId ? houses : [];
+  const scopedHouses = loadedView === viewKey ? houses : [];
   const pending = scopedHouses.filter((h) => h.review_status === "PENDING");
   const list = scopedHouses.filter(
     (h) =>
@@ -460,7 +487,7 @@ export default function Admin({
             </p>
           </div>
           <div className="beta-header-controls">
-            {!["dashboard", "seasons", "users"].includes(section) && (
+            {seasonScoped && (
               <label className="beta-season-select">
                 Saison consultée
                 <select
@@ -472,7 +499,8 @@ export default function Admin({
                   value={seasonId}
                   onChange={(e) => {
                     generation.current++;
-                    setLoadedSeason("");
+                    setLoadedView("");
+                    setPendingHouseId(null);
                     setSeasonId(e.target.value);
                   }}
                 >
@@ -568,9 +596,9 @@ export default function Admin({
             Voir toutes les statistiques
           </button>
         )}
-        {section === "dashboard" && seasons.some((s) => s.active) && (
+        {section === "dashboard" && !error && seasons.some((s) => s.active) && (
           <AdminDashboard
-            metrics={loadedSeason === seasonId ? dashboard : null}
+            metrics={loadedView === viewKey ? dashboard : null}
             pending={pending
               .slice()
               .sort(
@@ -578,10 +606,10 @@ export default function Admin({
                   +new Date(b.submitted_at ?? 0) -
                   +new Date(a.submitted_at ?? 0),
               )}
-            audit={loadedSeason === seasonId ? audit : []}
+            audit={loadedView === viewKey ? audit : []}
             loading={
               (loading && !error) ||
-              (!!seasonId && loadedSeason !== seasonId && !error)
+              (!!seasonId && loadedView !== viewKey && !error)
             }
             zone={state.instance?.timezone ?? "Europe/Paris"}
             onActivity={
@@ -596,8 +624,7 @@ export default function Admin({
             onHouse={(id) => {
               setSeasonId(seasons.find((s) => s.active)?.id ?? "");
               setSection("houses");
-              const house = scopedHouses.find((h) => h.id === id);
-              if (house) select(house);
+              setPendingHouseId(id);
             }}
           />
         )}
@@ -614,23 +641,23 @@ export default function Admin({
         {section === "communications" && !selectedSeason && (
           <p>Aucune saison consultée.</p>
         )}
-        {section === "activity" && has(user, "audit.read") && (
+        {section === "activity" && !error && has(user, "audit.read") && (
           <AdminActivity
-            audit={loadedSeason === seasonId ? audit : []}
+            audit={loadedView === viewKey ? audit : []}
             scope={auditScope}
             onScope={setAuditScope}
             loading={loading}
             zone={state.instance?.timezone ?? "Europe/Paris"}
           />
         )}
-        {section === "statistics" && (
+        {section === "statistics" && !error && (
           <AdminStatistics
             season={selectedSeason}
-            data={loadedSeason === seasonId ? statistics : null}
-            loading={loading || loadedSeason !== seasonId}
+            data={loadedView === viewKey ? statistics : null}
+            loading={!error && (loading || loadedView !== viewKey)}
           />
         )}
-        {["content", "settings", "roles", "users"].includes(section) && (
+        {["content", "settings", "roles"].includes(section) && (
           <AdminExistingPage
             key={section}
             section={section}
@@ -702,19 +729,26 @@ export default function Admin({
                 <option value="CLOSED">Fermées</option>
               </select>
             </div>
-            {table(list)}
+            {loading && !error ? (
+              <p role="status">Chargement des maisons…</p>
+            ) : (
+              !error && table(list)
+            )}
           </section>
         )}
-        {section === "users" && (
-          <AdminUsers
-            key={seasonId}
-            users={users}
-            roles={roles}
-            user={user}
-            initialCreate={userCreate}
-            reload={reloadUsers}
-          />
-        )}
+        {section === "users" &&
+          !error &&
+          (loadedView !== viewKey ? (
+            <p role="status">Chargement des utilisateurs…</p>
+          ) : (
+            <AdminUsers
+              users={users}
+              roles={roles}
+              user={user}
+              initialCreate={userCreate}
+              reload={reload}
+            />
+          ))}
         {section === "seasons" && (
           <SeasonManager
             seasons={seasons}
@@ -793,6 +827,7 @@ export default function Admin({
                 closes={new Date(selectedSeason.closes_at).toISOString()}
                 center={[state.instance.longitude, state.instance.latitude]}
                 styleUrl={mapStyle}
+                isTest={selectedSeason.is_test}
                 settings={state.participation}
                 documents={state.documents}
                 scheduleRef={scheduleRef}
@@ -884,6 +919,9 @@ export default function Admin({
                 zone={state.instance.timezone}
                 opens={current.season_opens_at}
                 closes={current.season_closes_at}
+                isTest={current.season_is_test}
+                styleUrl={mapStyle}
+                settings={state.participation}
                 onSave={async (payload) => {
                   await act("editHouse", payload);
                   setEdit(false);

@@ -1,21 +1,28 @@
 import type { Season } from "../lib/domain";
+import {
+  unavailableMetric as unavailable,
+  measured,
+  formatCount,
+  formatDistance,
+  formatDuration,
+  formatPercent,
+  average,
+  metricLabels,
+} from "../lib/admin-metrics";
 
 export type SeasonStatistics = {
   seasonId: string;
   snapshot: boolean;
-  stats: Record<string, number>;
+  stats: Record<string, number | null | undefined>;
 };
-const unavailable = "Donnée non disponible";
-const number = (value: number) =>
-  new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 1 }).format(value);
 function Bars({
   title,
   items,
 }: {
   title: string;
-  items: [string, number | undefined][];
+  items: [string, number | null | undefined][];
 }) {
-  const available = items.filter(([, value]) => value !== undefined);
+  const available = items.filter(([, value]) => measured(value));
   const max = Math.max(1, ...available.map(([, value]) => value!));
   return (
     <section className="beta-card stats-chart" aria-label={title}>
@@ -27,10 +34,8 @@ function Bars({
           {items.map(([label, value]) => (
             <li key={label}>
               <span>{label}</span>
-              <strong>
-                {value === undefined ? unavailable : number(value)}
-              </strong>
-              {value !== undefined && (
+              <strong>{formatCount(value)}</strong>
+              {measured(value) && (
                 <div className="stats-track" aria-hidden="true">
                   <div style={{ width: `${(value / max) * 100}%` }} />
                 </div>
@@ -55,50 +60,31 @@ export default function AdminStatistics({
   if (!season || !data)
     return (
       <section className="beta-card">
-        <p>Aucune saison à consulter.</p>
+        <p>{!season ? "Aucune saison à consulter." : unavailable}</p>
       </section>
     );
   const s = data.stats,
     finished = s.collections_finished,
     started = s.collections_started;
-  const metrics: [string, string | number | undefined][] = [
-    ["Maisons inscrites", s.houses],
-    ["Maisons validées", s.approved],
-    ["Maisons en attente", s.pending],
+  const metrics: [string, string | number | null | undefined][] = [
+    [metricLabels.houses, s.houses],
+    [metricLabels.approved, s.approved],
+    [metricLabels.pending, s.pending],
     ["Maisons refusées", s.refused],
-    ["Participants uniques", s.participants],
-    ["Maisons visitées", s.visited],
+    [metricLabels.participants, s.participants],
+    [metricLabels.visited, s.visited],
   ];
-  const performance: [string, string | undefined][] = [
-    [
-      "Taux de collectes terminées",
-      started !== undefined && started > 0 && finished !== undefined
-        ? `${number((finished / started) * 100)} %`
-        : undefined,
-    ],
-    [
-      "Complétion moyenne",
-      finished !== undefined && finished > 0 && s.completion_sum !== undefined
-        ? `${number((s.completion_sum / finished) * 100)} %`
-        : undefined,
-    ],
-    [
-      "Distance totale déclarée",
-      s.distance_meters !== undefined
-        ? `${number(s.distance_meters / 1000)} km`
-        : undefined,
-    ],
+  const performance: [string, string][] = [
+    ["Taux de collectes terminées", formatPercent(average(finished, started))],
+    ["Complétion moyenne", formatPercent(average(s.completion_sum, finished))],
+    [metricLabels.distance, formatDistance(s.distance_meters)],
     [
       "Distance moyenne par collecte terminée",
-      finished !== undefined && finished > 0 && s.distance_meters !== undefined
-        ? `${number(s.distance_meters / finished / 1000)} km`
-        : undefined,
+      formatDistance(average(s.distance_meters, finished)),
     ],
     [
       "Durée moyenne par collecte terminée",
-      finished !== undefined && finished > 0 && s.duration_seconds !== undefined
-        ? `${number(s.duration_seconds / finished / 60)} min`
-        : undefined,
+      formatDuration(average(s.duration_seconds, finished)),
     ],
   ];
   const cards = (items: typeof metrics) => (
@@ -107,10 +93,10 @@ export default function AdminStatistics({
         <article className="beta-card" key={label}>
           <span>{label}</span>
           <strong>
-            {value === undefined
+            {value == null
               ? unavailable
               : typeof value === "number"
-                ? number(value)
+                ? formatCount(value)
                 : value}
           </strong>
         </article>
@@ -146,9 +132,9 @@ export default function AdminStatistics({
         <Bars
           title="Parcours et collectes"
           items={[
-            ["Parcours préparés", s.routes],
-            ["Collectes lancées", started],
-            ["Collectes terminées", finished],
+            [metricLabels.routes, s.routes],
+            [metricLabels.started, started],
+            [metricLabels.finished, finished],
           ]}
         />
       </div>

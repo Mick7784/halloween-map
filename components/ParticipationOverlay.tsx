@@ -244,6 +244,7 @@ export default function ParticipationOverlay({
                     closes={season.closes_at}
                     center={[instance.longitude, instance.latitude]}
                     styleUrl={styleUrl}
+                    isTest={season.is_test}
                     settings={state.participation}
                     documents={state.documents}
                     scheduleRef={schedule}

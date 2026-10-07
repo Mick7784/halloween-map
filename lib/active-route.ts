@@ -40,6 +40,12 @@ const house = z.object({
   latitude: z.number().min(-90).max(90),
   longitude: z.number().min(-180).max(180),
   activities: z.array(z.enum(["DECORATION", "CANDY", "ACTING"])).max(3),
+  offeredActivities: z
+    .array(z.enum(["DECORATION", "CANDY", "ACTING"]))
+    .max(3)
+    .optional(),
+  candy_available: z.boolean().optional(),
+  referenceFear: z.number().int().min(1).max(5).optional(),
   starts_at: date,
   ends_at: date,
   fear: z.number().int().min(1).max(5).nullable(),

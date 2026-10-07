@@ -1,6 +1,6 @@
-# Accueil premium — référence visuelle sur baseline V0.5.3
+# Accueil premium — composition et fonctionnement actuel V0.7.1
 
-La nouvelle page est limitée à la route `/`. Carte, routage, participation, administration, compte et pages de connexion dédiées conservent leurs composants et règles existants. La publication de cet accueil porte la version V0.5.4, sur baseline fonctionnelle V0.5.3. Aucun changement de données ou d’infrastructure ; l’image est publiée, le pull serveur reste réalisé par l’exploitant.
+La composition d’accueil introduite en V0.5.4 est conservée. Ce document décrit ses sources actuelles ; les règles métier Saison et collecte libre sont décrites dans [seasons.md](seasons.md).
 
 ## A. Fonctionnel maintenant
 
@@ -9,10 +9,10 @@ La nouvelle page est limitée à la route `/`. Carte, routage, participation, ad
 - Nombre de maisons : `PublicState.count`, sans nouvelle requête métier ni adresse exposée.
 - Saison : `PublicState.state` pilote les vues avant ouverture, ouverte, fermée/archivée.
 - Inscription : `season.registrations_open` pilote le CTA ; le compte connecté mène à `/participant`, le visiteur à `/register`.
-- Participation : `/api/house` récupère la maison de l’utilisateur authentifié ; les libellés deviennent « Ma participation » et « Mon parcours » et son statut réel est indiqué (visible/masquée, sans inventer un état « validé »).
+- Participation : `/api/house` récupère la maison de l’utilisateur authentifié ; les libellés et cartouches utilisent les statuts de modération persistés PENDING/VALIDATED/REFUSED.
 - Menu visiteur : formulaire LoginForm existant, connexion réelle, récupération du mot de passe et création de compte. Aucun lien réservé dans ce menu.
 - Menu connecté : carte, inscription/participation, parcours, compte, déconnexion. L’entrée Administration utilise la permission existante `admin.access`.
-- Mode démo Super Admin : déplacé de la page principale vers le menu, avec la même API et les mêmes contrôles serveur.
+- Environnement de test : activation explicite d’une saison TEST depuis le BO, avec les mêmes maisons et horaires réels ; accès carte réservé aux admins.
 - Informations légales : menu connecté ; lien de signature vers À propos pour tous, où les liens légaux existants restent accessibles.
 - Drawer : panneau à droite de 85 % de largeur mobile, arrière-plan assombri, fermeture croix/clic extérieur/Échap, focus piégé puis restauré. Seul le panneau peut défiler.
 - Composition : 100dvh/hauteur du visual viewport, safe areas, pas de scroll document, CTA minimum 44 px. Desktop recomposé : contenu à gauche, village à droite, chat/portail en premier plan.
@@ -28,7 +28,7 @@ La nouvelle page est limitée à la route `/`. Carte, routage, participation, ad
 
 ## C. UI prête à brancher plus tard
 
-Les données de saison, date et compteur ne demandent aucun branchement supplémentaire. Aucun nouveau back-office n’a été créé.
+Les données de saison, date et compteur ne demandent aucun branchement supplémentaire. Le BO actuel dispose de ses pages Saison, Dashboard, Statistiques, Communications et Activité.
 
 | Option future                           | Source attendue                                                             | Point de branchement                                                                |
 | --------------------------------------- | --------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
@@ -44,7 +44,7 @@ Les données de saison, date et compteur ne demandent aucun branchement supplém
 - `components/Application.tsx` : branche uniquement la route home sur ce composant et réutilise LoginForm.
 - `public/art/home-reference-v2.webp` : décor final généré, 1024 × 1536, compressé WebP (aucun texte/interface dans l’image).
 - `e2e/home-reference.spec.ts` et `playwright.home.config.ts` : vérifications ciblées et captures.
-- `e2e/journeys.spec.ts` : ouvre le menu avant de choisir Mode démo, conformément au nouvel emplacement.
+- `e2e/journeys.spec.ts` : parcours de connexion et navigation existants.
 - `docs/home-reference.md` : ce guide.
 
 ## Vérification
@@ -63,7 +63,7 @@ Prompt d’édition retenu :
 
 > Edit this background composition only. Preserve identical sophisticated painterly cinematic village, amber moon, branches, warm lighting and colors. Keep upper village within top 30%. Critical correction: compress and relocate the ENTIRE foreground black cat, left stone pillar, right lantern, wrought iron gate and pumpkin into the bottom 22% of the image. The cat must be clearly visible in profile on the LEFT pillar at y=78% or lower; lantern right at y=80%; gate spans y=84%-97%. Make pillars/gate shorter; do not retain tall gate currently spanning half the image. Leave the entire central zone from y=35% to y=75% as quiet dark near-black plum mist negative space. No text, no UI. Portrait composition. Keep cat and lamp slightly inset horizontally at x=25% and x=75% so both survive narrow central mobile cropping.
 
-Résultats finaux : lint et typecheck réussis, build de production réussi, 10 tests ciblés accueil/menu réussis et 22 tests navigateur du projet réussis (dont activation démo et routage existant).
+Les résultats de validation doivent être lus dans la CI du commit concerné ; les anciennes captures de composition ne valident pas les changements métier ultérieurs.
 
 ## Installation depuis le menu latéral
 

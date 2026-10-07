@@ -32,6 +32,7 @@ export type PublicState = {
   > & { footer: string; defaultOpen: string; defaultClose: string };
   season?:
     | (Pick<Season, "id" | "year" | "registrations_open"> & {
+        is_test?: boolean;
         opens_at: string;
         closes_at: string;
         purge_at: string;

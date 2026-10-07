@@ -1,10 +1,10 @@
-# Saisons : modèle unique après V0.6.4
+# Saisons : modèle unique V0.7.1
 
 ## Exploitation
 
 `instances.active_season_id` est l’unique source de vérité, nullable, REAL ou TEST. Les champs `active` des réponses BO sont dérivés de ce pointeur ; il n’existe pas de seconde activation. Activation/désactivation : Super Admin, transaction, verrou instance puis saison. Supprimer une saison active est refusé. Créer une saison, y compris pendant le setup, ne l’active pas. L’activation reste manuelle : aucun nouveau scheduler.
 
-REAL conserve inscriptions, ouverture, fermeture et purge. Aucun utilisateur, admin compris, n’accède à la carte avant l’ouverture. La sélection BO ne modifie pas l’exploitation. TEST active donne accès à ADMIN/SUPER_ADMIN sans session démo, paramètre URL ou calendrier public. Les utilisateurs ordinaires n’obtiennent ni contexte TEST, ni maisons, ni création de participation TEST.
+REAL conserve inscriptions, ouverture, fermeture et purge. Aucun utilisateur, admin compris, n’accède à la carte avant l’ouverture. La sélection BO ne modifie pas l’exploitation. TEST active donne accès à ADMIN/SUPER_ADMIN avec le même modèle métier, sans calendrier public. Les utilisateurs ordinaires n’obtiennent ni contexte TEST, ni maisons, ni création de participation TEST. Les horaires réellement saisis des maisons TEST sont respectés à la création et à l’édition. Aucun email réel n’est envoyé pour une saison TEST : campagne, test email, retry et anciens jobs en attente sont bloqués côté serveur.
 
 Les comptes sont permanents et globaux. Le Super Admin peut créer un USER actif/vérifié sans invitation, avec mot de passe ; sans email, le serveur génère `test-<identifiant aléatoire>@example.invalid`. Ces adresses internes ne sont jamais livrées par SMTP. Leur identifiant reste visible dans Utilisateurs pour une connexion manuelle si nécessaire. Toute nouvelle participation utilise la saison active verrouillée côté serveur. Le contexte éventuellement transmis par le BO doit correspondre : sinon 409. Un même compte peut participer à plusieurs saisons.
 
@@ -15,7 +15,7 @@ Les comptes sont permanents et globaux. Le Super Admin peut créer un USER actif
 - Retire `test_season_id`, `created_for_season_id`, `activated`, `early_access`, les anciens flags de comptes/maisons et triggers d’origine saison. La FK composite de saison active reste en place.
 - Conserve `seasons.is_test`, l’unicité participation utilisateur/saison et les FK d’instance.
 - Normalise les dates techniques TEST sur 2000–2201. Les anciennes maisons TEST deviennent disponibles immédiatement du point de vue horaire ; contenus, propriétaires, modération, visibilité et activité restent inchangés. La normalisation des maisons ne se répète pas sur replay.
-- Aucun drop de données métier ni d’identité. Tester et sauvegarder la base avant une future mise en production. Ce chantier reste local.
+- Aucun retrait de données métier ni d’identité par cette migration historique. Le Lot 3 ne modifie ni ce modèle ni les migrations.
 
 ## Fin, statistiques et confidentialité
 
@@ -33,15 +33,21 @@ La sauvegarde locale d’un parcours est effacée lors du prochain rafraîchisse
 
 Page Saison : ligne active, REAL planifiées, saisons désactivées, puis historique. Type séparé de l’état. Création en panneau ; réglages dépliables ; TEST = nom uniquement. Actions critiques Super Admin. Historique = snapshot et suppression définitive. Mobile présente des cartes lisibles avec actions, sans miniaturiser le tableau desktop.
 
-Dashboard principal = saison active uniquement, même si une autre saison est consultée dans Maisons. Sans saison : état vide et « Gérer les saisons ». Utilisateurs reste global. Activité récente saisonnière avec libellés lisibles.
+Dashboard principal = saison active uniquement, même si une autre saison est consultée dans Maisons. Sans saison : état vide et « Gérer les saisons ». Utilisateurs reste global. Activité récente = saison active et événements globaux pertinents ; la page Activité propose saison/global/tout. Maisons, Statistiques, Communications et Activité utilisent la saison consultée, distincte du pointeur actif métier.
+
+Le shell charge uniquement les données de la page : maisons, utilisateurs/rôles, statistiques ou audit ; Communications charge ses campagnes. Le Dashboard conserve ses indicateurs synthétiques, maisons en attente et activité récente. Les réponses d’une consultation précédente sont ignorées ; les mutations rechargent la vue concernée. Les métriques absentes affichent « Donnée non disponible », les zéros mesurés restent 0, avec les mêmes unités et formatters sur Dashboard/Statistiques.
+
+La purge manuelle REAL est réservée au SUPER_ADMIN, après fin et désactivation, avec confirmation `PURGER`. Elle conserve la saison et son snapshot anonyme ; elle est distincte de la suppression définitive.
 
 La carte est la vraie application, sans badge TEST ni menu spécial. Sur téléphone, une session ADMIN/SUPER_ADMIN résout la même saison active que le BO. Maisons actualisées toutes les 60 secondes et au retour dans l’application ; contrôle du parcours existant conservé. Le moteur ORS/GPS et les règles de collecte libre ne sont pas modifiés.
 
 ## Vérification locale
 
-Résultats locaux : lint et build réussis ; 108 tests Vitest ciblés réussis ; 13 scénarios E2E Saison/Admin/Public réussis, dont le parcours HTTP complet sur base jetable. Les thèmes sombre/clair et les cartes mobile ont été vérifiés visuellement.
+Validation du Lot 3 reconstruit sur ce poste : 146 tests ciblés réussis dans neuf fichiers (formulaires, métriques, fiche maison, métier, saisons, participation, rapports, persistance et routage), lint/TypeScript et build de production réussis. Les tests métier utilisent uniquement la base jetable PGlite. Aucune migration ni donnée d’instance n’a été modifiée.
 
-`npm run lint`, `npm run build`, tests Vitest ciblés (`business`, `seasons`, `routing-v05` et persistance/collecte), Playwright Saison/Admin/Public. Les tests `seasons` vérifient base vierge, upgrade V0.6.4, replay, FK, permissions, transitions concurrentes, snapshot et suppressions. La base Vitest par défaut est PGlite (PostgreSQL WASM, transactions sérialisées) ; `TEST_DATABASE_URL` permet la même suite sur PostgreSQL avec connexions distinctes. L’environnement de travail ne permet pas de lancer PostgreSQL natif sous un compte non-root : ne pas prétendre que son verrouillage multi-processus a été validé ici.
+Playwright recense 43 scénarios pertinents dans `admin-shell`, `admin-statistics`, `participation-context` et `routing-v05`, dont douze nouveaux cas de chargement/refresh BO et de présentation de fiche. Ils ne sont pas exécutés localement : l’exécutable Chromium est absent du sandbox. Aucun contournement n’a été tenté. Les captures des cinq états mobile/desktop et la validation navigateur restent à réaliser en CI ; l’inspection de l’image hero ne vaut pas validation visuelle de l’interface.
+
+`npm run lint`, `npm run build`, tests Vitest ciblés (`business`, `seasons`, `routing-v05` et persistance/collecte), Playwright Saison/Admin/Public. Les tests `seasons` vérifient base vierge, upgrade V0.6.4, replay, FK, permissions, transitions concurrentes, snapshot et suppressions. La base Vitest par défaut est PGlite (PostgreSQL WASM, transactions sérialisées) ; `TEST_DATABASE_URL` permet la même suite sur PostgreSQL avec connexions distinctes. Le verrouillage PostgreSQL multi-processus n’est pas validé par ces résultats locaux.
 
 Pour l’E2E avec vraies APIs : démarrer `scripts/test-db.ts` (base jetable), puis définir `DATABASE_URL`, `SEASON_E2E_DATABASE_URL` vers cette base, `APP_ORIGIN`, `SETUP_TOKEN` et lancer `e2e/seasons-live.spec.ts`. Ne jamais fournir une base de production. Le navigateur peut être fourni par `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH`.
 

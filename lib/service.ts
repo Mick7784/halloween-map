@@ -488,6 +488,7 @@ export async function publicState(
     season: s
       ? {
           id: s.id,
+          is_test: s.is_test,
           route_end_at: s.is_test
             ? new Date(+now + 3 * 3600000).toISOString()
             : undefined,

@@ -122,7 +122,10 @@ export default function MapExperience({
   const selectedStop = selected
     ? route?.stops.find((s) => s.house.id === selected.id)
     : undefined;
-  const selectedHouse = selectedStop?.house ?? selected;
+  const selectedHouse =
+    selectedStop?.house ??
+    state.houses?.find((h) => h.id === selected?.id) ??
+    selected;
   const blocked =
     preparing ||
     !!selected ||
@@ -447,6 +450,7 @@ export default function MapExperience({
       )}
       {selectedHouse && (
         <VisitorHouse
+          fearLabels={state.participation?.fearLabels}
           house={selectedHouse}
           stop={selectedStop}
           visited={controller.collection.visitedIds.includes(selectedHouse.id)}

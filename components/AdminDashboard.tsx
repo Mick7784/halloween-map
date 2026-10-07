@@ -7,13 +7,18 @@ import {
   Activity,
 } from "lucide-react";
 import type { House as HouseData } from "../lib/domain";
+import {
+  formatDistance,
+  formatCount,
+  metricLabels,
+} from "../lib/admin-metrics";
 import { auditLabel } from "../lib/admin-presentation";
 export type AdminMetrics = {
-  approved: number;
-  pending: number;
-  routes: number;
-  users: number;
-  collectionStats?: Record<string, number>;
+  approved?: number | null;
+  pending?: number | null;
+  routes?: number | null;
+  users?: number | null;
+  collectionStats?: Record<string, number | null | undefined>;
 };
 export type AdminAudit = {
   id: string;
@@ -60,16 +65,23 @@ export default function AdminDashboard({
         <span>Chargement des données de la saison…</span>
       </div>
     );
+  const stats = metrics?.collectionStats;
+  const collections = [
+    [metricLabels.started, formatCount(stats?.collections_started)],
+    [metricLabels.finished, formatCount(stats?.collections_finished)],
+    [metricLabels.visited, formatCount(stats?.visited)],
+    [metricLabels.distance, formatDistance(stats?.distance_meters)],
+  ];
   return (
     <>
       {metrics && (
         <div className="beta-kpis">
           {(
             [
-              ["Maisons validées", metrics.approved, House],
-              ["En attente", metrics.pending, Clock],
-              ["Parcours créés", metrics.routes, Route],
-              ["Participants uniques", metrics.users, Users],
+              [metricLabels.approved, metrics.approved, House],
+              [metricLabels.pending, metrics.pending, Clock],
+              [metricLabels.routes, metrics.routes, Route],
+              [metricLabels.participants, metrics.users, Users],
             ] as const
           ).map(([label, value, Icon]) => (
             <article key={label}>
@@ -77,31 +89,18 @@ export default function AdminDashboard({
                 <span>{label}</span>
                 <Icon size={19} />
               </div>
-              <strong>{value}</strong>
+              <strong>{formatCount(value)}</strong>
             </article>
           ))}
         </div>
       )}
-      {metrics?.collectionStats?.collections_started !== undefined && (
+      {metrics && (
         <section className="beta-card">
           <div className="beta-card-title">
             <h2>Collectes de la saison active</h2>
           </div>
           <div className="season-statistics">
-            {(
-              [
-                ["Lancées", metrics.collectionStats.collections_started],
-                [
-                  "Terminées",
-                  metrics.collectionStats.collections_finished ?? 0,
-                ],
-                ["Maisons visitées", metrics.collectionStats.visited ?? 0],
-                [
-                  "Distance cumulée",
-                  `${((metrics.collectionStats.distance_meters ?? 0) / 1000).toFixed(2)} km`,
-                ],
-              ] as const
-            ).map(([label, value]) => (
+            {collections.map(([label, value]) => (
               <article key={label}>
                 <span>{label}</span>
                 <strong>{value}</strong>

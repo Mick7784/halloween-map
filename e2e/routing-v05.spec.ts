@@ -684,7 +684,8 @@ test("desktop keeps the map central with a lateral panel and the same house dial
   const card = await page
     .getByRole("dialog", { name: houses[0].name, exact: true })
     .boundingBox();
-  expect(card!.width).toBeLessThan(500);
+  expect(card!.width).toBeGreaterThanOrEqual(700);
+  expect(card!.width).toBeLessThanOrEqual(900);
   await page
     .getByRole("button", { name: "Fermer la fiche", exact: true })
     .click();
@@ -998,3 +999,79 @@ test("offline completion survives return to map and reload, then retries aggrega
     ].sort(),
   );
 });
+
+for (const width of [390, 1440]) {
+  for (const [key, candy, stock, adaptable] of [
+    ["A", true, true, false],
+    ["B", true, false, false],
+    ["C", true, true, true],
+    ["D", true, false, true],
+    ["E", false, false, false],
+  ] as const) {
+    test(
+      "house detail presentation " + key + " at " + width,
+      async ({ page }) => {
+        await page.setViewportSize({
+          width,
+          height: width === 390 ? 844 : 1000,
+        });
+        await arrange(page);
+        const house = {
+          ...houses[0],
+          activities: ["DECORATION"],
+          offeredActivities: candy ? ["DECORATION", "CANDY"] : ["DECORATION"],
+          candy_available: stock,
+          adaptable,
+          fear: adaptable ? null : 4,
+          referenceFear: 4,
+        };
+        await page.route("**/api/public*", (r) =>
+          r.fulfill({
+            json: { ...state, houses: [house], routeCandidates: [house] },
+          }),
+        );
+        await page.goto("/map");
+        await page
+          .getByRole("button", { name: house.name, exact: true })
+          .click();
+        const card = page.getByRole("dialog", {
+          name: house.name,
+          exact: true,
+        });
+        await expect(card).toBeVisible();
+        await expect(
+          card.locator(".visitor-activities .is-offered"),
+        ).toHaveCount(candy ? 2 : 1);
+        await expect(
+          card.locator(".visitor-activities .is-absent"),
+        ).toHaveCount(candy ? 1 : 2);
+        await expect(card.locator(".visitor-adapt")).toHaveCount(
+          adaptable ? 1 : 0,
+        );
+        await expect(card.getByRole("meter")).toHaveAttribute(
+          "aria-valuenow",
+          "4",
+        );
+        await expect(
+          card.locator(".visitor-hours svg.lucide-chevron-right"),
+        ).toHaveCount(0);
+        if (candy)
+          await expect(card.locator(".visitor-stock")).toContainText(
+            stock ? "disponibles" : "épuisés",
+          );
+        else await expect(card.locator(".visitor-stock")).toHaveCount(0);
+        await expect(
+          card.getByRole("button", { name: "Voir sur la carte", exact: true }),
+        ).toBeVisible();
+        const box = await card.boundingBox();
+        expect(box!.width).toBe(width === 390 ? 390 : 820);
+        expect(
+          await page.evaluate(() => document.documentElement.scrollWidth),
+        ).toBeLessThanOrEqual(width);
+        await page.screenshot({
+          path: "test-results/house-detail-" + key + "-" + width + ".png",
+        });
+      },
+    );
+  }
+}

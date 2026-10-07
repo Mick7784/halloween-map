@@ -1,6 +1,6 @@
 # Halloween Map · Beta
 
-Carte des maisons accueillantes pour les communes et associations. Une expérience DomotiK Studio. `VERSION` est l’unique source de vérité. La direction artistique V0.2 est conservée.
+Carte des maisons accueillantes pour les communes et associations. Une expérience DomotiK Studio. `VERSION` est l’unique source de vérité. Identité nocturne sombre, accents orange et violet.
 
 ## Installation
 
@@ -47,7 +47,7 @@ La purge transactionnelle/idempotente supprime réellement participations, adres
 
 Politique de comptes inactifs : aucun nettoyage automatique implicite. L’exploitant doit définir/publier un délai justifié, informer les utilisateurs avant suppression puis utiliser la suppression de compte, avec rétention limitée des sauvegardes. Les jetons expirés sont supprimés ; les états d’emails d’identité terminés sont effacés après 30 jours.
 
-**Saisons TEST** : une seule saison active, REAL ou TEST, désignée exclusivement par `active_season_id`. TEST active ouvre la vraie carte à ADMIN/SUPER_ADMIN uniquement, sans mode démo, accès anticipé ou dates publiques. Comptes globaux ; maisons liées à la saison active lors de leur création. L’activation est manuelle, création et sélection BO ne l’activent pas. Historique REAL en lecture seule, statistiques anonymes après purge.
+**Saisons TEST** : une seule saison active, REAL ou TEST, désignée exclusivement par `active_season_id`. TEST active ouvre la vraie carte à ADMIN/SUPER_ADMIN uniquement. Comptes globaux ; maisons liées à la saison active lors de leur création et horaires saisis respectés. L’activation est manuelle, création et sélection BO ne l’activent pas. Historique REAL en lecture seule, statistiques anonymes après purge. Aucun email réel pour une saison TEST. Voir [le modèle Saison](docs/seasons.md).
 
 Voir [les règles d’exploitation, la migration 008 et les statistiques](docs/seasons.md).
 
@@ -64,7 +64,7 @@ SMTP est nécessaire pour vérifier les nouveaux comptes et activer les invitati
 
 **Admin → Communications** permet plusieurs campagnes : audience tous/maisons visibles/actifs, activation, date fixe ou décalage en jours autour d’une date de saison, aperçu et test à son propre email vérifié. Les campagnes relatives non commencées sont recalculées dans le fuseau local après changement des dates ; le formulaire affiche leur nombre. Variables explicitement listées près de l’éditeur : nom, territoire, événement, année, dates et maison/horaires. Les messages utilisent un layout HTML responsive commun, avec fallback texte et sans HTML arbitraire.
 
-`email_campaigns` et `email_outbox` : contraintes d’idempotence, claim atomique avant SMTP, compteurs, aucun email recopié si l’ID utilisateur suffit. Maximum 20 jobs par passage, espacés de 250 ms en production. Démo, comptes désactivés et emails non vérifiés/invalides/rebondis exclus au lancement et vérifiés de nouveau au claim. `SENT` n’est jamais renvoyé. Connexion refusée/DNS avant acceptation : réessais limités, espacés de cinq minutes ; résultat ambigu ou claim abandonné après dix minutes : erreur sans réessai automatique. Aucun suivi d’ouverture. Le test est séparé des compteurs réels.
+`email_campaigns` et `email_outbox` : contraintes d’idempotence, claim atomique avant SMTP, compteurs, aucun email recopié si l’ID utilisateur suffit. Maximum 20 jobs par passage, espacés de 250 ms en production. Saisons TEST, adresses internes non délivrables, comptes désactivés et emails non vérifiés/invalides/rebondis exclus au lancement et vérifiés de nouveau au claim. Campagne, test email, retry et anciens jobs TEST sont bloqués. `SENT` n’est jamais renvoyé. Connexion refusée/DNS avant acceptation : réessais limités, espacés de cinq minutes ; résultat ambigu ou claim abandonné après dix minutes : erreur sans réessai automatique. Aucun suivi d’ouverture. Le test est séparé des compteurs réels.
 
 SMTP ne garantit pas une livraison exactement une fois après coupure lors de l’acceptation. La politique évite les doublons volontaires et privilégie une erreur explicite en cas d’incertitude. Configurer chez le fournisseur les DNS **SPF** (serveurs autorisés), **DKIM** (signature) et **DMARC** (alignement/politique et rapports) ; vérifier l’expéditeur et la délivrabilité avec ses outils.
 
@@ -125,15 +125,15 @@ Métier : PGlite local, PostgreSQL 17 en CI (`TEST_DATABASE_URL`). Migrations fr
 
 Production : `npm audit --omit=dev`. L’avis GHSA-vfj7-8cjw-p6xm concerne le transitif de développement `braces`, exclu du runtime ; ne pas forcer une rétrogradation du lint.
 
-La CI publie après verify et Docker verts seulement : tag **V0.5.5**, release **Halloween Map V0.5.5 Beta**, `ghcr.io/mick7784/halloween-map:V0.5.5` et `:latest`, labels OCI version/commit. Aucun numéro parallèle dans package.json, aucun déploiement externe. L’accueil premium et ses sources/fallbacks sont documentés dans [docs/home-reference.md](docs/home-reference.md).
+La CI publie après verify et Docker verts seulement : tag et release selon `VERSION`, `ghcr.io/mick7784/halloween-map:<VERSION>` et `:latest`, labels OCI version/commit. Aucun numéro parallèle dans package.json, aucun déploiement externe. L’accueil premium et ses sources/fallbacks sont documentés dans [docs/home-reference.md](docs/home-reference.md).
 
-Limites : mono-instance active, parcours exclusivement piétons selon le réseau disponible chez le fournisseur, cinq minutes de visite par maison. Pas de navigation vocale ni de suivi GPS continu. Recalculer si les disponibilités changent. Provenance du décor : [docs/visual-assets.md](docs/visual-assets.md).
+La collecte libre permet de visiter les maisons dans n’importe quel ordre. Le GPS temps réel mesure progression et distance réelle, avec validation des visites, arrêt manuel ou fin automatique, bilan et sauvegarde/reprise locale. Le départ reste fixe, le recentrage est volontaire. Les rapports de fin hors ligne persistent dans une file d’agrégats idempotents, indépendante du parcours, sans trace GPS complète. ORS conserve uniquement l’estimation théorique piétonne. Pas de navigation vocale. Les indisponibilités sont signalées et l’estimation peut être recalculée. Provenance du décor : [docs/visual-assets.md](docs/visual-assets.md). Dette DB conservée : [docs/technical-debt.md](docs/technical-debt.md).
 
 ### V0.4 Beta
 
-Les rôles sont désormais USER, ADMIN et SUPER_ADMIN. La migration `004_beta_simplification.sql` convertit les anciens rôles et états de maison sans supprimer les données. Les maisons sont inscrites automatiquement et peuvent être masquées ou supprimées en conservant le compte. La carte exige une connexion ; avant ouverture, elle ne renvoie que la maison du propriétaire.
+Les rôles sont USER, ADMIN et SUPER_ADMIN. La migration historique `004_beta_simplification.sql` convertit les anciens rôles et états de maison sans supprimer les données. La modération actuelle utilise PENDING/VALIDATED/REFUSED, séparément de la visibilité. La carte exige une connexion et respecte la saison active.
 
-Le Super Admin peut activer le mode démo depuis l’accueil, hors ouverture publique. Il utilise cinq maisons éphémères si moins de deux maisons réelles sont disponibles et ne change ni les dates, ni les compteurs, ni la purge. La récupération de compte est accessible dans « Mot de passe oublié ? » ; les liens expirent après une heure et révoquent les sessions après utilisation. Les emails HTML conservent leur version texte. `SMTP_REPLY_TO` est facultatif ; aucune intégration Brevo n’est requise.
+La récupération de compte est accessible dans « Mot de passe oublié ? » ; les liens expirent après une heure et révoquent les sessions après utilisation. Les emails HTML conservent leur version texte. `SMTP_REPLY_TO` est facultatif ; aucune intégration Brevo n’est requise.
 
 ### V0.5 — parcours piétons
 
@@ -141,27 +141,15 @@ Le Super Admin peut activer le mode démo depuis l’accueil, hors ouverture pub
 
 Séquence : validation/snapshot SQL → Snap (rayon maximal 50 m) → matrice distances/durées piétonnes → sélection gloutonne de l’arrivée la plus précoce → Directions GeoJSON multi-étapes → vérification des horaires avec les métriques définitives → courte transaction SQL de contrôle et compteur. Aucun appel réseau pendant le verrou SQL. Les points non raccordables et les liaisons nulles sont exclus, sans ligne droite de secours. Erreurs explicites pour clé absente, quota/indisponibilité, timeout ou réponse invalide.
 
-La géométrie et les métriques finales proviennent de Directions ; la matrice détermine l’ordre. Durée totale = marche + attente d’ouverture + 5 min par visite. Chaque étape fournit sa distance et sa durée, en mètres/secondes et minutes affichées. Un déplacement sans retour au départ, au maximum 30 visites. Les métriques du fournisseur restent des prévisions : son réseau OpenStreetMap peut être incomplet ou obsolète ; vérifier les conditions et accès sur place. Le point peut être raccordé à une voie piétonne jusqu’à 50 m ; l’accès exact au portail reste à vérifier.
+La géométrie et les métriques théoriques proviennent de Directions ; la matrice détermine un ordre estimatif, sans imposer l’ordre des visites de collecte libre. L’estimation inclut marche, attente d’ouverture et cinq minutes de visite par maison. Au maximum 30 visites. Les métriques du fournisseur restent des prévisions : son réseau OpenStreetMap peut être incomplet ou obsolète ; vérifier les conditions et accès sur place. Le point peut être raccordé à une voie piétonne jusqu’à 50 m ; l’accès exact au portail reste à vérifier.
 
 Au maximum 200 maisons candidates après filtres/horaires (au-delà, demande explicite d’affiner, jamais de troncature silencieuse). Matrices par blocs de 50 sources/destinations, au plus 2500 paires par requête. Pour 30 maisons : normalement 1 Snap + 1 Matrix + 1 Directions. Pour 200 : au plus 1 + 25 + 1, hors recalcul exceptionnel si les métriques Directions invalident un horaire. Timeout 12 s par requête et 60 s pour toute la session fournisseur, aucun retry automatique. Dimensionner les quotas journaliers/par minute de la clé pour l’événement ; un quota dépassé affiche une indisponibilité, jamais une fausse route.
 
-Données transmises au fournisseur : coordonnées de départ et des maisons candidates (pas de noms, emails ou adresses textuelles). Aucune persistance/caching des routes dans l’application. L’exploitant doit informer les participants et visiteurs de ce prestataire dans sa politique de confidentialité. Les maisons ouvrant plus tard peuvent être utilisées dans la fenêtre demandée, uniquement pendant l’ouverture globale de la saison et après connexion ; la carte des maisons disponibles conserve son filtre d’ouverture immédiate. Le peuplement des profils de test vérifie leur raccordement au réseau ORS avant écriture.
+Données transmises au fournisseur : coordonnées de départ et des maisons candidates (pas de noms, emails ou adresses textuelles). Le parcours est conservé localement pour reprise, sans stockage serveur d’un tracé GPS. L’exploitant doit informer les participants et visiteurs de ce prestataire dans sa politique de confidentialité. Les maisons ouvrant plus tard peuvent être utilisées dans la fenêtre demandée, uniquement pendant l’ouverture globale de la saison et après connexion ; la carte des maisons disponibles conserve son filtre d’ouverture immédiate. Aucune donnée de test n’est créée automatiquement.
 
-Départ explicitement choisi, acquisition GPS haute précision sans cache, précision affichée, marqueur lavande, recentrage, étapes orange numérotées et cadrage automatique. Modifier départ/filtres/frayeur/horaires efface le résultat. Un changement de maison invalide l’intégralité du résultat lors de l’actualisation (30 s), sans conserver d’anciens totaux. Une nouvelle maison commence sans coordonnées et exige confirmation explicite du point côté UI/API.
+Départ explicitement choisi, précision GPS affichée et recentrage volontaire. Pendant une collecte active, la position évolue sans recentrage ni recalcul complet à chaque mouvement. Les maisons visitées sont grisées. Un changement de disponibilité est signalé par le polling et au retour au premier plan. Une nouvelle maison commence sans coordonnées et exige confirmation explicite du point côté UI/API.
 
 Validation dédiée : `npm run lint`, `npm test`, `npm run build`, `npm run test:routing:ui`. Les tests utilisent un fournisseur contrôlé, jamais une fausse route en production. La CI existante vérifie PostgreSQL, navigateur et stack Docker avant publication de l’image V0.5. Aucun accès VPS/Dockhand/Pangolin n’est configuré dans le dépôt ; publication d’image et déploiement de l’instance sont distincts. Pour l’upgrade, conserver DB/volume, configurer ORS_API_KEY, sélectionner l’image V0.5 et recréer app/worker avec le Compose mis à jour ; aucune nouvelle migration V0.5.
-
-### V0.5.1 — marqueurs et démonstration
-
-ORS_BASE_URL vaut désormais `https://api.heigit.org/openrouteservice`. Les trois endpoints ajoutent `/v2/snap/foot-walking/json`, `/v2/matrix/foot-walking` et `/v2/directions/foot-walking/geojson` à cette base. Sous deux maisons réelles, le serveur découvre cinq points avec Snap (rayon maximal 300 m autour de graines déterministes dans un rayon de 750 m du centre), écarte les doublons à moins de 80 m et vérifie la connexion piétonne avec Matrix puis Directions. Seuls les points raccordés sont affichés. Un cache mémoire borné partage les résultats ; aucune écriture en base. Si le réseau ne permet pas cinq points compatibles, aucun trajet artificiel n’est produit.
-
-Les diagnostics des réponses invalides indiquent endpoint et champs concernés, jamais la clé API ni le contenu brut. La publication corrective est `V0.5.1` et `ghcr.io/mick7784/halloween-map:V0.5.1`. Aucun changement de Compose ou déploiement de serveur dans ce correctif.
-
-### V0.5.2 — Snap et preview
-
-Chaque entrée Snap est validée séparément : null, coordonnées invalides ou snapped_distance absente/null/invalide deviennent un point non raccordable, sans bloquer les autres. Un tableau locations absent, de type incorrect ou de longueur incohérente reste une réponse invalide. Les journaux des entrées ignorées ne contiennent que leurs indices et les noms des champs. Matrix et Directions gardent leur validation stricte et aucun tracé de secours n’est produit.
-
-L’activation de la session preview ne dépend plus du fournisseur : le choix du créneau conserve les horaires des vraies maisons lorsqu’il y en a au moins deux, sinon les horaires configurés de la saison. La génération ORS intervient ensuite dans la preview ; une erreur explicite s’affiche avec la carte et la possibilité de quitter la démonstration.
 
 ### V0.5.3 — segments Directions
 
@@ -169,6 +157,4 @@ La requête Directions ne désactive plus les instructions : ORS retourne ainsi 
 
 ### Saisons de test
 
-La migration 007 ajoute le nom et le type des saisons, leur contexte admin et une référence de test distincte de la saison publique. Plusieurs saisons peuvent partager une année. Les anciens profils provisionnés sont rattachés à leur saison enregistrée ; la référence publique précédente est restaurée lorsqu’elle existe. Les anciens champs `is_test` des comptes et maisons restent uniquement des métadonnées de compatibilité.
-
-Le workflow TEST de V0.6.3 est remplacé par [le modèle unique](docs/seasons.md). Activer une TEST désactive la REAL : seuls les admins accèdent à sa vraie carte. Les comptes restent globaux et survivent à la suppression TEST. Le dashboard lit toujours la saison active ; l’historique lit les snapshots anonymes.
+Les migrations historiques sont conservées. Le fonctionnement courant suit [le modèle unique](docs/seasons.md) : activer une TEST désactive la REAL, seuls les admins accèdent à sa vraie carte. Les comptes globaux survivent à la suppression TEST ; l’historique REAL conserve les snapshots anonymes.

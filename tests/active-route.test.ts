@@ -87,6 +87,19 @@ describe("local active route", () => {
       expect(restoreRoute(JSON.stringify(value), identity, now)).toBeNull();
     expect(restoreRoute("broken", identity, now)).toBeNull();
   });
+  it("preserves optional house presentation metadata while keeping legacy routes valid", () => {
+    const enriched = structuredClone(saved);
+    Object.assign(enriched.result.stops[0].house, {
+      offeredActivities: ["CANDY", "ACTING"],
+      candy_available: false,
+      referenceFear: 4,
+    });
+    const now = +new Date("2026-10-31T18:30Z");
+    expect(restoreRoute(JSON.stringify(enriched), identity, now)).toEqual(
+      enriched,
+    );
+    expect(restoreRoute(JSON.stringify(saved), identity, now)).toEqual(saved);
+  });
   it("marks an unavailable step without changing its schedule, geometry or totals", () => {
     const result = annotateAvailability(saved.result, {
       valid: true,

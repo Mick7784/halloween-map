@@ -1,0 +1,67 @@
+.house-fear-gauge {
+  width: 100%;
+  padding: 8px 0 4px;
+}
+.house-fear-gauge input[type="range"] {
+  width: 100%;
+  accent-color: #ff922f;
+}
+.house-fear-track {
+  position: relative;
+  height: 8px;
+  margin: 13px 12px 20px;
+  border-radius: 6px;
+  background: #3d4251;
+}
+.house-fear-fill {
+  display: block;
+  height: 100%;
+  border-radius: 6px;
+  background: linear-gradient(90deg, #ffb04f, #f07826);
+}
+.house-fear-tick {
+  position: absolute;
+  top: -2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #646976;
+  transform: translateX(-50%);
+}
+.house-fear-cursor {
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  color: #ecd8ff;
+  filter: drop-shadow(0 1px 2px #000);
+}
+.house-fear-cursor svg {
+  fill: #d8b7ee;
+  stroke: #392448;
+}
+.house-fear-labels {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 3px;
+  font-size: 10px;
+  text-align: center;
+  color: #b7bac6;
+  line-height: 1.35;
+}
+.house-fear-labels .selected {
+  color: #ffbd7b;
+  font-weight: 600;
+}
+.house-fear-gauge.is-neutral .house-fear-fill {
+  background: #656375;
+}
+.house-fear-gauge.is-neutral .house-fear-labels .selected {
+  color: #e5d6ef;
+}
+.house-fear-gauge.is-neutral input {
+  opacity: 0.55;
+}
+.house-fear-gauge input:focus-visible {
+  outline: 2px solid #b685e3;
+  outline-offset: 3px;
+}

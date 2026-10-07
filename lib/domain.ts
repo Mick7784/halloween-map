@@ -156,8 +156,20 @@ export function localISO(value: string, zone: string) {
     );
   return d.toUTC().toISO()!;
 }
+// Optional presentation metadata preserves compatibility with older browser routes.
+export type HousePresentation = {
+  offeredActivities?: Activity[];
+  candy_available?: boolean;
+  referenceFear?: number;
+};
 export function publicHouse(h: House) {
+  const presentation: HousePresentation = {
+    offeredActivities: [...h.activities],
+    candy_available: h.candy_available,
+    referenceFear: h.fear,
+  };
   return {
+    ...presentation,
     id: h.id,
     name: h.name,
     address: h.address,

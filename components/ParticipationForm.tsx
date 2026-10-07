@@ -1,8 +1,6 @@
 "use client";
 import { useRef, useState, type ReactNode } from "react";
 import {
-  Candy,
-  Drama,
   Ghost,
   House as HouseIcon,
   Clock3,
@@ -18,18 +16,20 @@ import type { LegalDocument, LegalKind } from "../lib/content";
 import {
   publicParticipationSettings,
   formatAddress,
-  parseStoredAddress,
 } from "../lib/participation-settings";
 import type { ParticipationSettings } from "../lib/participation-settings";
-import HouseLocation, { type LocationValue } from "./HouseLocation";
+import HouseLocation from "./HouseLocation";
+import { initialHouseLocation, validateHouseForm } from "../lib/house-form";
+import {
+  HouseNameField,
+  HouseActivityFields,
+  HouseScheduleFields,
+  HouseFearFields,
+  HouseTextField,
+} from "./HouseFields";
 import { localDate, Notice } from "./common";
 import Editorial from "./Editorial";
 import { legalDefaults } from "../lib/legal-defaults";
-const activityItems = {
-  DECORATION: { label: "Décoration", icon: <Sparkles /> },
-  CANDY: { label: "Bonbons", icon: <Candy /> },
-  ACTING: { label: "Mise en scène", icon: <Drama /> },
-};
 export default function ParticipationForm({
   house,
   zone,
@@ -42,6 +42,7 @@ export default function ParticipationForm({
   scheduleRef,
   onSave,
   submitLabel,
+  isTest = false,
 }: {
   house?: House;
   zone: string;
@@ -54,22 +55,10 @@ export default function ParticipationForm({
   scheduleRef: React.RefObject<HTMLElement | null>;
   onSave: (payload: unknown) => Promise<void>;
   submitLabel?: string;
+  isTest?: boolean;
 }) {
   const settings = publicParticipationSettings(source);
-  const blank = {
-    postalCode: "",
-    city: "",
-    cityCode: "",
-    number: "",
-    street: "",
-  };
-  const initial = useRef<LocationValue>({
-    address:
-      house?.address_parts ??
-      (house ? parseStoredAddress(house.address) : blank),
-    point: house ? [Number(house.longitude), Number(house.latitude)] : null,
-    confirmed: !!house?.address_parts,
-  });
+  const initial = useRef(initialHouseLocation(house));
   const [location, setLocation] = useState(initial.current),
     [name, setName] = useState(house?.name ?? ""),
     [activities, setActivities] = useState<Activity[]>(
@@ -128,20 +117,6 @@ export default function ParticipationForm({
         e.preventDefault();
         setError("");
         setSaved(false);
-        if (!location.confirmed || !location.point) {
-          setError("Vérifiez et confirmez le point de votre maison.");
-          return;
-        }
-        if (!activities.length) {
-          setError("Choisissez au moins une activité.");
-          return;
-        }
-        if (rp.length > settings.descriptionLimit) {
-          setError(
-            `Raccourcissez la description à ${settings.descriptionLimit} caractères.`,
-          );
-          return;
-        }
         if (acceptanceNeeded && !guidelines) {
           setError(
             "Prenez connaissance des bonnes pratiques avant de participer.",
@@ -150,21 +125,24 @@ export default function ParticipationForm({
         }
         setBusy(true);
         try {
-          const h = {
-            name,
-            address: formatAddress(location.address),
-            address_parts: location.address,
-            latitude: location.point[1],
-            longitude: location.point[0],
-            position_confirmed: location.confirmed,
-            activities,
-            starts_at: starts,
-            ends_at: ends,
-            fear,
-            adaptable: adapt,
-            rp,
-            practical,
-          };
+          const h = validateHouseForm(
+            {
+              name,
+              address: formatAddress(location.address),
+              address_parts: location.address,
+              latitude: location.point?.[1],
+              longitude: location.point?.[0],
+              position_confirmed: location.confirmed,
+              activities,
+              starts_at: starts,
+              ends_at: ends,
+              fear,
+              adaptable: adapt,
+              rp,
+              practical,
+            },
+            { zone, opens, closes, isTest, settings },
+          );
           const acceptance = {
             mode: "GUIDELINES_ONLY",
             guidelines,
@@ -202,55 +180,28 @@ export default function ParticipationForm({
           2,
           "Nom de la maison *",
           <HouseIcon />,
-          <label className="field">
-            <span className="visually-hidden">Nom de la maison *</span>
-            <input
-              name="name"
-              maxLength={100}
-              required
-              placeholder="Ma Maison Hantée"
-              value={name}
-              onChange={(e) => {
-                setName(e.target.value);
-                setSaved(false);
-              }}
-            />
-          </label>,
+          <HouseNameField
+            value={name}
+            onChange={(v) => {
+              setName(v);
+              setSaved(false);
+            }}
+          />,
         )}
         {section(
           3,
           "Activités proposées",
           <Sparkles />,
-          <div
-            className="participation-activities"
-            role="group"
-            aria-label="Activités proposées"
-          >
-            {Array.from(
+          <HouseActivityFields
+            value={activities}
+            options={Array.from(
               new Set([...settings.activities, ...(house?.activities ?? [])]),
-            ).map((a) => (
-              <label
-                key={a}
-                className={activities.includes(a) ? "is-selected" : ""}
-              >
-                {activityItems[a].icon}
-                <span>{activityItems[a].label}</span>
-                <input
-                  type="checkbox"
-                  name={a}
-                  checked={activities.includes(a)}
-                  onChange={(e) => {
-                    setActivities(
-                      e.target.checked
-                        ? [...activities, a]
-                        : activities.filter((x) => x !== a),
-                    );
-                    setSaved(false);
-                  }}
-                />
-              </label>
-            ))}
-          </div>,
+            )}
+            onChange={(v) => {
+              setActivities(v);
+              setSaved(false);
+            }}
+          />,
         )}
         <section
           className="participation-section participation-schedule"
@@ -262,141 +213,69 @@ export default function ParticipationForm({
             <Clock3 />
             Horaires d’accueil
           </h2>
-          <div className="participation-address-grid">
-            <label className="field">
-              <span>Début *</span>
-              <input
-                name="starts_at"
-                type="datetime-local"
-                required
-                min={localDate(opens, zone)}
-                max={localDate(closes, zone)}
-                value={starts}
-                onChange={(e) => {
-                  setStarts(e.target.value);
-                  setSaved(false);
-                }}
-              />
-            </label>
-            <label className="field">
-              <span>Fin *</span>
-              <input
-                name="ends_at"
-                type="datetime-local"
-                required
-                min={starts || localDate(opens, zone)}
-                max={localDate(closes, zone)}
-                value={ends}
-                onChange={(e) => {
-                  setEnds(e.target.value);
-                  setSaved(false);
-                }}
-              />
-            </label>
-          </div>
-          <small className="participation-help">
-            Horaires de l’édition · {zone}
-          </small>
+          <HouseScheduleFields
+            starts={starts}
+            ends={ends}
+            zone={zone}
+            opens={opens}
+            closes={closes}
+            isTest={isTest}
+            onStart={(v) => {
+              setStarts(v);
+              setSaved(false);
+            }}
+            onEnd={(v) => {
+              setEnds(v);
+              setSaved(false);
+            }}
+          />
         </section>
         {section(
           5,
           "Niveau de frayeur",
           <Ghost />,
-          <>
-            <div
-              className={"participation-fear" + (adapt ? " is-disabled" : "")}
-            >
-              <input
-                aria-label="Niveau de frayeur"
-                type="range"
-                min={1}
-                max={5}
-                value={fear}
-                disabled={adapt}
-                onChange={(e) => {
-                  setFear(Number(e.target.value));
-                  setSaved(false);
-                }}
-              />
-              <div className="participation-fear-labels">
-                {settings.fearLabels.map((label, n) => (
-                  <span
-                    key={n}
-                    className={fear === n + 1 && !adapt ? "selected" : ""}
-                  >
-                    {label}
-                  </span>
-                ))}
-              </div>
-            </div>
-            <label className="participation-adapt">
-              <Ghost size={22} />
-              <span>Je m’adapte à mes visiteurs</span>
-              <input
-                type="checkbox"
-                role="switch"
-                checked={adapt}
-                onChange={(e) => {
-                  setAdapt(e.target.checked);
-                  setSaved(false);
-                }}
-              />
-              <span className="participation-toggle" aria-hidden="true" />
-            </label>
-            <small className="participation-help">
-              {adapt
-                ? "L’expérience s’adapte à vos visiteurs ; le niveau fixe est désactivé."
-                : "Activez ce mode pour adapter la frayeur à vos visiteurs."}
-            </small>
-          </>,
+          <HouseFearFields
+            fear={fear}
+            adapt={adapt}
+            labels={settings.fearLabels}
+            onFear={(v) => {
+              setFear(v);
+              setSaved(false);
+            }}
+            onAdapt={(v) => {
+              setAdapt(v);
+              setSaved(false);
+            }}
+          />,
         )}
         {section(
           6,
           "Description / ambiance",
           <Ghost />,
-          <label className="field">
-            <span>Facultatif</span>
-            <textarea
-              name="rp"
-              rows={3}
-              maxLength={settings.descriptionLimit}
-              placeholder="Décrivez en quelques mots l’ambiance de votre maison, votre décoration ou ce que les visiteurs vont découvrir…"
-              value={rp}
-              onChange={(e) => {
-                setRp(e.target.value);
-                setSaved(false);
-              }}
-            />
-            <small
-              className={
-                rp.length > settings.descriptionLimit
-                  ? "participation-over-limit"
-                  : "participation-counter"
-              }
-            >
-              {rp.length} / {settings.descriptionLimit}
-            </small>
-          </label>,
+          <HouseTextField
+            name="rp"
+            value={rp}
+            limit={settings.descriptionLimit}
+            onChange={(v) => {
+              setRp(v);
+              setSaved(false);
+            }}
+          />,
           "participation-description",
         )}
         {section(
           7,
           "Infos pratiques",
           <Info />,
-          <label className="field">
-            <span>Facultatif</span>
-            <textarea
-              name="practical"
-              rows={3}
-              maxLength={settings.practicalLimit}
-              placeholder="Ex. : Portail blanc, au fond de la cour, entrée côté jardin…"
-              value={practical}
-              onChange={(e) => {
-                setPractical(e.target.value);
-                setSaved(false);
-              }}
-            />
-          </label>,
+          <HouseTextField
+            name="practical"
+            value={practical}
+            limit={settings.practicalLimit}
+            onChange={(v) => {
+              setPractical(v);
+              setSaved(false);
+            }}
+          />,
           "participation-practical",
         )}
         {acceptanceNeeded && (

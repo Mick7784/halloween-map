@@ -35,6 +35,7 @@ async function arrange(page: Page, role = "SUPER_ADMIN") {
       active: false,
     },
   ];
+  const reviews: Record<string, string> = {};
   const mutations: { action: string; id?: string }[] = [];
   const permissions = [
     "admin.access",
@@ -106,7 +107,7 @@ async function arrange(page: Page, role = "SUPER_ADMIN") {
                 email: "camille@example.invalid",
                 address: "12 rue de Paris, Rennes",
                 address_parts: { city: "Rennes" },
-                review_status: "PENDING",
+                review_status: reviews[sid!] ?? "PENDING",
                 status: "VISIBLE",
                 activity: "ACTIVE",
                 activities: ["CANDY"],
@@ -138,6 +139,8 @@ async function arrange(page: Page, role = "SUPER_ADMIN") {
     else if (path === "/api/admin" && route.request().method() === "POST") {
       const body = route.request().postDataJSON();
       mutations.push(body);
+      if (body.action === "reviewHouse")
+        reviews[body.seasonId] = body.payload.status;
       if (body.action === "activateSeason")
         seasons = seasons.map((s) => ({ ...s, active: s.id === body.id }));
       data = { ok: true };
@@ -354,4 +357,85 @@ test("own account and protected administrators expose no rejected user-managemen
   await expect(
     dialog.getByRole("button", { name: "Désactiver", exact: true }),
   ).toHaveCount(0);
+});
+
+test("BO pages load only their data and ignore unrelated endpoint failures", async ({
+  page,
+}) => {
+  await arrange(page);
+  await page.goto("/admin");
+  await expect(page.locator(".beta-kpis article")).toHaveCount(4);
+  const requested: string[] = [];
+  page.on("request", (request) => {
+    const path = new URL(request.url()).pathname;
+    if (path.startsWith("/api/admin/")) requested.push(path);
+  });
+  await page.route("**/api/admin/houses*", (r) =>
+    r.fulfill({ status: 500, json: { error: "unrelated house failure" } }),
+  );
+  await page.route("**/api/admin/audit*", (r) =>
+    r.fulfill({ status: 500, json: { error: "unrelated audit failure" } }),
+  );
+  await page.route("**/api/admin/dashboard*", (r) =>
+    r.fulfill({ status: 500, json: { error: "unrelated dashboard failure" } }),
+  );
+  const nav = page.getByRole("navigation", {
+    name: "Navigation administration",
+  });
+  await nav.getByRole("button", { name: "Utilisateurs", exact: true }).click();
+  await expect(page.getByLabel("Rechercher un utilisateur")).toBeVisible();
+  expect(requested.sort()).toEqual(["/api/admin/roles", "/api/admin/users"]);
+  requested.length = 0;
+  await page.route("**/api/admin/statistics*", (r) =>
+    r.fulfill({
+      json: { seasonId: real, snapshot: false, stats: { houses: 0 } },
+    }),
+  );
+  await nav.getByRole("button", { name: "Statistiques", exact: true }).click();
+  await expect(page.locator(".stats-page")).toContainText(
+    "Donnée non disponible",
+  );
+  expect(requested).toEqual(["/api/admin/statistics"]);
+  requested.length = 0;
+  await page
+    .getByLabel("Saison consultée", { exact: true })
+    .selectOption(other);
+  await expect.poll(() => requested.length).toBe(1);
+  expect(requested).toEqual(["/api/admin/statistics"]);
+});
+
+test("dashboard moderation link switches to the active season and refreshes after mutation", async ({
+  page,
+}) => {
+  await arrange(page);
+  await page.goto("/admin");
+  const nav = page.getByRole("navigation", {
+    name: "Navigation administration",
+  });
+  await nav.getByRole("button", { name: "Maisons", exact: true }).click();
+  await page.getByLabel("Saison du back-office").selectOption(testId);
+  await expect(page.locator(".beta-table-scroll")).toContainText(
+    "Maison des essais",
+  );
+  await nav
+    .getByRole("button", { name: "Tableau de bord", exact: true })
+    .click();
+  await page
+    .getByRole("button", {
+      name: "Consulter Jardin des lanternes",
+      exact: true,
+    })
+    .click();
+  await expect(page.getByLabel("Saison du back-office")).toHaveValue(real);
+  await expect(page.locator(".beta-panel")).toContainText(
+    "Jardin des lanternes",
+  );
+  const refreshed = page.waitForResponse(
+    (response) => new URL(response.url()).pathname === "/api/admin/houses",
+  );
+  await page.getByRole("button", { name: "Valider", exact: true }).click();
+  await refreshed;
+  await expect(
+    page.locator(".beta-table-scroll tbody tr").first(),
+  ).toContainText("Validée");
 });

@@ -9,11 +9,7 @@ import type {
 } from "../lib/participation-settings";
 import { api } from "./common";
 import HouseLocationMap from "./HouseLocationMap";
-export type LocationValue = {
-  address: AddressParts;
-  point: [number, number] | null;
-  confirmed: boolean;
-};
+export type LocationValue = import("../lib/house-form").HouseLocationValue;
 const query = (mode: string, p: Record<string, string>) =>
   "location?" + new URLSearchParams({ mode, ...p });
 export default function HouseLocation({

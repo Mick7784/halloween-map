@@ -4,11 +4,11 @@
 
 Un formulaire `ParticipationForm` sert à la création et à l’édition dans `ParticipationOverlay`. L’application garde l’écran précédent monté, bloque son défilement et restaure son focus à la fermeture. Le panneau utilise 100dvh, un défilement interne et une présentation étendue en deux colonnes sur desktop. Les confirmations sont accessibles au clavier ; Échap annule la confirmation ou ferme le panneau.
 
-Les API existantes `/api/participation`, `/api/house` et `/api/participant`, les acceptations légales, la fenêtre de saison, les activités DECORATION/CANDY/ACTING, le mode adaptable et les états ACTIVE/PAUSED/ENDED sont réutilisés. L’administration conserve son formulaire existant.
+Les API existantes `/api/participation`, `/api/house` et `/api/participant`, les acceptations légales, la fenêtre de saison, les activités DECORATION/CANDY/ACTING, le mode adaptable et les états ACTIVE/PAUSED/ENDED sont réutilisés. `ParticipationForm` (public et création BO) et `HouseForm` (édition BO) partagent `HouseFields`, `HouseLocation` et `validateHouseForm`. Le BO conserve la sélection du propriétaire, la validation automatique autorisée et la modération. Son édition maintient les adresses historiques non structurées et la limite serveur de description de 300 caractères ; la création utilise les limites configurées communes.
 
 ## Adresse et point de référence
 
-La migration additive `005_participation_address.sql` ajoute `participations.address_parts` (JSONB). Le moteur de migrations existant l’appliquera au prochain déploiement. Le texte d’adresse existant reste présent. Aucun point n’est déplacé par la migration.
+La migration additive historique `005_participation_address.sql` a introduit `participations.address_parts` (JSONB). Le texte d’adresse existant reste présent. Aucun point n’est déplacé par cette migration ; le Lot 3 ne crée aucune migration.
 
 Les anciennes adresses préremplissent les éléments reconnaissables (numéro, rue, code postal et ville lorsqu’ils existent). Aucun code commune n’est inventé. Si l’adresse structurée manque, l’utilisateur complète les éléments nécessaires et confirme explicitement le point. Une adresse structurée déjà enregistrée conserve sa confirmation jusqu’à une modification.
 
@@ -29,7 +29,7 @@ Fournisseurs fixes, requêtes limitées et délai maximal de 6 secondes ; aucun 
 
 La collecte libre conserve les maisons sélectionnées et signale les étapes devenues indisponibles via le polling existant. Les nouvelles estimations excluent les maisons non visitables. Les rapports de fin contiennent uniquement des agrégats, dans une file locale distincte du parcours : retour carte et rechargement ne les effacent pas. Ils sont relancés jusqu’à acquittement serveur, avec le même identifiant idempotent, sans trace GPS complète.
 
-## Futur back-office
+## Réglages de participation
 
 Les réglages publics sont centralisés dans `lib/participation-settings.ts`, puis lus depuis `instances.config.participation` :
 
@@ -45,9 +45,11 @@ Les réglages publics sont centralisés dans `lib/participation-settings.ts`, pu
 
 Les valeurs absentes ou invalides reviennent aux valeurs par défaut. Les limites ne peuvent dépasser 180/300 ; une liste de communes vide signifie toutes les communes françaises. Les limites et les communes autorisées sont aussi contrôlées côté serveur. `activities` configure les choix proposés, conserve les valeurs historiques du modèle et ne migre pas les participations existantes. Les horaires restent fondés sur la saison et le fuseau de l’instance ; les règles légales restent fondées sur les documents versionnés existants.
 
-Un futur écran d’administration pourra éditer ce bloc avec ses permissions existantes. Des plages horaires plus fines, des paramètres GPS (précision, distance d’adresse, fournisseur) ou de nouvelles règles nécessiteront un contrat commun validé côté serveur avant exposition dans ce bloc ; aucun réglage inactif n’est présenté comme fonctionnel.
+Ce bloc de configuration est lu par les formulaires et le serveur. Son éventuelle exposition supplémentaire dans le BO devra conserver les permissions existantes. Les réglages GPS ou de nouvelles règles ne sont pas ajoutés par cette harmonisation.
 
-Le modèle actuel utilise VISIBLE/HIDDEN et valide automatiquement les créations depuis la migration 004. Le cartouche affiche Validée pour VISIBLE, et Participation enregistrée pour HIDDEN, sans afficher l’état administratif « masquée ». Le rendu accepte un futur `review_status` PENDING/VALIDATED/REFUSED. Il faudra ajouter sa persistance et son workflow administrateur pour avoir de véritables décisions En attente/Refusée. La refonte ne simule pas ces décisions.
+La modération persistée utilise `review_status` PENDING/VALIDATED/REFUSED, indépendamment de VISIBLE/HIDDEN et ACTIVE/PAUSED/ENDED. Une création publique attend une décision Admin ; une création BO autorisée est validée. La sauvegarde propriétaire d’une maison REFUSED la remet PENDING. « Réexaminer » ouvre la modération existante sans valider automatiquement.
+
+La fiche visiteur sépare activités proposées et stock de bonbons. Les trois activités restent visibles (orange si proposée, gris sinon), même lorsque les bonbons sont épuisés. La jauge reprend les cinq niveaux du formulaire ; une maison adaptable montre son niveau de référence neutralisé et une explication. Les métadonnées publiques `offeredActivities`, `candy_available` et `referenceFear` sont additives ; elles ne changent ni `effectiveActivities`, ni les filtres de disponibilité. Les anciens parcours sans ces champs restent lisibles, sans inventer une valeur absente. Le hero est une maison résidentielle réaliste, sombre et sobre : voir [provenance](visual-assets.md).
 
 ## Vérification locale ciblée
 
