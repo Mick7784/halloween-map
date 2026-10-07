@@ -1,5 +1,21 @@
 # Changelog
 
+## V0.7.0
+
+- Refonte complète de la gestion des saisons.
+- Une seule saison active à la fois, REAL ou TEST.
+- Comptes utilisateurs globaux et indépendants des saisons.
+- Maisons rattachées automatiquement à la saison active.
+- Saison TEST accessible uniquement aux administrateurs.
+- Suppression du mode démo et de l’ancienne logique TEST parallèle.
+- Nouveau tableau de gestion des saisons, avec présentation en cartes sur mobile.
+- Saisons planifiées et historique en lecture seule.
+- Snapshot de statistiques anonymes conservé après purge.
+- Suppression des données détaillées et personnelles saisonnières à la purge.
+- Nouveau dashboard basé sur la saison active.
+- Création rapide de comptes de test sans invitation.
+- Migration 008 préservant comptes, mots de passe et participations existantes.
+
 ## V0.6.4
 
 - Nouveau shell du back-office.
