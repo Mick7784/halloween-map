@@ -1,6 +1,11 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, type PublicHouse, type RouteResult } from "./common";
+import {
+  enqueueReport,
+  reportQueueKey,
+  type CollectionReport,
+} from "../lib/collection-reports";
 import { houseTravelKey } from "../lib/route-state";
 import { watchCurrentPosition } from "../lib/geolocation";
 import {
@@ -231,7 +236,7 @@ export default function useActiveRoute({
       return;
     const collection = state.collection,
       event = state.phase === "completed" ? "finish" : "start";
-    const report = {
+    const report: CollectionReport = {
       id: state.collectionId,
       seasonId,
       event,
@@ -248,22 +253,16 @@ export default function useActiveRoute({
             )
           : 0,
     };
-    let delivered = false;
-    const send = () => {
-      if (!delivered)
-        void api("collection/report", report)
-          .then(() => {
-            delivered = true;
-          })
-          .catch(() => {});
-    };
-    send();
-    window.addEventListener("online", send);
-    const retry = setInterval(send, 60000);
-    return () => {
-      clearInterval(retry);
-      window.removeEventListener("online", send);
-    };
+    try {
+      enqueueReport(localStorage, reportQueueKey(ownerId, instanceId), report);
+      window.dispatchEvent(new Event("collection-report-queued"));
+    } catch {
+      setState((s) => ({
+        ...s,
+        storageError:
+          "Le rapport de collecte ne peut pas être sauvegardé sur cet appareil.",
+      }));
+    }
     // GPS updates stay local; reports contain totals only and run on phase changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [

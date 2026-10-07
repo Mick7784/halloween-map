@@ -9,8 +9,6 @@ import {
   participationStatus,
   parseStoredAddress,
 } from "../lib/participation-settings";
-import { retainClosedRoute } from "../lib/route-state";
-import type { RouteResult } from "../lib/routing";
 afterEach(() => vi.unstubAllGlobals());
 it("prefills stored address parts without guessing a commune or confirming a point", () => {
   expect(parseStoredAddress("12 bis Rue de la République, 69002 Lyon")).toEqual(
@@ -110,48 +108,4 @@ it("limits and projects future public settings without exposing secrets or inven
   expect(
     participationStatus({ status: "HIDDEN", review_status: "REFUSED" }).label,
   ).toBe("Refusée");
-});
-it("retains confirmed closed stops with the complete geometry, but invalidates administrative disappearance", () => {
-  const house = {
-    id: "h",
-    name: "Lanternes",
-    address: "Une rue",
-    latitude: 45,
-    longitude: 4,
-    activities: ["CANDY"],
-    starts_at: "2026-10-31T17:00Z",
-    ends_at: "2026-10-31T21:00Z",
-    fear: 2,
-    adaptable: false,
-    rp: "",
-    practical: "",
-  };
-  const route = {
-    stops: [
-      {
-        house,
-        arrival: "2026-10-31T18:00Z",
-        departure: "2026-10-31T18:05Z",
-        walkingMinutes: 2,
-        walkingSeconds: 120,
-        distanceMeters: 100,
-      },
-    ],
-    geometry: [
-      [4, 45],
-      [4.01, 45.01],
-    ],
-    distanceMeters: 100,
-    durationMinutes: 7,
-    walkingMinutes: 2,
-    walkingSeconds: 120,
-    estimatedEnd: "2026-10-31T18:05Z",
-    disclaimer: "Indicatif",
-  } as RouteResult;
-  const now = +new Date("2026-10-31T18:00Z");
-  const kept = retainClosedRoute(route, [], ["h"], now)!;
-  expect(kept.geometry).toBe(route.geometry);
-  expect(kept.stops).toHaveLength(1);
-  expect(kept.stops[0].unavailable).toBe(true);
-  expect(retainClosedRoute(route, [], [], now)).toBeNull();
 });

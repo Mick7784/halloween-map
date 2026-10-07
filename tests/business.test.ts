@@ -197,8 +197,12 @@ beforeEach(async () => {
   );
   const first = await service.setup(setupData());
   admin = (await getUser(first.token))!;
-  const configured=(await db().query("SELECT id FROM seasons")).rows[0];
-  await service.adminAction(admin,{action:"activateSeason",id:configured.id,payload:"ACTIVER"});
+  const configured = (await db().query("SELECT id FROM seasons")).rows[0];
+  await service.adminAction(admin, {
+    action: "activateSeason",
+    id: configured.id,
+    payload: "ACTIVER",
+  });
   const registration = await service.register({
     display_name: "Visiteur",
     email: "visitor@example.invalid",
@@ -862,6 +866,11 @@ describe("Seasons, privacy and participant activity", () => {
       ),
     ).rejects.toMatchObject({ status: 403 });
     vi.setSystemTime(new Date(season.closes_at));
+    await service.adminAction(admin, {
+      action: "deactivateSeason",
+      id: season.id,
+      payload: "DÉSACTIVER",
+    });
     await service.adminAction(admin, {
       action: "purge",
       id: season.id,
@@ -1571,6 +1580,11 @@ describe("V0.3 campaigns and outbox", () => {
   it("purges seasonal delivery identifiers and content while keeping durable users and anonymous totals", async () => {
     await newCampaign();
     await dispatchEmails(new Date("2026-10-04T12:00Z"), async () => {});
+    await service.adminAction(admin, {
+      action: "deactivateSeason",
+      id: season.id,
+      payload: "DÉSACTIVER",
+    });
     await service.purgeSeason(
       season.id,
       admin.instance_id,

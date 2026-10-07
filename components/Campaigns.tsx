@@ -11,6 +11,7 @@ import {
   values,
   localDate,
 } from "./common";
+import { seasonFinished } from "../lib/domain";
 import type { Season, User } from "../lib/domain";
 type Campaign = {
   id: string;
@@ -49,16 +50,27 @@ export default function Campaigns({
     [creating, setCreating] = useState(false),
     [error, setError] = useState("");
   async function reload() {
-    setData(await api<Data>("admin/communications"));
+    setData(
+      await api<Data>(
+        "admin/communications?seasonId=" + encodeURIComponent(season.id),
+      ),
+    );
   }
   useEffect(() => {
-    void api<Data>("admin/communications")
+    void api<Data>(
+      "admin/communications?seasonId=" + encodeURIComponent(season.id),
+    )
       .then(setData)
       .catch((e) => setError(e.message));
-  }, []);
-  const manage = user.permissions.includes("communications.manage");
-  async function act(p: unknown) {
-    await api("admin/communications", p);
+  }, [season.id]);
+  const manage =
+    user.permissions.includes("communications.manage") &&
+    !season.is_test &&
+    !seasonFinished(season) &&
+    !season.archived &&
+    !season.purged_at;
+  async function act(p: Record<string, unknown>) {
+    await api("admin/communications", { ...p, seasonId: season.id });
     await reload();
     window.dispatchEvent(new Event("campaigns-changed"));
     setEditing(null);
@@ -73,6 +85,15 @@ export default function Campaigns({
         )}
       </div>
       <Notice error={error} />
+      {season.is_test && (
+        <p className="notice info">
+          Saison TEST : aucun email ne peut être envoyé.
+        </p>
+      )}
+      {!data && !error && <p role="status">Chargement des communications…</p>}
+      {data && !data.campaigns.length && (
+        <p>Aucune campagne pour cette saison.</p>
+      )}
       {data && !data.smtpAvailable && (
         <p className="notice info">
           SMTP non configuré : les messages restent en attente d’envoi.
@@ -108,9 +129,15 @@ export default function Campaigns({
                 {["DRAFT", "SCHEDULED"].includes(c.status) && (
                   <button onClick={() => setEditing(c)}>Modifier</button>
                 )}
-                <AsyncButton onClick={() => act({ action: "test", id: c.id })}>
-                  Envoyer un test
-                </AsyncButton>
+                {user.email_status === "VERIFIED" ? (
+                  <AsyncButton
+                    onClick={() => act({ action: "test", id: c.id })}
+                  >
+                    Envoyer un test
+                  </AsyncButton>
+                ) : (
+                  <p>Vérifiez votre email avant de recevoir un test.</p>
+                )}
                 {c.errors > 0 && (
                   <AsyncButton
                     onClick={() => act({ action: "retry", id: c.id })}
@@ -151,7 +178,7 @@ function CampaignForm({
   season: Season;
   zone: string;
   variables: string[];
-  submit: (p: unknown) => Promise<void>;
+  submit: (p: Record<string, unknown>) => Promise<void>;
   close: () => void;
 }) {
   const [mode, setMode] = useState(campaign?.schedule_mode ?? "RELATIVE"),

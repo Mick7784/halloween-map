@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { reportSchema } from "./collection-reports";
 import { transaction } from "./db";
 import { HttpError } from "./auth";
 import {
@@ -10,17 +10,7 @@ import {
 } from "./domain";
 
 // These totals are reported by the client, not independently measured by the server.
-const reportSchema = z
-  .object({
-    id: z.uuid(),
-    seasonId: z.uuid(),
-    event: z.enum(["start", "finish"]),
-    visited: z.number().int().min(0).max(30).default(0),
-    planned: z.number().int().min(1).max(30),
-    distanceMeters: z.number().finite().min(0).max(200000).default(0),
-    durationSeconds: z.number().finite().min(0).max(86400).default(0),
-  })
-  .refine((v) => v.visited <= v.planned);
+
 export async function reportCollection(
   user: User | null,
   input: unknown,

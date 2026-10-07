@@ -27,7 +27,7 @@ Fournisseurs fixes, requêtes limitées et délai maximal de 6 secondes ; aucun 
 
 `end` conserve la participation, alors que `delete` exige la confirmation SUPPRIMER et réutilise la suppression existante. Les confirmations affichées n’envoient aucune mutation tant qu’un choix n’a pas été validé.
 
-Les nouveaux parcours et recalculs excluent toujours les maisons fermées. `closedHouseIds` expose uniquement les identifiants de maisons explicitement fermées/pausées, encore autorisées et dans leurs horaires. `retainClosedRoute` conserve temporairement un parcours déjà calculé avec sa géométrie et ses totaux intacts, et marque l’étape indisponible. Une suppression, un masquage administratif, une expiration ou une modification des données d’une étape invalide ce parcours ; aucun instantané ne permet de contourner ces changements.
+La collecte libre conserve les maisons sélectionnées et signale les étapes devenues indisponibles via le polling existant. Les nouvelles estimations excluent les maisons non visitables. Les rapports de fin contiennent uniquement des agrégats, dans une file locale distincte du parcours : retour carte et rechargement ne les effacent pas. Ils sont relancés jusqu’à acquittement serveur, avec le même identifiant idempotent, sans trace GPS complète.
 
 ## Futur back-office
 

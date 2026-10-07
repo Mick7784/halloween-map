@@ -583,9 +583,6 @@
     animation: none;
   }
 }
-.beta-route-total {
-  font-size: 36px;
-}
 .beta-role-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);

@@ -40,6 +40,8 @@ async function arrange(page: Page, role = "SUPER_ADMIN") {
     "admin.access",
     "stats.read",
     "audit.read",
+    "communications.read",
+    "communications.manage",
     "participants.read",
     "participants.edit",
     "users.read",
@@ -129,6 +131,8 @@ async function arrange(page: Page, role = "SUPER_ADMIN") {
                 created_at: new Date(now).toISOString(),
               },
             ];
+    else if (path === "/api/admin/communications")
+      data = { campaigns: [], variables: [], smtpAvailable: true };
     else if (path === "/api/admin/users" || path === "/api/admin/roles")
       data = [];
     else if (path === "/api/admin" && route.request().method() === "POST") {
@@ -206,4 +210,148 @@ test("mobile dashboard and ADMIN navigation respect permissions", async ({
   await nav.getByRole("button", { name: "Maisons", exact: true }).click();
   await expect(page.locator(".beta-sidebar")).not.toHaveClass(/is-open/);
   await expect(page.getByLabel("Saison du back-office")).toHaveValue(real);
+});
+
+test("communications and activity follow the consulted season; TEST disables email actions", async ({
+  page,
+}) => {
+  await arrange(page);
+  await page.goto("/admin");
+  const nav = page.getByRole("navigation", {
+    name: "Navigation administration",
+  });
+  await nav
+    .getByRole("button", { name: "Communications", exact: true })
+    .click();
+  await expect(
+    page.getByRole("button", { name: "Nouvelle campagne" }),
+  ).toBeVisible();
+  const request = page.waitForRequest((r) =>
+    r.url().includes("admin/communications?seasonId=" + testId),
+  );
+  await page.getByLabel("Saison du back-office").selectOption(testId);
+  await request;
+  await expect(
+    page.getByText("Saison TEST : aucun email ne peut être envoyé."),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Nouvelle campagne" }),
+  ).toHaveCount(0);
+  await nav
+    .getByRole("button", { name: "Tableau de bord", exact: true })
+    .click();
+  await page.getByRole("button", { name: "Voir toute l’activité" }).click();
+  await expect(page.getByLabel("Saison du back-office")).toHaveValue(real);
+  for (const scope of ["global", "all", "season"]) {
+    const next = page.waitForRequest(
+      (r) =>
+        r.url().includes("admin/audit") && r.url().includes("scope=" + scope),
+    );
+    await page.getByLabel("Périmètre de l’activité").selectOption(scope);
+    await next;
+  }
+  await page.getByLabel("Filtrer l’activité").fill("introuvable");
+  await expect(
+    page.getByText("Aucune activité pour ces filtres."),
+  ).toBeVisible();
+});
+test("reexamining a refused house opens moderation without implicitly validating", async ({
+  page,
+}) => {
+  const { mutations } = await arrange(page);
+  await page.route("**/api/admin/houses*", (r) =>
+    r.fulfill({
+      json: [
+        {
+          id: "10000000-0000-4000-8000-000000000001",
+          season_id: real,
+          name: "Maison refusée",
+          owner_name: "Camille",
+          email: "camille@example.invalid",
+          address: "12 rue",
+          review_status: "REFUSED",
+          refusal_reason: "Adresse",
+          status: "VISIBLE",
+          activity: "ACTIVE",
+          activities: ["CANDY"],
+          candy_available: true,
+          starts_at: new Date(Date.now() - 3600000).toISOString(),
+          ends_at: new Date(Date.now() + 3600000).toISOString(),
+        },
+      ],
+    }),
+  );
+  await page.goto("/admin");
+  await page
+    .getByRole("navigation")
+    .getByRole("button", { name: "Maisons", exact: true })
+    .click();
+  await page.getByRole("button", { name: "Gérer", exact: true }).click();
+  await page.getByRole("button", { name: "Réexaminer", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "Valider", exact: true }),
+  ).toBeVisible();
+  expect(mutations).toEqual([]);
+  await page
+    .getByRole("button", { name: "Mettre en attente", exact: true })
+    .click();
+  await expect.poll(() => mutations.length).toBe(1);
+  expect(mutations[0]).toMatchObject({
+    action: "reviewHouse",
+    payload: { status: "PENDING" },
+    seasonId: real,
+  });
+});
+
+test("own account and protected administrators expose no rejected user-management action", async ({
+  page,
+}) => {
+  await arrange(page, "ADMIN");
+  await page.route("**/api/admin/users", (r) =>
+    r.fulfill({
+      json: [
+        {
+          id: "admin",
+          display_name: "Mon profil",
+          email: "me@example.invalid",
+          role_name: "ADMIN",
+          account_status: "ACTIVE",
+          email_status: "VERIFIED",
+          communications: [],
+        },
+        {
+          id: "protected",
+          display_name: "Super protégé",
+          email: "super@example.invalid",
+          role_name: "SUPER_ADMIN",
+          account_status: "ACTIVE",
+          email_status: "VERIFIED",
+          communications: [],
+        },
+      ],
+    }),
+  );
+  await page.goto("/admin");
+  await page
+    .getByRole("navigation")
+    .getByRole("button", { name: "Utilisateurs", exact: true })
+    .click();
+  await page.getByRole("button", { name: "Mon profil", exact: true }).click();
+  let dialog = page.getByRole("dialog");
+  await expect(
+    dialog.getByRole("link", { name: "Mon compte", exact: true }),
+  ).toBeVisible();
+  await expect(dialog.locator("form")).toHaveCount(0);
+  await expect(
+    dialog.getByRole("button", { name: "Désactiver", exact: true }),
+  ).toHaveCount(0);
+  await dialog.getByRole("button", { name: "Fermer", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Super protégé", exact: true })
+    .click();
+  dialog = page.getByRole("dialog");
+  await expect(dialog.locator("form")).toHaveCount(0);
+  await expect(
+    dialog.getByRole("button", { name: "Désactiver", exact: true }),
+  ).toHaveCount(0);
 });

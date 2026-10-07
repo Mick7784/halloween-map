@@ -261,21 +261,6 @@
 .route-experience .house-marker.is-unavailable {
   opacity: 0.7;
 }
-.route-experience .house-marker.is-unavailable .route-marker-number {
-  color: #fff;
-  border-color: #ff667d;
-  background: #87182b;
-}
-.route-experience .house-marker.is-selected .route-marker-number {
-  box-shadow:
-    0 0 0 3px #d8b6ff55,
-    0 0 18px #ca89ff;
-}
-.route-experience .route-marker-number {
-  background: #552575;
-  border-color: #c48fff;
-  box-shadow: 0 0 12px #a447e770;
-}
 .route-availability-notice {
   position: absolute;
   top: 108px;

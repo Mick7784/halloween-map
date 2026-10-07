@@ -3050,20 +3050,6 @@ body {
 .house-marker.route-house {
   filter: drop-shadow(0 0 5px #ff8c3266);
 }
-.route-marker-number {
-  position: absolute;
-  right: -7px;
-  top: -7px;
-  min-width: 20px;
-  height: 20px;
-  display: grid;
-  place-items: center;
-  border-radius: 50%;
-  background: var(--orange);
-  border: 2px solid #17191f;
-  color: #151216;
-  font: 700 11px var(--font-body);
-}
 .application .route-panel {
   background: linear-gradient(150deg, #1b1e25, #101216);
   border: 1px solid #454052;

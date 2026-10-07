@@ -36,6 +36,7 @@ export default function AdminDashboard({
   loading,
   zone,
   onHouse,
+  onActivity,
 }: {
   metrics: AdminMetrics | null;
   pending: (HouseData & { owner_name: string })[];
@@ -43,6 +44,7 @@ export default function AdminDashboard({
   loading: boolean;
   zone: string;
   onHouse: (id: string) => void;
+  onActivity?: () => void;
 }) {
   if (loading)
     return (
@@ -67,7 +69,7 @@ export default function AdminDashboard({
               ["Maisons validées", metrics.approved, House],
               ["En attente", metrics.pending, Clock],
               ["Parcours créés", metrics.routes, Route],
-              ["Utilisateurs", metrics.users, Users],
+              ["Participants uniques", metrics.users, Users],
             ] as const
           ).map(([label, value, Icon]) => (
             <article key={label}>
@@ -158,6 +160,9 @@ export default function AdminDashboard({
         <section className="beta-card">
           <div className="beta-card-title">
             <h2>Activité récente</h2>
+            {onActivity && (
+              <button onClick={onActivity}>Voir toute l’activité</button>
+            )}
             <Activity size={18} />
           </div>
           {!audit.length ? (

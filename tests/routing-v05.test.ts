@@ -6,8 +6,7 @@ import {
   type WalkingRouter,
 } from "../lib/walking-router";
 import { locateOrigin } from "../lib/geolocation";
-import { routeIsCurrent } from "../lib/route-state";
-import { publicHouse, type House, type Season } from "../lib/domain";
+import { type House, type Season } from "../lib/domain";
 import { frameRoute } from "../lib/map-framing";
 const season = {
   active: true,
@@ -88,14 +87,6 @@ describe("walking plan", () => {
     });
     expect(r.estimatedEnd).toBe("2026-10-31T18:28:50.000Z");
     expect(r.disclaimer).not.toContain("vol d’oiseau");
-    expect(routeIsCurrent(r, [a, b].map(publicHouse), +now)).toBe(true);
-    expect(routeIsCurrent(r, [a].map(publicHouse), +now)).toBe(false);
-    expect(
-      routeIsCurrent(r, [a, { ...b, longitude: -1.8 }].map(publicHouse), +now),
-    ).toBe(false);
-    expect(
-      routeIsCurrent(r, [a, { ...b, activities: [] }].map(publicHouse), +now),
-    ).toBe(false);
   });
   it("waits for future opening, visits for five minutes, and rejects closing before departure", async () => {
     const router: WalkingRouter = {

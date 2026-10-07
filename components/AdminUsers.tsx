@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 import { useState } from "react";
 import { DateTime } from "luxon";
 import { type User, type House } from "../lib/domain";
@@ -62,6 +63,18 @@ export default function AdminUsers({
   );
   const current = users.find((u) => u.id === selected);
   const manageable = user.permissions.includes("users.manage");
+  const canEdit =
+    manageable &&
+    (!current ||
+      (current.id !== user.id &&
+        (user.role_name === "SUPER_ADMIN" || current.role_name === "USER") &&
+        (current.role_name !== "SUPER_ADMIN" ||
+          users.some(
+            (u) =>
+              u.id !== current.id &&
+              u.role_name === "SUPER_ADMIN" &&
+              u.account_status === "ACTIVE",
+          ))));
   async function act(p: unknown) {
     await api("admin/users", p);
     await reload();
@@ -196,7 +209,8 @@ export default function AdminUsers({
                 )}
               </>
             )}
-            {manageable && (
+            {current?.id === user.id && <Link href="/account">Mon compte</Link>}
+            {canEdit && (
               <UserEditor
                 key={current?.id ?? "new"}
                 current={current}
@@ -210,7 +224,7 @@ export default function AdminUsers({
                 submit={act}
               />
             )}
-            {current && manageable && current.id !== user.id && (
+            {current && canEdit && (
               <div className="actions">
                 <AsyncButton
                   onClick={() =>
@@ -227,16 +241,20 @@ export default function AdminUsers({
                     ? "Réactiver"
                     : "Désactiver"}
                 </AsyncButton>
-                {(current.email_status !== "VERIFIED" ||
-                  current.account_status === "PENDING_ACTIVATION") && (
-                  <AsyncButton
-                    onClick={() => act({ action: "resend", id: current.id })}
-                  >
-                    {current.account_status === "PENDING_ACTIVATION"
-                      ? "Renvoyer l’invitation"
-                      : "Renvoyer la vérification"}
-                  </AsyncButton>
-                )}
+                {current.account_status !== "DISABLED" &&
+                  !/^test-[a-f0-9]{32}@example[.]invalid$/.test(
+                    current.email,
+                  ) &&
+                  (current.email_status !== "VERIFIED" ||
+                    current.account_status === "PENDING_ACTIVATION") && (
+                    <AsyncButton
+                      onClick={() => act({ action: "resend", id: current.id })}
+                    >
+                      {current.account_status === "PENDING_ACTIVATION"
+                        ? "Renvoyer l’invitation"
+                        : "Renvoyer la vérification"}
+                    </AsyncButton>
+                  )}
                 {user.role_name === "SUPER_ADMIN" && (
                   <AsyncButton
                     danger

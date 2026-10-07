@@ -314,6 +314,24 @@ export default function SeasonManager({
                               Voir les statistiques
                             </button>
                           )}
+                          {critical &&
+                            !s.is_test &&
+                            ended &&
+                            !s.active &&
+                            !s.purged_at && (
+                              <AsyncButton
+                                danger
+                                onClick={async () => {
+                                  const confirmation = window.prompt(
+                                    "Purger les données personnelles de cette saison ? La saison et son bilan anonyme seront conservés. Saisissez PURGER.",
+                                  );
+                                  if (confirmation === "PURGER")
+                                    await act("purge", "PURGER", s.id);
+                                }}
+                              >
+                                Purger les données
+                              </AsyncButton>
+                            )}
                           {critical && !s.active && (
                             <AsyncButton
                               danger

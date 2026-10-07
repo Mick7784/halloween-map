@@ -948,3 +948,53 @@ test("visiting every selected house automatically closes the last card and freez
     .poll(() => page.evaluate(() => window.__routeGPS.callbacks.size))
     .toBe(0);
 });
+
+test("offline completion survives return to map and reload, then retries aggregates until acknowledgement", async ({
+  page,
+}) => {
+  await controlledGPS(page);
+  await arrange(page);
+  let accepted = false;
+  const reports: Record<string, unknown>[] = [];
+  await page.route("**/api/collection/report", async (r) => {
+    reports.push(r.request().postDataJSON());
+    if (!accepted) await r.abort("internetdisconnected");
+    else await r.fulfill({ json: { ok: true } });
+  });
+  await generate(page);
+  await page
+    .getByRole("button", { name: "Position du panneau parcours", exact: true })
+    .press("ArrowUp");
+  await page
+    .getByRole("button", { name: "Arrêter le parcours", exact: true })
+    .click();
+  await page.getByRole("button", { name: "Arrêter", exact: true }).click();
+  const queued = () =>
+    page.evaluate(() =>
+      Object.keys(localStorage)
+        .filter((k) => k.startsWith("halloween.collection-reports:"))
+        .flatMap((k) => JSON.parse(localStorage.getItem(k)!)),
+    );
+  await expect.poll(async () => (await queued())[0]?.event).toBe("finish");
+  const finish = (await queued())[0];
+  await page
+    .getByRole("button", { name: "Revenir à la carte", exact: true })
+    .click();
+  await page.reload();
+  expect(await queued()).toEqual([finish]);
+  accepted = true;
+  await page.evaluate(() => window.dispatchEvent(new Event("online")));
+  await expect.poll(queued).toEqual([]);
+  expect(reports.at(-1)).toEqual(finish);
+  expect(Object.keys(finish).sort()).toEqual(
+    [
+      "id",
+      "seasonId",
+      "event",
+      "planned",
+      "visited",
+      "distanceMeters",
+      "durationSeconds",
+    ].sort(),
+  );
+});

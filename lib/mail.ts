@@ -1,3 +1,4 @@
+import { selectedSeason } from "./season-context";
 import { mailLayout } from "./mail-layout";
 import { randomBytes } from "node:crypto";
 import nodemailer from "nodemailer";
@@ -59,16 +60,17 @@ export async function recomputeCampaigns(c: Database, seasonId: string) {
     )
   ).rows.length;
 }
-export async function campaignAdmin(user: User | null) {
+export async function campaignAdmin(user: User | null, seasonId?: string) {
   const u = requirePermission(user, "admin.access");
   requirePermission(u, "communications.read");
+  const season = await selectedSeason(u, seasonId);
   return {
     smtpAvailable: smtpAvailable(),
     variables: mailVariables,
     campaigns: (
       await db().query(
-        `SELECT c.*,(SELECT count(*)::int FROM email_outbox o WHERE o.campaign_id=c.id AND o.kind='CAMPAIGN' AND o.status IN('PENDING','CLAIMED')) pending FROM email_campaigns c WHERE instance_id=$1 ORDER BY scheduled_at`,
-        [u.instance_id],
+        `SELECT c.*,(SELECT count(*)::int FROM email_outbox o WHERE o.campaign_id=c.id AND o.kind='CAMPAIGN' AND o.status IN('PENDING','CLAIMED')) pending FROM email_campaigns c WHERE instance_id=$1 AND season_id=$2 ORDER BY scheduled_at`,
+        [u.instance_id, season?.id ?? null],
       )
     ).rows,
   };
@@ -79,6 +81,7 @@ export async function campaignAction(user: User | null, input: unknown) {
   const p = z
     .object({
       action: z.enum(["save", "test", "retry"]),
+      seasonId: z.uuid().optional(),
       id: z.uuid().optional(),
       campaign: z
         .object({
@@ -117,10 +120,18 @@ export async function campaignAction(user: User | null, input: unknown) {
         )
       ).rows[0];
       if (!campaign) throw new HttpError(404, "Campagne introuvable");
+      if (p.seasonId && p.seasonId !== campaign.season_id)
+        throw new HttpError(409, "Saison consultée différente");
       const season = (
         await c.query("SELECT * FROM seasons WHERE id=$1", [campaign.season_id])
       ).rows[0];
-      if (season.purged_at || seasonFinished(season as unknown as Season))
+      if (season.is_test)
+        throw new HttpError(403, "Aucun email pour une saison TEST");
+      if (
+        season.purged_at ||
+        season.archived ||
+        seasonFinished(season as unknown as Season)
+      )
         throw new HttpError(400, "Saison en lecture seule");
       if (p.action === "test") {
         if (u.email_status !== "VERIFIED")
@@ -147,6 +158,8 @@ export async function campaignAction(user: User | null, input: unknown) {
   }
   if (!p.campaign) throw new HttpError(400, "Campagne requise");
   const v = p.campaign;
+  if (p.seasonId && p.seasonId !== v.season_id)
+    throw new HttpError(409, "Saison consultée différente");
   sanitizeContent(v.subject, mailVariables);
   sanitizeContent(v.body, mailVariables);
   return transaction(async (c) => {
@@ -156,7 +169,14 @@ export async function campaignAction(user: User | null, input: unknown) {
         [v.season_id, u.instance_id],
       )
     ).rows[0];
-    if (!s || s.purged_at || seasonFinished(s as unknown as Season))
+    if (s?.is_test)
+      throw new HttpError(403, "Aucun email pour une saison TEST");
+    if (
+      !s ||
+      s.purged_at ||
+      s.archived ||
+      seasonFinished(s as unknown as Season)
+    )
       throw new HttpError(400, "Saison indisponible");
     let at: string;
     try {
@@ -218,7 +238,7 @@ async function prepareCampaigns(now: Date) {
     await transaction(async (c) => {
       const campaign = (
         await c.query(
-          "SELECT ec.* FROM email_campaigns ec JOIN seasons s ON s.id=ec.season_id WHERE ec.id=$1 AND ec.status='SCHEDULED' AND s.purged_at IS NULL AND s.purge_at>$2 FOR UPDATE OF ec,s",
+          "SELECT ec.* FROM email_campaigns ec JOIN seasons s ON s.id=ec.season_id WHERE ec.id=$1 AND ec.status='SCHEDULED' AND NOT s.is_test AND s.purged_at IS NULL AND s.purge_at>$2 FOR UPDATE OF ec,s",
           [row.id, now],
         )
       ).rows[0];
@@ -250,12 +270,21 @@ async function claimJob(now: Date) {
     const campaign = job.campaign_id
       ? (
           await c.query(
-            "SELECT ec.*,s.purged_at,s.purge_at,s.year,s.opens_at,s.closes_at,s.registrations_open_at,i.public_name,i.territory,i.timezone FROM email_campaigns ec JOIN seasons s ON s.id=ec.season_id JOIN instances i ON i.id=ec.instance_id WHERE ec.id=$1 FOR UPDATE OF ec,s",
+            "SELECT ec.*,s.is_test,s.purged_at,s.purge_at,s.year,s.opens_at,s.closes_at,s.registrations_open_at,i.public_name,i.territory,i.timezone FROM email_campaigns ec JOIN seasons s ON s.id=ec.season_id JOIN instances i ON i.id=ec.instance_id WHERE ec.id=$1 FOR UPDATE OF ec,s",
             [job.campaign_id],
           )
         ).rows[0]
       : null;
+    const testSeason =
+      job.season_id &&
+      (
+        await c.query("SELECT is_test FROM seasons WHERE id=$1 FOR SHARE", [
+          job.season_id,
+        ])
+      ).rows[0]?.is_test;
     if (
+      testSeason ||
+      campaign?.is_test ||
       !u ||
       /^test-[a-f0-9]{32}@example\.invalid$/.test(String(u.email)) ||
       u.account_status === "DISABLED" ||
@@ -381,6 +410,10 @@ async function claimJob(now: Date) {
 export async function dispatchEmails(now = new Date(), send?: Sender) {
   if (!send && !smtpAvailable()) return;
   const sender = send ?? smtpSender();
+  // Legacy queued messages must obey the same TEST restriction as new campaigns.
+  await db().query(
+    "UPDATE email_outbox o SET status='CANCELLED',last_error='TEST_SEASON' WHERE o.status IN ('PENDING','FAILED') AND (EXISTS(SELECT 1 FROM seasons s WHERE s.id=o.season_id AND s.is_test) OR EXISTS(SELECT 1 FROM email_campaigns c JOIN seasons s ON s.id=c.season_id WHERE c.id=o.campaign_id AND s.is_test))",
+  );
   await prepareCampaigns(now);
   await db().query(
     "UPDATE email_outbox SET status='FAILED',last_error='SMTP_UNCERTAIN',retry_safe=false WHERE status='CLAIMED' AND claimed_at<$1",

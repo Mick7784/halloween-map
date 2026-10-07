@@ -78,10 +78,6 @@ export const houseSchema = z.object({
   rp: z.string().trim().max(300),
   practical: z.string().trim().max(300),
 });
-export const registrationSchema = z.object({
-  account: credentials,
-  house: houseSchema,
-});
 export const routeSchema = z.object({
   acceptance: z.object({
     mode: z.literal("GUIDELINES_ONLY"),

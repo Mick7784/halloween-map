@@ -36,6 +36,7 @@ import Scene from "./Scene";
 import PremiumHome from "./PremiumHome";
 import ParticipationOverlay from "./ParticipationOverlay";
 import Admin from "./Admin";
+import useCollectionReports from "./useCollectionReports";
 export default function Application({
   view,
   version,
@@ -55,6 +56,7 @@ export default function Application({
       view === "participant",
     ),
     [now, setNow] = useState(() => Date.now());
+  useCollectionReports(user?.id, user?.instance_id);
   const refresh = useCallback(async () => {
     const [s, u] = await Promise.all([
       api<PublicState>("public"),

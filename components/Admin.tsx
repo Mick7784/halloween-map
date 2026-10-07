@@ -9,6 +9,8 @@ import {
   CalendarDays,
   ChartColumn,
   FileText,
+  Mail,
+  Activity,
   Settings,
   ShieldCheck,
   Menu,
@@ -31,6 +33,8 @@ import SeasonManager from "./SeasonManager";
 import ParticipationForm from "./ParticipationForm";
 import AdminDashboard, { type AdminAudit } from "./AdminDashboard";
 import AdminStatistics, { type SeasonStatistics } from "./AdminStatistics";
+import Campaigns from "./Campaigns";
+import AdminActivity from "./AdminActivity";
 import AdminExistingPage from "./AdminExistingPage";
 import { seasonFinished } from "../lib/domain";
 import "./AdminBeta.css";
@@ -83,6 +87,8 @@ export default function Admin({
     [ownerSearch, setOwnerSearch] = useState(""),
     [dashboard, setDashboard] = useState<Dashboard | null>(null),
     [audit, setAudit] = useState<Audit[]>([]),
+    [auditScope, setAuditScope] = useState("season"),
+    [reexamining, setReexamining] = useState(false),
     [error, setError] = useState(""),
     [selected, setSelected] = useState<string | null>(null),
     [edit, setEdit] = useState(false),
@@ -154,7 +160,26 @@ export default function Admin({
         has(user, "stats.read")
           ? api<Dashboard>("admin/dashboard" + query)
           : null,
-        has(user, "audit.read") ? api<Audit[]>("admin/audit" + query) : [],
+        has(user, "audit.read") && ["dashboard", "activity"].includes(section)
+          ? section === "dashboard"
+            ? Promise.all([
+                api<Audit[]>("admin/audit?scope=season"),
+                api<Audit[]>("admin/audit?scope=global"),
+              ]).then((rows) =>
+                rows
+                  .flat()
+                  .sort(
+                    (a, b) => +new Date(b.created_at) - +new Date(a.created_at),
+                  ),
+              )
+            : api<Audit[]>(
+                "admin/audit" +
+                  query +
+                  (query ? "&" : "?") +
+                  "scope=" +
+                  auditScope,
+              )
+          : [],
         section === "statistics" && has(user, "stats.read")
           ? api<SeasonStatistics | null>("admin/statistics" + query)
           : null,
@@ -171,7 +196,7 @@ export default function Admin({
     } finally {
       if (revision === generation.current) setLoading(false);
     }
-  }, [user, seasonId, section]);
+  }, [user, seasonId, section, auditScope]);
   const reloadUsers = useCallback(async () => {
     const [u, r] = await Promise.all([
       api<ManagedUser[]>("admin/users"),
@@ -245,6 +270,7 @@ export default function Admin({
   function select(h: ManagedHouse) {
     setSelected(h.id);
     setEdit(false);
+    setReexamining(false);
     setReason(h.refusal_reason ?? "");
   }
   function table(items: ManagedHouse[], moderation = false) {
@@ -364,6 +390,8 @@ export default function Admin({
               ["users", "Utilisateurs", "users.read", Users],
               ["statistics", "Statistiques", "stats.read", ChartColumn],
               ["seasons", "Saison", "season.read", CalendarDays],
+              ["communications", "Communications", "communications.read", Mail],
+              ["activity", "Activité", "audit.read", Activity],
               ["content", "Textes & documents", "content.manage", FileText],
               ["settings", "Paramètres", "settings.read", Settings],
               ["roles", "Rôles & permissions", "roles.manage", ShieldCheck],
@@ -412,6 +440,8 @@ export default function Admin({
                   houses: "Maisons",
                   users: "Utilisateurs",
                   statistics: "Statistiques",
+                  communications: "Communications",
+                  activity: "Activité",
                   seasons: "Saison",
                   content: "Textes & documents",
                   settings: "Paramètres",
@@ -554,12 +584,43 @@ export default function Admin({
               (!!seasonId && loadedSeason !== seasonId && !error)
             }
             zone={state.instance?.timezone ?? "Europe/Paris"}
+            onActivity={
+              has(user, "audit.read")
+                ? () => {
+                    setSeasonId(seasons.find((s) => s.active)?.id ?? "");
+                    setAuditScope("season");
+                    setSection("activity");
+                  }
+                : undefined
+            }
             onHouse={(id) => {
               setSeasonId(seasons.find((s) => s.active)?.id ?? "");
               setSection("houses");
               const house = scopedHouses.find((h) => h.id === id);
               if (house) select(house);
             }}
+          />
+        )}
+        {section === "communications" &&
+          selectedSeason &&
+          has(user, "communications.read") && (
+            <Campaigns
+              key={selectedSeason.id}
+              season={selectedSeason}
+              zone={state.instance?.timezone ?? "Europe/Paris"}
+              user={user}
+            />
+          )}
+        {section === "communications" && !selectedSeason && (
+          <p>Aucune saison consultée.</p>
+        )}
+        {section === "activity" && has(user, "audit.read") && (
+          <AdminActivity
+            audit={loadedSeason === seasonId ? audit : []}
+            scope={auditScope}
+            onScope={setAuditScope}
+            loading={loading}
+            zone={state.instance?.timezone ?? "Europe/Paris"}
           />
         )}
         {section === "statistics" && (
@@ -834,7 +895,17 @@ export default function Admin({
                   !seasonFinished(selectedSeason) &&
                   has(user, "participants.edit") && (
                     <>
-                      {current.review_status === "PENDING" && (
+                      {current.review_status === "REFUSED" && !reexamining && (
+                        <button
+                          className="primary"
+                          onClick={() => setReexamining(true)}
+                        >
+                          Réexaminer
+                        </button>
+                      )}
+                      {(current.review_status === "PENDING" ||
+                        (current.review_status === "REFUSED" &&
+                          reexamining)) && (
                         <section>
                           <h3>Modération</h3>
                           <div className="beta-actions">

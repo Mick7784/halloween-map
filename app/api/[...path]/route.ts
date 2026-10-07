@@ -103,7 +103,10 @@ async function handle(
         );
       if (path === "admin/communications")
         return response(
-          await campaignAdmin(await getUser(req.cookies.get(cookie)?.value)),
+          await campaignAdmin(
+            await getUser(req.cookies.get(cookie)?.value),
+            req.nextUrl.searchParams.get("seasonId") ?? undefined,
+          ),
         );
       if (path === "admin/mail") {
         const u = await getUser(req.cookies.get(cookie)?.value);
@@ -121,6 +124,7 @@ async function handle(
             await getUser(req.cookies.get(cookie)?.value),
             path.slice(6),
             req.nextUrl.searchParams.get("seasonId") ?? undefined,
+            req.nextUrl.searchParams.get("scope") ?? "season",
           ),
         );
       }

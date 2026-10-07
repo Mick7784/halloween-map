@@ -7,6 +7,7 @@ import { db, type Database } from "../lib/db";
 import * as service from "../lib/service";
 import { adminUserAction } from "../lib/accounts";
 import { getUser, createSession } from "../lib/auth";
+import { campaignAction, campaignAdmin, dispatchEmails } from "../lib/mail";
 import { reportCollection } from "../lib/season-statistics";
 import { seasonLabel, type Season, type User } from "../lib/domain";
 import { fixtureRouter } from "./walking-fixture";
@@ -225,6 +226,7 @@ it("does not leak TEST to USER, while ADMIN/Super Admin use the same houses, rou
   await expect(
     service.createParticipation(owner, { house: houseDefinition, acceptance }),
   ).rejects.toMatchObject({ status: 403 });
+  vi.setSystemTime(new Date(houseDefinition.starts_at));
   const now = new Date(),
     input = {
       acceptance,
@@ -754,4 +756,241 @@ it("manual creation validates ADMIN and Super Admin houses while public creation
   await expect(createHouse(another, real)).rejects.toMatchObject({
     status: 403,
   });
+});
+
+// Reconstructed Lots 1 + 2: regressions against the V0.7.1 season model.
+it("resubmits an owner-edited refusal while admin edits preserve moderation", async () => {
+  const house = await createHouse(ordinary, real);
+  await db().query(
+    "UPDATE participations SET review_status='REFUSED',refusal_reason='Adresse' WHERE id=$1",
+    [house.id],
+  );
+  await service.updateHouse(
+    admin,
+    String(house.id),
+    { ...houseDefinition, name: "Correction admin" },
+    true,
+  );
+  expect(
+    (
+      await db().query("SELECT review_status FROM participations WHERE id=$1", [
+        house.id,
+      ])
+    ).rows[0].review_status,
+  ).toBe("REFUSED");
+  await service.updateHouse(ordinary, String(house.id), {
+    ...houseDefinition,
+    name: "Correction propriétaire",
+  });
+  expect(
+    (
+      await db().query(
+        "SELECT review_status,refusal_reason FROM participations WHERE id=$1",
+        [house.id],
+      )
+    ).rows[0],
+  ).toEqual({ review_status: "PENDING", refusal_reason: "" });
+  await service.adminAction(admin, {
+    action: "reviewHouse",
+    id: house.id,
+    seasonId: real.id,
+    payload: { status: "VALIDATED" },
+  });
+  expect(
+    (
+      await db().query("SELECT review_status FROM participations WHERE id=$1", [
+        house.id,
+      ])
+    ).rows[0].review_status,
+  ).toBe("VALIDATED");
+});
+it("preserves entered TEST hours on creation and editing without changing REAL bounds", async () => {
+  const s = await testSeason();
+  await activate(s);
+  const house = await createHouse(ordinary, s);
+  expect(new Date(String(house.starts_at)).toISOString()).toBe(
+    "2026-10-31T17:00:00.000Z",
+  );
+  expect(new Date(String(house.ends_at)).toISOString()).toBe(
+    "2026-10-31T22:00:00.000Z",
+  );
+  await service.updateHouse(
+    admin,
+    String(house.id),
+    {
+      ...houseDefinition,
+      starts_at: "2026-10-07T15:00Z",
+      ends_at: "2026-10-07T16:00Z",
+    },
+    true,
+  );
+  expect(
+    new Date(
+      String(
+        (
+          await db().query("SELECT ends_at FROM participations WHERE id=$1", [
+            house.id,
+          ])
+        ).rows[0].ends_at,
+      ),
+    ).toISOString(),
+  ).toBe("2026-10-07T16:00:00.000Z");
+  await activate(real);
+  await expect(
+    service.createParticipation(ordinary, {
+      house: {
+        ...houseDefinition,
+        starts_at: "2026-10-07T15:00Z",
+        ends_at: "2026-10-07T16:00Z",
+      },
+      acceptance,
+    }),
+  ).rejects.toMatchObject({ status: 400 });
+});
+it("provides explicit season/global/all audit scopes without crossing instances", async () => {
+  const s = await testSeason();
+  await service.audit(db(), admin.instance_id, admin, "global.fixture");
+  await service.audit(
+    db(),
+    admin.instance_id,
+    admin,
+    "season.fixture",
+    real.id,
+  );
+  await service.audit(db(), admin.instance_id, admin, "other.fixture", s.id);
+  const actions = async (scope: string) =>
+    (
+      (await service.adminRead(admin, "audit", real.id, scope)) as {
+        action: string;
+      }[]
+    ).map((r) => r.action);
+  expect(await actions("season")).toContain("season.fixture");
+  expect(await actions("season")).not.toContain("global.fixture");
+  expect(await actions("global")).toContain("global.fixture");
+  expect(await actions("global")).not.toContain("season.fixture");
+  expect(await actions("all")).toEqual(
+    expect.arrayContaining([
+      "season.fixture",
+      "global.fixture",
+      "other.fixture",
+    ]),
+  );
+  await expect(
+    service.adminRead(ordinary, "audit", real.id, "all"),
+  ).rejects.toMatchObject({ status: 403 });
+  await expect(actions("bad")).rejects.toThrow();
+});
+it("requires an ended inactive REAL season and PURGER, retaining its anonymous snapshot", async () => {
+  await createHouse(ordinary, real);
+  await expect(
+    service.adminAction(admin, {
+      action: "purge",
+      id: real.id,
+      payload: "PURGER",
+    }),
+  ).rejects.toMatchObject({ status: 409 });
+  vi.setSystemTime(new Date(real.closes_at));
+  await expect(
+    service.adminAction(admin, {
+      action: "purge",
+      id: real.id,
+      payload: "PURGER",
+    }),
+  ).rejects.toMatchObject({ status: 409 });
+  await service.adminAction(admin, {
+    action: "deactivateSeason",
+    id: real.id,
+    payload: "DÉSACTIVER",
+  });
+  await expect(
+    service.adminAction(admin, {
+      action: "purge",
+      id: real.id,
+      payload: "wrong",
+    }),
+  ).rejects.toMatchObject({ status: 400 });
+  await expect(
+    service.adminAction(
+      { ...admin, role_name: "ADMIN" },
+      { action: "purge", id: real.id, payload: "PURGER" },
+    ),
+  ).rejects.toMatchObject({ status: 403 });
+  await service.adminAction(admin, {
+    action: "purge",
+    id: real.id,
+    payload: "PURGER",
+  });
+  const row = (await db().query("SELECT * FROM seasons WHERE id=$1", [real.id]))
+    .rows[0];
+  expect(row.purged_at).toBeTruthy();
+  expect(row.stats_snapshot_at).toBeTruthy();
+  expect(row.stats).toMatchObject({ houses: 1 });
+  expect(
+    (
+      await db().query("SELECT * FROM participations WHERE season_id=$1", [
+        real.id,
+      ])
+    ).rows,
+  ).toHaveLength(0);
+  expect(JSON.stringify(row.stats)).not.toContain("Adresse privée");
+});
+it("blocks TEST campaign creation, test and retry; cancels legacy queued TEST messages", async () => {
+  const s = await testSeason();
+  const definition = {
+    season_id: s.id,
+    name: "Interdite",
+    subject: "Hello",
+    body: "Body",
+    audience: "ALL",
+    active: true,
+    schedule_mode: "ABSOLUTE",
+    anchor: "opens_at",
+    offset_days: 0,
+    scheduled_at: "2026-10-07T12:00Z",
+  };
+  await expect(
+    campaignAction(admin, {
+      action: "save",
+      seasonId: s.id,
+      campaign: definition,
+    }),
+  ).rejects.toMatchObject({ status: 403 });
+  const campaign = (
+    await db().query(
+      "INSERT INTO email_campaigns(instance_id,season_id,name,subject,body,audience,active,scheduled_at,status) VALUES($1,$2,'Legacy','Hello','Body','ALL',true,'2026-10-07T12:00Z','SCHEDULED') RETURNING id",
+      [admin.instance_id, s.id],
+    )
+  ).rows[0];
+  for (const action of ["test", "retry"])
+    await expect(
+      campaignAction(admin, { action, id: campaign.id, seasonId: s.id }),
+    ).rejects.toMatchObject({ status: 403 });
+  // Includes a legacy row with no season_id and another without a campaign.
+  await db().query(
+    "INSERT INTO email_outbox(user_id,campaign_id,kind,idempotency_key) VALUES($1,$2,'TEST','legacy-null')",
+    [admin.id, campaign.id],
+  );
+  await db().query(
+    "INSERT INTO email_outbox(user_id,season_id,kind,idempotency_key) VALUES($1,$2,'VERIFY','legacy-season')",
+    [admin.id, s.id],
+  );
+  await db().query("UPDATE email_outbox SET scheduled_at='2026-10-07T12:00Z'");
+  const send = vi.fn(async () => {});
+  await dispatchEmails(new Date(), send);
+  expect(send).not.toHaveBeenCalled();
+  expect((await db().query("SELECT status FROM email_outbox")).rows).toEqual([
+    { status: "CANCELLED" },
+    { status: "CANCELLED" },
+  ]);
+  expect((await campaignAdmin(admin, s.id)).campaigns).toHaveLength(1);
+  expect((await campaignAdmin(admin, real.id)).campaigns).toHaveLength(0);
+  await expect(campaignAdmin(ordinary, s.id)).rejects.toMatchObject({
+    status: 403,
+  });
+  await expect(
+    campaignAction(
+      { ...admin, permissions: ["admin.access", "communications.read"] },
+      { action: "test", id: campaign.id },
+    ),
+  ).rejects.toMatchObject({ status: 403 });
 });

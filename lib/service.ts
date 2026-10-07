@@ -255,9 +255,21 @@ export async function purgeSeason(
   now = new Date(),
 ) {
   return transaction(async (c) => {
-    await c.query("SELECT id FROM instances WHERE id=$1 FOR UPDATE", [
-      instanceId,
-    ]);
+    const instanceRow = (
+      await c.query(
+        "SELECT id,active_season_id FROM instances WHERE id=$1 FOR UPDATE",
+        [instanceId],
+      )
+    ).rows[0];
+    if (
+      manual &&
+      (!actor ||
+        actor.instance_id !== instanceId ||
+        actor.role_name !== "SUPER_ADMIN")
+    )
+      throw new HttpError(403, "Super Admin requis");
+    if (manual && instanceRow?.active_season_id === seasonId)
+      throw new HttpError(409, "Désactivez la saison avant de la purger");
     const s = (
       await c.query(
         "SELECT * FROM seasons WHERE id=$1 AND instance_id=$2 FOR UPDATE",
@@ -651,12 +663,7 @@ export async function createParticipation(
     const a = await validateAcceptance(c, i.id, raw.acceptance);
     const h = raw.house;
     validateParticipationSettings(h, i);
-    const [starts, ends] = ss.is_test
-      ? [
-          new Date().toISOString(),
-          new Date("2201-01-01T00:00:00Z").toISOString(),
-        ]
-      : houseDates(h, i, ss);
+    const [starts, ends] = houseDates(h, i, ss);
     await c.query(
       "INSERT INTO participations(instance_id,season_id,user_id,name,address,latitude,longitude,activities,starts_at,ends_at,fear,adaptable,rp,practical,terms_version,terms_accepted_at,guidelines_version,guidelines_accepted_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,CASE WHEN $17 THEN now() ELSE NULL END,$16,now())",
       [
@@ -803,6 +810,12 @@ export async function updateHouse(
         user.instance_id,
       ],
     );
+    if (!admin && old.review_status === "REFUSED") {
+      await c.query(
+        "UPDATE participations SET review_status='PENDING',refusal_reason='',submitted_at=now() WHERE id=$1",
+        [id],
+      );
+    }
     await audit(c, user.instance_id, user, "house.updated", id);
     await c.query("UPDATE participations SET address_parts=$1 WHERE id=$2", [
       data.address_parts
@@ -1103,6 +1116,7 @@ export async function adminRead(
   user: User | null,
   section: string,
   seasonId?: string,
+  auditScope: string = "season",
 ) {
   const permission: Record<string, string> = {
     dashboard: "stats.read",
@@ -1179,13 +1193,15 @@ export async function adminRead(
           [u.instance_id],
         )
       ).rows;
-    case "audit":
+    case "audit": {
+      const scope = z.enum(["season", "global", "all"]).parse(auditScope);
       return (
         await db().query(
-          "SELECT a.id,a.action,a.created_at,a.target_id,u.display_name actor,COALESCE(h.name,s.name,t.display_name) target_label FROM audit_logs a LEFT JOIN users u ON u.id=a.actor_id LEFT JOIN participations h ON h.id=a.target_id AND h.instance_id=a.instance_id LEFT JOIN seasons s ON s.id=a.target_id AND s.instance_id=a.instance_id LEFT JOIN users t ON t.id=a.target_id AND t.instance_id=a.instance_id WHERE a.instance_id=$1 AND a.season_id=$2 ORDER BY a.created_at DESC LIMIT 200",
-          [u.instance_id, scoped?.id ?? null],
+          "SELECT a.id,a.action,a.created_at,a.target_id,u.display_name actor,COALESCE(h.name,s.name,t.display_name) target_label FROM audit_logs a LEFT JOIN users u ON u.id=a.actor_id LEFT JOIN participations h ON h.id=a.target_id AND h.instance_id=a.instance_id LEFT JOIN seasons s ON s.id=a.target_id AND s.instance_id=a.instance_id LEFT JOIN users t ON t.id=a.target_id AND t.instance_id=a.instance_id WHERE a.instance_id=$1 AND ($3='all' OR ($3='global' AND a.season_id IS NULL) OR ($3='season' AND a.season_id=$2)) ORDER BY a.created_at DESC LIMIT 200",
+          [u.instance_id, scoped?.id ?? null, scope],
         )
       ).rows;
+    }
     default: {
       const i = (await instance())!,
         s = scoped;
