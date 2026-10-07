@@ -1,77 +1,136 @@
 "use client";
-import { useEffect, useState } from "react";
-import { DateTime } from "luxon";
-import { CalendarDays, ShieldAlert } from "lucide-react";
-import type { Season, User } from "../lib/domain";
+import { Fragment, useState } from "react";
+import { ChevronDown, ChevronUp, CircleCheck, Plus, X } from "lucide-react";
 import {
-  api,
+  seasonFinished,
+  seasonLabel,
+  type Season,
+  type User,
+} from "../lib/domain";
+import {
   Field,
   Check,
   Notice,
-  values,
-  localDate,
-  has,
   AsyncButton,
+  localDate,
+  values,
+  has,
 } from "./common";
-type Action = (
-  action: string,
-  payload: unknown,
-  id?: string,
-) => Promise<unknown>;
-function SeasonForm({
+
+type Action = (action: string, payload: unknown, id?: string) => Promise<void>;
+const statisticLabels: Record<string, string> = {
+  houses: "Maisons inscrites",
+  approved: "Maisons validées",
+  refused: "Maisons refusées",
+  pending: "Maisons en attente",
+  participants: "Participants uniques",
+  candy: "Maisons avec bonbons",
+  decoration: "Maisons avec décoration",
+  acting: "Maisons avec mise en scène",
+  routes: "Parcours préparés",
+  collections_started: "Collectes lancées",
+  collections_finished: "Collectes terminées",
+  visited: "Maisons visitées",
+};
+function Statistics({
+  season,
+  onClose,
+}: {
+  season: Season;
+  onClose: () => void;
+}) {
+  const stats = season.stats ?? {},
+    finished = stats.collections_finished ?? 0;
+  return (
+    <div className="beta-overlay">
+      <section
+        className="beta-panel"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Statistiques historiques"
+      >
+        <header>
+          <h2>{season.name} · Statistiques</h2>
+          <button aria-label="Fermer les statistiques" onClick={onClose}>
+            <X />
+          </button>
+        </header>
+        <p>Historique en lecture seule · chiffres agrégés uniquement.</p>
+        {!season.stats_snapshot_at && !season.purged_at ? (
+          <p>Le snapshot sera disponible à la clôture de la saison.</p>
+        ) : (
+          <>
+            <div className="season-statistics">
+              {Object.entries(statisticLabels)
+                .filter(([key]) => stats[key] !== undefined)
+                .map(([key, label]) => (
+                  <article key={key}>
+                    <span>{label}</span>
+                    <strong>{stats[key]}</strong>
+                  </article>
+                ))}
+            </div>
+            {finished > 0 && (
+              <dl className="season-averages">
+                <dt>Distance cumulée</dt>
+                <dd>{((stats.distance_meters ?? 0) / 1000).toFixed(2)} km</dd>
+                <dt>Distance moyenne par collecte terminée</dt>
+                <dd>
+                  {((stats.distance_meters ?? 0) / finished / 1000).toFixed(2)}{" "}
+                  km
+                </dd>
+                <dt>Durée moyenne</dt>
+                <dd>
+                  {Math.round((stats.duration_seconds ?? 0) / finished / 60)}{" "}
+                  min
+                </dd>
+                <dt>Complétion moyenne</dt>
+                <dd>
+                  {Math.round(((stats.completion_sum ?? 0) / finished) * 100)} %
+                </dd>
+              </dl>
+            )}
+            <p className="small muted">
+              Les totaux de collecte proviennent des rapports anonymes des
+              appareils. Les anciennes collectes locales ne sont pas
+              reconstruites.
+            </p>
+          </>
+        )}
+      </section>
+    </div>
+  );
+}
+function SeasonEditor({
   season,
   zone,
-  year,
   act,
-  critical = true,
+  onSaved,
+  superAdmin,
 }: {
-  critical?: boolean;
   season?: Season;
   zone: string;
-  year: number;
   act: Action;
+  onSaved: () => void;
+  superAdmin: boolean;
 }) {
-  const [error, setError] = useState(""),
-    [busy, setBusy] = useState(false);
-  const [test, setTest] = useState(season?.is_test ?? false);
-  const [valid, setValid] = useState(true),
-    [impacted, setImpacted] = useState(0);
-  useEffect(() => {
-    const load = () =>
-      void api<(Season & { relative_campaign_count: number })[]>(
-        "admin/seasons",
-      )
-        .then((rows) =>
-          setImpacted(
-            rows.find((row) => row.id === season?.id)
-              ?.relative_campaign_count ?? 0,
-          ),
-        )
-        .catch(() => {});
-    load();
-    window.addEventListener("campaigns-changed", load);
-    return () => window.removeEventListener("campaigns-changed", load);
-  }, [season?.id]);
+  const [test, setTest] = useState(!!season?.is_test),
+    [busy, setBusy] = useState(false),
+    [error, setError] = useState("");
+  const year = season?.year ?? new Date().getFullYear();
   const dates = [
     [
       "registrations_open_at",
       "Ouverture des inscriptions",
       `${year}-10-01T00:00`,
     ],
-    ["opens_at", "Ouverture publique de la carte", `${year}-10-31T12:00`],
-    ["closes_at", "Fermeture publique de la carte", `${year}-11-01T00:00`],
-    ["purge_at", "Purge définitive des données", `${year}-11-02T12:00`],
+    ["opens_at", "Ouverture de la carte", `${year}-10-31T12:00`],
+    ["closes_at", "Fermeture de la carte", `${year}-11-01T00:00`],
+    ["purge_at", "Purge des données personnelles", `${year}-11-02T12:00`],
   ] as const;
   return (
     <form
-      onInput={(e) => {
-        const v = values(e.currentTarget);
-        const ordered =
-          v.registrations_open_at <= v.opens_at &&
-          v.opens_at < v.closes_at &&
-          v.closes_at <= v.purge_at;
-        setValid(ordered);
-      }}
+      className="season-editor"
       onSubmit={async (e) => {
         e.preventDefault();
         const v = values(e.currentTarget);
@@ -82,16 +141,14 @@ function SeasonForm({
             "season",
             {
               ...v,
-              year: Number(v.year),
               name: v.name,
               is_test: test,
+              year: Number(v.year ?? year),
               registrations_open: v.registrations_open === "on",
-              activated: test
-                ? !!season && v.activated === "on"
-                : !!season?.activated,
             },
             season?.id,
           );
+          onSaved();
         } catch (e) {
           setError((e as Error).message);
         } finally {
@@ -99,77 +156,70 @@ function SeasonForm({
         }
       }}
     >
-      <Field
-        label="Nom"
-        name="name"
-        value={season?.name ?? "Halloween " + year}
-      />
-      <label className="check">
-        <input
-          type="checkbox"
-          checked={test}
-          disabled={!critical}
-          onChange={(e) => setTest(e.target.checked)}
-        />{" "}
-        Mode TEST
-      </label>
-      {test && (
-        <p className="notice info">
-          Cette saison est un environnement de test isolé. Les utilisateurs,
-          maisons, parcours, statistiques et données créés dans son contexte
-          seront supprimés avec elle.
-        </p>
-      )}
-      <Field label="Année" name="year" type="number" value={year} />
-      <div className="season-timeline">
-        {dates.map(([key, label, fallback], n) => (
-          <div key={key} className="timeline-step">
-            <span>{n + 1}</span>
-            <Field
-              name={key}
-              label={label}
-              type="datetime-local"
-              value={season ? localDate(season[key], zone) : fallback}
-              readOnly={key === "purge_at" && !critical}
-            />
-          </div>
-        ))}
-      </div>
-      <p className="muted small">
-        Heures présentées en {zone}. La fermeture masque la carte ; les données
-        restent accessibles à l’équipe jusqu’à la purge.
-      </p>
-      <div className="choices">
-        <Check
-          name="registrations_open"
-          label="Autoriser les inscriptions"
-          checked={season?.registrations_open ?? true}
+      <div className="season-editor-grid">
+        <Field
+          name="name"
+          label="Nom de la saison"
+          value={season?.name}
+          maxLength={100}
         />
-        {season && test && (
-          <Check
-            name="activated"
-            label="Ouvrir l’environnement TEST"
-            checked={season.activated}
-          />
+        {!season && (
+          <label className="field">
+            <span>Type</span>
+            <select
+              aria-label="Type de saison"
+              value={test ? "TEST" : "REAL"}
+              onChange={(e) => setTest(e.target.value === "TEST")}
+            >
+              <option value="REAL">Saison normale</option>
+              {superAdmin && <option value="TEST">Saison de test</option>}
+            </select>
+          </label>
+        )}
+        {!test && (
+          <>
+            <Field
+              name="year"
+              label="Année"
+              type="number"
+              value={year}
+              min={2020}
+              max={2200}
+            />
+            {dates.map(([key, label, fallback]) => (
+              <Field
+                key={key}
+                name={key}
+                type="datetime-local"
+                label={label}
+                readOnly={!!season && key === "purge_at" && !superAdmin}
+                value={season ? localDate(season[key], zone) : fallback}
+              />
+            ))}
+          </>
         )}
       </div>
-      <Notice
-        error={
-          !valid
-            ? "Dates invalides : inscriptions ≤ ouverture < fermeture ≤ purge"
-            : error
-        }
-      />
-      {impacted > 0 && (
-        <p className="notice info">
-          {impacted}{" "}
-          {impacted === 1
-            ? "communication programmée sera recalculée."
-            : "communications programmées seront recalculées."}
+      {test ? (
+        <p className="small muted">
+          Accessible aux administrateurs uniquement lorsqu’elle est active.
+          Aucun calendrier public ni purge automatique.
         </p>
+      ) : (
+        <>
+          <Check
+            name="registrations_open"
+            label="Autoriser les inscriptions"
+            checked={season?.registrations_open ?? true}
+          />
+          <p className="small muted">
+            Heures en {zone}. L’activation est manuelle et indépendante de
+            l’ouverture de la carte.
+          </p>
+        </>
       )}
-      <button className="primary" disabled={busy || !valid}>
-        {busy ? "Enregistrement…" : "Enregistrer la saison"}
+      <Notice error={error} />
+      <button className="primary" disabled={busy}>
+        {busy ? "Enregistrement…" : "Enregistrer"}
       </button>
     </form>
   );
@@ -179,130 +229,215 @@ export default function SeasonManager({
   user,
   zone,
   act,
-  selectedId,
-  testSeasonId,
 }: {
-  selectedId?: string;
-  testSeasonId?: string | null;
   seasons: Season[];
   user: User;
   zone: string;
   act: Action;
 }) {
-  const year = DateTime.now().setZone(zone).year;
+  const [expanded, setExpanded] = useState<string | null>(null),
+    [creating, setCreating] = useState(false),
+    [statistics, setStatistics] = useState<Season | null>(null);
+  const critical = user.role_name === "SUPER_ADMIN",
+    manage = has(user, "season.manage");
+  const rank = (s: Season) =>
+    ({ ACTIVE: 0, PLANIFIÉE: 1, DÉSACTIVÉE: 2, TERMINÉE: 3 })[seasonLabel(s)];
+  const ordered = seasons
+    .slice()
+    .sort(
+      (a, b) =>
+        rank(a) - rank(b) ||
+        +new Date(a.opens_at) - +new Date(b.opens_at) ||
+        (a.name ?? "").localeCompare(b.name ?? ""),
+    );
+  const date = (v: Date | string) =>
+    new Intl.DateTimeFormat("fr-FR", {
+      dateStyle: "short",
+      timeZone: zone,
+    }).format(new Date(v));
   return (
-    <div className="season-manager">
-      {seasons
-        .filter((s) => !selectedId || s.id === selectedId)
-        .map((s) => (
-          <div key={s.id}>
-            <section className="panel">
-              <div className="section-heading">
-                <h2>
-                  <CalendarDays /> {s.name ?? "Halloween " + s.year}{" "}
-                  {s.is_test && <span className="badge">TEST</span>}
-                </h2>
-                <span className="badge">
-                  {s.purged_at
-                    ? "Purgée"
-                    : s.archived
-                      ? "Archivée"
-                      : s.activated
-                        ? "Ouverte"
-                        : "Préparation"}
-                </span>
-              </div>
-              {!s.purged_at && !s.archived && has(user, "season.manage") ? (
-                <SeasonForm
-                  season={s}
-                  zone={zone}
-                  year={s.year}
-                  act={act}
-                  critical={user.role_name === "SUPER_ADMIN"}
-                />
-              ) : (
-                <p>
-                  {DateTime.fromJSDate(new Date(s.opens_at))
-                    .setZone(zone)
-                    .setLocale("fr")
-                    .toFormat("dd LLLL yyyy à HH:mm")}{" "}
-                  →{" "}
-                  {DateTime.fromJSDate(new Date(s.closes_at))
-                    .setZone(zone)
-                    .setLocale("fr")
-                    .toFormat("dd LLLL yyyy à HH:mm")}{" "}
-                  · purge :{" "}
-                  {DateTime.fromJSDate(new Date(s.purge_at))
-                    .setZone(zone)
-                    .setLocale("fr")
-                    .toFormat("dd LLLL yyyy à HH:mm")}
-                </p>
-              )}
-            </section>
-            {s.is_test && user.role_name === "SUPER_ADMIN" && (
-              <section className="panel">
-                <AsyncButton
-                  onClick={() =>
-                    act("useForTests", undefined, s.id).then(() => {})
-                  }
-                >
-                  {testSeasonId === s.id
-                    ? "Utilisée pour les tests"
-                    : "Utiliser pour les tests"}
-                </AsyncButton>
-                <AsyncButton
-                  danger
-                  onClick={async () => {
-                    const confirmation = window.prompt(
-                      "Pour supprimer tout l’environnement, saisissez le nom de la saison : " +
-                        s.name,
-                    );
-                    if (confirmation !== null)
-                      await act("deleteTestSeason", confirmation, s.id);
-                  }}
-                >
-                  Supprimer la saison de test
-                </AsyncButton>
-              </section>
-            )}
-            {!s.is_test && !s.purged_at && user.role_name === "SUPER_ADMIN" && (
-              <section className="panel purge-block">
-                <h3>
-                  <ShieldAlert /> Purge manuelle
-                </h3>
-                <p className="muted small">
-                  Suppression définitive des participations, maisons, adresses
-                  et messages. Seuls les totaux anonymes restent conservés. Les
-                  comptes restent disponibles pour les prochaines éditions.
-                </p>
-                <AsyncButton
-                  danger
-                  onClick={async () => {
-                    if (
-                      window.confirm(
-                        "Supprimer définitivement les données participantes de cette saison ? Cette action est irréversible.",
-                      )
-                    )
-                      await act("purge", "PURGER", s.id);
-                  }}
-                >
-                  Purger maintenant
-                </AsyncButton>
-              </section>
-            )}
-          </div>
-        ))}
-      {has(user, "season.manage") && (
-        <section className="panel">
-          <h2>Préparer une nouvelle saison</h2>
-          <SeasonForm
-            zone={zone}
-            year={year}
-            act={act}
-            critical={user.role_name === "SUPER_ADMIN"}
-          />
-        </section>
+    <section className="beta-card season-manager">
+      <div className="beta-card-title">
+        <div>
+          <h2>Les saisons</h2>
+          <p className="small muted">
+            Une seule saison active, REAL ou TEST. Les comptes restent globaux.
+          </p>
+        </div>
+        {manage && (
+          <button className="primary" onClick={() => setCreating(true)}>
+            <Plus size={17} /> Nouvelle saison
+          </button>
+        )}
+      </div>
+      {!ordered.length ? (
+        <p className="beta-empty">
+          Aucune saison. Créez votre première saison.
+        </p>
+      ) : (
+        <div className="beta-table-scroll">
+          <table className="season-table">
+            <thead>
+              <tr>
+                <th>Saison</th>
+                <th>Type</th>
+                <th>État</th>
+                <th className="season-period">Période</th>
+                <th className="season-summary">Synthèse</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {ordered.map((s) => {
+                const ended = seasonFinished(s),
+                  label = seasonLabel(s);
+                return (
+                  <Fragment key={s.id}>
+                    <tr className={s.active ? "season-active" : ""}>
+                      <td>
+                        <strong>
+                          {s.active && <CircleCheck size={16} />} {s.name}
+                        </strong>
+                        {!s.is_test && <small>{s.year}</small>}
+                      </td>
+                      <td>
+                        <span className="beta-status">
+                          {s.is_test ? "TEST" : "REAL"}
+                        </span>
+                      </td>
+                      <td>
+                        <span
+                          className={
+                            "beta-status " + (s.active ? "public-active" : "")
+                          }
+                        >
+                          {label}
+                        </span>
+                      </td>
+                      <td className="season-period">
+                        {s.is_test
+                          ? "Sans calendrier public"
+                          : `${date(s.opens_at)} → ${date(s.closes_at)}`}
+                      </td>
+                      <td className="season-summary">
+                        {ended && s.stats?.houses !== undefined
+                          ? `${s.stats.houses} maisons · ${s.stats.routes ?? 0} parcours`
+                          : "—"}
+                      </td>
+                      <td>
+                        <div className="beta-actions season-row-actions">
+                          {critical &&
+                            !ended &&
+                            !s.purged_at &&
+                            !s.archived && (
+                              <AsyncButton
+                                onClick={async () => {
+                                  const action = s.active
+                                    ? "deactivateSeason"
+                                    : "activateSeason";
+                                  if (
+                                    window.confirm(
+                                      s.active
+                                        ? `Désactiver ${s.name} ? La carte sera indisponible.`
+                                        : `Activer ${s.name} ? La saison actuellement active sera désactivée.${s.is_test ? " La carte sera réservée aux admins." : ""}`,
+                                    )
+                                  )
+                                    await act(
+                                      action,
+                                      s.active ? "DÉSACTIVER" : "ACTIVER",
+                                      s.id,
+                                    );
+                                }}
+                              >
+                                {s.active ? "Désactiver" : "Activer"}
+                              </AsyncButton>
+                            )}
+                          {ended && has(user, "stats.read") && (
+                            <button onClick={() => setStatistics(s)}>
+                              Voir les statistiques
+                            </button>
+                          )}
+                          {critical && !s.active && (
+                            <AsyncButton
+                              danger
+                              onClick={async () => {
+                                const confirmation = window.prompt(
+                                  `Suppression définitive de « ${s.name} ». Recopiez son nom pour confirmer. Les comptes utilisateurs sont conservés.`,
+                                );
+                                if (confirmation !== null)
+                                  await act("deleteSeason", confirmation, s.id);
+                              }}
+                            >
+                              {ended ? "Supprimer définitivement" : "Supprimer"}
+                            </AsyncButton>
+                          )}
+                          {!ended && !s.purged_at && !s.archived && manage && (
+                            <button
+                              aria-label={`Réglages de ${s.name}`}
+                              aria-expanded={expanded === s.id}
+                              onClick={() =>
+                                setExpanded(expanded === s.id ? null : s.id)
+                              }
+                            >
+                              {expanded === s.id ? (
+                                <ChevronUp size={17} />
+                              ) : (
+                                <ChevronDown size={17} />
+                              )}
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                    {!ended && expanded === s.id && (
+                      <tr className="season-settings-row">
+                        <td colSpan={6}>
+                          <SeasonEditor
+                            season={s}
+                            zone={zone}
+                            act={act}
+                            superAdmin={critical}
+                            onSaved={() => setExpanded(null)}
+                          />
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       )}
-    </div>
+      {creating && (
+        <div className="beta-overlay">
+          <section
+            className="beta-panel"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Nouvelle saison"
+          >
+            <header>
+              <h2>Nouvelle saison</h2>
+              <button
+                aria-label="Fermer la création"
+                onClick={() => setCreating(false)}
+              >
+                <X />
+              </button>
+            </header>
+            <SeasonEditor
+              zone={zone}
+              act={act}
+              superAdmin={critical}
+              onSaved={() => setCreating(false)}
+            />
+          </section>
+        </div>
+      )}
+      {statistics && (
+        <Statistics season={statistics} onClose={() => setStatistics(null)} />
+      )}
+    </section>
   );
 }

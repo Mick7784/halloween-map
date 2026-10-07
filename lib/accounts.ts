@@ -18,6 +18,11 @@ export async function queueIdentity(
   userId: string,
   kind: "VERIFY" | "INVITE" | "RESET",
 ) {
+  const recipient = (
+    await client.query("SELECT email FROM users WHERE id=$1", [userId])
+  ).rows[0];
+  if (/^test-[a-f0-9]{32}@example\.invalid$/.test(String(recipient?.email)))
+    throw new HttpError(400, "Ce compte interne ne reçoit pas d’email");
   await client.query(
     "DELETE FROM email_tokens WHERE user_id=$1 AND (kind=$2 OR ($2<>'RESET' AND kind IN('VERIFY','INVITE','ACTIVATE')))",
     [userId, kind],
@@ -304,18 +309,17 @@ export async function accountAction(user: User | null, input: unknown) {
 export async function adminUsers(
   user: User | null,
   seasonId?: string,
-  eligible = false,
 ): Promise<Record<string, unknown>[]> {
   const u = requirePermission(user, "admin.access");
   requirePermission(u, "users.read");
   const context = await selectedSeason(u, seasonId);
   return (
     await db().query(
-      `SELECT u.id,u.email,u.display_name,u.email_status,u.email_verified_at,u.account_status,u.created_at,u.last_login_at,u.role_id,u.created_for_season_id,COALESCE(r.name,'USER') role_name,
+      `SELECT u.id,u.email,u.display_name,u.email_status,u.email_verified_at,u.account_status,u.created_at,u.last_login_at,u.role_id,COALESCE(r.name,'USER') role_name,
  (SELECT row_to_json(p) FROM participations p WHERE p.season_id=$2 AND p.user_id=u.id) participation,
- (SELECT COALESCE(json_agg(x),'[]'::json) FROM (SELECT kind,status,scheduled_at,sent_at,last_error FROM email_outbox WHERE user_id=u.id AND (season_id=$2 OR (season_id IS NULL AND (u.created_for_season_id=$2 OR u.created_for_season_id IS NULL))) ORDER BY created_at DESC LIMIT 50) x) communications
- FROM users u LEFT JOIN roles r ON r.id=u.role_id WHERE u.instance_id=$1 AND (CASE WHEN $3::boolean THEN u.created_for_season_id=$2 ELSE u.created_for_season_id IS NULL AND ($4::boolean OR EXISTS(SELECT 1 FROM participations p WHERE p.user_id=u.id AND p.season_id=$2) OR NOT EXISTS(SELECT 1 FROM participations p WHERE p.user_id=u.id)) END) ORDER BY u.created_at`,
-      [u.instance_id, context?.id ?? null, !!context?.is_test, eligible],
+ (SELECT COALESCE(json_agg(x),'[]'::json) FROM (SELECT kind,status,scheduled_at,sent_at,last_error FROM email_outbox WHERE user_id=u.id AND (season_id=$2 OR season_id IS NULL) ORDER BY created_at DESC LIMIT 50) x) communications
+ FROM users u LEFT JOIN roles r ON r.id=u.role_id WHERE u.instance_id=$1 ORDER BY u.created_at`,
+      [u.instance_id, context?.id ?? null],
     )
   ).rows.map((row) => ({
     ...row,
@@ -340,28 +344,22 @@ export async function adminUserAction(user: User | null, input: unknown) {
       display_name: z.string().trim().min(1).max(80).optional(),
       role_id: z.uuid().optional(),
       confirm: z.string().optional(),
-      seasonId: z.uuid().optional(),
       without_invitation: z.boolean().default(false),
       password: credentials.shape.password.optional(),
     })
     .parse(input);
-  const context = await selectedSeason(u, p.seasonId);
   if (
     p.without_invitation &&
-    (p.action !== "invite" ||
-      !context?.is_test ||
-      u.role_name !== "SUPER_ADMIN")
+    (p.action !== "invite" || u.role_name !== "SUPER_ADMIN")
   )
     throw new HttpError(
       403,
-      "Création sans invitation réservée au Super Admin en saison TEST",
+      "Création sans invitation réservée au Super Admin",
     );
   if (p.id) {
-    const allowed = (await adminUsers(u, p.seasonId)).some(
-      (row) => row.id === p.id,
-    );
+    const allowed = (await adminUsers(u)).some((row) => row.id === p.id);
     if (!allowed)
-      throw new HttpError(404, "Utilisateur absent de cette saison");
+      throw new HttpError(404, "Utilisateur absent de cette instance");
   }
   if (p.action === "resend") {
     if (!p.id) throw new HttpError(400, "Compte requis");
@@ -393,18 +391,20 @@ export async function adminUserAction(user: User | null, input: unknown) {
     if (p.action === "delete" && u.role_name !== "SUPER_ADMIN")
       throw new HttpError(403, "Super Admin requis");
     if (p.action === "invite") {
+      if (p.without_invitation && !p.email)
+        p.email = `test-${randomBytes(16).toString("hex")}@example.invalid`;
       if (!p.email || !p.display_name || !p.role_id)
         throw new HttpError(400, "Nom, email et profil requis");
-      if (context?.is_test && role?.name !== "USER")
+      if (p.without_invitation && role?.name !== "USER")
         throw new HttpError(
           403,
-          "Les comptes de saison TEST utilisent le profil Utilisateur",
+          "La création directe utilise le profil Utilisateur",
         );
       if (p.without_invitation && !p.password)
         throw new HttpError(400, "Mot de passe requis");
       const target = (
         await c.query(
-          "INSERT INTO users(instance_id,email,display_name,role_id,kind,account_status,email_status,email_verified_at,password_hash,created_for_season_id) VALUES($1,$2,$3,$4,'PARTICIPANT',$5,$6,CASE WHEN $7 THEN now() ELSE NULL END,$8,$9) RETURNING id",
+          "INSERT INTO users(instance_id,email,display_name,role_id,kind,account_status,email_status,email_verified_at,password_hash) VALUES($1,$2,$3,$4,'PARTICIPANT',$5,$6,CASE WHEN $7 THEN now() ELSE NULL END,$8) RETURNING id",
           [
             u.instance_id,
             p.email,
@@ -414,7 +414,6 @@ export async function adminUserAction(user: User | null, input: unknown) {
             p.without_invitation ? "VERIFIED" : "UNVERIFIED",
             p.without_invitation,
             p.without_invitation ? await hashPassword(p.password!) : null,
-            context?.is_test ? context.id : null,
           ],
         )
       ).rows[0];
@@ -427,7 +426,7 @@ export async function adminUserAction(user: User | null, input: unknown) {
           u.id,
           p.without_invitation ? "user.created" : "user.invite",
           target.id,
-          context?.id ?? null,
+          null,
         ],
       );
       return { ok: true, id: target.id };
@@ -471,13 +470,7 @@ export async function adminUserAction(user: User | null, input: unknown) {
     }
     await c.query(
       "INSERT INTO audit_logs(instance_id,actor_id,action,target_id,season_id) VALUES($1,$2,$3,$4,$5)",
-      [
-        u.instance_id,
-        u.id,
-        "user." + p.action,
-        p.id ?? null,
-        context?.id ?? null,
-      ],
+      [u.instance_id, u.id, "user." + p.action, p.id ?? null, null],
     );
     return { ok: true };
   });

@@ -5,7 +5,7 @@ import { DateTime } from "luxon";
 import { z } from "zod";
 import { db, transaction, type Database } from "./db";
 import { HttpError, hashToken, requirePermission, rateLimit } from "./auth";
-import { localISO, type User } from "./domain";
+import { seasonFinished, localISO, type User, type Season } from "./domain";
 import { interpolate, sanitizeContent } from "./content";
 export const mailVariables = [
   "name",
@@ -118,11 +118,10 @@ export async function campaignAction(user: User | null, input: unknown) {
       ).rows[0];
       if (!campaign) throw new HttpError(404, "Campagne introuvable");
       const season = (
-        await c.query("SELECT purged_at FROM seasons WHERE id=$1", [
-          campaign.season_id,
-        ])
+        await c.query("SELECT * FROM seasons WHERE id=$1", [campaign.season_id])
       ).rows[0];
-      if (season.purged_at) throw new HttpError(400, "Saison purgée");
+      if (season.purged_at || seasonFinished(season as unknown as Season))
+        throw new HttpError(400, "Saison en lecture seule");
       if (p.action === "test") {
         if (u.email_status !== "VERIFIED")
           throw new HttpError(
@@ -157,7 +156,8 @@ export async function campaignAction(user: User | null, input: unknown) {
         [v.season_id, u.instance_id],
       )
     ).rows[0];
-    if (!s || s.purged_at) throw new HttpError(400, "Saison indisponible");
+    if (!s || s.purged_at || seasonFinished(s as unknown as Season))
+      throw new HttpError(400, "Saison indisponible");
     let at: string;
     try {
       at =
@@ -225,7 +225,7 @@ async function prepareCampaigns(now: Date) {
       if (!campaign) return;
       await c.query(
         `INSERT INTO email_outbox(user_id,season_id,campaign_id,kind,scheduled_at,idempotency_key)
- SELECT u.id,p.season_id,$1::uuid,'CAMPAIGN',$3,($1::uuid)::text||':'||u.id::text FROM participations p JOIN users u ON u.id=p.user_id WHERE p.season_id=$2 AND u.account_status='ACTIVE' AND u.email_status='VERIFIED'
+ SELECT u.id,p.season_id,$1::uuid,'CAMPAIGN',$3,($1::uuid)::text||':'||u.id::text FROM participations p JOIN users u ON u.id=p.user_id WHERE p.season_id=$2 AND u.account_status='ACTIVE' AND u.email_status='VERIFIED' AND u.email !~ '^test-[a-f0-9]{32}@example[.]invalid$'
  AND ($4='ALL' OR ($4='ACTIVE' AND p.activity='ACTIVE') OR p.status=$4) ON CONFLICT DO NOTHING`,
         [campaign.id, campaign.season_id, now, campaign.audience],
       );
@@ -257,6 +257,7 @@ async function claimJob(now: Date) {
       : null;
     if (
       !u ||
+      /^test-[a-f0-9]{32}@example\.invalid$/.test(String(u.email)) ||
       u.account_status === "DISABLED" ||
       (job.kind === "INVITE" && u.account_status !== "PENDING_ACTIVATION") ||
       (job.kind === "VERIFY" && u.email_status === "VERIFIED") ||

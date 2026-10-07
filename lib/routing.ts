@@ -47,10 +47,8 @@ export function validateRouteWindow(
   season: Season,
   input: RouteInput,
   now: Date,
-  earlyAccess = false,
 ) {
-  if (!mapAccessible(season, now, earlyAccess))
-    throw new Error("La carte est fermée");
+  if (!mapAccessible(season, now)) throw new Error("La carte est fermée");
   const start = +new Date(input.start),
     end = +new Date(input.end);
   if (
@@ -58,8 +56,8 @@ export function validateRouteWindow(
     !Number.isFinite(end) ||
     end <= start ||
     start < +now - 60000 ||
-    start < +new Date(season.opens_at) ||
-    end > +new Date(season.closes_at)
+    (!season.is_test &&
+      (start < +new Date(season.opens_at) || end > +new Date(season.closes_at)))
   )
     throw new Error("Fenêtre de parcours invalide");
 }
@@ -69,9 +67,8 @@ export async function planRoute(
   input: RouteInput,
   now = new Date(),
   router?: WalkingRouter,
-  earlyAccess = false,
 ): Promise<RouteResult> {
-  validateRouteWindow(season, input, now, earlyAccess);
+  validateRouteWindow(season, input, now);
   const end = +new Date(input.end),
     start = +new Date(input.start);
   const eligible = houses

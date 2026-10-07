@@ -69,19 +69,19 @@ test("beta desktop exposes only useful navigation, pending moderation and normal
           ...state.season,
           name: "Tests octobre",
           is_test: true,
-          public_active: false,
+          active: true,
         },
         {
           ...state.season,
           id: realId,
           name: "Halloween 2026",
           is_test: false,
-          public_active: true,
+          active: false,
         },
       ];
     else if (path === "/api/admin/houses")
       data =
-        new URL(r.request().url()).searchParams.get("seasonId") === sid
+        (new URL(r.request().url()).searchParams.get("seasonId") ?? sid) === sid
           ? houses
           : [];
     else if (path === "/api/admin/dashboard")
@@ -100,8 +100,7 @@ test("beta desktop exposes only useful navigation, pending moderation and normal
     await r.fulfill({ json: data });
   });
   await page.goto("/admin");
-  await expect(page.getByLabel("Saison du back-office")).toHaveValue(realId);
-  await page.getByLabel("Saison du back-office").selectOption(sid);
+  await expect(page.getByLabel("Saison du back-office")).toHaveCount(0);
   await expect(
     page.getByRole("heading", { name: "Tableau de bord", exact: true }),
   ).toBeVisible();
@@ -138,7 +137,7 @@ test("beta desktop exposes only useful navigation, pending moderation and normal
   );
 });
 
-test("season context enables direct accounts only in TEST and shows season controls", async ({
+test("global direct accounts need neither a TEST season nor an email", async ({
   page,
 }) => {
   const real = "30000000-0000-4000-8000-000000000002",
@@ -150,7 +149,6 @@ test("season context enables direct accounts only in TEST and shows season contr
       closes_at: new Date(now + 86400000).toISOString(),
       registrations_open_at: new Date(now - 7200000).toISOString(),
       purge_at: new Date(now + 172800000).toISOString(),
-      activated: true,
       registrations_open: true,
     };
   const seasons = [
@@ -159,14 +157,13 @@ test("season context enables direct accounts only in TEST and shows season contr
       id: real,
       name: "Halloween 2026",
       is_test: false,
-      public_active: true,
+      active: true,
     },
     {
       ...dates,
       id: testId,
       name: "Tests octobre",
       is_test: true,
-      test_used: true,
     },
   ];
   const user = {
@@ -222,8 +219,7 @@ test("season context enables direct accounts only in TEST and shows season contr
     await r.fulfill({ json: data });
   });
   await page.goto("/admin");
-  const selector = page.getByLabel("Saison du back-office");
-  await expect(selector).toHaveValue(real);
+  await expect(page.getByLabel("Saison du back-office")).toHaveCount(0);
   await page
     .locator(".beta-sidebar")
     .getByRole("button", { name: "Utilisateurs", exact: true })
@@ -231,18 +227,7 @@ test("season context enables direct accounts only in TEST and shows season contr
   await page
     .getByRole("button", { name: "Créer un utilisateur", exact: true })
     .click();
-  await expect(page.getByLabel("Créer sans envoyer d’invitation")).toHaveCount(
-    0,
-  );
-  await selector.selectOption(testId);
-  await expect(page.getByRole("dialog")).toHaveCount(0);
-  await page
-    .getByRole("button", { name: "Créer un utilisateur", exact: true })
-    .click();
   await page.getByLabel("Nom ou pseudo").fill("Mr Test 1");
-  await page
-    .getByRole("textbox", { name: /^Email/ })
-    .fill("mr-test-1@example.invalid");
   await page.getByLabel("Créer sans envoyer d’invitation").check();
   await page
     .getByLabel("Mot de passe (12 caractères minimum)")
@@ -253,7 +238,6 @@ test("season context enables direct accounts only in TEST and shows season contr
   await expect
     .poll(() => created)
     .toMatchObject({
-      seasonId: testId,
       without_invitation: true,
       password: "valid-password-1234",
       action: "invite",
@@ -262,15 +246,17 @@ test("season context enables direct accounts only in TEST and shows season contr
     .locator(".beta-sidebar")
     .getByRole("button", { name: "Saison", exact: true })
     .click();
+  expect(created).not.toHaveProperty("seasonId");
   await expect(
     page.getByRole("button", { name: "Utilisée pour les tests" }),
+  ).toHaveCount(0);
+  await page.getByRole("button", { name: "Réglages de Tests octobre" }).click();
+  await expect(
+    page.locator(".season-editor").getByLabel("Nom de la saison"),
   ).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Supprimer la saison de test" }),
-  ).toBeVisible();
-  await expect(
-    page.getByText("Cette saison est un environnement de test isolé.", {
-      exact: false,
-    }),
-  ).toBeVisible();
+    page
+      .locator(".season-editor")
+      .getByText("Ouverture de la carte", { exact: true }),
+  ).toHaveCount(0);
 });

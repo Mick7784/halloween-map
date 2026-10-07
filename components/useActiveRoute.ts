@@ -29,6 +29,7 @@ type Controller = {
   parameters: RouteParameters | null;
   result: RouteResult | null;
   collection: Collection;
+  collectionId: string | null;
   selectedHouse: PublicHouse | null;
   selectedStepId: string | null;
   sheet: SheetPosition;
@@ -59,6 +60,7 @@ const initial = (): Controller => ({
   parameters: null,
   result: null,
   collection: emptyCollection(),
+  collectionId: null,
   selectedHouse: null,
   selectedStepId: null,
   sheet: "collapsed",
@@ -151,6 +153,7 @@ export default function useActiveRoute({
             parameters: saved.parameters,
             result: saved.result,
             collection: saved.collection,
+            collectionId: saved.collectionId ?? null,
             sheet: saved.sheet,
             camera: saved.camera,
             createdAt: saved.createdAt,
@@ -173,6 +176,7 @@ export default function useActiveRoute({
       format: 2,
       phase: state.phase,
       collection: state.collection,
+      collectionId: state.collectionId,
       ownerId,
       instanceId,
       seasonId,
@@ -206,6 +210,7 @@ export default function useActiveRoute({
     state.parameters,
     state.result,
     state.collection,
+    state.collectionId,
     state.createdAt,
     state.sheet,
     state.camera,
@@ -214,6 +219,60 @@ export default function useActiveRoute({
     instanceId,
     seasonId,
     closesAt,
+  ]);
+  useEffect(() => {
+    if (
+      !state.ready ||
+      state.identityKey !== identityKey ||
+      !state.collectionId ||
+      !state.result ||
+      !["active", "completed"].includes(state.phase)
+    )
+      return;
+    const collection = state.collection,
+      event = state.phase === "completed" ? "finish" : "start";
+    const report = {
+      id: state.collectionId,
+      seasonId,
+      event,
+      planned: state.result.stops.length,
+      visited: event === "finish" ? collection.visitedIds.length : 0,
+      distanceMeters: event === "finish" ? collection.distanceMeters : 0,
+      durationSeconds:
+        event === "finish" && collection.startedAt && collection.endedAt
+          ? Math.max(
+              0,
+              (+new Date(collection.endedAt) -
+                +new Date(collection.startedAt)) /
+                1000,
+            )
+          : 0,
+    };
+    let delivered = false;
+    const send = () => {
+      if (!delivered)
+        void api("collection/report", report)
+          .then(() => {
+            delivered = true;
+          })
+          .catch(() => {});
+    };
+    send();
+    window.addEventListener("online", send);
+    const retry = setInterval(send, 60000);
+    return () => {
+      clearInterval(retry);
+      window.removeEventListener("online", send);
+    };
+    // GPS updates stay local; reports contain totals only and run on phase changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    state.ready,
+    state.identityKey,
+    state.collectionId,
+    state.phase,
+    identityKey,
+    seasonId,
   ]);
   const checkAvailability = useCallback(async () => {
     if (document.visibilityState === "hidden") return;
@@ -432,6 +491,7 @@ export default function useActiveRoute({
             parameters: null,
             result: null,
             collection: emptyCollection(),
+            collectionId: null,
             error: "",
           },
     );
@@ -449,6 +509,7 @@ export default function useActiveRoute({
       parameters,
       result: { ...result, geometry: [] },
       collection: emptyCollection(),
+      collectionId: null,
       unavailable: [],
       verified: false,
       error: "",
@@ -471,6 +532,7 @@ export default function useActiveRoute({
     setState((s) => ({
       ...s,
       phase: "active",
+      collectionId: crypto.randomUUID(),
       collection: { ...emptyCollection(), startedAt: new Date().toISOString() },
       verified: false,
       sheet: "intermediate",

@@ -12,7 +12,6 @@ import {
   ShieldCheck,
   LogOut,
   ArrowRight,
-  Ghost,
   UserRound,
   Bug,
 } from "lucide-react";
@@ -317,22 +316,6 @@ export default function PremiumHome({
                       <span>Se déconnecter</span>
                     </AsyncButton>
                   </div>
-                  {state.demoAvailable && (
-                    <div className="home-menu-group">
-                      <AsyncButton
-                        onClick={async () => {
-                          await api("admin", {
-                            action: "preview",
-                            payload: { enabled: true },
-                          });
-                          window.location.href = "/map";
-                        }}
-                      >
-                        <Ghost />
-                        <span>Mode démo</span>
-                      </AsyncButton>
-                    </div>
-                  )}
                 </nav>
               </>
             )}

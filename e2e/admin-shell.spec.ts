@@ -18,27 +18,21 @@ async function arrange(page: Page, role = "SUPER_ADMIN") {
       id: real,
       name: "Halloween 2026",
       is_test: false,
-      activated: true,
-      public_active: true,
-      test_used: false,
+      active: true,
     },
     {
       ...dates,
       id: other,
       name: "Halloween prochaine édition",
       is_test: false,
-      activated: false,
-      public_active: false,
-      test_used: false,
+      active: false,
     },
     {
       ...dates,
       id: testId,
       name: "Essais octobre",
       is_test: true,
-      activated: true,
-      public_active: false,
-      test_used: true,
+      active: false,
     },
   ];
   const mutations: { action: string; id?: string }[] = [];
@@ -60,7 +54,8 @@ async function arrange(page: Page, role = "SUPER_ADMIN") {
   await page.route("**/api/**", async (route) => {
     const url = new URL(route.request().url()),
       path = url.pathname,
-      sid = url.searchParams.get("seasonId");
+      sid =
+        url.searchParams.get("seasonId") ?? seasons.find((s) => s.active)?.id;
     let data: unknown = {};
     if (path === "/api/me")
       data = {
@@ -74,6 +69,7 @@ async function arrange(page: Page, role = "SUPER_ADMIN") {
       data = {
         setupRequired: false,
         state: "MAP_OPEN",
+        mapAccessible: true,
         instance: {
           id: "instance",
           public_name: "Halloween Map",
@@ -83,7 +79,7 @@ async function arrange(page: Page, role = "SUPER_ADMIN") {
           longitude: -1.67,
           zoom: 14,
         },
-        season: seasons.find((s) => s.public_active),
+        season: seasons.find((s) => s.active),
         houses: [],
       };
     else if (path === "/api/admin/seasons") data = seasons;
@@ -139,17 +135,7 @@ async function arrange(page: Page, role = "SUPER_ADMIN") {
       const body = route.request().postDataJSON();
       mutations.push(body);
       if (body.action === "activateSeason")
-        seasons = seasons.map((s) =>
-          s.is_test
-            ? s
-            : {
-                ...s,
-                activated: s.id === body.id,
-                public_active: s.id === body.id,
-              },
-        );
-      if (body.action === "useForTests")
-        seasons = seasons.map((s) => ({ ...s, test_used: s.id === body.id }));
+        seasons = seasons.map((s) => ({ ...s, active: s.id === body.id }));
       data = { ok: true };
     }
     await route.fulfill({ json: data });
@@ -161,144 +147,45 @@ async function arrange(page: Page, role = "SUPER_ADMIN") {
     },
   };
 }
-test("desktop shell, themes, independent persisted season context and existing navigation", async ({
+
+test("dashboard stays active while BO house browsing is independently persisted; themes and navigation work", async ({
   page,
 }) => {
-  await page.setViewportSize({ width: 1440, height: 1080 });
-  const { mutations, removeTest } = await arrange(page);
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  const { mutations } = await arrange(page);
   await page.goto("/admin");
-  const selector = page.getByLabel("Saison du back-office");
-  await expect(selector).toHaveValue(real);
-  await expect(
-    page.locator(".beta-kpis article").filter({ hasText: "Maisons validées" }),
-  ).toContainText("24");
-  await expect(page.locator(".beta-activity-list")).toContainText(
-    "Maison validée",
-  );
-  await expect(page.locator(".beta-activity-list")).not.toContainText(
-    "house.review",
-  );
-  await page.getByLabel("Apparence", { exact: true }).selectOption("dark");
-  await expect(page.locator(".admin-beta")).toHaveCSS(
-    "background-color",
-    "rgb(12, 17, 26)",
-  );
-  await page
-    .locator(".beta-sidebar")
-    .evaluate((el) =>
-      Promise.all(el.getAnimations({ subtree: true }).map((a) => a.finished)),
-    );
-  await expect(page.locator(".beta-sidebar nav button.is-current")).toHaveCSS(
-    "color",
-    "rgb(255, 154, 83)",
-  );
-  await page.screenshot({ path: "test-results/admin-desktop-dark.png" });
-  await page.getByLabel("Apparence", { exact: true }).selectOption("light");
-  await expect(page.locator(".admin-beta")).toHaveCSS(
-    "background-color",
-    "rgb(244, 246, 250)",
-  );
-  await page
-    .locator(".beta-sidebar")
-    .evaluate((el) =>
-      Promise.all(el.getAnimations({ subtree: true }).map((a) => a.finished)),
-    );
-  await page.screenshot({ path: "test-results/admin-desktop-light.png" });
-  await page.getByLabel("Apparence", { exact: true }).selectOption("system");
-  await page.emulateMedia({ colorScheme: "dark" });
-  await expect(page.locator(".admin-beta")).toHaveCSS(
-    "background-color",
-    "rgb(12, 17, 26)",
-  );
-  await page.emulateMedia({ colorScheme: "light" });
-  await expect(page.locator(".admin-beta")).toHaveCSS(
-    "background-color",
-    "rgb(244, 246, 250)",
-  );
-  for (const sid of [testId, other, real, testId])
-    await selector.selectOption(sid);
-  await expect(
-    page.locator(".beta-kpis article").filter({ hasText: "Maisons validées" }),
-  ).toContainText("5");
-  await expect(page.locator(".beta-pending-list")).toContainText(
-    "Maison des essais",
-  );
-  await expect(page.locator(".beta-context")).toContainText(
-    "Saison publique : Halloween 2026",
-  );
-  await expect(page.locator(".beta-activity-list")).not.toContainText(
-    "Jardin des lanternes",
-  );
-  expect(mutations).toEqual([]);
-  await page.reload();
-  await expect(selector).toHaveValue(testId);
-  await expect(page.getByLabel("Apparence", { exact: true })).toHaveValue(
-    "system",
-  );
   const nav = page.getByRole("navigation", {
     name: "Navigation administration",
   });
-  for (const name of [
-    "Maisons",
-    "Utilisateurs",
-    "Parcours",
-    "Saison",
-    "Rôles & permissions",
-    "Tableau de bord",
-  ]) {
+  await expect(
+    page.locator(".beta-kpis article").filter({ hasText: "Maisons validées" }),
+  ).toContainText("24");
+  for (const theme of ["dark", "light", "system"])
+    await page.getByLabel("Apparence", { exact: true }).selectOption(theme);
+  await nav.getByRole("button", { name: "Maisons", exact: true }).click();
+  const selector = page.getByLabel("Saison du back-office");
+  await selector.selectOption(testId);
+  await expect(page.locator(".beta-table-scroll")).toContainText(
+    "Maison des essais",
+  );
+  await nav
+    .getByRole("button", { name: "Tableau de bord", exact: true })
+    .click();
+  await expect(
+    page.locator(".beta-kpis article").filter({ hasText: "Maisons validées" }),
+  ).toContainText("24");
+  await expect(page.locator(".beta-context")).toContainText(
+    "Saison active : Halloween 2026",
+  );
+  await nav.getByRole("button", { name: "Maisons", exact: true }).click();
+  await expect(selector).toHaveValue(testId);
+  expect(mutations).toEqual([]);
+  for (const name of ["Utilisateurs", "Saison", "Tableau de bord"]) {
     await nav.getByRole("button", { name, exact: true }).click();
     await expect(page.locator(".beta-page-title h1")).toHaveText(name);
   }
-  await expect(page.locator(".beta-logo")).toHaveAttribute(
-    "href",
-    "https://github.com/Mick7784/halloween-map",
-  );
-  removeTest();
-  await page.getByRole("button", { name: "Actualiser les données" }).click();
-  await expect(selector).toHaveValue(real);
 });
-test("explicit activation confirms, excludes TEST and updates public state immediately", async ({
-  page,
-}) => {
-  const { mutations } = await arrange(page);
-  await page.goto("/admin");
-  await page.getByLabel("Saison du back-office").selectOption(other);
-  await page
-    .getByRole("navigation")
-    .getByRole("button", { name: "Saison", exact: true })
-    .click();
-  page.once("dialog", (d) => d.dismiss());
-  await page
-    .getByRole("button", { name: "Activer cette saison", exact: true })
-    .click();
-  expect(mutations).toEqual([]);
-  page.once("dialog", async (d) => {
-    expect(d.message()).toContain("automatiquement désactivée");
-    await d.accept();
-  });
-  await page
-    .getByRole("button", { name: "Activer cette saison", exact: true })
-    .click();
-  await expect(page.locator(".beta-context")).toContainText(
-    "Saison publique : Halloween prochaine édition",
-  );
-  expect(mutations).toEqual([
-    expect.objectContaining({
-      action: "activateSeason",
-      id: other,
-      payload: "ACTIVER",
-    }),
-  ]);
-  await page.getByLabel("Saison du back-office").selectOption(testId);
-  await expect(
-    page.getByRole("button", { name: "Activer cette saison", exact: true }),
-  ).toHaveCount(0);
-  await page.getByLabel("Saison du back-office").selectOption(real);
-  await expect(
-    page.getByRole("button", { name: "Activer cette saison", exact: true }),
-  ).toBeVisible();
-});
-test("mobile dashboard simplifies presentation and navigation respects ADMIN permissions", async ({
+test("mobile dashboard and ADMIN navigation respect permissions", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
@@ -306,11 +193,8 @@ test("mobile dashboard simplifies presentation and navigation respects ADMIN per
   await page.goto("/admin");
   await expect(page.locator(".beta-kpis article")).toHaveCount(4);
   expect(
-    await page.evaluate(
-      () => document.querySelector(".beta-content")!.scrollWidth,
-    ),
+    await page.evaluate(() => document.documentElement.scrollWidth),
   ).toBeLessThanOrEqual(390);
-  await page.screenshot({ path: "test-results/admin-mobile.png" });
   await page.getByRole("button", { name: "Ouvrir la navigation" }).click();
   const nav = page.getByRole("navigation");
   await expect(

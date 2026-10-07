@@ -754,3 +754,134 @@
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
+/* Seasons use the existing shell tokens in all three appearances. */
+.season-manager .beta-card-title {
+  align-items: flex-start;
+  gap: 1rem;
+}
+.season-manager h2 {
+  margin: 0;
+}
+.season-active {
+  background: color-mix(in srgb, var(--accent) 9%, transparent);
+}
+.season-table td strong {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+}
+.season-editor {
+  padding: 1rem;
+  max-width: 900px;
+}
+.season-editor-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+.season-statistics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+.season-statistics article {
+  padding: 1rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.season-statistics strong {
+  display: block;
+  font-size: 1.5rem;
+  margin-top: 0.5rem;
+}
+.season-averages {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.6rem;
+}
+.season-averages dd {
+  margin: 0;
+  font-weight: 600;
+}
+@media (max-width: 700px) {
+  .season-period,
+  .season-summary {
+    display: none;
+  }
+  .season-table,
+  .season-table tbody {
+    display: block;
+    width: 100%;
+  }
+  .season-table thead {
+    display: none;
+  }
+  .season-table tbody {
+    display: grid;
+    gap: 12px;
+  }
+  .season-table tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    padding: 12px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+  }
+  .season-table td {
+    padding: 6px 0;
+    border: 0;
+    min-width: 0;
+  }
+  .season-table td:nth-child(3),
+  .season-table td:last-child {
+    grid-column: 1 / -1;
+  }
+  .season-table td:nth-child(2) {
+    text-align: right;
+  }
+  .season-table .season-row-actions {
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    gap: 8px;
+  }
+  .season-table .season-row-actions button {
+    max-width: 100%;
+    padding: 8px 10px;
+    font-size: 13px;
+  }
+  .season-table .season-settings-row {
+    display: block;
+  }
+  .season-editor {
+    padding: 0;
+  }
+  .season-manager .beta-card-title {
+    flex-wrap: wrap;
+  }
+  .season-editor-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Keep native controls and global public button rules inside the BO theme. */
+.application.admin-app .admin-beta button,
+.application.admin-app .admin-beta input,
+.application.admin-app .admin-beta select,
+.application.admin-app .admin-beta textarea {
+  background: var(--surface);
+  color: var(--text);
+  border-color: var(--line);
+}
+.application.admin-app .admin-beta button.primary {
+  background: var(--accent);
+  color: var(--bg);
+  border-color: var(--accent);
+}
+.application.admin-app .admin-beta button.danger {
+  color: #ef7272;
+}
+.application.admin-app .admin-beta .beta-sidebar nav button.is-current {
+  background: color-mix(in srgb, var(--accent) 14%, var(--surface));
+  color: var(--accent);
+}

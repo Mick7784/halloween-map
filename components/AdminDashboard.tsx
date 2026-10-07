@@ -13,6 +13,7 @@ export type AdminMetrics = {
   pending: number;
   routes: number;
   users: number;
+  collectionStats?: Record<string, number>;
 };
 export type AdminAudit = {
   id: string;
@@ -78,6 +79,38 @@ export default function AdminDashboard({
             </article>
           ))}
         </div>
+      )}
+      {metrics?.collectionStats?.collections_started !== undefined && (
+        <section className="beta-card">
+          <div className="beta-card-title">
+            <h2>Collectes de la saison active</h2>
+          </div>
+          <div className="season-statistics">
+            {(
+              [
+                ["Lancées", metrics.collectionStats.collections_started],
+                [
+                  "Terminées",
+                  metrics.collectionStats.collections_finished ?? 0,
+                ],
+                ["Maisons visitées", metrics.collectionStats.visited ?? 0],
+                [
+                  "Distance cumulée",
+                  `${((metrics.collectionStats.distance_meters ?? 0) / 1000).toFixed(2)} km`,
+                ],
+              ] as const
+            ).map(([label, value]) => (
+              <article key={label}>
+                <span>{label}</span>
+                <strong>{value}</strong>
+              </article>
+            ))}
+          </div>
+          <p className="small muted">
+            Totaux transmis par les appareils, sans trace GPS ni liste des
+            visites.
+          </p>
+        </section>
       )}
       <div className="beta-dashboard-grid">
         <section className="beta-card beta-pending">

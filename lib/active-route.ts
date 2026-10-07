@@ -73,6 +73,7 @@ const result = z.object({
 });
 export const storedRouteSchema = z.object({
   format: z.literal(2),
+  collectionId: z.uuid().nullable().optional(),
   phase: z.enum(["calculated", "active", "completed"]),
   collection: z.object({
     startedAt: date.nullable(),

@@ -31,7 +31,7 @@ import SeasonManager from "./SeasonManager";
 import ParticipationForm from "./ParticipationForm";
 import AdminDashboard, { type AdminAudit } from "./AdminDashboard";
 import AdminExistingPage from "./AdminExistingPage";
-import { seasonState } from "../lib/domain";
+import { seasonFinished } from "../lib/domain";
 import "./AdminBeta.css";
 type ManagedHouse = House & {
   email: string;
@@ -45,6 +45,7 @@ type Dashboard = {
   pending: number;
   routes: number;
   users: number;
+  collectionStats?: Record<string, number>;
 };
 type Audit = AdminAudit;
 function dateLabel(value: string, zone: string) {
@@ -92,9 +93,7 @@ export default function Admin({
     [roles, setRoles] = useState<
       { id: string; name: string; permissions: string[] }[]
     >([]);
-  const [seasons, setSeasons] = useState<
-      (Season & { public_active?: boolean; test_used?: boolean })[]
-    >([]),
+  const [seasons, setSeasons] = useState<Season[]>([]),
     [seasonId, setSeasonId] = useState(""),
     [loadedSeason, setLoadedSeason] = useState(""),
     [creating, setCreating] = useState(false),
@@ -108,10 +107,7 @@ export default function Admin({
   const seasonStorageKey =
     "halloween.admin.season." + state.instance?.id + "." + user.id;
   const reloadSeasons = useCallback(async () => {
-    const rows =
-      await api<(Season & { public_active?: boolean; test_used?: boolean })[]>(
-        "admin/seasons",
-      );
+    const rows = await api<Season[]>("admin/seasons");
     setSeasons(rows);
     if (!rows.length) setLoading(false);
     let stored = "";
@@ -121,8 +117,8 @@ export default function Admin({
     setSeasonId((id) =>
       rows.some((s) => s.id === id)
         ? id
-        : (rows.find((s) => s.id === stored)?.id ??
-          rows.find((s) => s.public_active)?.id ??
+        : (rows.find((s) => s.active)?.id ??
+          rows.find((s) => s.id === stored)?.id ??
           rows[0]?.id ??
           ""),
     );
@@ -138,9 +134,13 @@ export default function Admin({
     }
   }, [seasonId, seasonStorageKey]);
   const reload = useCallback(async () => {
-    if (!seasonId) return;
     const revision = ++generation.current,
-      query = "?seasonId=" + encodeURIComponent(seasonId);
+      query =
+        section === "dashboard"
+          ? ""
+          : seasonId
+            ? "?seasonId=" + encodeURIComponent(seasonId)
+            : "";
     setLoading(true);
     try {
       const [h, d, a] = await Promise.all([
@@ -163,14 +163,11 @@ export default function Admin({
     } finally {
       if (revision === generation.current) setLoading(false);
     }
-  }, [user, seasonId]);
+  }, [user, seasonId, section]);
   const reloadUsers = useCallback(async () => {
-    if (!seasonId) return;
     const [u, r] = await Promise.all([
-      api<ManagedUser[]>("admin/users?seasonId=" + seasonId),
-      api<{ id: string; name: string; permissions: string[] }[]>(
-        "admin/roles?seasonId=" + seasonId,
-      ),
+      api<ManagedUser[]>("admin/users"),
+      api<{ id: string; name: string; permissions: string[] }[]>("admin/roles"),
     ]);
     if (currentSeason.current !== seasonId) return;
     setUsers(u);
@@ -193,9 +190,9 @@ export default function Admin({
       void reloadUsers().catch((e) => setError(e.message));
   }, [section, reloadUsers]);
   async function seasonAction(action: string, payload: unknown, id?: string) {
-    await api("admin", { action, payload, id, seasonId });
+    await api("admin", { action, payload, id });
     await reloadSeasons();
-    if (action !== "deleteTestSeason") await reload();
+    if (action !== "deleteSeason") await reload();
     await refresh();
   }
   async function startCreate() {
@@ -224,9 +221,7 @@ export default function Admin({
     await refresh();
   }
   const scopedHouses = loadedSeason === seasonId ? houses : [];
-  const pending = scopedHouses.filter(
-    (h) => h.review_status === "PENDING" && h.season_id === seasonId,
-  );
+  const pending = scopedHouses.filter((h) => h.review_status === "PENDING");
   const list = scopedHouses.filter(
     (h) =>
       (h.name + " " + h.owner_name + " " + h.email + " " + h.address)
@@ -385,7 +380,7 @@ export default function Admin({
         </nav>
         <Link className="beta-public-link" href="/map">
           <ExternalLink size={17} />
-          Voir la carte publique
+          Voir la carte
         </Link>
       </aside>
       <main className="beta-content">
@@ -416,33 +411,37 @@ export default function Admin({
             </h1>
             <p>
               {section === "dashboard"
-                ? "Vue d’ensemble de la saison sélectionnée"
-                : ["content", "settings", "roles"].includes(section)
-                  ? "Configuration globale de l’instance"
-                  : "Données de la saison sélectionnée"}
+                ? "Vue d’ensemble de la saison active"
+                : section === "seasons"
+                  ? "Gestion des saisons et de l’historique"
+                  : ["content", "settings", "roles", "users"].includes(section)
+                    ? "Configuration globale de l’instance"
+                    : "Données de la saison sélectionnée"}
             </p>
           </div>
           <div className="beta-header-controls">
-            <label className="beta-season-select">
-              Saison consultée
-              <select
-                aria-label="Saison du back-office"
-                value={seasonId}
-                onChange={(e) => {
-                  generation.current++;
-                  setLoadedSeason("");
-                  setSeasonId(e.target.value);
-                }}
-              >
-                {seasons.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name ?? "Halloween " + s.year}
-                    {s.is_test ? " · TEST" : " · REAL"}
-                    {s.public_active && s.activated ? " · ACTIVE" : ""}
-                  </option>
-                ))}
-              </select>
-            </label>
+            {!["dashboard", "seasons", "users"].includes(section) && (
+              <label className="beta-season-select">
+                Saison consultée
+                <select
+                  aria-label="Saison du back-office"
+                  value={seasonId}
+                  onChange={(e) => {
+                    generation.current++;
+                    setLoadedSeason("");
+                    setSeasonId(e.target.value);
+                  }}
+                >
+                  {seasons.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name ?? "Halloween " + s.year}
+                      {s.is_test ? " · TEST" : " · REAL"}
+                      {s.active ? " · ACTIVE" : ""}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
             <label className="beta-theme-select">
               <SunMoon size={17} />
               <select
@@ -478,39 +477,18 @@ export default function Admin({
         </header>
         <div className="beta-context">
           <div>
-            {selectedSeason && (
-              <>
-                <span className="beta-status">
-                  {selectedSeason.is_test ? "TEST" : "REAL"}
-                </span>
-                <strong>{selectedSeason.name}</strong>
-                {selectedSeason.public_active && selectedSeason.activated && (
-                  <span className="beta-status public-active">ACTIVE</span>
-                )}
-                {selectedSeason.test_used && (
-                  <span className="beta-status">Utilisée pour les tests</span>
-                )}
-              </>
+            <strong>
+              Saison active : {seasons.find((s) => s.active)?.name ?? "Aucune"}
+            </strong>
+            {seasons.some((s) => s.active) && (
+              <span className="beta-status">
+                {seasons.find((s) => s.active)?.is_test ? "TEST" : "REAL"}
+              </span>
             )}
           </div>
           <div>
-            <span>
-              Saison publique :{" "}
-              <strong>
-                {seasons.find((s) => s.public_active)?.name ?? "Aucune"}
-              </strong>
-            </span>
             <span className="beta-service">
-              Carte :{" "}
-              {
-                {
-                  MAP_OPEN: "ouverte",
-                  COUNTDOWN: "ouverture programmée",
-                  PREPARATION: "en préparation",
-                  CLOSED: "fermée",
-                  ARCHIVED: "archivée",
-                }[seasonState(seasons.find((s) => s.public_active) ?? null)]
-              }
+              Carte : {state.mapAccessible ? "ouverte" : "indisponible"}
             </span>
             <button
               aria-label="Actualiser les données"
@@ -524,7 +502,18 @@ export default function Admin({
           </div>
         </div>
         <Notice error={error} />
-        {section === "dashboard" && (
+        {section === "dashboard" &&
+          !seasons.some((s) => s.active) &&
+          !loading && (
+            <section className="beta-card">
+              <h2>Aucune saison active</h2>
+              <p>Activez une saison pour consulter ses indicateurs.</p>
+              <button className="primary" onClick={() => setSection("seasons")}>
+                Gérer les saisons
+              </button>
+            </section>
+          )}
+        {section === "dashboard" && seasons.some((s) => s.active) && (
           <AdminDashboard
             metrics={loadedSeason === seasonId ? dashboard : null}
             pending={pending
@@ -541,6 +530,7 @@ export default function Admin({
             }
             zone={state.instance?.timezone ?? "Europe/Paris"}
             onHouse={(id) => {
+              setSeasonId(seasons.find((s) => s.active)?.id ?? "");
               setSection("houses");
               const house = scopedHouses.find((h) => h.id === id);
               if (house) select(house);
@@ -565,7 +555,7 @@ export default function Admin({
             )}
           </section>
         )}
-        {["content", "settings", "roles"].includes(section) && (
+        {["content", "settings", "roles", "users"].includes(section) && (
           <AdminExistingPage
             key={section}
             section={section}
@@ -576,15 +566,17 @@ export default function Admin({
         )}
         {section === "houses" && (
           <section className="beta-card">
-            {has(user, "participants.edit") && (
-              <button
-                onClick={() =>
-                  void startCreate().catch((e) => setError(e.message))
-                }
-              >
-                Créer une maison
-              </button>
-            )}
+            {selectedSeason?.active &&
+              !seasonFinished(selectedSeason) &&
+              has(user, "participants.edit") && (
+                <button
+                  onClick={() =>
+                    void startCreate().catch((e) => setError(e.message))
+                  }
+                >
+                  Créer une maison
+                </button>
+              )}
             <div className="beta-filters">
               <input
                 aria-label="Rechercher une maison"
@@ -621,8 +613,6 @@ export default function Admin({
         {section === "users" && (
           <AdminUsers
             key={seasonId}
-            seasonId={seasonId}
-            testSeason={!!selectedSeason?.is_test}
             users={users}
             roles={roles}
             user={user}
@@ -630,49 +620,12 @@ export default function Admin({
           />
         )}
         {section === "seasons" && (
-          <>
-            {selectedSeason &&
-              !selectedSeason.is_test &&
-              !selectedSeason.archived &&
-              !selectedSeason.purged_at &&
-              seasonState(selectedSeason) !== "CLOSED" &&
-              !(selectedSeason.public_active && selectedSeason.activated) &&
-              has(user, "season.manage") && (
-                <section className="beta-card">
-                  <h2>Activation publique</h2>
-                  <p>
-                    La consultation d’une saison ne modifie jamais la carte
-                    publique.
-                  </p>
-                  <AsyncButton
-                    onClick={async () => {
-                      if (
-                        window.confirm(
-                          (selectedSeason.name ?? "Cette saison") +
-                            " deviendra la saison publique active. La saison actuellement active sera automatiquement désactivée.",
-                        )
-                      )
-                        await seasonAction(
-                          "activateSeason",
-                          "ACTIVER",
-                          selectedSeason.id,
-                        );
-                    }}
-                  >
-                    Activer cette saison
-                  </AsyncButton>
-                </section>
-              )}
-            <SeasonManager
-              key={seasonId}
-              seasons={seasons}
-              selectedId={seasonId}
-              testSeasonId={seasons.find((s) => s.test_used)?.id}
-              user={user}
-              zone={state.instance?.timezone ?? "Europe/Paris"}
-              act={seasonAction}
-            />
-          </>
+          <SeasonManager
+            seasons={seasons}
+            user={user}
+            zone={state.instance?.timezone ?? "Europe/Paris"}
+            act={seasonAction}
+          />
         )}
       </main>
       {creating && selectedSeason && state.instance && (
@@ -786,15 +739,17 @@ export default function Admin({
             </p>
             <p>{current.rp}</p>
             <p>{current.practical}</p>
-            {has(user, "participants.edit") && (
-              <div className="beta-actions">
-                <button className="secondary" onClick={() => setEdit(!edit)}>
-                  {edit
-                    ? "Consulter / gérer"
-                    : "Modifier les informations et horaires"}
-                </button>
-              </div>
-            )}
+            {selectedSeason &&
+              !seasonFinished(selectedSeason) &&
+              has(user, "participants.edit") && (
+                <div className="beta-actions">
+                  <button className="secondary" onClick={() => setEdit(!edit)}>
+                    {edit
+                      ? "Consulter / gérer"
+                      : "Modifier les informations et horaires"}
+                  </button>
+                </div>
+              )}
             {edit && state.instance ? (
               <HouseForm
                 key={current.updated_at}
@@ -810,137 +765,143 @@ export default function Admin({
               />
             ) : (
               <>
-                {has(user, "participants.edit") && (
-                  <>
-                    <section>
-                      <h3>Modération</h3>
-                      <div className="beta-actions">
+                {selectedSeason &&
+                  !seasonFinished(selectedSeason) &&
+                  has(user, "participants.edit") && (
+                    <>
+                      <section>
+                        <h3>Modération</h3>
+                        <div className="beta-actions">
+                          <AsyncButton
+                            onClick={() =>
+                              act("reviewHouse", { status: "VALIDATED" })
+                            }
+                          >
+                            Valider
+                          </AsyncButton>
+                          <AsyncButton
+                            onClick={() =>
+                              act("reviewHouse", { status: "PENDING" })
+                            }
+                          >
+                            Mettre en attente
+                          </AsyncButton>
+                        </div>
+                        <label>
+                          Motif du refus
+                          <textarea
+                            maxLength={500}
+                            value={reason}
+                            onChange={(e) => setReason(e.target.value)}
+                          />
+                        </label>
                         <AsyncButton
                           onClick={() =>
-                            act("reviewHouse", { status: "VALIDATED" })
+                            act("reviewHouse", { status: "REFUSED", reason })
                           }
                         >
-                          Valider
+                          Refuser avec motif
                         </AsyncButton>
-                        <AsyncButton
-                          onClick={() =>
-                            act("reviewHouse", { status: "PENDING" })
-                          }
-                        >
-                          Mettre en attente
-                        </AsyncButton>
-                      </div>
-                      <label>
-                        Motif du refus
-                        <textarea
-                          maxLength={500}
-                          value={reason}
-                          onChange={(e) => setReason(e.target.value)}
-                        />
-                      </label>
-                      <AsyncButton
-                        onClick={() =>
-                          act("reviewHouse", { status: "REFUSED", reason })
-                        }
-                      >
-                        Refuser avec motif
-                      </AsyncButton>
-                    </section>
-                    <section>
-                      <h3>Disponibilité</h3>
-                      <div className="beta-actions">
-                        <AsyncButton
-                          onClick={() =>
-                            act("houseActivity", {
-                              action:
-                                current.activity === "ACTIVE"
-                                  ? "end"
-                                  : "resume",
-                            })
-                          }
-                        >
-                          {current.activity === "ACTIVE"
-                            ? "Fermer la maison"
-                            : "Rouvrir la maison"}
-                        </AsyncButton>
-                        {current.candy_available &&
-                        current.activities.includes("CANDY") ? (
-                          <>
-                            <AsyncButton
-                              onClick={() =>
-                                act("houseActivity", {
-                                  action: "deplete",
-                                  choice: "close",
-                                })
-                              }
-                            >
-                              Plus de bonbons et fermer
-                            </AsyncButton>
-                            {current.activities.includes("ACTING") && (
+                      </section>
+                      <section>
+                        <h3>Disponibilité</h3>
+                        <div className="beta-actions">
+                          <AsyncButton
+                            onClick={() =>
+                              act("houseActivity", {
+                                action:
+                                  current.activity === "ACTIVE"
+                                    ? "end"
+                                    : "resume",
+                              })
+                            }
+                          >
+                            {current.activity === "ACTIVE"
+                              ? "Fermer la maison"
+                              : "Rouvrir la maison"}
+                          </AsyncButton>
+                          {current.candy_available &&
+                          current.activities.includes("CANDY") ? (
+                            <>
                               <AsyncButton
                                 onClick={() =>
                                   act("houseActivity", {
                                     action: "deplete",
-                                    choice: "continue",
+                                    choice: "close",
                                   })
                                 }
                               >
-                                Plus de bonbons, continuer la mise en scène
+                                Plus de bonbons et fermer
                               </AsyncButton>
-                            )}
-                          </>
-                        ) : (
-                          <AsyncButton
-                            onClick={() =>
-                              act("houseActivity", {
-                                action: "candy",
-                                available: true,
-                              })
-                            }
-                          >
-                            Remettre les bonbons disponibles
-                          </AsyncButton>
-                        )}
-                      </div>
-                    </section>
-                  </>
-                )}
-                {has(user, "participants.edit") && (
-                  <section>
-                    <h3>Visibilité administrative</h3>
-                    <p>La visibilité est indépendante de la modération.</p>
-                    <AsyncButton
-                      onClick={() =>
-                        act(
-                          "visibility",
-                          current.status === "HIDDEN" ? "VISIBLE" : "HIDDEN",
-                        )
-                      }
-                    >
-                      {current.status === "HIDDEN" ? "Réafficher" : "Masquer"}
-                    </AsyncButton>
-                  </section>
-                )}
-                {has(user, "participants.delete") && (
-                  <section>
-                    <h3>Suppression</h3>
-                    <AsyncButton
-                      danger
-                      onClick={async () => {
-                        if (
-                          !window.confirm(
-                            "Supprimer définitivement cette maison ?",
+                              {current.activities.includes("ACTING") && (
+                                <AsyncButton
+                                  onClick={() =>
+                                    act("houseActivity", {
+                                      action: "deplete",
+                                      choice: "continue",
+                                    })
+                                  }
+                                >
+                                  Plus de bonbons, continuer la mise en scène
+                                </AsyncButton>
+                              )}
+                            </>
+                          ) : (
+                            <AsyncButton
+                              onClick={() =>
+                                act("houseActivity", {
+                                  action: "candy",
+                                  available: true,
+                                })
+                              }
+                            >
+                              Remettre les bonbons disponibles
+                            </AsyncButton>
+                          )}
+                        </div>
+                      </section>
+                    </>
+                  )}
+                {selectedSeason &&
+                  !seasonFinished(selectedSeason) &&
+                  has(user, "participants.edit") && (
+                    <section>
+                      <h3>Visibilité administrative</h3>
+                      <p>La visibilité est indépendante de la modération.</p>
+                      <AsyncButton
+                        onClick={() =>
+                          act(
+                            "visibility",
+                            current.status === "HIDDEN" ? "VISIBLE" : "HIDDEN",
                           )
-                        )
-                          return;
-                        await act("deleteHouse", "SUPPRIMER LA MAISON");
-                        setSelected(null);
-                      }}
-                    >
-                      Supprimer la maison
-                    </AsyncButton>
-                  </section>
-                )}
+                        }
+                      >
+                        {current.status === "HIDDEN" ? "Réafficher" : "Masquer"}
+                      </AsyncButton>
+                    </section>
+                  )}
+                {selectedSeason &&
+                  !seasonFinished(selectedSeason) &&
+                  has(user, "participants.delete") && (
+                    <section>
+                      <h3>Suppression</h3>
+                      <AsyncButton
+                        danger
+                        onClick={async () => {
+                          if (
+                            !window.confirm(
+                              "Supprimer définitivement cette maison ?",
+                            )
+                          )
+                            return;
+                          await act("deleteHouse", "SUPPRIMER LA MAISON");
+                          setSelected(null);
+                        }}
+                      >
+                        Supprimer la maison
+                      </AsyncButton>
+                    </section>
+                  )}
               </>
             )}
           </section>

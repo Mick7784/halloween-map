@@ -33,8 +33,13 @@ export const seasonSchema = z.object({
   opens_at: text(40),
   closes_at: text(40),
   registrations_open: z.boolean(),
-  activated: z.boolean().default(false),
 });
+export function testSeasonDefinition(input: unknown) {
+  if (!input || typeof input !== "object" || !(input as { is_test?: boolean }).is_test) return input;
+  return { ...input, year: (input as { year?: number }).year ?? new Date().getUTCFullYear(),
+    registrations_open_at: "2000-01-01T00:00:00Z", opens_at: "2000-01-01T00:00:00Z",
+    closes_at: "2201-01-01T00:00:00Z", purge_at: "2201-01-02T00:00:00Z", registrations_open: true };
+}
 export const setupSchema = z.object({
   token: text(200).optional(),
   instance: instanceSchema,

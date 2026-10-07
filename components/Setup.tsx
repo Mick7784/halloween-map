@@ -28,7 +28,6 @@ type Wizard = {
     opens_at: string;
     closes_at: string;
     registrations_open: boolean;
-    activated: boolean;
   };
 };
 export default function Setup() {
@@ -55,7 +54,6 @@ export default function Setup() {
       opens_at: `${year}-10-31T12:00`,
       closes_at: `${year}-11-01T00:00`,
       registrations_open: true,
-      activated: false,
     },
   });
   const titles = [
@@ -100,7 +98,6 @@ export default function Setup() {
             opens_at: v.opens_at,
             closes_at: v.closes_at,
             registrations_open: v.registrations_open === "on",
-            activated: false,
           },
         });
         setStep(3);

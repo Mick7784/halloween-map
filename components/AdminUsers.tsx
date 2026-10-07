@@ -36,11 +36,7 @@ export default function AdminUsers({
   roles,
   user,
   reload,
-  seasonId,
-  testSeason = false,
 }: {
-  seasonId?: string;
-  testSeason?: boolean;
   users: ManagedUser[];
   roles: Role[];
   user: User;
@@ -65,7 +61,7 @@ export default function AdminUsers({
   const current = users.find((u) => u.id === selected);
   const manageable = user.permissions.includes("users.manage");
   async function act(p: unknown) {
-    await api("admin/users", { ...(p as object), seasonId });
+    await api("admin/users", p);
     await reload();
     setCreate(false);
   }
@@ -149,7 +145,7 @@ export default function AdminUsers({
               ×
             </button>
             <h2 id="user-title">
-              {current?.display_name ?? "Inviter un utilisateur"}
+              {current?.display_name ?? "Créer un utilisateur"}
             </h2>
             {current && (
               <>
@@ -203,14 +199,12 @@ export default function AdminUsers({
                 key={current?.id ?? "new"}
                 current={current}
                 roles={
-                  user.role_name === "SUPER_ADMIN" && !testSeason
+                  user.role_name === "SUPER_ADMIN"
                     ? roles
                     : roles.filter((r) => r.name === "USER")
                 }
                 canChangeRole={user.role_name === "SUPER_ADMIN" || !current}
-                allowDirect={
-                  !current && testSeason && user.role_name === "SUPER_ADMIN"
-                }
+                allowDirect={!current && user.role_name === "SUPER_ADMIN"}
                 submit={act}
               />
             )}
@@ -296,7 +290,7 @@ function UserEditor({
           await submit({
             action: current ? "edit" : "invite",
             id: current?.id,
-            email: v.email,
+            email: v.email || undefined,
             display_name: v.display_name,
             role_id: canChangeRole ? v.role_id : undefined,
             without_invitation: direct,
@@ -315,7 +309,13 @@ function UserEditor({
         label="Nom ou pseudo"
         value={current?.display_name}
       />
-      <Field name="email" type="email" label="Email" value={current?.email} />
+      <Field
+        name="email"
+        type="email"
+        label={direct ? "Email (facultatif)" : "Email"}
+        required={!direct}
+        value={current?.email}
+      />
       {canChangeRole && (
         <label className="field">
           <span>Profil</span>
@@ -325,11 +325,13 @@ function UserEditor({
               current?.role_id ?? roles.find((r) => r.name === "USER")?.id
             }
           >
-            {roles.map((r) => (
-              <option key={r.id} value={r.id}>
-                {labels[r.name] ?? r.name}
-              </option>
-            ))}
+            {roles
+              .filter((r) => !direct || r.name === "USER")
+              .map((r) => (
+                <option key={r.id} value={r.id}>
+                  {labels[r.name] ?? r.name}
+                </option>
+              ))}
           </select>
         </label>
       )}
@@ -342,6 +344,12 @@ function UserEditor({
           />{" "}
           Créer sans envoyer d’invitation
         </label>
+      )}
+      {direct && (
+        <p>
+          Sans email, une adresse interne est générée. Aucun message ne lui sera
+          envoyé.
+        </p>
       )}
       {direct && (
         <Field

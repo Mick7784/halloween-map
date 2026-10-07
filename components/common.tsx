@@ -1,7 +1,7 @@
 "use client";
 import FrenchDate from "./FrenchDate";
 import { useState } from "react";
-import { clearStoredRoute } from "../lib/active-route";
+import { ACTIVE_ROUTE_KEY, clearStoredRoute } from "../lib/active-route";
 import { Sparkles, Candy, Drama } from "lucide-react";
 import { DateTime } from "luxon";
 import type { Activity, Instance, Season, User } from "../lib/domain";
@@ -19,7 +19,6 @@ export type PublicState = {
     import("../lib/content").LegalKind,
     import("../lib/content").LegalDocument
   >;
-  demoAvailable?: boolean;
   mapAccessible?: boolean;
   instance?: Pick<
     Instance,
@@ -36,6 +35,7 @@ export type PublicState = {
         opens_at: string;
         closes_at: string;
         purge_at: string;
+        route_end_at?: string;
       })
     | null;
   state?: string;
@@ -86,6 +86,18 @@ export async function api<T>(path: string, body?: unknown): Promise<T> {
   const data = await r.json();
   if (!r.ok)
     throw new Error(data.error ?? "Impossible de terminer cette action");
+  if (path === "public") {
+    try {
+      const raw = localStorage.getItem(ACTIVE_ROUTE_KEY);
+      if (
+        raw &&
+        (!data.mapAccessible || JSON.parse(raw).seasonId !== data.season?.id)
+      )
+        clearStoredRoute();
+    } catch {
+      clearStoredRoute();
+    }
+  }
   if (path === "logout" || (path === "account" && data.deleted))
     clearStoredRoute();
   return data;

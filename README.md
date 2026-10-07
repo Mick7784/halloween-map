@@ -31,7 +31,7 @@ La création libre ouvre un compte `UNVERIFIED` et programme un email. Le lien e
 
 **Mon compte** permet de changer nom, email et mot de passe, de consulter sa participation et la confidentialité, ou de supprimer définitivement le compte. Changement d’email/mot de passe et suppression demandent le mot de passe actuel ; les sessions sont révoquées. Le nouvel email doit être vérifié. La suppression d’une participation garde le compte ; celle du compte efface aussi ses participations et données associées. Le dernier Super Admin actif est protégé.
 
-**Admin → Utilisateurs** : recherche, filtres, identité, participation, états des communications, trois rôles fixes. Créer un utilisateur envoie une invitation : pas de mot de passe généré ni envoyé. Le clic vérifie l’email puis ouvre une session d’activation de 30 minutes pour choisir son mot de passe.
+**Admin → Utilisateurs** : recherche, filtres, identité, participation, états des communications, trois rôles fixes. Créer un utilisateur envoie une invitation par défaut. Le Super Admin peut aussi créer un USER sans invitation avec un mot de passe défini et une adresse interne non délivrable si aucun email n’est fourni. Le clic vérifie l’email puis ouvre une session d’activation de 30 minutes pour choisir son mot de passe.
 
 ## Rôles
 
@@ -41,13 +41,15 @@ USER accède au compte, à la participation, à la carte et aux parcours. ADMIN 
 
 Quatre dates : **inscriptions ≤ ouverture < fermeture ≤ purge**. Calendrier français et heures 24 h dans le fuseau de l’instance ; stockage UTC. Heures locales inexistantes/ambiguës refusées. Préremplissage : 1 octobre, 31 octobre à 12 h, 1 novembre à 0 h, 2 novembre à 12 h. Activation explicite.
 
-La carte exige une connexion. Avant ouverture, seule la maison du propriétaire peut être envoyée à ce compte. Pendant ouverture, uniquement les maisons VISIBLE, actives, dans leurs horaires et avec une activité disponible. Fermeture : carte/parcours masqués, accès de l’équipe conservé jusqu’à purge. Modifier identité/adresse/textes conserve la visibilité administrative ; pause, reprise, fin définitive et rupture de bonbons restent disponibles.
+La carte exige une connexion. Avant ouverture, la carte est inaccessible ; le compte et sa participation restent accessibles séparément. Pendant ouverture, uniquement les maisons VISIBLE, actives, dans leurs horaires et avec une activité disponible. Fermeture : carte/parcours masqués, accès de l’équipe conservé jusqu’à purge. Modifier identité/adresse/textes conserve la visibilité administrative ; pause, reprise, fin définitive et rupture de bonbons restent disponibles.
 
-La purge transactionnelle/idempotente supprime réellement participations, adresse/GPS, textes, états et acceptations, détails d’envoi et audits saisonniers ciblés. **Les comptes et rôles restent.** Seuls les totaux anonymes des saisons/campagnes subsistent ; aucun historique des adresses, aucune réutilisation commerciale. Le worker utilise les dates réelles toutes les 30 secondes ; les accès public/admin rattrapent les purges échues. Une saison purgée ne se rouvre pas.
+La purge transactionnelle/idempotente supprime réellement participations, adresse/GPS, textes, états et acceptations, détails d’envoi et audits saisonniers ciblés. **Les comptes et rôles restent.** Seuls les snapshots agrégés des saisons subsistent ; aucun historique des adresses, aucune réutilisation commerciale. Le worker utilise les dates réelles toutes les 30 secondes ; les accès public/admin rattrapent les purges échues. Une saison purgée ne se rouvre pas.
 
 Politique de comptes inactifs : aucun nettoyage automatique implicite. L’exploitant doit définir/publier un délai justifié, informer les utilisateurs avant suppression puis utiliser la suppression de compte, avec rétention limitée des sauvegardes. Les jetons expirés sont supprimés ; les états d’emails d’identité terminés sont effacés après 30 jours.
 
-**Mode démo** : accès anticipé réservé à la session du Super Admin, sans horloge ni maisons simulées. Les API de carte et parcours utilisent les participations réelles.
+**Saisons TEST** : une seule saison active, REAL ou TEST, désignée exclusivement par `active_season_id`. TEST active ouvre la vraie carte à ADMIN/SUPER_ADMIN uniquement, sans mode démo, accès anticipé ou dates publiques. Comptes globaux ; maisons liées à la saison active lors de leur création. L’activation est manuelle, création et sélection BO ne l’activent pas. Historique REAL en lecture seule, statistiques anonymes après purge.
+
+Voir [les règles d’exploitation, la migration 008 et les statistiques](docs/seasons.md).
 
 ## SMTP et communications
 
@@ -119,7 +121,7 @@ npx playwright install --with-deps chromium
 npm run test:e2e
 ```
 
-Métier : PGlite local, PostgreSQL 17 en CI (`TEST_DATABASE_URL`). Migrations fresh/V0.2/replay, identité, permissions, participations, purge, campagnes, concurrence, incertitude SMTP, CMS/documents et PWA. Playwright : connexion/carte avant ouverture, masquage admin, mode démo/parcours et récupération de mot de passe ; captures uniquement en cas d’échec. Base locale jetable : `scripts/test-db.ts`, port 54329. Le job Docker démarre la vraie stack et vérifie santé/version.
+Métier : PGlite local, PostgreSQL 17 en CI (`TEST_DATABASE_URL`). Migrations fresh/V0.2/replay, identité, permissions, participations, purge, campagnes, concurrence, incertitude SMTP, CMS/documents et PWA. Playwright : connexion/carte avant ouverture, masquage admin, saisons REAL/TEST et parcours et récupération de mot de passe ; captures uniquement en cas d’échec. Base locale jetable : `scripts/test-db.ts`, port 54329. Le job Docker démarre la vraie stack et vérifie santé/version.
 
 Production : `npm audit --omit=dev`. L’avis GHSA-vfj7-8cjw-p6xm concerne le transitif de développement `braces`, exclu du runtime ; ne pas forcer une rétrogradation du lint.
 
@@ -169,6 +171,4 @@ La requête Directions ne désactive plus les instructions : ORS retourne ainsi 
 
 La migration 007 ajoute le nom et le type des saisons, leur contexte admin et une référence de test distincte de la saison publique. Plusieurs saisons peuvent partager une année. Les anciens profils provisionnés sont rattachés à leur saison enregistrée ; la référence publique précédente est restaurée lorsqu’elle existe. Les anciens champs `is_test` des comptes et maisons restent uniquement des métadonnées de compatibilité.
 
-Depuis le back-office, sélectionner ou créer « Tests octobre » avec Mode TEST et des dates réellement ouvertes. Le Super Admin peut la désigner via « Utiliser pour les tests », créer cinq comptes sans invitation (mot de passe normal), puis créer et valider leurs maisons avec le formulaire de participation. Le Mode démo ouvre cette saison sur les API habituelles, à l’heure réelle : carte, GPS, parcours et polling restent identiques. Sans saison TEST désignée, il conserve son accès anticipé à la saison publique. Aucun seed n’est nécessaire.
-
-Pour tester PC → téléphone, fermer une maison, retirer ses bonbons ou changer ses horaires depuis le PC ; vérifier ensuite notification et recalcul sur le téléphone. La suppression d’une saison TEST exige son nom exact et le rôle Super Admin. Elle supprime transactionnellement ses maisons, comptes d’origine, sessions, tokens, communications, audits et compteurs, sans toucher aux saisons réelles. Les comptes durables ne peuvent pas être utilisés comme propriétaires d’une saison TEST.
+Le workflow TEST de V0.6.3 est remplacé par [le modèle unique](docs/seasons.md). Activer une TEST désactive la REAL : seuls les admins accèdent à sa vraie carte. Les comptes restent globaux et survivent à la suppression TEST. Le dashboard lit toujours la saison active ; l’historique lit les snapshots anonymes.

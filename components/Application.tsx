@@ -66,9 +66,19 @@ export default function Application({
   }, []);
   useEffect(() => {
     void refresh().catch((e) => setError(e.message));
+    const sync = () => {
+      if (document.visibilityState !== "hidden")
+        void refresh().catch((e) => setError(e.message));
+    };
+    const poll = setInterval(sync, 60000);
+    window.addEventListener("pageshow", sync);
+    document.addEventListener("visibilitychange", sync);
     const clock = setInterval(() => setNow(Date.now()), 1000);
     return () => {
       clearInterval(clock);
+      clearInterval(poll);
+      window.removeEventListener("pageshow", sync);
+      document.removeEventListener("visibilitychange", sync);
     };
   }, [refresh]);
   useEffect(() => {
@@ -300,7 +310,7 @@ export default function Application({
     );
   else
     content =
-      !user && ["map", "preview"].includes(view) ? (
+      !user && view === "map" ? (
         <Login destination="/map" />
       ) : (
         <PublicMap
@@ -310,7 +320,8 @@ export default function Application({
           now={effectiveNow}
           showMap={
             !!user &&
-            (view === "map" || view === "preview" || state.state === "MAP_OPEN")
+            !!state.mapAccessible &&
+            (view === "map" || state.state === "MAP_OPEN")
           }
           user={user}
         />
@@ -335,7 +346,7 @@ export default function Application({
     <div
       className={
         "application " +
-        (["map", "preview"].includes(view) && user ? "map-app" : "") +
+        (view === "map" && user ? "map-app" : "") +
         (view === "admin" && user?.permissions.includes("admin.access")
           ? " admin-app"
           : "")
@@ -656,19 +667,6 @@ function PublicMap({
             <Link href="/map" className="button">
               La carte
             </Link>
-            {state.demoAvailable && (
-              <AsyncButton
-                onClick={async () => {
-                  await api("admin", {
-                    action: "preview",
-                    payload: { enabled: true },
-                  });
-                  window.location.href = "/map";
-                }}
-              >
-                Mode démo
-              </AsyncButton>
-            )}
           </div>
           <p className="tagline">{state.contents?.["home.final"]}</p>
         </div>

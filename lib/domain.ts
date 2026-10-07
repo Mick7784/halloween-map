@@ -6,7 +6,8 @@ export type Season = {
   year: number;
   name?: string;
   is_test?: boolean;
-  activated: boolean;
+  active?: boolean;
+  stats_snapshot_at?: Date | string | null;
   registrations_open: boolean;
   registrations_open_at: Date | string;
   purge_at: Date | string;
@@ -38,7 +39,6 @@ export type House = {
   candy_available: boolean;
   status: string;
   activity: string;
-  is_test?: boolean;
   refusal_reason?: string;
   submitted_at?: string;
   updated_at?: string;
@@ -55,8 +55,7 @@ export type Instance = {
   zoom: number;
   plan: string;
   config: Record<string, unknown>;
-  active_season_id: string;
-  test_season_id?: string | null;
+  active_season_id: string | null;
 };
 export type User = {
   id: string;
@@ -70,7 +69,6 @@ export type User = {
   role_name: string | null;
   role_id: string | null;
   permissions: string[];
-  created_for_season_id?: string | null;
 };
 export type Participation = House;
 // Capabilities are derived exclusively from the three fixed roles.
@@ -86,7 +84,6 @@ export const permissions = [
   "users.manage",
   "season.read",
   "season.manage",
-  "season.preview",
   "settings.read",
   "settings.manage",
   "stats.read",
@@ -97,13 +94,7 @@ export const defaultRoles: Record<string, readonly string[]> = {
   USER: [],
   SUPER_ADMIN: permissions,
   ADMIN: permissions.filter(
-    (p) =>
-      ![
-        "roles.manage",
-        "settings.manage",
-        "settings.read",
-        "season.preview",
-      ].includes(p),
+    (p) => !["roles.manage", "settings.manage", "settings.read"].includes(p),
   ),
 };
 export function can(user: User | null, permission: string) {
@@ -111,38 +102,38 @@ export function can(user: User | null, permission: string) {
     !!user && !!defaultRoles[user.role_name ?? "USER"]?.includes(permission)
   );
 }
+export function seasonFinished(s: Season, now = new Date()) {
+  return (
+    !s.is_test &&
+    (!!s.archived || !!s.purged_at || +now >= +new Date(s.closes_at))
+  );
+}
+export function seasonLabel(s: Season, now = new Date()) {
+  if (seasonFinished(s, now)) return "TERMINÉE";
+  if (s.active) return "ACTIVE";
+  if (s.is_test) return "DÉSACTIVÉE";
+  return +now < +new Date(s.opens_at) ? "PLANIFIÉE" : "DÉSACTIVÉE";
+}
 export function seasonState(s: Season | null, now = new Date()) {
   if (!s) return "PREPARATION";
-  if (s.archived) return "ARCHIVED";
-  if (s.purged_at || +now >= +new Date(s.closes_at)) return "CLOSED";
-  if (!s.activated) return "PREPARATION";
+  if (s.purged_at || s.archived || seasonFinished(s, now)) return "CLOSED";
+  if (!s.active) return "PREPARATION";
+  if (s.is_test) return "MAP_OPEN";
   if (+now < +new Date(s.opens_at)) return "COUNTDOWN";
   return "MAP_OPEN";
+}
+export function adminAccount(user: User | null) {
+  return user?.role_name === "ADMIN" || user?.role_name === "SUPER_ADMIN";
 }
 export function effectiveActivities(h: House) {
   return h.activities.filter((a) => a !== "CANDY" || h.candy_available);
 }
-export function mapAccessible(
-  s: Season | null,
-  now = new Date(),
-  earlyAccess = false,
-) {
-  return (
-    !!s &&
-    !s.archived &&
-    !s.purged_at &&
-    +now < +new Date(s.closes_at) &&
-    (earlyAccess || seasonState(s, now) === "MAP_OPEN")
-  );
+export function mapAccessible(s: Season | null, now = new Date()) {
+  return !!s && seasonState(s, now) === "MAP_OPEN";
 }
-export function visible(
-  h: House,
-  s: Season,
-  now = new Date(),
-  earlyAccess = false,
-) {
+export function visible(h: House, s: Season, now = new Date()) {
   return (
-    mapAccessible(s, now, earlyAccess) &&
+    mapAccessible(s, now) &&
     (h.review_status ?? "VALIDATED") === "VALIDATED" &&
     h.status === "VISIBLE" &&
     h.activity === "ACTIVE" &&

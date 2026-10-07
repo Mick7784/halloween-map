@@ -1,5 +1,6 @@
 import { setupCookie, setupAuthorized } from "../../../lib/bootstrap";
-import { effectiveTime } from "../../../lib/time";
+import { reportCollection } from "../../../lib/season-statistics";
+import { realTime } from "../../../lib/time";
 import {
   smtpAvailable,
   campaignAction,
@@ -13,7 +14,6 @@ import {
   resetPassword,
 } from "../../../lib/accounts";
 import { contentAction, contentAdmin } from "../../../lib/content";
-import { seasonState } from "../../../lib/domain";
 import {
   frenchCommunes,
   frenchAddressSearch,
@@ -23,7 +23,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getUser, HttpError, hashToken, rateLimit } from "../../../lib/auth";
 import { db } from "../../../lib/db";
 import * as service from "../../../lib/service";
-import { z, ZodError } from "zod";
+import { ZodError } from "zod";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 const cookie = "halloween_session";
@@ -63,11 +63,7 @@ async function handle(
       if (path === "public")
         return response(
           await service.publicState(
-            await effectiveTime(
-              req.nextUrl.searchParams.get("preview") === "1",
-              await getUser(req.cookies.get(cookie)?.value),
-              req.cookies.get(cookie)?.value,
-            ),
+            realTime(),
             await getUser(req.cookies.get(cookie)?.value),
           ),
         );
@@ -271,69 +267,30 @@ async function handle(
 
       return r;
     }
+    if (path === "collection/report") {
+      if (!user) throw new HttpError(401, "Connexion requise");
+      await rateLimit("collection-report:" + user.id, 120);
+      return response(
+        await reportCollection(
+          user,
+          input,
+          req.cookies.get(cookie)?.value ?? "",
+        ),
+      );
+    }
     if (path === "route/availability") {
       if (!user) throw new HttpError(401, "Connexion requise");
       await rateLimit("route-availability:" + user.id, 120);
-      const context = await effectiveTime(
-        req.nextUrl.searchParams.get("preview") === "1",
-        user,
-        req.cookies.get(cookie)?.value,
-      );
+      const context = realTime();
       return response(await service.routeAvailability(user, input, context));
     }
     if (path === "route") {
       await rateLimit("routes-global", 300);
-      const context = await effectiveTime(
-        req.nextUrl.searchParams.get("preview") === "1",
-        user,
-        req.cookies.get(cookie)?.value,
-      );
+      const context = realTime();
       await service.tick();
       return response(await service.route(input, context, user));
     }
     if (path === "admin") {
-      if (input.action === "preview") {
-        if (user?.role_name !== "SUPER_ADMIN")
-          throw new HttpError(403, "Super Admin requis");
-        const previewInput = z
-          .object({ enabled: z.boolean() })
-          .parse(input.payload);
-        const configured = (await service.instance())!;
-        const season = configured.test_season_id
-          ? ((
-              await db().query(
-                "SELECT * FROM seasons WHERE id=$1 AND instance_id=$2 AND is_test",
-                [configured.test_season_id, configured.id],
-              )
-            ).rows[0] as unknown as import("../../../lib/domain").Season)
-          : await service.activeSeason(configured);
-        let at: string | null = null;
-        if (previewInput.enabled) {
-          if (
-            !season ||
-            (!configured.test_season_id && seasonState(season) === "MAP_OPEN")
-          )
-            throw new HttpError(403, "Mode démo indisponible");
-          if (
-            season.archived ||
-            season.purged_at ||
-            +new Date() >= +new Date(season.closes_at)
-          )
-            throw new HttpError(403, "Saison fermée");
-          at = new Date().toISOString();
-        }
-        await db().query(
-          "UPDATE sessions SET early_access=$1 WHERE token_hash=$2 AND user_id=$3",
-          [!!at, hashToken(req.cookies.get(cookie)!.value), user.id],
-        );
-        await service.audit(
-          db(),
-          user.instance_id,
-          user,
-          at ? "preview.enabled" : "preview.disabled",
-        );
-        return response({ ok: true });
-      }
       await service.tick();
       return response(await service.adminAction(user, input));
     }

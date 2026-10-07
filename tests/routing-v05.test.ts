@@ -10,7 +10,7 @@ import { routeIsCurrent } from "../lib/route-state";
 import { publicHouse, type House, type Season } from "../lib/domain";
 import { frameRoute } from "../lib/map-framing";
 const season = {
-  activated: true,
+  active: true,
   opens_at: "2026-10-31T17:00Z",
   closes_at: "2026-10-31T22:00Z",
   archived: false,
