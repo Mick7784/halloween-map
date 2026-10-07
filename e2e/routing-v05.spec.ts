@@ -1,11 +1,33 @@
 import { test, expect, type Page } from "@playwright/test";
+import { mapAccessible, seasonState, type Activity } from "../lib/domain";
+import {
+  realSeasonFixture,
+  assertOpenRealFixture,
+} from "./fixtures/real-season";
+const season = realSeasonFixture();
+const visitor = {
+  id: "visitor",
+  instance_id: season.instance_id,
+  display_name: "Visiteur",
+  permissions: [],
+  role_name: "USER",
+  account_status: "ACTIVE",
+  email_status: "VERIFIED",
+};
 const houses = [0, 1].map((n) => ({
   id: `10000000-0000-4000-8000-00000000000${n}`,
+  instance_id: season.instance_id,
+  season_id: season.id,
+  user_id: `40000000-0000-4000-8000-00000000000${n}`,
+  review_status: "VALIDATED" as const,
+  status: "VISIBLE",
+  activity: "ACTIVE",
+  candy_available: true,
   name: `Les lanternes ${n + 1}`,
   address: `${n + 1} rue des Lanternes`,
   latitude: 48.1 + n * 0.002,
   longitude: -1.67 + n * 0.002,
-  activities: ["CANDY"],
+  activities: ["CANDY"] as Activity[],
   starts_at: new Date(Date.now() - 3600000).toISOString(),
   ends_at: new Date(Date.now() + 14400000).toISOString(),
   fear: n === 0 ? null : 2,
@@ -14,9 +36,12 @@ const houses = [0, 1].map((n) => ({
   practical: "Entrée par le portail",
 }));
 const state = {
-  state: "MAP_OPEN",
+  setupRequired: false,
+  state: seasonState(season),
+  mapAccessible: mapAccessible(season),
   instance: {
-    id: "20000000-0000-4000-8000-000000000001",
+    id: season.instance_id,
+    active_season_id: season.id,
     public_name: "Halloween",
     territory: "Saint-Martin",
     timezone: "Europe/Paris",
@@ -24,12 +49,7 @@ const state = {
     longitude: -1.67,
     zoom: 14,
   },
-  season: {
-    id: "30000000-0000-4000-8000-000000000001",
-    opens_at: new Date(Date.now() - 7200000).toISOString(),
-    closes_at: new Date(Date.now() + 18000000).toISOString(),
-    registrations_open: true,
-  },
+  season,
   houses,
   documents: {
     GUIDELINES: {
@@ -45,15 +65,15 @@ const state = {
   },
 };
 async function arrange(page: Page) {
+  assertOpenRealFixture(
+    season,
+    houses,
+    visitor,
+    state.instance.active_season_id,
+  );
   await page.route("**/api/me", (r) =>
     r.fulfill({
-      json: {
-        id: "visitor",
-        display_name: "Visiteur",
-        permissions: [],
-        role_name: "USER",
-        email_status: "VERIFIED",
-      },
+      json: visitor,
     }),
   );
   await page.route("**/api/public*", (r) => r.fulfill({ json: state }));

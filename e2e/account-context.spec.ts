@@ -1,7 +1,22 @@
 import { test, expect, type Page } from "@playwright/test";
+import { DateTime } from "luxon";
+import { mapAccessible, seasonState, type Activity } from "../lib/domain";
+import {
+  realSeasonFixture,
+  assertOpenRealFixture,
+} from "./fixtures/real-season";
+const season = realSeasonFixture({
+  opensIn: 2 * 86400000,
+  closesIn: 3 * 86400000,
+});
+const purgeLabel = DateTime.fromISO(season.purge_at)
+  .setZone("Europe/Paris")
+  .setLocale("fr");
 const output = process.env.ACCOUNT_PREVIEW_OUTPUT ?? "test-results/account";
 const person = {
   id: "account-user",
+  instance_id: season.instance_id,
+  account_status: "ACTIVE",
   display_name: "Mickael",
   email: "mickael@example.invalid",
   role_name: "ADMIN",
@@ -10,9 +25,12 @@ const person = {
 };
 const state = {
   setupRequired: false,
-  state: "COUNTDOWN",
+  state: seasonState(season),
+  mapAccessible: mapAccessible(season),
   count: 24,
   instance: {
+    id: season.instance_id,
+    active_season_id: season.id,
     public_name: "Halloween",
     territory: "Villiers-sur-Morin",
     timezone: "Europe/Paris",
@@ -20,12 +38,7 @@ const state = {
     longitude: 2.8,
     zoom: 14,
   },
-  season: {
-    opens_at: "2026-10-31T11:00:00Z",
-    closes_at: "2026-10-31T22:00:00Z",
-    purge_at: "2026-11-02T11:00:00Z",
-    registrations_open: true,
-  },
+  season,
   houses: [],
   routeCandidates: [],
   contents: {
@@ -198,7 +211,9 @@ test("mobile information, security, verification, privacy and deletion confirmat
   await page
     .getByRole("button", { name: /Confidentialité et données/ })
     .click();
-  await expect(page.getByRole("dialog")).toContainText("2 novembre 2026");
+  await expect(page.getByRole("dialog")).toContainText(
+    purgeLabel.toFormat("d MMMM yyyy"),
+  );
   await expect(
     page.getByRole("button", { name: /Politique de confidentialité/ }),
   ).toBeVisible();
@@ -262,30 +277,43 @@ test("map canvas, filters and active route remain mounted across account", async
   page,
 }) => {
   await arrange(page, "/map");
+  const openSeason = realSeasonFixture({
+    instanceId: season.instance_id,
+    closesIn: 86400000,
+  });
   const house = {
     id: "11111111-1111-4111-8111-111111111111",
+    instance_id: openSeason.instance_id,
+    season_id: openSeason.id,
+    user_id: person.id,
+    review_status: "VALIDATED" as const,
+    status: "VISIBLE",
+    activity: "ACTIVE",
+    candy_available: true,
     name: "Les lanternes",
     address: "1 rue des Lanternes",
     latitude: 48.802,
     longitude: 2.802,
-    activities: ["CANDY"],
+    activities: ["CANDY"] as Activity[],
     starts_at: new Date(Date.now() - 3600000).toISOString(),
-    ends_at: new Date(Date.now() + 86400000).toISOString(),
+    ends_at: openSeason.closes_at,
     fear: 2,
     adaptable: false,
     rp: "",
     practical: "",
   };
+  assertOpenRealFixture(openSeason, [house], person, openSeason.id);
   await page.route("**/api/public*", (r) =>
     r.fulfill({
       json: {
         ...state,
-        state: "MAP_OPEN",
+        state: seasonState(openSeason),
+        mapAccessible: mapAccessible(openSeason),
         houses: [house],
         routeCandidates: [house],
         instance: {
           ...state.instance,
-          id: "22222222-2222-4222-8222-222222222222",
+          active_season_id: openSeason.id,
         },
         documents: {
           ...state.documents,
@@ -295,12 +323,7 @@ test("map canvas, filters and active route remain mounted across account", async
             body: "Respecter les lieux.",
           },
         },
-        season: {
-          ...state.season,
-          id: "33333333-3333-4333-8333-333333333333",
-          opens_at: house.starts_at,
-          closes_at: house.ends_at,
-        },
+        season: openSeason,
       },
     }),
   );
@@ -361,12 +384,13 @@ test("map canvas, filters and active route remain mounted across account", async
     .getByRole("button", { name: "Créer mon parcours", exact: true })
     .click();
   await expect(page.locator(".route-sheet")).toBeVisible();
-  await page.waitForTimeout(500);
-  const resultBefore = await page.locator(".route-sheet").textContent();
   const read = () =>
     page.evaluate(() =>
       JSON.parse(localStorage.getItem("halloween.active-route")!),
     );
+  // Wait for this fixture’s fitBounds result, not a snapshot midway through its animation.
+  await expect.poll(async () => (await read())?.camera?.zoom).toBe(16);
+  const resultBefore = await page.locator(".route-sheet").textContent();
   const routeBefore = await read();
   await page.locator(".route-account-link").click();
   await expect(page.locator(".account-dialog")).toBeVisible();
@@ -469,8 +493,10 @@ for (const width of [390, 1440]) {
           address: "1 rue des Lanternes",
           latitude: 48.802,
           longitude: 2.802,
-          starts_at: "2026-10-31T17:00:00Z",
-          ends_at: "2026-10-31T20:00:00Z",
+          starts_at: season.opens_at,
+          ends_at: new Date(
+            +new Date(season.opens_at) + 3 * 3600000,
+          ).toISOString(),
           activities: ["CANDY", "DECORATION"],
           rp: "Un jardin de citrouilles.",
           practical: "Entrée par le portail.",
@@ -526,7 +552,9 @@ for (const width of [390, 1440]) {
     await expect(dialog).toHaveAttribute("data-preserved", "yes");
     await expect(page.getByRole("dialog")).toHaveCount(1);
     await expect(dialog).toContainText("Les lanternes");
-    await expect(dialog).toContainText("18:00 – 21:00");
+    await expect(dialog).toContainText(
+      `${DateTime.fromISO(season.opens_at).setZone("Europe/Paris").toFormat("HH:mm")} – ${DateTime.fromISO(season.opens_at).setZone("Europe/Paris").plus({ hours: 3 }).toFormat("HH:mm")}`,
+    );
     await expect(dialog).toContainText("Bonbons, Décoration");
     await expect(dialog).toContainText("Un jardin de citrouilles");
     await page.locator(".account-participation-details summary").click();
@@ -535,7 +563,9 @@ for (const width of [390, 1440]) {
     ).toBeVisible();
     await page.locator(".account-participation-details summary").click();
     await page.locator(".account-scroll").evaluate((el) => (el.scrollTop = 0));
-    await expect(dialog).toContainText("2 novembre 2026 à 12:00");
+    await expect(dialog).toContainText(
+      purgeLabel.toFormat("d MMMM yyyy à HH:mm"),
+    );
     await expect(dialog).not.toContainText("do-not-display-this");
     await expect(
       dialog.getByRole("link", { name: /Nous contacter/ }),
