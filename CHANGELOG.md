@@ -1,5 +1,19 @@
 # Changelog
 
+## V0.7.1
+
+- Nouvelle page Statistiques à la place de Parcours.
+- Statistiques détaillées par saison.
+- KPI maisons, participants, visites et collectes.
+- Graphiques des activités, statuts et parcours.
+- Prise en charge des statistiques historiques anonymisées.
+- Affichage explicite des données indisponibles sans valeur inventée.
+- Création manuelle de maisons depuis le back-office.
+- Sélection du propriétaire parmi les utilisateurs existants.
+- Maisons créées par ADMIN/SUPER_ADMIN validées immédiatement.
+- Maisons créées depuis l’application publique toujours soumises à modération.
+- Rattachement serveur automatique à la saison active.
+
 ## V0.7.0
 
 - Refonte complète de la gestion des saisons.
