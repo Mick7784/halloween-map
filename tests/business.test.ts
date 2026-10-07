@@ -212,6 +212,13 @@ beforeEach(async () => {
     acceptance: acceptance(),
   });
   house = (await service.ownHouse(participant)) as unknown as House;
+  // This shared map fixture represents a reviewed public submission.
+  await service.adminAction(admin, {
+    action: "reviewHouse",
+    id: house.id,
+    payload: { status: "VALIDATED" },
+  });
+  house = (await service.ownHouse(participant)) as unknown as House;
   season = (await service.activeSeason((await service.instance())!))!;
 });
 afterAll(async () => {

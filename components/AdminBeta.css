@@ -885,3 +885,84 @@
   background: color-mix(in srgb, var(--accent) 14%, var(--surface));
   color: var(--accent);
 }
+
+.admin-beta .stats-page {
+  display: grid;
+  gap: 16px;
+}
+.admin-beta .stats-kpis {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+.admin-beta .stats-kpis article {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 18px;
+}
+.admin-beta .stats-kpis span {
+  color: var(--muted);
+  font-size: 13px;
+}
+.admin-beta .stats-kpis strong {
+  font-size: 22px;
+  overflow-wrap: anywhere;
+}
+.admin-beta .stats-charts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+.admin-beta .stats-chart {
+  margin: 0;
+}
+.admin-beta .stats-chart h2 {
+  font-size: 16px;
+}
+.admin-beta .stats-chart ul {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  gap: 18px;
+}
+.admin-beta .stats-chart li {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 6px;
+  font-size: 13px;
+}
+.admin-beta .stats-chart strong {
+  text-align: right;
+}
+.admin-beta .stats-track {
+  grid-column: 1 / -1;
+  height: 8px;
+  background: var(--line);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.admin-beta .stats-track > div {
+  background: var(--accent);
+  height: 100%;
+  border-radius: inherit;
+}
+.admin-beta .beta-house-create {
+  margin-bottom: 18px;
+}
+.admin-beta .stats-link {
+  margin-bottom: 16px;
+}
+@media (max-width: 1100px) {
+  .admin-beta .stats-charts {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 600px) {
+  .admin-beta .stats-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .admin-beta .stats-kpis strong {
+    font-size: 18px;
+  }
+}

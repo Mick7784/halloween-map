@@ -41,6 +41,7 @@ export default function ParticipationForm({
   documents,
   scheduleRef,
   onSave,
+  submitLabel,
 }: {
   house?: House;
   zone: string;
@@ -52,6 +53,7 @@ export default function ParticipationForm({
   documents?: Record<LegalKind, LegalDocument>;
   scheduleRef: React.RefObject<HTMLElement | null>;
   onSave: (payload: unknown) => Promise<void>;
+  submitLabel?: string;
 }) {
   const settings = publicParticipationSettings(source);
   const blank = {
@@ -441,7 +443,7 @@ export default function ParticipationForm({
             ? "Enregistrement…"
             : house
               ? "Enregistrer les modifications"
-              : "Envoyer ma participation"}
+              : (submitLabel ?? "Envoyer ma participation")}
         </button>
       </div>
       {guidelinesOpen && (

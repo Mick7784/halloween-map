@@ -7,7 +7,7 @@ import {
   House as HouseIcon,
   Users,
   CalendarDays,
-  Route,
+  ChartColumn,
   FileText,
   Settings,
   ShieldCheck,
@@ -30,6 +30,7 @@ import HouseForm from "./HouseForm";
 import SeasonManager from "./SeasonManager";
 import ParticipationForm from "./ParticipationForm";
 import AdminDashboard, { type AdminAudit } from "./AdminDashboard";
+import AdminStatistics, { type SeasonStatistics } from "./AdminStatistics";
 import AdminExistingPage from "./AdminExistingPage";
 import { seasonFinished } from "../lib/domain";
 import "./AdminBeta.css";
@@ -77,6 +78,9 @@ export default function Admin({
 }) {
   const [section, setSection] = useState("dashboard"),
     [houses, setHouses] = useState<ManagedHouse[]>([]),
+    [statistics, setStatistics] = useState<SeasonStatistics | null>(null),
+    [userCreate, setUserCreate] = useState(false),
+    [ownerSearch, setOwnerSearch] = useState(""),
     [dashboard, setDashboard] = useState<Dashboard | null>(null),
     [audit, setAudit] = useState<Audit[]>([]),
     [error, setError] = useState(""),
@@ -143,7 +147,7 @@ export default function Admin({
             : "";
     setLoading(true);
     try {
-      const [h, d, a] = await Promise.all([
+      const [h, d, a, stats] = await Promise.all([
         has(user, "participants.read")
           ? api<ManagedHouse[]>("admin/houses" + query)
           : [],
@@ -151,8 +155,12 @@ export default function Admin({
           ? api<Dashboard>("admin/dashboard" + query)
           : null,
         has(user, "audit.read") ? api<Audit[]>("admin/audit" + query) : [],
+        section === "statistics" && has(user, "stats.read")
+          ? api<SeasonStatistics | null>("admin/statistics" + query)
+          : null,
       ]);
       if (revision !== generation.current) return;
+      setStatistics(stats);
       setHouses(h);
       setDashboard(d);
       setAudit(a);
@@ -201,7 +209,8 @@ export default function Admin({
     );
     if (currentSeason.current !== seasonId) return;
     setOwners(available);
-    setOwnerId(available[0]?.id ?? "");
+    setOwnerId("");
+    setOwnerSearch("");
     setCreating(true);
   }
   useEffect(() => {
@@ -353,7 +362,7 @@ export default function Admin({
               ["dashboard", "Tableau de bord", "stats.read", LayoutDashboard],
               ["houses", "Maisons", "participants.read", HouseIcon],
               ["users", "Utilisateurs", "users.read", Users],
-              ["routes", "Parcours", "stats.read", Route],
+              ["statistics", "Statistiques", "stats.read", ChartColumn],
               ["seasons", "Saison", "season.read", CalendarDays],
               ["content", "Textes & documents", "content.manage", FileText],
               ["settings", "Paramètres", "settings.read", Settings],
@@ -368,6 +377,7 @@ export default function Admin({
                   className={section === id ? "is-current" : ""}
                   aria-current={section === id ? "page" : undefined}
                   onClick={() => {
+                    setUserCreate(false);
                     setSection(id);
                     setMenuOpen(false);
                   }}
@@ -401,7 +411,7 @@ export default function Admin({
                   dashboard: "Tableau de bord",
                   houses: "Maisons",
                   users: "Utilisateurs",
-                  routes: "Parcours",
+                  statistics: "Statistiques",
                   seasons: "Saison",
                   content: "Textes & documents",
                   settings: "Paramètres",
@@ -424,7 +434,11 @@ export default function Admin({
               <label className="beta-season-select">
                 Saison consultée
                 <select
-                  aria-label="Saison du back-office"
+                  aria-label={
+                    section === "statistics"
+                      ? "Saison consultée"
+                      : "Saison du back-office"
+                  }
                   value={seasonId}
                   onChange={(e) => {
                     generation.current++;
@@ -514,6 +528,17 @@ export default function Admin({
             </section>
           )}
         {section === "dashboard" && seasons.some((s) => s.active) && (
+          <button
+            className="stats-link"
+            onClick={() => {
+              setSeasonId(seasons.find((s) => s.active)!.id);
+              setSection("statistics");
+            }}
+          >
+            Voir toutes les statistiques
+          </button>
+        )}
+        {section === "dashboard" && seasons.some((s) => s.active) && (
           <AdminDashboard
             metrics={loadedSeason === seasonId ? dashboard : null}
             pending={pending
@@ -537,23 +562,12 @@ export default function Admin({
             }}
           />
         )}
-        {section === "routes" && (
-          <section className="beta-card">
-            <h2>Parcours créés</h2>
-            {loadedSeason !== seasonId ? (
-              <p role="status">Chargement…</p>
-            ) : (
-              <>
-                <strong className="beta-route-total">
-                  {dashboard?.routes ?? 0}
-                </strong>
-                <p>
-                  Créations enregistrées pour cette saison. Les parcours et les
-                  traces GPS individuels restent sur le terminal des visiteurs.
-                </p>
-              </>
-            )}
-          </section>
+        {section === "statistics" && (
+          <AdminStatistics
+            season={selectedSeason}
+            data={loadedSeason === seasonId ? statistics : null}
+            loading={loading || loadedSeason !== seasonId}
+          />
         )}
         {["content", "settings", "roles", "users"].includes(section) && (
           <AdminExistingPage
@@ -566,17 +580,37 @@ export default function Admin({
         )}
         {section === "houses" && (
           <section className="beta-card">
-            {selectedSeason?.active &&
-              !seasonFinished(selectedSeason) &&
-              has(user, "participants.edit") && (
+            {has(user, "participants.edit") && (
+              <div className="beta-house-create">
                 <button
+                  className="primary"
+                  disabled={
+                    !selectedSeason?.active || seasonFinished(selectedSeason)
+                  }
                   onClick={() =>
                     void startCreate().catch((e) => setError(e.message))
                   }
                 >
-                  Créer une maison
+                  + Nouvelle maison
                 </button>
-              )}
+                {!seasons.some((s) => s.active) ? (
+                  <p>Activez une saison avant de créer une maison.</p>
+                ) : (
+                  !selectedSeason?.active && (
+                    <p>
+                      La création est réservée à la saison active.{" "}
+                      <button
+                        onClick={() =>
+                          setSeasonId(seasons.find((s) => s.active)!.id)
+                        }
+                      >
+                        Revenir à la saison active
+                      </button>
+                    </p>
+                  )
+                )}
+              </div>
+            )}
             <div className="beta-filters">
               <input
                 aria-label="Rechercher une maison"
@@ -616,6 +650,7 @@ export default function Admin({
             users={users}
             roles={roles}
             user={user}
+            initialCreate={userCreate}
             reload={reloadUsers}
           />
         )}
@@ -634,12 +669,21 @@ export default function Admin({
             className="beta-panel"
             role="dialog"
             aria-modal="true"
-            aria-label="Créer une maison"
+            aria-label="Nouvelle maison"
           >
             <header>
-              <h2>Créer une maison</h2>
+              <h2>Nouvelle maison</h2>
               <button onClick={() => setCreating(false)}>Fermer</button>
             </header>
+            <label>
+              Rechercher un propriétaire
+              <input
+                aria-label="Rechercher un propriétaire"
+                placeholder="Nom ou email…"
+                value={ownerSearch}
+                onChange={(e) => setOwnerSearch(e.target.value)}
+              />
+            </label>
             <label>
               Propriétaire
               <select
@@ -647,21 +691,42 @@ export default function Admin({
                 value={ownerId}
                 onChange={(e) => setOwnerId(e.target.value)}
               >
-                {owners.map((u) => (
-                  <option key={u.id} value={u.id}>
-                    {u.display_name} · {u.email}
-                  </option>
-                ))}
+                <option value="">Choisir un propriétaire</option>
+                {owners
+                  .filter(
+                    (u) =>
+                      u.id === ownerId ||
+                      (u.display_name + " " + u.email)
+                        .toLocaleLowerCase()
+                        .includes(ownerSearch.toLocaleLowerCase()),
+                  )
+                  .map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.display_name} · {u.email}
+                    </option>
+                  ))}
               </select>
             </label>
+            {has(user, "users.manage") && (
+              <button
+                onClick={() => {
+                  setCreating(false);
+                  setUserCreate(true);
+                  setSection("users");
+                }}
+              >
+                Créer un utilisateur
+              </button>
+            )}
             {!ownerId ? (
               <p>
-                Aucun utilisateur vérifié sans maison dans cette saison. Créez
-                ou activez un compte depuis Utilisateurs.
+                Choisissez un utilisateur vérifié sans maison dans cette saison.
+                Si nécessaire, créez ou activez un compte depuis Utilisateurs.
               </p>
             ) : (
               <ParticipationForm
                 key={ownerId}
+                submitLabel="Créer la maison"
                 zone={state.instance.timezone}
                 opens={new Date(selectedSeason.opens_at).toISOString()}
                 closes={new Date(selectedSeason.closes_at).toISOString()}
@@ -769,40 +834,42 @@ export default function Admin({
                   !seasonFinished(selectedSeason) &&
                   has(user, "participants.edit") && (
                     <>
-                      <section>
-                        <h3>Modération</h3>
-                        <div className="beta-actions">
+                      {current.review_status === "PENDING" && (
+                        <section>
+                          <h3>Modération</h3>
+                          <div className="beta-actions">
+                            <AsyncButton
+                              onClick={() =>
+                                act("reviewHouse", { status: "VALIDATED" })
+                              }
+                            >
+                              Valider
+                            </AsyncButton>
+                            <AsyncButton
+                              onClick={() =>
+                                act("reviewHouse", { status: "PENDING" })
+                              }
+                            >
+                              Mettre en attente
+                            </AsyncButton>
+                          </div>
+                          <label>
+                            Motif du refus
+                            <textarea
+                              maxLength={500}
+                              value={reason}
+                              onChange={(e) => setReason(e.target.value)}
+                            />
+                          </label>
                           <AsyncButton
                             onClick={() =>
-                              act("reviewHouse", { status: "VALIDATED" })
+                              act("reviewHouse", { status: "REFUSED", reason })
                             }
                           >
-                            Valider
+                            Refuser avec motif
                           </AsyncButton>
-                          <AsyncButton
-                            onClick={() =>
-                              act("reviewHouse", { status: "PENDING" })
-                            }
-                          >
-                            Mettre en attente
-                          </AsyncButton>
-                        </div>
-                        <label>
-                          Motif du refus
-                          <textarea
-                            maxLength={500}
-                            value={reason}
-                            onChange={(e) => setReason(e.target.value)}
-                          />
-                        </label>
-                        <AsyncButton
-                          onClick={() =>
-                            act("reviewHouse", { status: "REFUSED", reason })
-                          }
-                        >
-                          Refuser avec motif
-                        </AsyncButton>
-                      </section>
+                        </section>
+                      )}
                       <section>
                         <h3>Disponibilité</h3>
                         <div className="beta-actions">

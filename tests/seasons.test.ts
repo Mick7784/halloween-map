@@ -212,13 +212,7 @@ it("does not leak TEST to USER, while ADMIN/Super Admin use the same houses, rou
   await activate(s);
   const owner = await directAccount();
   const h = await createHouse(owner, s);
-  expect(h.review_status).toBe("PENDING");
-  await service.adminAction(admin, {
-    action: "reviewHouse",
-    id: h.id,
-    seasonId: s.id,
-    payload: { status: "VALIDATED" },
-  });
+  expect(h.review_status).toBe("VALIDATED");
   for (const u of [null, ordinary, owner]) {
     const publicState = await service.publicState(undefined, u);
     expect(publicState.season).toBeNull();
@@ -378,7 +372,7 @@ it("keeps several planned REAL seasons inactive and dashboard tied to active rat
     "dashboard",
     real.id,
   )) as unknown as { pending: number; season: Season };
-  expect(d.pending).toBe(1);
+  expect(d.pending).toBe(0);
   expect(d.season.id).toBe(s.id);
   expect(await service.adminRead(admin, "houses", real.id)).toEqual([]);
   const users = (await service.adminRead(admin, "users", real.id)) as User[];
@@ -483,6 +477,11 @@ it("enforces REAL opening/closing, takes anonymous snapshot, purges details, fre
     await db().query("SELECT * FROM seasons WHERE id=$1", [real.id])
   ).rows[0];
   expect(purged.stats).toEqual(frozen.stats);
+  expect(await service.adminRead(admin, "statistics", real.id)).toEqual({
+    seasonId: real.id,
+    snapshot: true,
+    stats: frozen.stats,
+  });
   for (const table of [
     "participations",
     "email_campaigns",
@@ -645,4 +644,114 @@ it("upgrades V0.6.4 without losing identities/houses or changing REAL active; mi
   } finally {
     await pg.close();
   }
+});
+
+it("statistics follows the consulted season, including inactive data and empty REAL, without fabricated collection totals", async () => {
+  const s = await testSeason();
+  await activate(s);
+  await createHouse(ordinary, s);
+  const expected = {
+    houses: 1,
+    approved: 1,
+    refused: 0,
+    pending: 0,
+    participants: 1,
+    candy: 1,
+    decoration: 1,
+    acting: 0,
+    routes: 0,
+  };
+  expect(await service.adminRead(admin, "statistics", s.id)).toEqual({
+    seasonId: s.id,
+    snapshot: false,
+    stats: expected,
+  });
+  await activate(real);
+  expect(await service.adminRead(admin, "statistics", s.id)).toEqual({
+    seasonId: s.id,
+    snapshot: false,
+    stats: expected,
+  });
+  const empty = (await service.adminRead(admin, "statistics", real.id)) as {
+    stats: Record<string, number>;
+  };
+  expect(empty.stats.houses).toBe(0);
+  expect(empty.stats.collections_started).toBeUndefined();
+  await expect(
+    service.adminRead(ordinary, "statistics", s.id),
+  ).rejects.toMatchObject({ status: 403 });
+});
+it("manual creation validates ADMIN and Super Admin houses while public creation ignores supplied review and season fields", async () => {
+  await service.createParticipation(ordinary, {
+    house: {
+      ...houseDefinition,
+      review_status: "VALIDATED",
+      season_id: randomUUID(),
+    },
+    acceptance,
+    seasonId: randomUUID(),
+  });
+  const publicHouse = (
+    await db().query("SELECT * FROM participations WHERE user_id=$1", [
+      ordinary.id,
+    ])
+  ).rows[0];
+  expect(publicHouse.review_status).toBe("PENDING");
+  expect(publicHouse.season_id).toBe(real.id);
+  const owner = await directAccount("Admin owner"),
+    superOwner = await directAccount("Super owner");
+  const role = (await db().query("SELECT id FROM roles WHERE name='ADMIN'"))
+    .rows[0];
+  await db().query("UPDATE users SET role_id=$1 WHERE id=$2", [
+    role.id,
+    owner.id,
+  ]);
+  const manager = (await getUser(await createSession(owner.id)))!;
+  for (const [actor, account] of [
+    [manager, owner],
+    [admin, superOwner],
+  ]) {
+    await service.adminAction(actor, {
+      action: "createHouse",
+      seasonId: real.id,
+      payload: {
+        userId: account.id,
+        participation: {
+          house: {
+            ...houseDefinition,
+            review_status: "PENDING",
+            season_id: randomUUID(),
+          },
+          acceptance,
+        },
+      },
+    });
+    expect(
+      (
+        await db().query(
+          "SELECT review_status,season_id FROM participations WHERE user_id=$1",
+          [account.id],
+        )
+      ).rows[0],
+    ).toEqual({ review_status: "VALIDATED", season_id: real.id });
+  }
+  await expect(
+    service.adminAction(ordinary, {
+      action: "createHouse",
+      seasonId: real.id,
+      payload: {
+        userId: ordinary.id,
+        participation: { house: houseDefinition, acceptance },
+      },
+    }),
+  ).rejects.toMatchObject({ status: 403 });
+  await service.adminAction(admin, {
+    action: "deactivateSeason",
+    id: real.id,
+    payload: "DÉSACTIVER",
+  });
+  const another = await directAccount("Inactive owner");
+  await expect(createHouse(another, real)).rejects.toMatchObject({
+    status: 403,
+  });
 });

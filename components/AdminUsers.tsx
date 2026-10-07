@@ -36,16 +36,18 @@ export default function AdminUsers({
   roles,
   user,
   reload,
+  initialCreate = false,
 }: {
   users: ManagedUser[];
   roles: Role[];
   user: User;
   reload: () => Promise<void>;
+  initialCreate?: boolean;
 }) {
   const [search, setSearch] = useState(""),
     [filter, setFilter] = useState("ALL"),
     [selected, setSelected] = useState<string | null>(null),
-    [create, setCreate] = useState(false);
+    [create, setCreate] = useState(initialCreate);
   const list = users.filter(
     (u) =>
       (u.display_name + " " + u.email)

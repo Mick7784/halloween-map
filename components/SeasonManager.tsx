@@ -1,4 +1,5 @@
 "use client";
+import AdminStatistics from "./AdminStatistics";
 import { Fragment, useState } from "react";
 import { ChevronDown, ChevronUp, CircleCheck, Plus, X } from "lucide-react";
 import {
@@ -18,20 +19,6 @@ import {
 } from "./common";
 
 type Action = (action: string, payload: unknown, id?: string) => Promise<void>;
-const statisticLabels: Record<string, string> = {
-  houses: "Maisons inscrites",
-  approved: "Maisons validées",
-  refused: "Maisons refusées",
-  pending: "Maisons en attente",
-  participants: "Participants uniques",
-  candy: "Maisons avec bonbons",
-  decoration: "Maisons avec décoration",
-  acting: "Maisons avec mise en scène",
-  routes: "Parcours préparés",
-  collections_started: "Collectes lancées",
-  collections_finished: "Collectes terminées",
-  visited: "Maisons visitées",
-};
 function Statistics({
   season,
   onClose,
@@ -39,8 +26,6 @@ function Statistics({
   season: Season;
   onClose: () => void;
 }) {
-  const stats = season.stats ?? {},
-    finished = stats.collections_finished ?? 0;
   return (
     <div className="beta-overlay">
       <section
@@ -59,43 +44,15 @@ function Statistics({
         {!season.stats_snapshot_at && !season.purged_at ? (
           <p>Le snapshot sera disponible à la clôture de la saison.</p>
         ) : (
-          <>
-            <div className="season-statistics">
-              {Object.entries(statisticLabels)
-                .filter(([key]) => stats[key] !== undefined)
-                .map(([key, label]) => (
-                  <article key={key}>
-                    <span>{label}</span>
-                    <strong>{stats[key]}</strong>
-                  </article>
-                ))}
-            </div>
-            {finished > 0 && (
-              <dl className="season-averages">
-                <dt>Distance cumulée</dt>
-                <dd>{((stats.distance_meters ?? 0) / 1000).toFixed(2)} km</dd>
-                <dt>Distance moyenne par collecte terminée</dt>
-                <dd>
-                  {((stats.distance_meters ?? 0) / finished / 1000).toFixed(2)}{" "}
-                  km
-                </dd>
-                <dt>Durée moyenne</dt>
-                <dd>
-                  {Math.round((stats.duration_seconds ?? 0) / finished / 60)}{" "}
-                  min
-                </dd>
-                <dt>Complétion moyenne</dt>
-                <dd>
-                  {Math.round(((stats.completion_sum ?? 0) / finished) * 100)} %
-                </dd>
-              </dl>
-            )}
-            <p className="small muted">
-              Les totaux de collecte proviennent des rapports anonymes des
-              appareils. Les anciennes collectes locales ne sont pas
-              reconstruites.
-            </p>
-          </>
+          <AdminStatistics
+            season={season}
+            loading={false}
+            data={{
+              seasonId: season.id,
+              snapshot: true,
+              stats: season.stats ?? {},
+            }}
+          />
         )}
       </section>
     </div>

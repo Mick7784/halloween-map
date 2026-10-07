@@ -136,16 +136,7 @@ test("live APIs: REAL/TEST isolation, phone session, reusable accounts, purge an
     ).toBe(true);
     const h = (await (await page.request.get("/api/admin/houses")).json())[0];
     expect(h.season_id).toBe(testSeason.id);
-    expect(
-      (
-        await post("admin", {
-          action: "reviewHouse",
-          seasonId: testSeason.id,
-          id: h.id,
-          payload: { status: "VALIDATED" },
-        })
-      ).ok(),
-    ).toBe(true);
+    expect(h.review_status).toBe("VALIDATED");
     const phone = await browser.newContext({ baseURL: origin }),
       visitor = await browser.newContext({ baseURL: origin });
     try {
@@ -227,11 +218,7 @@ test("live APIs: REAL/TEST isolation, phone session, reusable accounts, purge an
       const realHouse = (
         await (await page.request.get("/api/admin/houses")).json()
       )[0];
-      await post("admin", {
-        action: "reviewHouse",
-        id: realHouse.id,
-        payload: { status: "VALIDATED" },
-      });
+      expect(realHouse.review_status).toBe("VALIDATED");
       expect(
         (
           await post("admin", {

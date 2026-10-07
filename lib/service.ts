@@ -594,6 +594,7 @@ export async function createParticipation(
   management?: { actor: User; seasonId: string },
 ) {
   if (management) {
+    requirePermission(management.actor, "admin.access");
     requirePermission(management.actor, "participants.edit");
     if (management.actor.instance_id !== user?.instance_id)
       throw new HttpError(403, "Instance incompatible");
@@ -628,8 +629,9 @@ export async function createParticipation(
         [i.active_season_id, i.id],
       )
     ).rows[0] as unknown as Season;
+    if (!ss)
+      throw new HttpError(403, "Activez une saison avant de créer une maison.");
     if (
-      !ss ||
       ss.purged_at ||
       (!ss.is_test &&
         (!ss.registrations_open ||
@@ -677,11 +679,10 @@ export async function createParticipation(
         a.terms,
       ],
     );
-    if (management)
-      await c.query(
-        "UPDATE participations SET review_status='PENDING' WHERE user_id=$1 AND season_id=$2",
-        [user.id, ss.id],
-      );
+    await c.query(
+      "UPDATE participations SET review_status=$1 WHERE user_id=$2 AND season_id=$3",
+      [management ? "VALIDATED" : "PENDING", user.id, ss.id],
+    );
     await audit(
       c,
       i.id,
@@ -1110,6 +1111,7 @@ export async function adminRead(
     eligibleOwners: "users.read",
     seasons: "season.read",
     stats: "stats.read",
+    statistics: "stats.read",
     settings: "settings.read",
     roles: "users.read",
     audit: "audit.read",
@@ -1124,6 +1126,24 @@ export async function adminRead(
       : seasonId,
   );
   switch (section) {
+    case "statistics":
+      if (!scoped) return null;
+      return transaction(async (c) => {
+        // A purge must not replace live totals with empty detail counts during this read.
+        const s = (
+          await c.query(
+            "SELECT * FROM seasons WHERE id=$1 AND instance_id=$2 FOR SHARE",
+            [scoped.id, u.instance_id],
+          )
+        ).rows[0] as unknown as Season | undefined;
+        if (!s) throw new HttpError(404, "Saison introuvable");
+        const snapshot = !!(s.stats_snapshot_at || s.purged_at || s.archived);
+        return {
+          seasonId: s.id,
+          snapshot,
+          stats: snapshot ? s.stats : await statisticalSnapshot(c, s),
+        };
+      });
     case "houses":
       return (
         await db().query(
