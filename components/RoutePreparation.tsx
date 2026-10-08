@@ -10,7 +10,6 @@ import {
   Ghost,
   Send,
   Check,
-  Sparkles,
 } from "lucide-react";
 import { locateOrigin } from "../lib/geolocation";
 import type { RouteParameters } from "../lib/active-route";
@@ -18,6 +17,7 @@ import type { PublicState } from "./common";
 import type { Activity } from "../lib/domain";
 import { Field, Notice, fears, values } from "./common";
 import Editorial from "./Editorial";
+import { selectableHouses } from "../lib/collection-view";
 import ManorMark from "./ManorMark";
 
 export default function RoutePreparation({
@@ -50,17 +50,38 @@ export default function RoutePreparation({
   const [locating, setLocating] = useState(false),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
-    [allFear, setAllFear] = useState(false),
+    [excluded, setExcluded] = useState<string[]>([]),
+    [windowStart, setWindowStart] = useState(() =>
+      DateTime.now()
+        .setZone(state.instance!.timezone)
+        .plus({ minutes: 2 })
+        .toFormat("yyyy-MM-dd'T'HH:mm"),
+    ),
+    [windowEnd, setWindowEnd] = useState(() => {
+      const now = DateTime.now().setZone(state.instance!.timezone);
+      const limit = DateTime.fromISO(
+        state.season!.route_end_at ?? state.season!.closes_at,
+      ).setZone(state.instance!.timezone);
+      return (
+        now.plus({ hours: 2 }) < limit ? now.plus({ hours: 2 }) : limit
+      ).toFormat("yyyy-MM-dd'T'HH:mm");
+    }),
     [acceptedVersion, setAcceptedVersion] = useState<string | null>(null),
     [guidelinesOpen, setGuidelinesOpen] = useState(false);
   const zone = state.instance!.timezone,
     guideline = state.documents?.GUIDELINES;
-  const now = DateTime.now().setZone(zone);
-  const end = DateTime.fromISO(
-    state.season!.route_end_at ?? state.season!.closes_at,
-  ).setZone(zone);
+  const candidates = state.routeCandidates ?? state.houses ?? [];
+  const eligible = selectableHouses(
+    candidates,
+    maxFear,
+    activities,
+    +DateTime.fromISO(windowStart, { zone }),
+    +DateTime.fromISO(windowEnd, { zone }),
+  );
+  const chosen = eligible.filter((h) => !excluded.includes(h.id));
   const accepted = !!guideline && acceptedVersion === guideline.version;
-  const alive = useRef(true);
+  const alive = useRef(true),
+    form = useRef<HTMLFormElement>(null);
   useEffect(() => {
     alive.current = true;
     return () => {
@@ -105,9 +126,18 @@ export default function RoutePreparation({
           </button>
         </header>
         <form
+          ref={form}
           onSubmit={async (e) => {
             e.preventDefault();
-            if (!origin || !accepted || locating || busy) return;
+            if (
+              !origin ||
+              !accepted ||
+              !chosen.length ||
+              chosen.length > 30 ||
+              locating ||
+              busy
+            )
+              return;
             setBusy(true);
             setError("");
             const v = values(e.currentTarget);
@@ -117,8 +147,10 @@ export default function RoutePreparation({
                 end: DateTime.fromISO(v.end, { zone }).toUTC().toISO()!,
                 origin: { latitude: origin[1], longitude: origin[0] },
                 activities,
-                maxFear: allFear ? undefined : maxFear,
-                excludedHouseIds: [],
+                maxFear,
+                excludedHouseIds: candidates
+                  .filter((h) => !chosen.some((c) => c.id === h.id))
+                  .map((h) => h.id),
                 acceptance: {
                   mode: "GUIDELINES_ONLY",
                   guidelines: true,
@@ -133,9 +165,10 @@ export default function RoutePreparation({
           }}
         >
           <div className="route-preparation-scroll">
-            <h1 id="route-preparation-title">Préparer mon parcours</h1>
+            <h1 id="route-preparation-title">Préparer ma collecte</h1>
             <p className="route-subtitle">
-              Créez un itinéraire personnalisé selon vos envies.
+              Choisissez vos maisons et explorez-les dans l’ordre qui vous
+              plaît.
             </p>
             <fieldset disabled={busy || locating}>
               <legend>
@@ -172,11 +205,12 @@ export default function RoutePreparation({
                   label="Heure de début"
                   name="start"
                   type="datetime-local"
-                  value={now
-                    .plus({ minutes: 2 })
-                    .toFormat("yyyy-MM-dd'T'HH:mm")}
+                  value={windowStart}
                   readOnly={busy || locating}
-                  onValueChange={onInvalidate}
+                  onValueChange={() => {
+                    setWindowStart(values(form.current!).start);
+                    onInvalidate();
+                  }}
                 />
               </div>
               <div>
@@ -185,12 +219,12 @@ export default function RoutePreparation({
                   label="Heure de fin"
                   name="end"
                   type="datetime-local"
-                  value={(now.plus({ hours: 2 }) < end
-                    ? now.plus({ hours: 2 })
-                    : end
-                  ).toFormat("yyyy-MM-dd'T'HH:mm")}
+                  value={windowEnd}
                   readOnly={busy || locating}
-                  onValueChange={onInvalidate}
+                  onValueChange={() => {
+                    setWindowEnd(values(form.current!).end);
+                    onInvalidate();
+                  }}
                 />
               </div>
             </div>
@@ -205,7 +239,6 @@ export default function RoutePreparation({
                 max="5"
                 step="1"
                 value={maxFear}
-                disabled={allFear}
                 onChange={(e) => {
                   onFear(Number(e.target.value));
                   onInvalidate();
@@ -220,25 +253,54 @@ export default function RoutePreparation({
                 {fears.map((fear, n) => (
                   <span
                     key={fear}
-                    className={!allFear && maxFear === n + 1 ? "selected" : ""}
+                    className={maxFear === n + 1 ? "selected" : ""}
                   >
                     {fear}
                   </span>
                 ))}
               </div>
-              <label className="route-switch">
-                <input
-                  type="checkbox"
-                  checked={allFear}
-                  onChange={(e) => {
-                    setAllFear(e.target.checked);
-                    onInvalidate();
-                  }}
-                />
-                <span />
-                <span>Je m’adapte à tous les niveaux</span>
-                <Sparkles size={15} />
-              </label>
+              <p className="route-status">
+                Le niveau choisi inclut également toutes les maisons de niveau
+                inférieur.
+              </p>
+            </fieldset>
+            <fieldset
+              className="collection-selection"
+              disabled={busy || locating}
+            >
+              <legend>Ma sélection · {chosen.length} maisons</legend>
+              <p className="route-status">
+                Sélection libre, sans ordre de visite. Les maisons qui
+                s’adaptent aux visiteurs sont incluses.
+              </p>
+              {eligible.map((h) => (
+                <label className="collection-choice" key={h.id}>
+                  <input
+                    type="checkbox"
+                    checked={!excluded.includes(h.id)}
+                    onChange={(e) => {
+                      setExcluded((ids) =>
+                        e.target.checked
+                          ? ids.filter((id) => id !== h.id)
+                          : [...ids, h.id],
+                      );
+                      onInvalidate();
+                    }}
+                  />
+                  <span>
+                    <strong>{h.name}</strong>
+                    <small>{h.address}</small>
+                  </span>
+                </label>
+              ))}
+              {chosen.length > 30 && (
+                <p role="alert">
+                  Choisissez au maximum 30 maisons pour cette collecte.
+                </p>
+              )}
+              {!eligible.length && (
+                <p>Aucune maison compatible avec ces horaires et filtres.</p>
+              )}
             </fieldset>
             <Notice
               error={
@@ -277,10 +339,17 @@ export default function RoutePreparation({
             </label>
             <button
               className="primary route-submit"
-              disabled={!origin || !accepted || locating || busy}
+              disabled={
+                !origin ||
+                !accepted ||
+                !chosen.length ||
+                chosen.length > 30 ||
+                locating ||
+                busy
+              }
             >
               <Send size={19} />
-              {busy ? "Calcul piéton…" : "Créer mon parcours"}
+              {busy ? "Calcul piéton…" : "Préparer ma collecte"}
             </button>
           </footer>
         </form>

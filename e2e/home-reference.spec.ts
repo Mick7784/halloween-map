@@ -228,7 +228,7 @@ for (const mode of ["guest", "member", "house", "admin"]) {
         "Inscrire ma maison",
         "Ma participation",
         "Administration",
-        "Préparer mon parcours",
+        "Préparer ma collecte",
       ]) {
         await expect(
           dialog.getByRole("link", { name, exact: true }),

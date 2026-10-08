@@ -6,6 +6,8 @@ import FloatingWindow from "../components/FloatingWindow";
 import AccountOverlay from "../components/AccountOverlay";
 import UserMenu from "../components/UserMenu";
 import InstallApp, { InstallAppProvider } from "../components/InstallApp";
+import RouteSheet from "../components/RouteSheet";
+import RoutePreparation from "../components/RoutePreparation";
 import MapExperience from "../components/MapExperience";
 import { useDialogFocus } from "../components/useDialogFocus";
 import type { User } from "../lib/domain";
@@ -318,7 +320,7 @@ describe("map navigation surfaces", () => {
     await click(byLabel("Fermer Maisons et filtres"));
     expect(byLabel("Maisons et filtres")).toBeNull();
   });
-  it("calculated route is a closable window; active route retains toolbar, sheet and recenter", async () => {
+  it("calculated route is a closable window; active collection retains top panel, bottom stop and recenter", async () => {
     fixture.controller.phase = "calculated";
     fixture.controller.result = {
       stops: [
@@ -346,7 +348,7 @@ describe("map navigation surfaces", () => {
     expect(
       document.querySelector(".prepared-route-window .route-sheet"),
     ).not.toBeNull();
-    await click(byLabel("Fermer Mon parcours Halloween"));
+    await click(byLabel("Fermer Ma collecte Halloween"));
     expect(document.querySelector(".prepared-route-window")).toBeNull();
     expect(fixture.controller.deletePreparedRoute).not.toHaveBeenCalled();
     fixture.controller.phase = "active";
@@ -365,11 +367,147 @@ describe("map navigation surfaces", () => {
     );
     expect(
       document.querySelector(".route-experience.is-focused .route-map-toolbar"),
-    ).not.toBeNull();
+    ).toBeNull();
+    expect(document.querySelector(".collection-top-panel")).not.toBeNull();
+    expect(
+      document.querySelector(".collection-top-panel")?.textContent,
+    ).not.toContain("Arrêter");
+    expect(
+      document.querySelector(".collection-bottom-bar")?.textContent,
+    ).toContain("Arrêter la collecte");
     expect(
       document.querySelector(".route-map-layer .route-sheet"),
     ).not.toBeNull();
     expect(byLabel("Recentrer sur ma position")).not.toBeNull();
     expect(document.querySelector(".route-account-link")).not.toBeNull();
   });
+});
+
+describe("visitor collection preparation", () => {
+  it("uses cumulative fear, keeps adaptable houses and submits only the freely selected houses", async () => {
+    const now = Date.now();
+    const houses = [1, 2, 3].map((fear) => ({
+      id: `10000000-0000-4000-8000-00000000000${fear}`,
+      name: `Maison niveau ${fear}`,
+      address: "Rue des maisons",
+      latitude: 48.8,
+      longitude: 2.8,
+      fear,
+      adaptable: fear === 3,
+      activities: ["CANDY" as const],
+      starts_at: new Date(now - 3600000).toISOString(),
+      ends_at: new Date(now + 86400000).toISOString(),
+      rp: "",
+      practical: "",
+    }));
+    const calculate = vi.fn().mockResolvedValue(undefined);
+    const props = {
+      state: {
+        ...state,
+        houses,
+        routeCandidates: houses,
+        documents: {
+          GUIDELINES: {
+            version: "2026.1",
+            title: "Bonnes pratiques",
+            body: "Respecter les maisons.",
+          },
+        },
+      } as PublicState,
+      origin: [2.8, 48.8] as [number, number],
+      originLabel: "Point choisi",
+      activities: [],
+      onOrigin: vi.fn(),
+      onPick: vi.fn(),
+      onClose: vi.fn(),
+      onCalculate: calculate,
+      onInvalidate: vi.fn(),
+      onFear: vi.fn(),
+      maxFear: 1,
+    };
+    await act(async () => root.render(h(RoutePreparation, props)));
+    expect(document.querySelectorAll(".collection-choice")).toHaveLength(2);
+    expect(document.querySelector(".route-preparation")?.textContent).toContain(
+      "Le niveau choisi inclut également toutes les maisons de niveau inférieur.",
+    );
+    expect(
+      document.querySelector(".route-fear input[type=checkbox]"),
+    ).toBeNull();
+    await act(async () =>
+      root.render(h(RoutePreparation, { ...props, maxFear: 2 })),
+    );
+    expect(document.querySelectorAll(".collection-choice")).toHaveLength(3);
+    await click(document.querySelectorAll(".collection-choice input")[1]);
+    await click(document.querySelector(".route-acceptance input")!);
+    await click(document.querySelector(".route-submit")!);
+    expect(calculate).toHaveBeenCalledOnce();
+    expect(calculate.mock.calls[0][0]).toMatchObject({
+      maxFear: 2,
+      excludedHouseIds: [houses[1].id],
+      acceptance: { guidelines: true },
+    });
+  });
+});
+
+it("expands the top panel by dragging down and by keyboard, without moving the stop action into it", async () => {
+  Object.defineProperty(window, "innerWidth", {
+    value: 390,
+    configurable: true,
+  });
+  Object.defineProperty(HTMLElement.prototype, "setPointerCapture", {
+    value: vi.fn(),
+    configurable: true,
+  });
+  const onPosition = vi.fn();
+  const props = {
+    result: {
+      stops: [],
+      geometry: [],
+      distanceMeters: 0,
+      durationMinutes: 0,
+      disclaimer: "",
+    } as unknown as import("../lib/routing").RouteResult,
+    phase: "active" as const,
+    position: "collapsed" as const,
+    onPosition,
+    onHouse: vi.fn(),
+    onEnd: vi.fn(),
+    onStart: vi.fn(),
+    onSave: vi.fn(),
+    visitedIds: [],
+    remaining: 0,
+    elapsedSeconds: 0,
+    onHeight: vi.fn(),
+    selectedStepId: null,
+    onAdd: vi.fn(),
+    onRemove: vi.fn(),
+  };
+  await act(async () => root.render(h(RouteSheet, props)));
+  const handle = byLabel("Déplier ou replier ma sélection");
+  const panel = document.querySelector(".collection-top-panel")!;
+  vi.spyOn(panel, "getBoundingClientRect").mockReturnValue({
+    height: 78,
+  } as DOMRect);
+  await act(async () => {
+    handle.dispatchEvent(
+      new MouseEvent("pointerdown", { clientY: 40, button: 0, bubbles: true }),
+    );
+    handle.dispatchEvent(
+      new MouseEvent("pointermove", { clientY: 220, button: 0, bubbles: true }),
+    );
+    handle.dispatchEvent(
+      new MouseEvent("pointerup", { clientY: 220, button: 0, bubbles: true }),
+    );
+  });
+  expect(onPosition).toHaveBeenLastCalledWith("intermediate");
+  await act(async () =>
+    root.render(h(RouteSheet, { ...props, position: "intermediate" })),
+  );
+  await act(async () =>
+    handle.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }),
+    ),
+  );
+  expect(onPosition).toHaveBeenLastCalledWith("expanded");
+  expect(panel.textContent).not.toContain("Arrêter");
 });

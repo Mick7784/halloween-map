@@ -290,3 +290,32 @@
     animation: none;
   }
 }
+
+.visitor-overlay {
+  padding: max(16px, env(safe-area-inset-top)) 16px
+    max(16px, env(safe-area-inset-bottom));
+  backdrop-filter: blur(5px);
+}
+.visitor-overlay .visitor-house {
+  width: min(620px, 100%);
+  height: min(
+    820px,
+    calc(100dvh - 48px - env(safe-area-inset-top) - env(safe-area-inset-bottom))
+  );
+  border-radius: 20px;
+  border: 1px solid #6b607d;
+  background: #10131c;
+}
+.visitor-overlay .visitor-house-hero {
+  flex-basis: clamp(88px, 16dvh, 160px);
+}
+.visitor-overlay .visitor-house-body {
+  padding: 0 18px 16px;
+  gap: 12px;
+}
+.visitor-overlay .visitor-house h1 {
+  font-size: 26px;
+}
+.visitor-overlay .visitor-house .visitor-address {
+  font-size: 13px;
+}

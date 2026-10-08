@@ -6,6 +6,7 @@ import {
   reportQueueKey,
   type CollectionReport,
 } from "../lib/collection-reports";
+import { nearestHouse, removeUnvisitedHouse } from "../lib/collection-view";
 import { houseTravelKey } from "../lib/route-state";
 import { watchCurrentPosition } from "../lib/geolocation";
 import {
@@ -48,6 +49,8 @@ type Controller = {
   ready: boolean;
   currentPosition: [number, number] | null;
   accuracy: number | null;
+  fixTimestamp: number | null;
+  nearestHouseId: string | null;
   gpsState:
     | "idle"
     | "searching"
@@ -79,6 +82,8 @@ const initial = (): Controller => ({
   ready: false,
   currentPosition: null,
   accuracy: null,
+  fixTimestamp: null,
+  nearestHouseId: null,
   gpsState: "idle",
   gpsError: "",
   recenterTarget: null,
@@ -169,11 +174,7 @@ export default function useActiveRoute({
   }, [ownerId, instanceId, seasonId, identityKey, bumpRevision]);
   useEffect(() => {
     if (!state.ready || state.identityKey !== identityKey) return;
-    if (
-      state.phase === "preparation" ||
-      !state.parameters ||
-      !state.result?.stops.length
-    ) {
+    if (state.phase === "preparation" || !state.parameters || !state.result) {
       clearStoredRoute();
       return;
     }
@@ -291,8 +292,24 @@ export default function useActiveRoute({
       Date.now() >=
       Math.min(+new Date(snapshot.parameters.end), +new Date(closesAt))
     ) {
-      if (snapshot.phase === "active") stopActiveRoute();
-      else reset();
+      if (snapshot.phase !== "active") reset();
+      else
+        setState((s) => ({
+          ...s,
+          verified: false,
+          nearestHouseId: null,
+          result: s.result
+            ? {
+                ...s.result,
+                stops: s.result.stops.map((stop) => ({
+                  ...stop,
+                  unavailable: true,
+                })),
+              }
+            : null,
+          error:
+            "Les horaires sont terminés. Vous pouvez arrêter votre collecte sans perdre vos visites.",
+        }));
       return;
     }
     const token = revision.current;
@@ -315,7 +332,17 @@ export default function useActiveRoute({
       });
       if (token !== revision.current) return;
       if (!availability.valid) {
-        if (snapshot.phase === "active") stopActiveRoute();
+        if (snapshot.phase === "active")
+          setState((s) => ({
+            ...s,
+            verified: false,
+            nearestHouseId: null,
+            error:
+              "La carte n’est plus accessible. Vous pouvez terminer votre collecte sans perdre vos visites.",
+            result: s.result
+              ? annotateAvailability(s.result, availability)
+              : null,
+          }));
         else reset();
         return;
       }
@@ -354,7 +381,7 @@ export default function useActiveRoute({
         s.identityKey === identityKey ? { ...s, checking: false } : s,
       );
     }
-  }, [instanceId, seasonId, closesAt, identityKey, stopActiveRoute, reset]);
+  }, [instanceId, seasonId, closesAt, identityKey, reset]);
   useEffect(() => {
     checkCallback.current = checkAvailability;
   }, [checkAvailability]);
@@ -379,12 +406,19 @@ export default function useActiveRoute({
   useEffect(() => {
     if (state.phase !== "active") return;
     let stopWatch: (() => void) | undefined;
+    let previousGPS: { timestamp: number; accuracy: number } | null = null;
     const sync = () => {
       stopWatch?.();
       stopWatch = undefined;
       tracker.current = emptyTracker();
+      previousGPS = null;
       if (document.visibilityState === "hidden") {
-        setState((s) => ({ ...s, gpsState: "paused" }));
+        setState((s) => ({
+          ...s,
+          gpsState: "paused",
+          nearestHouseId: null,
+          collection: { ...s.collection, distancePartial: true },
+        }));
         return;
       }
       setState((s) => ({ ...s, gpsState: "searching", gpsError: "" }));
@@ -396,10 +430,23 @@ export default function useActiveRoute({
           const update = collectGPS(
             tracker.current,
             { ...position, timestamp: position.timestamp ?? Date.now() },
-            snapshot.verified ? (snapshot.result?.stops ?? []) : [],
+            snapshot.verified &&
+              Date.now() <
+                Math.min(
+                  +new Date(snapshot.parameters!.end),
+                  +new Date(closesAt),
+                )
+              ? (snapshot.result?.stops ?? [])
+              : [],
             snapshot.collection.visitedIds,
             Date.now(),
           );
+          const previousFix = previousGPS;
+          const timestamp = position.timestamp ?? Date.now();
+          const gap = previousFix ? timestamp - previousFix.timestamp : 0;
+          previousGPS = update.accepted
+            ? { timestamp, accuracy: position.accuracy }
+            : null;
           tracker.current = update.tracker;
           setState((s) =>
             s.phase !== "active"
@@ -410,6 +457,32 @@ export default function useActiveRoute({
                     ? position.point
                     : s.currentPosition,
                   accuracy: position.accuracy,
+                  fixTimestamp: update.accepted
+                    ? (position.timestamp ?? Date.now())
+                    : s.fixTimestamp,
+                  nearestHouseId:
+                    update.accepted &&
+                    snapshot.verified &&
+                    previousFix &&
+                    previousFix.accuracy <= 20 &&
+                    gap > 0 &&
+                    gap <= 15000 &&
+                    Date.now() <
+                      Math.min(
+                        +new Date(snapshot.parameters!.end),
+                        +new Date(closesAt),
+                      )
+                      ? nearestHouse(
+                          snapshot.result?.stops ?? [],
+                          update.visitedIds,
+                          {
+                            ...position,
+                            timestamp: position.timestamp ?? Date.now(),
+                          },
+                          s.nearestHouseId,
+                          Date.now(),
+                        )
+                      : null,
                   gpsState:
                     position.accuracy > 35
                       ? "low-accuracy"
@@ -419,6 +492,18 @@ export default function useActiveRoute({
                   gpsError: "",
                   collection: {
                     ...s.collection,
+                    gpsAcceptedFixes:
+                      (s.collection.gpsAcceptedFixes ?? 0) +
+                      (update.accepted ? 1 : 0),
+                    gpsObservedSeconds:
+                      (s.collection.gpsObservedSeconds ?? 0) +
+                      (update.accepted && previousFix && gap > 0 && gap <= 15000
+                        ? gap / 1000
+                        : 0),
+                    distancePartial:
+                      s.collection.distancePartial ||
+                      !update.accepted ||
+                      gap > 15000,
                     distanceMeters:
                       s.collection.distanceMeters + update.distanceDelta,
                     visitedIds: [
@@ -431,12 +516,17 @@ export default function useActiveRoute({
                 },
           );
         },
-        (error) =>
+        (error) => {
+          tracker.current = emptyTracker();
+          previousGPS = null;
           setState((s) => ({
             ...s,
             gpsState: error.code === 1 ? "denied" : "unavailable",
             gpsError: error.message,
-          })),
+            nearestHouseId: null,
+            collection: { ...s.collection, distancePartial: true },
+          }));
+        },
       );
     };
     sync();
@@ -447,22 +537,7 @@ export default function useActiveRoute({
       document.removeEventListener("visibilitychange", sync);
       window.removeEventListener("pageshow", sync);
     };
-  }, [state.phase]);
-  useEffect(() => {
-    if (
-      state.phase === "active" &&
-      state.verified &&
-      state.result &&
-      !remainingHouses(state.result.stops, state.collection.visitedIds).length
-    )
-      stopActiveRoute();
-  }, [
-    state.phase,
-    state.verified,
-    state.result,
-    state.collection.visitedIds,
-    stopActiveRoute,
-  ]);
+  }, [state.phase, closesAt]);
   useEffect(() => {
     if (!state.parameters || !["active", "calculated"].includes(state.phase))
       return;
@@ -471,12 +546,94 @@ export default function useActiveRoute({
         Date.now() >=
         Math.min(+new Date(state.parameters!.end), +new Date(closesAt))
       ) {
-        if (state.phase === "active") stopActiveRoute();
-        else reset();
+        if (state.phase !== "active") reset();
+        else if (current.current.verified) void checkCallback.current();
       }
     }, 1000);
     return () => clearInterval(timer);
-  }, [state.phase, state.parameters, closesAt, stopActiveRoute, reset]);
+  }, [state.phase, state.parameters, closesAt, reset]);
+  const removeHouse = useCallback((id: string) => {
+    revision.current++;
+    setState((s) =>
+      s.phase !== "active" || !s.result
+        ? s
+        : {
+            ...s,
+            result: removeUnvisitedHouse(s.result, s.collection.visitedIds, id),
+            selectedHouse: null,
+            nearestHouseId: s.nearestHouseId === id ? null : s.nearestHouseId,
+          },
+    );
+  }, []);
+  const addHouse = useCallback(
+    async (house: PublicHouse) => {
+      const snapshot = current.current;
+      if (
+        snapshot.phase !== "active" ||
+        !snapshot.result ||
+        !snapshot.parameters ||
+        snapshot.result.stops.length >= 30 ||
+        snapshot.result.stops.some((s) => s.house.id === house.id)
+      )
+        return;
+      const token = revision.current;
+      // Validate with the existing availability API and the session's real season context.
+      const checked = await api<RouteAvailability>("route/availability", {
+        instanceId,
+        seasonId,
+        mode: "COLLECTION",
+        end: snapshot.parameters.end,
+        activities: snapshot.parameters.activities,
+        maxFear: snapshot.parameters.maxFear,
+        steps: [
+          {
+            id: house.id,
+            arrival: new Date().toISOString(),
+            departure: new Date(Date.now() + 300000).toISOString(),
+            key: houseTravelKey(house),
+          },
+        ],
+      });
+      const candidate = checked.steps[0];
+      if (token !== revision.current) return;
+      if (
+        !checked.valid ||
+        !candidate?.available ||
+        !candidate.house ||
+        +new Date(snapshot.parameters.end) <= Date.now()
+      )
+        throw new Error(
+          "Cette maison n’est plus disponible pour votre collecte.",
+        );
+      revision.current++;
+      setState((s) =>
+        !s.result ||
+        s.phase !== "active" ||
+        s.result.stops.length >= 30 ||
+        s.result.stops.some((stop) => stop.house.id === house.id)
+          ? s
+          : {
+              ...s,
+              result: {
+                ...s.result,
+                geometry: [],
+                stops: [
+                  ...s.result.stops,
+                  {
+                    house: candidate.house!,
+                    arrival: new Date().toISOString(),
+                    departure: new Date(Date.now() + 300000).toISOString(),
+                    walkingMinutes: 0,
+                    walkingSeconds: 0,
+                    distanceMeters: 0,
+                  },
+                ],
+              },
+            },
+      );
+    },
+    [instanceId, seasonId],
+  );
   const invalidate = useCallback(() => {
     inputRevision.current++;
     if (current.current.phase === "active") return;
@@ -516,6 +673,8 @@ export default function useActiveRoute({
       sheet: "expanded",
       currentPosition: null,
       accuracy: null,
+      fixTimestamp: null,
+      nearestHouseId: null,
       gpsState: "idle",
       gpsError: "",
       recenterTarget: null,
@@ -534,7 +693,7 @@ export default function useActiveRoute({
       collectionId: crypto.randomUUID(),
       collection: { ...emptyCollection(), startedAt: new Date().toISOString() },
       verified: false,
-      sheet: "intermediate",
+      sheet: "collapsed",
     }));
   }, []);
   const markVisited = useCallback(
@@ -544,7 +703,9 @@ export default function useActiveRoute({
           now = Date.now();
         if (
           s.phase !== "active" ||
+          !s.verified ||
           !stop ||
+          +new Date(s.parameters?.end ?? 0) <= now ||
           stop.unavailable ||
           +new Date(stop.house.starts_at) > now ||
           +new Date(stop.house.ends_at) <= now ||
@@ -611,6 +772,17 @@ export default function useActiveRoute({
     )
       ? "Une maison de votre sélection n’est plus disponible"
       : "",
+    finishSuggested:
+      state.phase === "active" &&
+      (Date.now() >=
+        Math.min(+new Date(state.parameters?.end ?? 0), +new Date(closesAt)) ||
+        (state.verified &&
+          !remainingHouses(
+            state.result?.stops ?? [],
+            state.collection.visitedIds,
+          ).length)),
+    removeHouse,
+    addHouse,
     calculateRoute,
     startRoute,
     savePreparedRoute,

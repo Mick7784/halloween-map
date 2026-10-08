@@ -343,6 +343,21 @@ test("map canvas, filters and active route remain mounted across account", async
     }),
   );
   await page.route("**/api/route*", (r) => {
+    if (r.request().url().includes("/availability"))
+      return r.fulfill({
+        json: {
+          valid: true,
+          checkedAt: new Date().toISOString(),
+          steps: [
+            {
+              id: house.id,
+              available: true,
+              activities: house.activities,
+              house,
+            },
+          ],
+        },
+      });
     const input = r.request().postDataJSON();
     const arrival = new Date(+new Date(input.start) + 120000).toISOString();
     const departure = new Date(+new Date(input.start) + 420000).toISOString();
@@ -372,7 +387,7 @@ test("map canvas, filters and active route remain mounted across account", async
   });
   await page.reload();
   await page
-    .getByRole("button", { name: "Préparer mon parcours", exact: true })
+    .getByRole("button", { name: "Préparer ma collecte", exact: true })
     .click();
   const canvas = page.locator("canvas.maplibregl-canvas");
   await expect(canvas).toBeVisible();
@@ -381,7 +396,7 @@ test("map canvas, filters and active route remain mounted across account", async
   await page.getByRole("button", { name: "Me localiser", exact: true }).click();
   await page.getByRole("checkbox", { name: /J’ai pris connaissance/ }).check();
   await page
-    .getByRole("button", { name: "Créer mon parcours", exact: true })
+    .getByRole("button", { name: "Préparer ma collecte", exact: true })
     .click();
   await expect(page.locator(".route-sheet")).toBeVisible();
   const read = () =>
@@ -391,11 +406,11 @@ test("map canvas, filters and active route remain mounted across account", async
   // Wait for this fixture’s fitBounds result, not a snapshot midway through its animation.
   await expect.poll(async () => (await read())?.camera?.zoom).toBe(16);
   await page
-    .getByRole("button", { name: "Lancer le parcours", exact: true })
+    .getByRole("button", { name: "Commencer ma collecte", exact: true })
     .click();
   await page
     .getByRole("button", {
-      name: "J’ai compris — lancer le parcours",
+      name: "J’ai compris — commencer ma collecte",
       exact: true,
     })
     .click();

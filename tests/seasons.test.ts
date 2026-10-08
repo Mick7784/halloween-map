@@ -994,3 +994,27 @@ it("blocks TEST campaign creation, test and retry; cancels legacy queued TEST me
     ),
   ).rejects.toMatchObject({ status: 403 });
 });
+
+it("finishes an emptied free selection with finite anonymous statistics", async () => {
+  vi.setSystemTime(new Date("2026-10-31T18:00Z"));
+  const session = await createSession(ordinary.id);
+  await reportCollection(
+    ordinary,
+    {
+      id: randomUUID(),
+      seasonId: real.id,
+      event: "finish",
+      planned: 0,
+      visited: 0,
+    },
+    session,
+  );
+  const stats = (
+    await db().query("SELECT stats FROM seasons WHERE id=$1", [real.id])
+  ).rows[0].stats;
+  expect(stats).toMatchObject({
+    collections_started: 1,
+    collections_finished: 1,
+    completion_sum: 0,
+  });
+});

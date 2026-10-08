@@ -2,7 +2,8 @@
 import { useEffect, useRef, useState } from "react";
 import {
   ChevronUp,
-  Pause,
+  Plus,
+  Minus,
   Trash2,
   Footprints,
   Play,
@@ -34,10 +35,10 @@ export default function RouteSheet({
   onStart,
   onSave,
   visitedIds,
-  remaining,
-  elapsedSeconds,
   onHeight,
   selectedStepId,
+  onAdd,
+  onRemove,
 }: {
   result: RouteResult;
   phase: "calculated" | "active";
@@ -52,6 +53,8 @@ export default function RouteSheet({
   elapsedSeconds: number;
   onHeight: (height: number) => void;
   selectedStepId: string | null;
+  onAdd?: () => void;
+  onRemove?: (id: string) => void;
 }) {
   const panel = useRef<HTMLElement>(null),
     drag = useRef<{
@@ -64,7 +67,7 @@ export default function RouteSheet({
   const [dragHeight, setDragHeight] = useState<number | null>(null);
   function heights() {
     const h = window.visualViewport?.height ?? window.innerHeight;
-    return [96, Math.min(360, h * 0.46), Math.max(360, h - 180)];
+    return [78, Math.min(300, h * 0.42), Math.min(520, h * 0.52)];
   }
   useEffect(() => {
     const el = panel.current;
@@ -78,20 +81,24 @@ export default function RouteSheet({
   const ordered = result.stops
     .slice()
     .sort((a, b) => a.house.name.localeCompare(b.house.name, "fr"));
-  const visible = position === "intermediate" ? ordered.slice(0, 3) : ordered;
+  const visible = ordered;
   return (
     <aside
       id="parcours"
       ref={panel}
-      className={"route-sheet" + (dragHeight !== null ? " is-dragging" : "")}
+      className={
+        "route-sheet" +
+        (phase === "active" ? " collection-top-panel" : "") +
+        (dragHeight !== null ? " is-dragging" : "")
+      }
       data-sheet-position={position}
-      aria-label="Mon parcours"
+      aria-label={phase === "active" ? "Collecte en cours" : "Ma collecte"}
       style={dragHeight === null ? undefined : { height: dragHeight }}
     >
       <button
         type="button"
         className="route-sheet-handle"
-        aria-label="Position du panneau parcours"
+        aria-label="Déplier ou replier ma sélection"
         aria-expanded={position !== "collapsed"}
         onPointerDown={(e) => {
           if (e.button !== 0 || window.innerWidth >= 768) return;
@@ -106,7 +113,7 @@ export default function RouteSheet({
         onPointerMove={(e) => {
           const d = drag.current;
           if (!d) return;
-          const dy = d.y - e.clientY;
+          const dy = phase === "active" ? e.clientY - d.y : d.y - e.clientY;
           if (Math.abs(dy) > 4) d.moved = true;
           if (d.moved) {
             const limits = heights();
@@ -122,7 +129,7 @@ export default function RouteSheet({
           if (!d.moved) return;
           ignoreClick.current = true;
           const sizes = heights(),
-            dy = d.y - e.clientY;
+            dy = phase === "active" ? e.clientY - d.y : d.y - e.clientY;
           let index = sizes.reduce(
             (best, height, n) =>
               Math.abs(height - (d.height + dy)) <
@@ -152,7 +159,14 @@ export default function RouteSheet({
                 0,
                 Math.min(
                   2,
-                  positions.indexOf(position) + (e.key === "ArrowUp" ? 1 : -1),
+                  positions.indexOf(position) +
+                    ((
+                      phase === "active"
+                        ? e.key === "ArrowDown"
+                        : e.key === "ArrowUp"
+                    )
+                      ? 1
+                      : -1),
                 ),
               )
             ],
@@ -171,24 +185,23 @@ export default function RouteSheet({
           <ManorMark />
         </span>
         <span>
-          <strong>Mon parcours</strong>
+          <strong>
+            {phase === "active" ? "Collecte en cours" : "Ma collecte"}
+          </strong>
           <small>
             {phase === "active"
-              ? visitedIds.length +
-                " visitées · " +
-                remaining +
-                " restantes · " +
-                Math.floor(elapsedSeconds / 60) +
-                " min"
+              ? `${result.stops.length} maisons sélectionnées · ${visitedIds.length} visitées`
               : routeSummary(result)}
           </small>
         </span>
         <ChevronUp className="route-sheet-chevron" size={19} />
       </button>
       <div className="route-sheet-content" inert={position === "collapsed"}>
-        {position === "intermediate" && <h2>Ma sélection · ordre libre</h2>}
-        {position === "expanded" && (
-          <h2>{result.stops.length} maisons · ordre libre</h2>
+        <h2>Ma sélection · ordre libre</h2>
+        {phase === "active" && onAdd && (
+          <button className="collection-add" type="button" onClick={onAdd}>
+            <Plus size={18} /> Ajouter des maisons
+          </button>
         )}
         <ul className="route-steps">
           {visible.map((stop) => {
@@ -236,14 +249,28 @@ export default function RouteSheet({
                     )}
                   </span>
                 </button>
+                {phase === "active" && onRemove && !visited && (
+                  <button
+                    className="collection-remove"
+                    type="button"
+                    aria-label={`Retirer ${stop.house.name} de ma sélection`}
+                    onClick={() => onRemove(stop.house.id)}
+                  >
+                    <Minus size={18} />
+                  </button>
+                )}
               </li>
             );
           })}
         </ul>
-        {result.message && <p className="route-status">{result.message}</p>}
-        <p className="route-disclaimer">{result.disclaimer}</p>
+        {phase === "calculated" && result.message && (
+          <p className="route-status">{result.message}</p>
+        )}
+        {phase === "calculated" && (
+          <p className="route-disclaimer">{result.disclaimer}</p>
+        )}
       </div>
-      {position !== "collapsed" && (
+      {phase === "calculated" && position !== "collapsed" && (
         <footer className="route-sheet-footer">
           {phase === "calculated" && (
             <button type="button" onClick={onSave}>
@@ -254,18 +281,11 @@ export default function RouteSheet({
           {phase === "calculated" && !!result.stops.length && (
             <button type="button" className="primary" onClick={onStart}>
               <Play size={16} />
-              Lancer le parcours
+              Commencer ma collecte
             </button>
           )}
-          <button
-            type="button"
-            className={phase === "active" ? "primary" : "route-danger"}
-            onClick={onEnd}
-          >
-            {phase === "active" ? <Pause size={16} /> : <Trash2 size={16} />}{" "}
-            {phase === "active"
-              ? "Arrêter le parcours"
-              : "Supprimer le parcours"}
+          <button type="button" className="route-danger" onClick={onEnd}>
+            <Trash2 size={16} /> Supprimer la sélection
           </button>
         </footer>
       )}

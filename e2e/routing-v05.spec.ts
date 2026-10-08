@@ -97,11 +97,19 @@ async function arrange(page: Page) {
       json: {
         valid: true,
         checkedAt: new Date().toISOString(),
-        steps: houses.map((h) => ({
-          id: h.id,
-          available: true,
-          activities: h.activities,
-        })),
+        steps: houses
+          .filter((h) =>
+            r
+              .request()
+              .postDataJSON()
+              .steps.some((s: { id: string }) => s.id === h.id),
+          )
+          .map((h) => ({
+            id: h.id,
+            available: true,
+            activities: h.activities,
+            house: h,
+          })),
       },
     }),
   );
@@ -111,11 +119,19 @@ async function arrange(page: Page) {
         json: {
           valid: true,
           checkedAt: new Date().toISOString(),
-          steps: houses.map((h) => ({
-            id: h.id,
-            available: true,
-            activities: h.activities,
-          })),
+          steps: houses
+            .filter((h) =>
+              r
+                .request()
+                .postDataJSON()
+                .steps.some((s: { id: string }) => s.id === h.id),
+            )
+            .map((h) => ({
+              id: h.id,
+              available: true,
+              activities: h.activities,
+              house: h,
+            })),
         },
       });
     const input = r.request().postDataJSON(),
@@ -155,33 +171,30 @@ async function arrange(page: Page) {
 async function generate(page: Page) {
   if (
     !(await page
-      .getByRole("dialog", { name: "Préparer mon parcours" })
+      .getByRole("dialog", { name: "Préparer ma collecte" })
       .isVisible())
   )
     await page
-      .getByRole("button", { name: "Préparer mon parcours", exact: true })
+      .getByRole("button", { name: "Préparer ma collecte", exact: true })
       .click();
   await page.getByRole("button", { name: "Me localiser", exact: true }).click();
   await page.getByRole("checkbox", { name: "J’ai pris connaissance" }).check();
   await page
-    .getByRole("button", { name: "Créer mon parcours", exact: true })
+    .getByRole("button", { name: "Préparer ma collecte", exact: true })
     .click();
   await expect(page.locator(".route-experience")).toHaveAttribute(
     "data-route-phase",
     "calculated",
   );
   await page
-    .getByRole("button", { name: "Lancer le parcours", exact: true })
+    .getByRole("button", { name: "Commencer ma collecte", exact: true })
     .click();
   await page
     .getByRole("button", {
-      name: "J’ai compris — lancer le parcours",
+      name: "J’ai compris — commencer ma collecte",
       exact: true,
     })
     .click();
-  await page
-    .getByRole("button", { name: "Position du panneau parcours", exact: true })
-    .press("ArrowDown");
   await expect(page.locator(".route-experience")).toHaveAttribute(
     "data-route-phase",
     "active",
@@ -430,13 +443,13 @@ test("preparation gates creation, opens administrable guidelines and accepts eve
     if (new URL(r.url()).pathname === "/api/route") payload = r.postDataJSON();
   });
   await page
-    .getByRole("button", { name: "Préparer mon parcours", exact: true })
+    .getByRole("button", { name: "Préparer ma collecte", exact: true })
     .click();
-  const prep = page.getByRole("dialog", { name: "Préparer mon parcours" });
+  const prep = page.getByRole("dialog", { name: "Préparer ma collecte" });
   await expect(prep).toBeVisible();
   await page.getByRole("button", { name: "Me localiser", exact: true }).click();
   await expect(
-    page.getByRole("button", { name: "Créer mon parcours", exact: true }),
+    page.getByRole("button", { name: "Préparer ma collecte", exact: true }),
   ).toBeDisabled();
   await page
     .getByRole("button", { name: "bonnes pratiques", exact: true })
@@ -450,14 +463,13 @@ test("preparation gates creation, opens administrable guidelines and accepts eve
     .getByRole("button", { name: "J’ai compris", exact: false })
     .click();
   await expect(
-    page.getByRole("button", { name: "Créer mon parcours", exact: true }),
+    page.getByRole("button", { name: "Préparer ma collecte", exact: true }),
   ).toBeDisabled();
-  await page
-    .getByRole("checkbox", { name: "Je m’adapte à tous les niveaux" })
-    .check();
   await expect(
-    page.getByRole("slider", { name: "Niveau de frayeur" }),
-  ).toBeDisabled();
+    page.getByRole("checkbox", { name: "Je m’adapte à tous les niveaux" }),
+  ).toHaveCount(0);
+  await page.getByRole("slider", { name: "Niveau de frayeur" }).fill("3");
+  await expect(page.locator(".collection-choice input:checked")).toHaveCount(2);
   await page.getByRole("checkbox", { name: "J’ai pris connaissance" }).check();
   await page.locator(".route-experience").evaluate(async (el) => {
     await Promise.allSettled(
@@ -466,13 +478,13 @@ test("preparation gates creation, opens administrable guidelines and accepts eve
   });
   await page.screenshot({ path: "test-results/route-preparation-mobile.png" });
   await page
-    .getByRole("button", { name: "Créer mon parcours", exact: true })
+    .getByRole("button", { name: "Préparer ma collecte", exact: true })
     .click();
   await expect(page.locator(".route-experience")).toHaveAttribute(
     "data-route-phase",
     "calculated",
   );
-  expect(payload).not.toHaveProperty("maxFear");
+  expect(payload).toHaveProperty("maxFear", 3);
   expect(payload).toMatchObject({
     acceptance: { guidelines: true, guidelines_version: "2026.1" },
   });
@@ -482,11 +494,11 @@ test("preparation gates creation, opens administrable guidelines and accepts eve
   await expect(page.locator(".route-experience")).not.toHaveClass(/is-focused/);
   await expect(page.locator(".site-header")).toBeVisible();
   await page
-    .getByRole("button", { name: "Lancer le parcours", exact: true })
+    .getByRole("button", { name: "Commencer ma collecte", exact: true })
     .click();
   await page
     .getByRole("button", {
-      name: "J’ai compris — lancer le parcours",
+      name: "J’ai compris — commencer ma collecte",
       exact: true,
     })
     .click();
@@ -495,7 +507,7 @@ test("preparation gates creation, opens administrable guidelines and accepts eve
   expect(box!.height).toBe(844);
   await expect(page.locator(".route-sheet")).toHaveAttribute(
     "data-sheet-position",
-    "expanded",
+    "collapsed",
   );
 });
 test("manual departure keeps preferences and permission errors do not choose the communal centre", async ({
@@ -505,30 +517,28 @@ test("manual departure keeps preferences and permission errors do not choose the
   await controlledGPS(page);
   await arrange(page);
   await page
-    .getByRole("button", { name: "Préparer mon parcours", exact: true })
+    .getByRole("button", { name: "Préparer ma collecte", exact: true })
     .click();
-  await page
-    .getByRole("checkbox", { name: "Je m’adapte à tous les niveaux" })
-    .check();
+  await page.getByRole("slider", { name: "Niveau de frayeur" }).fill("3");
   await page.getByRole("checkbox", { name: "J’ai pris connaissance" }).check();
   await page
     .getByRole("button", { name: "Choisir sur la carte", exact: true })
     .click();
   await expect(
-    page.getByRole("dialog", { name: "Préparer mon parcours" }),
+    page.getByRole("dialog", { name: "Préparer ma collecte" }),
   ).toBeHidden();
   await page.locator(".map-canvas").click({ position: { x: 140, y: 300 } });
   await page
     .getByRole("button", { name: "Valider le départ", exact: true })
     .click();
   await expect(
-    page.getByRole("checkbox", { name: "Je m’adapte à tous les niveaux" }),
-  ).toBeChecked();
+    page.getByRole("slider", { name: "Niveau de frayeur" }),
+  ).toHaveValue("3");
   await expect(
     page.getByRole("checkbox", { name: "J’ai pris connaissance" }),
   ).toBeChecked();
   await expect(
-    page.getByRole("button", { name: "Créer mon parcours", exact: true }),
+    page.getByRole("button", { name: "Préparer ma collecte", exact: true }),
   ).toBeEnabled();
   await page.getByRole("button", { name: "Fermer la préparation" }).click();
   await page.evaluate(() => {
@@ -536,7 +546,7 @@ test("manual departure keeps preferences and permission errors do not choose the
       fail?.({ code: 1 } as GeolocationPositionError);
   });
   await page
-    .getByRole("button", { name: "Préparer mon parcours", exact: true })
+    .getByRole("button", { name: "Préparer ma collecte", exact: true })
     .click();
   await page.getByRole("button", { name: "Me localiser", exact: true }).click();
   await expect(
@@ -556,7 +566,7 @@ test("mobile panel snaps through three states; map and list open a one-screen ho
   ).toBeVisible();
   const sheet = page.locator(".route-sheet"),
     handle = page.getByRole("button", {
-      name: "Position du panneau parcours",
+      name: "Déplier ou replier ma sélection",
       exact: true,
     });
   await expect(sheet).toHaveAttribute("data-sheet-position", "collapsed");
@@ -568,10 +578,10 @@ test("mobile panel snaps through three states; map and list open a one-screen ho
   const grip = await handle.boundingBox();
   await page.mouse.move(grip!.x + 100, grip!.y + 20);
   await page.mouse.down();
-  await page.mouse.move(grip!.x + 100, grip!.y - 210, { steps: 12 });
+  await page.mouse.move(grip!.x + 100, grip!.y + 180, { steps: 12 });
   await page.mouse.up();
   await expect(sheet).toHaveAttribute("data-sheet-position", "intermediate");
-  await handle.press("ArrowUp");
+  await handle.press("ArrowDown");
   await expect(sheet).toHaveAttribute("data-sheet-position", "expanded");
   await page.locator(".route-experience").evaluate(async (el) => {
     await Promise.allSettled(
@@ -610,8 +620,8 @@ test("mobile panel snaps through three states; map and list open a one-screen ho
     .click();
   expect((await read()).camera).toEqual(original.camera);
   expect((await read()).sheet).toBe("expanded");
-  await handle.press("ArrowDown");
-  await handle.press("ArrowDown");
+  await handle.press("ArrowUp");
+  await handle.press("ArrowUp");
   await expect(sheet).toHaveAttribute("data-sheet-position", "collapsed");
   await page
     .getByRole("button", { name: "Les lanternes 2", exact: true })
@@ -663,7 +673,7 @@ test("compact visitor house fits small mobile screens with maximum text", async 
   });
   await page.screenshot({ path: "test-results/route-house-small-mobile.png" });
 });
-test("desktop keeps the map central with a lateral panel and the same house dialog", async ({
+test("desktop keeps the map central with a compact top panel and the same house dialog", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
@@ -671,18 +681,18 @@ test("desktop keeps the map central with a lateral panel and the same house dial
   await arrange(page);
   await generate(page);
   const handle = page.getByRole("button", {
-    name: "Position du panneau parcours",
+    name: "Déplier ou replier ma sélection",
     exact: true,
   });
-  await handle.press("ArrowUp");
-  await handle.press("ArrowUp");
+  await handle.press("ArrowDown");
+  await handle.press("ArrowDown");
   const sheet = await page.locator(".route-sheet").boundingBox();
-  expect(sheet!.width).toBe(360);
+  expect(sheet!.width).toBe(440);
   await expect
     .poll(
       async () => (await page.locator(".route-sheet").boundingBox())!.height,
     )
-    .toBeGreaterThan(600);
+    .toBeGreaterThan(400);
   await page.locator(".route-experience").evaluate(async (el) => {
     await Promise.allSettled(
       el.getAnimations({ subtree: true }).map((a) => a.finished),
@@ -695,8 +705,8 @@ test("desktop keeps the map central with a lateral panel and the same house dial
   const card = await page
     .getByRole("dialog", { name: houses[0].name, exact: true })
     .boundingBox();
-  expect(card!.width).toBeGreaterThanOrEqual(700);
-  expect(card!.width).toBeLessThanOrEqual(900);
+  expect(card!.width).toBeGreaterThanOrEqual(600);
+  expect(card!.width).toBeLessThanOrEqual(640);
   await page
     .getByRole("button", { name: "Fermer la fiche", exact: true })
     .click();
@@ -737,18 +747,25 @@ for (const width of [390, 1440])
           json: {
             valid: true,
             checkedAt: new Date().toISOString(),
-            steps: houses.map((h, n) => ({
-              id: h.id,
-              available: !(closed && n === 0),
-              ...(closed && n === 0 ? { reason: "ended" } : {}),
-              activities: h.activities,
-              house: h,
-            })),
+            steps: houses
+              .filter((h) =>
+                r
+                  .request()
+                  .postDataJSON()
+                  .steps.some((s: { id: string }) => s.id === h.id),
+              )
+              .map((h, n) => ({
+                id: h.id,
+                available: !(closed && n === 0),
+                ...(closed && n === 0 ? { reason: "ended" } : {}),
+                activities: h.activities,
+                house: h,
+              })),
           },
         }),
       );
       await page
-        .getByRole("button", { name: "Préparer mon parcours", exact: true })
+        .getByRole("button", { name: "Préparer ma collecte", exact: true })
         .click();
       await page
         .getByRole("button", { name: "Me localiser", exact: true })
@@ -757,7 +774,7 @@ for (const width of [390, 1440])
         .getByRole("checkbox", { name: "J’ai pris connaissance" })
         .check();
       await page
-        .getByRole("button", { name: "Créer mon parcours", exact: true })
+        .getByRole("button", { name: "Préparer ma collecte", exact: true })
         .click();
       const read = () =>
         page.evaluate(() =>
@@ -779,12 +796,12 @@ for (const width of [390, 1440])
       expect((await read()).collection.startedAt).toBeNull();
       await page
         .getByRole("button", {
-          name: "Position du panneau parcours",
+          name: "Déplier ou replier ma sélection",
           exact: true,
         })
         .press("ArrowUp");
       await page
-        .getByRole("button", { name: "Lancer le parcours", exact: true })
+        .getByRole("button", { name: "Commencer ma collecte", exact: true })
         .click();
       await expect(
         page.getByRole("dialog", { name: "Avant de commencer 🎃" }),
@@ -795,11 +812,11 @@ for (const width of [390, 1440])
       await page.getByRole("button", { name: "Annuler", exact: true }).click();
       expect((await read()).collection.startedAt).toBeNull();
       await page
-        .getByRole("button", { name: "Lancer le parcours", exact: true })
+        .getByRole("button", { name: "Commencer ma collecte", exact: true })
         .click();
       await page
         .getByRole("button", {
-          name: "J’ai compris — lancer le parcours",
+          name: "J’ai compris — commencer ma collecte",
           exact: true,
         })
         .click();
@@ -833,7 +850,7 @@ for (const width of [390, 1440])
       ).toHaveCSS("filter", "grayscale(1)");
       await expect(page.locator(".route-marker-number")).toHaveCount(0);
       await page
-        .getByRole("button", { name: "Position du panneau parcours" })
+        .getByRole("button", { name: "Déplier ou replier ma sélection" })
         .press("ArrowDown");
       const original = await read();
       await page
@@ -862,15 +879,28 @@ for (const width of [390, 1440])
       );
       // Hours and activities refresh using the existing availability endpoint, without asking ORS for another route.
       await page
-        .getByRole("button", { name: "Position du panneau parcours" })
+        .getByRole("button", { name: "Déplier ou replier ma sélection" })
         .press("ArrowUp");
       await page
-        .getByRole("button", { name: "Arrêter le parcours", exact: true })
+        .getByRole("button", { name: "Arrêter la collecte", exact: true })
+        .click();
+      await page
+        .getByRole("button", { name: "Continuer", exact: true })
         .click();
       closed = true;
       await page.clock.fastForward(61000);
+      await expect(page.locator(".route-experience")).toHaveAttribute(
+        "data-route-phase",
+        "active",
+      );
+      expect((await read()).collection.visitedIds).toEqual([houses[1].id]);
+      await expect(page.locator(".house-marker.is-unavailable")).toHaveCount(1);
+      await page
+        .getByRole("button", { name: "Arrêter la collecte", exact: true })
+        .click();
+      await page.getByRole("button", { name: "Arrêter", exact: true }).click();
       await expect(
-        page.getByRole("dialog", { name: "Parcours terminé 🎃" }),
+        page.getByRole("dialog", { name: "Collecte terminée 🎃" }),
       ).toBeVisible();
       await expect
         .poll(() => page.evaluate(() => window.__routeGPS.callbacks.size))
@@ -884,7 +914,7 @@ for (const width of [390, 1440])
       await page.clock.fastForward(30000);
       expect((await read()).collection).toEqual(finished);
       await expect(
-        page.getByRole("dialog", { name: "Parcours terminé 🎃" }),
+        page.getByRole("dialog", { name: "Collecte terminée 🎃" }),
       ).toContainText("1 / 2 maisons visitées · 50 %");
       await page.screenshot({
         path: "test-results/free-collection-" + width + ".png",
@@ -911,10 +941,13 @@ test("manual visit fallback, stop confirmation and completed collection survive 
     .getByRole("button", { name: "Fermer la fiche", exact: true })
     .click();
   await page
-    .getByRole("button", { name: "Position du panneau parcours", exact: true })
+    .getByRole("button", {
+      name: "Déplier ou replier ma sélection",
+      exact: true,
+    })
     .press("ArrowUp");
   await page
-    .getByRole("button", { name: "Arrêter le parcours", exact: true })
+    .getByRole("button", { name: "Arrêter la collecte", exact: true })
     .click();
   await page.getByRole("button", { name: "Continuer", exact: true }).click();
   await expect(page.locator(".route-experience")).toHaveAttribute(
@@ -922,20 +955,20 @@ test("manual visit fallback, stop confirmation and completed collection survive 
     "active",
   );
   await page
-    .getByRole("button", { name: "Arrêter le parcours", exact: true })
+    .getByRole("button", { name: "Arrêter la collecte", exact: true })
     .click();
   await page.getByRole("button", { name: "Arrêter", exact: true }).click();
   await expect(
-    page.getByRole("dialog", { name: "Parcours terminé 🎃" }),
+    page.getByRole("dialog", { name: "Collecte terminée 🎃" }),
   ).toContainText("1 / 2 maisons visitées · 50 %");
   await page.reload();
   await expect(
-    page.getByRole("dialog", { name: "Parcours terminé 🎃" }),
+    page.getByRole("dialog", { name: "Collecte terminée 🎃" }),
   ).toBeVisible();
   expect(await page.evaluate(() => window.__routeGPS.callbacks.size)).toBe(0);
 });
 
-test("visiting every selected house automatically closes the last card and freezes a complete collection", async ({
+test("visiting every selected house suggests finishing and preserves the last card until confirmed", async ({
   page,
 }) => {
   await page.clock.install();
@@ -947,13 +980,23 @@ test("visiting every selected house automatically closes the last card and freez
     await page
       .getByRole("button", { name: "Marquer comme visitée", exact: true })
       .click();
-    if (name.endsWith("2"))
-      await page
-        .getByRole("button", { name: "Fermer la fiche", exact: true })
-        .click();
+    await page
+      .getByRole("button", { name: "Fermer la fiche", exact: true })
+      .click();
   }
+  await expect(page.locator(".route-experience")).toHaveAttribute(
+    "data-route-phase",
+    "active",
+  );
+  await expect(page.locator(".collection-bottom-bar")).toContainText(
+    "2 / 2 maisons visitées",
+  );
+  await page
+    .getByRole("button", { name: "Arrêter la collecte", exact: true })
+    .click();
+  await page.getByRole("button", { name: "Arrêter", exact: true }).click();
   await expect(
-    page.getByRole("dialog", { name: "Parcours terminé 🎃" }),
+    page.getByRole("dialog", { name: "Collecte terminée 🎃" }),
   ).toContainText("2 / 2 maisons visitées · 100 %");
   await expect(page.getByRole("dialog")).toHaveCount(1);
   await expect
@@ -975,10 +1018,13 @@ test("offline completion survives return to map and reload, then retries aggrega
   });
   await generate(page);
   await page
-    .getByRole("button", { name: "Position du panneau parcours", exact: true })
+    .getByRole("button", {
+      name: "Déplier ou replier ma sélection",
+      exact: true,
+    })
     .press("ArrowUp");
   await page
-    .getByRole("button", { name: "Arrêter le parcours", exact: true })
+    .getByRole("button", { name: "Arrêter la collecte", exact: true })
     .click();
   await page.getByRole("button", { name: "Arrêter", exact: true }).click();
   const queued = () =>
@@ -1093,3 +1139,72 @@ for (const width of [390, 1440]) {
     );
   }
 }
+
+test("mobile free selection stays at the top with a permanent bottom stop and supports removal and addition", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await controlledGPS(page);
+  await arrange(page);
+  await generate(page);
+  await expect(page.locator(".site-header")).toBeHidden();
+  const top = page.locator(".collection-top-panel"),
+    bottom = page.locator(".collection-bottom-bar");
+  const topBox = await top.boundingBox(),
+    bottomBox = await bottom.boundingBox();
+  expect(topBox!.y).toBeLessThan(40);
+  expect(bottomBox!.y).toBeGreaterThan(700);
+  await expect(
+    top.getByRole("button", { name: "Arrêter la collecte" }),
+  ).toHaveCount(0);
+  await expect(
+    bottom.getByRole("button", { name: "Arrêter la collecte" }),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: "Déplier ou replier ma sélection" })
+    .press("ArrowDown");
+  await page
+    .getByRole("button", {
+      name: "Retirer Les lanternes 1 de ma sélection",
+      exact: true,
+    })
+    .click();
+  await expect(top).toContainText("1 maisons sélectionnées");
+  await page
+    .getByRole("button", { name: "Ajouter des maisons", exact: true })
+    .click();
+  const dialog = page.getByRole("dialog", {
+    name: "Ajouter des maisons",
+    exact: true,
+  });
+  await dialog.getByRole("button", { name: /Les lanternes 1/ }).click();
+  await page.keyboard.press("Escape");
+  await expect(top).toContainText("2 maisons sélectionnées");
+  await expect(page.locator(".route-experience")).toHaveAttribute(
+    "data-route-phase",
+    "active",
+  );
+});
+
+test("nearest halo needs coherent reliable GPS and disappears when the position expires", async ({
+  page,
+}) => {
+  await page.clock.install();
+  await controlledGPS(page);
+  await arrange(page);
+  await generate(page);
+  await page.evaluate(() => window.__routeGPS.emit(8));
+  await expect(page.locator(".house-marker.is-nearest")).toHaveCount(0);
+  await page.clock.fastForward(3000);
+  await page.evaluate(() => window.__routeGPS.emit(8));
+  await expect(page.locator(".house-marker.is-nearest")).toHaveCount(1);
+  await expect(
+    page.locator(".house-marker.is-nearest .house-map-label"),
+  ).toContainText("La plus proche —");
+  await page.clock.fastForward(16000);
+  await expect(page.locator(".house-marker.is-nearest")).toHaveCount(0);
+  await expect(page.locator(".route-experience")).toHaveAttribute(
+    "data-route-phase",
+    "active",
+  );
+});

@@ -4,6 +4,9 @@ export type Collection = {
   endedAt: string | null;
   distanceMeters: number;
   visitedIds: string[];
+  gpsAcceptedFixes?: number;
+  gpsObservedSeconds?: number;
+  distancePartial?: boolean;
 };
 export const emptyCollection = (): Collection => ({
   startedAt: null,

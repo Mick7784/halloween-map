@@ -172,7 +172,7 @@ export default function PremiumHome({
             </div>
           )}
           <p className="home-explanation">
-            Découvrez les maisons participantes et préparez votre parcours
+            Découvrez les maisons participantes et préparez votre collecte
             d’Halloween.
           </p>
           <Link className="home-cta" href={cta.href}>

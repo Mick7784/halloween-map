@@ -110,10 +110,10 @@ for (const width of [390, 1440])
       page.getByRole("button", { name: "Options de la carte", exact: true }),
     ).toBeFocused();
     await page
-      .getByRole("button", { name: "Préparer mon parcours", exact: true })
+      .getByRole("button", { name: "Préparer ma collecte", exact: true })
       .click();
     const prep = page.getByRole("dialog", {
-      name: "Préparer mon parcours",
+      name: "Préparer ma collecte",
       exact: true,
     });
     await expect(prep).toBeVisible();

@@ -80,7 +80,7 @@ export default function UserMenu({
           <House />,
           participationSubtitle,
         )}
-        {entry("/map#parcours", "Préparer mon parcours", <Route />)}
+        {entry("/map#parcours", "Préparer ma collecte", <Route />)}
         {user?.permissions.includes("admin.access") && (
           <div className="home-menu-group">
             {entry("/admin", "Administration", <ShieldCheck />)}

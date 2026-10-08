@@ -12,13 +12,7 @@ import ManorMark from "./ManorMark";
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { DateTime } from "luxon";
-import {
-  Map,
-  CircleUserRound,
-  House as HouseIcon,
-  ArrowRight,
-  Route,
-} from "lucide-react";
+import { CircleUserRound, House as HouseIcon, ArrowRight } from "lucide-react";
 import type { User } from "../lib/domain";
 import {
   api,
@@ -352,26 +346,6 @@ export default function Application({
           </span>
         </Link>
         <div className="header-account">
-          {view === "map" && user && (
-            <>
-              <button
-                className="map-header-prepare"
-                aria-label="Préparer mon parcours"
-                onClick={() => {
-                  window.location.hash = "parcours";
-                }}
-              >
-                <Route size={20} />
-                <span>Préparer mon parcours</span>
-              </button>
-              <button
-                aria-label="Options de la carte"
-                onClick={() => window.dispatchEvent(new Event("map-options"))}
-              >
-                <Map size={20} />
-              </button>
-            </>
-          )}
           {!user ? (
             <div className="desktop-login">
               <LoginForm compact destination="/map" />
