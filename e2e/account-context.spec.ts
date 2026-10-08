@@ -476,7 +476,7 @@ for (const installed of [false, true]) {
       );
       await expect(page.getByRole("dialog", { includeHidden: true })).toHaveCount(2);
       await expect(page.getByRole("dialog")).toHaveCount(1);
-      await expect(page.locator(".account-dialog")).toHaveAttribute("inert", "");
+      await expect.poll(() => page.locator(".account-dialog").evaluate(el => !!el.closest("[inert]"))).toBe(true);
       await page
         .getByRole("button", { name: "Fermer Ajouter à l’écran d’accueil" })
         .click();

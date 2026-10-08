@@ -157,7 +157,7 @@ async function arrange(page: Page, edit = false, candyOnly = false) {
   await expect(page.locator(".participation-dialog")).toBeVisible();
   await expect(page.locator("#participation-form")).toBeVisible();
   await page.locator(".participation-overlay").evaluate(async (el) => {
-    await Promise.all(
+    await Promise.allSettled(
       el.getAnimations({ subtree: true }).map((a) => a.finished),
     );
   });
