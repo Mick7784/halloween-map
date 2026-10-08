@@ -28,6 +28,8 @@ export default function MapView({
   unavailableIds = [],
   selectedStepId,
   visitedIds = [],
+  nearestHouseId,
+  collectionActive = false,
 }: {
   houses: (PublicHouse & { status?: string })[];
   center: [number, number];
@@ -48,6 +50,8 @@ export default function MapView({
   unavailableIds?: string[];
   selectedStepId?: string | null;
   visitedIds?: string[];
+  nearestHouseId?: string | null;
+  collectionActive?: boolean;
 }) {
   const el = useRef<HTMLDivElement>(null),
     map = useRef<MapType | null>(null),
@@ -138,8 +142,8 @@ export default function MapView({
     import("maplibre-gl").then((m) => {
       if (cancelled) return;
       const combined: (PublicHouse & { status?: string })[] = [
-        ...houses,
-        ...routeSteps.filter((h) => !houses.some((item) => item.id === h.id)),
+        ...houses.filter((h) => !routeSteps.some((item) => item.id === h.id)),
+        ...routeSteps,
       ];
       for (const h of combined) {
         const step = routeSteps.findIndex((stop) => stop.id === h.id);
@@ -153,7 +157,16 @@ export default function MapView({
             : unavailableIds.includes(h.id)
               ? " is-unavailable"
               : "") +
-          (selectedStepId === h.id ? " is-selected" : "");
+          (selectedStepId === h.id ? " is-selected" : "") +
+          (nearestHouseId === h.id &&
+          !visitedIds.includes(h.id) &&
+          !unavailableIds.includes(h.id)
+            ? " is-nearest"
+            : "") +
+          (h.candy_available === false &&
+          (h.offeredActivities ?? h.activities).includes("CANDY")
+            ? " is-depleted"
+            : "");
         if (h.status === "HIDDEN") button.title = "Masquée · " + h.name;
         button.setAttribute(
           "aria-label",
@@ -168,6 +181,34 @@ export default function MapView({
         visual.className = "house-marker-visual";
         visual.innerHTML = houseSVG;
         button.append(visual);
+        if (
+          h.candy_available === false &&
+          (h.offeredActivities ?? h.activities).includes("CANDY")
+        ) {
+          const stock = document.createElement("span");
+          stock.className = "house-candy-badge";
+          stock.textContent = "🍬";
+          stock.title = "Bonbons épuisés";
+          button.append(stock);
+          button.setAttribute(
+            "aria-label",
+            button.getAttribute("aria-label") + " · Bonbons épuisés",
+          );
+        }
+        if (visitedIds.includes(h.id) || unavailableIds.includes(h.id)) {
+          const badge = document.createElement("span");
+          badge.className = "house-state-badge";
+          badge.textContent = visitedIds.includes(h.id) ? "✓" : "×";
+          badge.setAttribute("aria-hidden", "true");
+          button.append(badge);
+        }
+        if (nearestHouseId === h.id || selectedStepId === h.id) {
+          const label = document.createElement("span");
+          label.className = "house-map-label";
+          label.textContent =
+            (nearestHouseId === h.id ? "La plus proche — " : "") + h.name;
+          button.append(label);
+        }
         button.onclick = (e) => {
           e.stopPropagation();
           onSelect?.(h);
@@ -191,6 +232,7 @@ export default function MapView({
     unavailableIds,
     selectedStepId,
     visitedIds,
+    nearestHouseId,
   ]);
   useEffect(() => {
     const g = map.current;
@@ -331,6 +373,7 @@ export default function MapView({
     if (
       !loaded ||
       !map.current ||
+      collectionActive ||
       geometry?.length ||
       !selectionKey ||
       framedSelection.current === selectionKey
@@ -352,7 +395,7 @@ export default function MapView({
       document.getElementById("parcours")?.getBoundingClientRect().top,
       document.getElementById("parcours")?.getBoundingClientRect().right,
     );
-  }, [loaded, selectionKey, geometry]);
+  }, [loaded, selectionKey, geometry, collectionActive]);
   useEffect(() => {
     const g = map.current;
     if (!loaded || !g) return;

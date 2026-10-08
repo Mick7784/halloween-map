@@ -85,7 +85,7 @@ export async function reportCollection(
       stats.duration_seconds =
         (stats.duration_seconds ?? 0) + p.durationSeconds;
       stats.completion_sum =
-        (stats.completion_sum ?? 0) + p.visited / p.planned;
+        (stats.completion_sum ?? 0) + (p.planned ? p.visited / p.planned : 0);
     }
     await c.query("UPDATE seasons SET stats=$1 WHERE id=$2", [
       JSON.stringify(stats),

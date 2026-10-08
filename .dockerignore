@@ -6,3 +6,6 @@ test-results
 playwright-report
 coverage
 *.tsbuildinfo
+deploy/preprod/.env
+.env.preprod
+*.bundle

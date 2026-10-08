@@ -1081,6 +1081,52 @@ describe("Routing, demo and canonical versions", () => {
     vi.setSystemTime(new Date("2026-10-04T12:00:00Z"));
   });
 
+  it("keeps explicitly selected houses or reports infeasible choices without silently dropping them", async () => {
+    const now = new Date(
+      String((await db().query("SELECT now() current")).rows[0].current),
+    );
+    vi.setSystemTime(now);
+    await db().query(
+      "UPDATE seasons SET opens_at=now()-interval '1 day',closes_at=now()+interval '1 day' WHERE id=$1",
+      [season.id],
+    );
+    await db().query(
+      "UPDATE participations SET status='VISIBLE',starts_at=now()-interval '1 hour',ends_at=now()+interval '3 hours' WHERE id=$1",
+      [house.id],
+    );
+    const input = {
+      acceptance: {
+        mode: "GUIDELINES_ONLY",
+        guidelines: true,
+        guidelines_version: "2026.1",
+      },
+      start: now.toISOString(),
+      end: new Date(+now + 3600000).toISOString(),
+      origin: { latitude: 48.1, longitude: -1.67 },
+      activities: [],
+      selectedHouseIds: [house.id],
+    };
+    const result = await service.route(input, { now }, participant);
+    expect(result.stops.map((stop) => stop.house.id)).toEqual([house.id]);
+    await expect(
+      service.route(
+        { ...input, end: new Date(+now + 60000).toISOString() },
+        { now },
+        participant,
+      ),
+    ).rejects.toMatchObject({ status: 422 });
+    await expect(
+      service.route(
+        {
+          ...input,
+          selectedHouseIds: ["10000000-0000-4000-8000-000000000099"],
+        },
+        { now },
+        participant,
+      ),
+    ).rejects.toMatchObject({ status: 422 });
+    vi.setSystemTime(new Date("2026-10-04T12:00:00Z"));
+  });
   it("increments patches once and permits explicit milestone overrides", () => {
     expect(nextVersion("V0.1")).toBe("V0.101");
     expect(nextVersion("V0.101")).toBe("V0.102");

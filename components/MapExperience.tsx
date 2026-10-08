@@ -4,24 +4,26 @@ import Link from "next/link";
 import {
   X,
   Route,
+  Square,
   LocateFixed,
   AlertTriangle,
-  ChevronDown,
   CircleUserRound,
   MapPin,
   List,
   Map as MapIcon,
 } from "lucide-react";
 import type { User, Activity } from "../lib/domain";
+import { locateOrigin } from "../lib/geolocation";
+import { nearestHouse, selectableHouses } from "../lib/collection-view";
 import { collectionStats } from "../lib/collection";
 import type { RouteParameters } from "../lib/active-route";
 import { Notice, labels, type PublicState } from "./common";
 import useActiveRoute from "./useActiveRoute";
 import MapView from "./Map";
 import RoutePreparation from "./RoutePreparation";
-import RouteSheet, { routeSummary } from "./RouteSheet";
+import RouteSheet from "./RouteSheet";
 import VisitorHouse from "./VisitorHouse";
-import ManorMark from "./ManorMark";
+import FloatingWindow from "./FloatingWindow";
 import "./MapExperience.css";
 
 export default function MapExperience({
@@ -50,18 +52,32 @@ export default function MapExperience({
     [maxFear, setMaxFear] = useState(2),
     [filters, setFilters] = useState<Activity[]>([]),
     [list, setList] = useState(false),
+    [optionsOpen, setOptionsOpen] = useState(false),
+    [previewOpen, setPreviewOpen] = useState(true),
     [confirmation, setConfirmation] = useState(false),
     [launch, setLaunch] = useState(false),
     [dismissedNotification, setDismissedNotification] = useState(""),
-    [sheetHeight, setSheetHeight] = useState(96);
+    [sheetHeight, setSheetHeight] = useState(78),
+    [adding, setAdding] = useState(false),
+    [selectionBusy, setSelectionBusy] = useState(false),
+    [selectionError, setSelectionError] = useState(""),
+    [locating, setLocating] = useState(false),
+    [locationError, setLocationError] = useState("");
+  const [consultationFix, setConsultationFix] = useState<{
+    point: [number, number];
+    token: number;
+  } | null>(null);
   const route = controller.result,
     routeShown = !!route,
-    focused = routeShown && !!route.stops.length;
+    focused = routeShown && controller.phase === "active";
+  const setSheet = controller.setSheet;
   useEffect(() => {
     if (!controller.ready) return;
     const open = () => {
       if (window.location.hash !== "#parcours") return;
       if (controller.phase === "preparation") setPreparing(true);
+      else if (controller.phase === "calculated") setPreviewOpen(true);
+      else if (controller.phase === "active") setSheet("expanded");
       window.history.replaceState(
         null,
         "",
@@ -71,25 +87,13 @@ export default function MapExperience({
     open();
     window.addEventListener("hashchange", open);
     return () => window.removeEventListener("hashchange", open);
-  }, [controller.ready, controller.phase]);
-  const selected = controller.selectedHouse;
-  const locked =
-    focused || preparing || pick || !!selected || confirmation || launch;
+  }, [controller.ready, controller.phase, setSheet]);
   useEffect(() => {
-    if (!locked) return;
-    const body = document.body,
-      html = document.documentElement;
-    const previous = [body.style.overflow, html.style.overflow],
-      x = window.scrollX,
-      y = window.scrollY;
-    body.style.overflow = "hidden";
-    html.style.overflow = "hidden";
-    return () => {
-      body.style.overflow = previous[0];
-      html.style.overflow = previous[1];
-      window.scrollTo({ left: x, top: y, behavior: "instant" });
-    };
-  }, [locked]);
+    const open = () => setOptionsOpen(true);
+    window.addEventListener("map-options", open);
+    return () => window.removeEventListener("map-options", open);
+  }, []);
+  const selected = controller.selectedHouse;
   const retainedOrigin = useMemo(
     () =>
       origin ??
@@ -102,17 +106,16 @@ export default function MapExperience({
     [origin, controller.parameters],
   );
   const unavailableIds = useMemo(
-    () => controller.unavailable.map((s) => s.id),
-    [controller.unavailable],
+    () =>
+      route?.stops.filter((s) => s.unavailable).map((s) => s.house.id) ?? [],
+    [route],
   );
   const houses = useMemo(
     () =>
       (state.houses ?? []).filter(
-        (h) =>
-          !unavailableIds.includes(h.id) &&
-          (!filters.length || filters.some((a) => h.activities.includes(a))),
+        (h) => !filters.length || filters.some((a) => h.activities.includes(a)),
       ),
-    [state.houses, filters, unavailableIds],
+    [state.houses, filters],
   );
   const steps = useMemo(() => route?.stops.map((s) => s.house) ?? [], [route]);
   const notificationKey = unavailableIds.slice().sort().join("|");
@@ -131,9 +134,11 @@ export default function MapExperience({
     !!selected ||
     confirmation ||
     launch ||
+    adding ||
     controller.phase === "completed";
   async function calculate(parameters: RouteParameters) {
     await controller.calculateRoute(parameters);
+    setPreviewOpen(true);
     setPreparing(false);
     setList(false);
   }
@@ -166,7 +171,98 @@ export default function MapExperience({
     setPreparing(false);
     void refresh().catch(() => {});
   }
+  function prepare() {
+    if (controller.phase === "calculated") setPreviewOpen(true);
+    else setPreparing(true);
+  }
+  async function locate() {
+    setLocating(true);
+    setLocationError("");
+    try {
+      const fix = await locateOrigin(navigator.geolocation);
+      setConsultationFix((previous) => ({
+        point: fix.point,
+        token: (previous?.token ?? 0) + 1,
+      }));
+    } catch (e) {
+      setLocationError((e as Error).message);
+    } finally {
+      setLocating(false);
+    }
+  }
+  const selectedCandidates = route?.stops.map((s) => s.house.id) ?? [];
+  const addCandidates = selectableHouses(
+    state.routeCandidates ?? state.houses ?? [],
+    controller.parameters?.maxFear ?? 5,
+    controller.parameters?.activities ?? [],
+    clock,
+    +new Date(controller.parameters?.end ?? 0),
+  ).filter((h) => !selectedCandidates.includes(h.id));
+  async function addHouse(house: NonNullable<PublicState["houses"]>[number]) {
+    setSelectionBusy(true);
+    setSelectionError("");
+    try {
+      await controller.addHouse(house);
+    } catch (e) {
+      setSelectionError((e as Error).message);
+    } finally {
+      setSelectionBusy(false);
+    }
+  }
+  const distanceKnown = (controller.collection.gpsAcceptedFixes ?? 0) >= 3;
+  const distanceComplete =
+    distanceKnown &&
+    !controller.collection.distancePartial &&
+    (controller.collection.gpsObservedSeconds ?? 0) >=
+      stats.durationSeconds * 0.7;
+  const nearestId =
+    focused &&
+    controller.verified &&
+    controller.gpsState === "tracking" &&
+    controller.fixTimestamp &&
+    clock - controller.fixTimestamp <= 15000 &&
+    controller.nearestHouseId &&
+    controller.currentPosition &&
+    controller.parameters &&
+    clock < +new Date(controller.parameters.end)
+      ? nearestHouse(
+          route?.stops ?? [],
+          controller.collection.visitedIds,
+          {
+            point: controller.currentPosition,
+            accuracy: controller.accuracy ?? Infinity,
+            timestamp: controller.fixTimestamp,
+          },
+          controller.nearestHouseId,
+          clock,
+        )
+      : null;
   const selectHouse = controller.selectHouse;
+  const routeSheet = routeShown &&
+    controller.phase !== "completed" &&
+    !preparing &&
+    !pick && (
+      <RouteSheet
+        result={route!}
+        phase={controller.phase === "active" ? "active" : "calculated"}
+        position={focused ? controller.sheet : "expanded"}
+        onPosition={controller.setSheet}
+        onHouse={selectHouse}
+        onEnd={() => setConfirmation(true)}
+        onStart={() => setLaunch(true)}
+        onSave={controller.savePreparedRoute}
+        visitedIds={controller.collection.visitedIds}
+        remaining={controller.remaining}
+        elapsedSeconds={stats.durationSeconds}
+        selectedStepId={controller.selectedStepId}
+        onHeight={setSheetHeight}
+        onAdd={() => {
+          setSelectionError("");
+          setAdding(true);
+        }}
+        onRemove={controller.removeHouse}
+      />
+    );
   return (
     <main
       className={"route-experience" + (focused || pick ? " is-focused" : "")}
@@ -176,7 +272,7 @@ export default function MapExperience({
       <div className="route-map-layer" inert={blocked}>
         {controller.ready && (
           <MapView
-            houses={focused ? [] : houses}
+            houses={houses}
             center={[state.instance!.longitude, state.instance!.latitude]}
             zoom={state.instance!.zoom}
             styleUrl={mapStyle}
@@ -185,75 +281,95 @@ export default function MapExperience({
             origin={(pick ? draftOrigin : retainedOrigin) ?? undefined}
             focusToken={pick ? 0 : focusToken}
             routeSteps={steps}
-            routePanelOpen={routeShown && !preparing}
+            routePanelOpen={false}
             sheetPosition={controller.sheet}
             initialCamera={controller.camera}
             onCameraChange={controller.setCamera}
             currentPosition={
               ["tracking", "low-accuracy"].includes(controller.gpsState)
                 ? controller.currentPosition
-                : null
+                : (consultationFix?.point ?? null)
             }
-            recenterTarget={controller.recenterTarget}
+            recenterTarget={
+              focused ? controller.recenterTarget : consultationFix
+            }
             unavailableIds={unavailableIds}
-            selectedStepId={controller.selectedStepId}
+            selectedStepId={selected?.id ?? null}
+            nearestHouseId={nearestId}
+            collectionActive={focused}
             onPoint={
               pick ? (lat, lon) => setDraftOrigin([lon, lat]) : undefined
             }
           />
         )}
-        <header className="route-map-toolbar">
-          {focused && route ? (
-            <button
-              type="button"
-              className="route-overview"
-              onClick={() =>
-                controller.setSheet(
-                  controller.sheet === "collapsed" ? "expanded" : "collapsed",
-                )
-              }
-            >
-              <Route size={23} />
-              <span>
-                <strong>Mon parcours Halloween</strong>
-                <small>{routeSummary(route)}</small>
-              </span>
-              <ChevronDown size={17} />
-            </button>
-          ) : (
-            <div className="route-map-title">
-              <span className="route-brand">
-                <ManorMark />
-              </span>
-              <span>
-                <strong>Les maisons à découvrir</strong>
-                <small>{state.instance!.territory}</small>
-              </span>
-            </div>
-          )}
+        {focused && (
           <Link
-            className="route-account-link"
+            className="route-account-link collection-account"
             href="/account"
             aria-label="Mon compte"
           >
             <CircleUserRound size={21} />
           </Link>
-        </header>
+        )}
         {!focused && !pick && (
-          <div className="route-map-discovery">
+          <>
             <button
-              className="primary"
+              className="collection-discovery"
               type="button"
-              disabled={state.state !== "MAP_OPEN"}
               onClick={() => {
-                setList(false);
-                setPreparing(true);
+                setList(true);
+                setOptionsOpen(true);
               }}
             >
-              {" "}
-              <Route size={18} />
-              Préparer mon parcours
+              <MapPin size={20} />
+              <span>
+                <strong>Les maisons à découvrir</strong>
+                <small>
+                  {state.instance!.territory} · {houses.length} maisons
+                </small>
+              </span>
             </button>
+            <button
+              className="collection-options"
+              type="button"
+              aria-label="Options de la carte"
+              onClick={() => setOptionsOpen(true)}
+            >
+              <List size={22} />
+            </button>
+            <button
+              className="collection-prepare primary"
+              type="button"
+              disabled={state.state !== "MAP_OPEN"}
+              onClick={prepare}
+            >
+              <Route size={22} />
+              {controller.phase === "calculated"
+                ? "Voir ma sélection"
+                : "Préparer ma collecte"}
+            </button>
+            <button
+              className="route-recenter consultation-recenter"
+              type="button"
+              aria-label="Me localiser"
+              disabled={locating}
+              onClick={() => void locate()}
+            >
+              <LocateFixed size={22} />
+            </button>
+            {locationError && (
+              <p className="route-gps-status" role="status">
+                {locationError}
+              </p>
+            )}
+          </>
+        )}
+        {!focused && !pick && optionsOpen && (
+          <FloatingWindow
+            title="Maisons et filtres"
+            onClose={() => setOptionsOpen(false)}
+            className="map-options-window"
+          >
             <button
               type="button"
               aria-label={
@@ -279,26 +395,33 @@ export default function MapExperience({
                 </button>
               ))}
             </div>
-          </div>
+            {list && (
+              <div className="map-options-list">
+                {houses.map((h) => (
+                  <button
+                    type="button"
+                    key={h.id}
+                    onClick={() => {
+                      setOptionsOpen(false);
+                      selectHouse(h);
+                    }}
+                  >
+                    <MapPin size={18} />
+                    <span>
+                      <strong>{h.name}</strong>
+                      <small>{h.address}</small>
+                    </span>
+                  </button>
+                ))}
+                {!houses.length && <p>Aucune maison disponible.</p>}
+              </div>
+            )}
+          </FloatingWindow>
         )}
         {state.state !== "MAP_OPEN" && (
           <p className="route-closed-notice">
             Les autres maisons seront visibles à l’ouverture de la carte.
           </p>
-        )}
-        {list && !focused && (
-          <div className="route-house-list">
-            {houses.map((h) => (
-              <button type="button" key={h.id} onClick={() => selectHouse(h)}>
-                <MapPin size={18} />
-                <span>
-                  <strong>{h.name}</strong>
-                  <small>{h.address}</small>
-                </span>
-              </button>
-            ))}
-            {!houses.length && <p>Aucune maison disponible.</p>}
-          </div>
         )}
         {focused && (
           <button
@@ -402,27 +525,53 @@ export default function MapExperience({
             </div>
           </div>
         )}
-        {routeShown &&
-          controller.phase !== "completed" &&
-          !preparing &&
-          !pick && (
-            <RouteSheet
-              result={route!}
-              phase={controller.phase === "active" ? "active" : "calculated"}
-              position={controller.sheet}
-              onPosition={controller.setSheet}
-              onHouse={selectHouse}
-              onEnd={() => setConfirmation(true)}
-              onStart={() => setLaunch(true)}
-              onSave={controller.savePreparedRoute}
-              visitedIds={controller.collection.visitedIds}
-              remaining={controller.remaining}
-              elapsedSeconds={stats.durationSeconds}
-              selectedStepId={controller.selectedStepId}
-              onHeight={setSheetHeight}
-            />
-          )}
+        {focused && routeSheet}
+        {focused && (
+          <div className="collection-bottom-bar">
+            <div>
+              <strong>Ma collecte</strong>
+              <small>
+                {stats.visited} / {stats.selected} maisons visitées
+              </small>
+              <progress
+                aria-label="Progression de la collecte"
+                max={Math.max(1, stats.selected)}
+                value={stats.visited}
+              />
+            </div>
+            <button
+              type="button"
+              className="route-danger"
+              onClick={() => setConfirmation(true)}
+            >
+              <Square size={18} />
+              Arrêter la collecte
+            </button>
+          </div>
+        )}
+        {focused && controller.finishSuggested && (
+          <div className="collection-finish-suggestion" role="status">
+            Aucune maison restante disponible. Vous pouvez modifier votre
+            sélection ou terminer depuis la barre du bas.
+          </div>
+        )}
       </div>
+      {!focused &&
+        !preparing &&
+        !pick &&
+        !launch &&
+        !confirmation &&
+        !selectedHouse &&
+        routeSheet &&
+        previewOpen && (
+          <FloatingWindow
+            title="Ma collecte Halloween"
+            className="prepared-route-window"
+            onClose={() => setPreviewOpen(false)}
+          >
+            {routeSheet}
+          </FloatingWindow>
+        )}
       {(preparing || pick) && state.season && (
         <div hidden={!preparing} inert={!preparing}>
           <RoutePreparation
@@ -448,6 +597,38 @@ export default function MapExperience({
           />
         </div>
       )}
+      {adding && (
+        <FloatingWindow
+          title="Ajouter des maisons"
+          onClose={() => setAdding(false)}
+        >
+          <p>
+            Votre collecte continue. Les maisons visitées restent conservées.
+          </p>
+          <Notice error={selectionError} />
+          {addCandidates.map((h) => (
+            <button
+              className="collection-add-choice"
+              key={h.id}
+              type="button"
+              disabled={selectionBusy || (route?.stops.length ?? 0) >= 30}
+              onClick={() => void addHouse(h)}
+            >
+              <span>
+                <strong>{h.name}</strong>
+                <small>{h.address}</small>
+              </span>
+              Ajouter
+            </button>
+          ))}
+          {!addCandidates.length && (
+            <p>Aucune autre maison compatible avec vos horaires et filtres.</p>
+          )}
+          {(route?.stops.length ?? 0) >= 30 && (
+            <p>La sélection est limitée à 30 maisons.</p>
+          )}
+        </FloatingWindow>
+      )}
       {selectedHouse && (
         <VisitorHouse
           fearLabels={state.participation?.fearLabels}
@@ -456,11 +637,30 @@ export default function MapExperience({
           visited={controller.collection.visitedIds.includes(selectedHouse.id)}
           onVisit={
             controller.phase === "active" &&
+            controller.verified &&
+            controller.parameters &&
+            clock < +new Date(controller.parameters.end) &&
             selectedStop &&
             !selectedStop.unavailable
               ? () => controller.markVisited(selectedHouse.id)
               : undefined
           }
+          onSelection={
+            focused &&
+            !controller.collection.visitedIds.includes(selectedHouse.id)
+              ? selectedStop
+                ? () => controller.removeHouse(selectedHouse.id)
+                : () => void addHouse(selectedHouse)
+              : undefined
+          }
+          selected={!!selectedStop}
+          selectionDisabled={
+            selectionBusy ||
+            (!selectedStop &&
+              ((route?.stops.length ?? 0) >= 30 ||
+                !addCandidates.some((h) => h.id === selectedHouse.id)))
+          }
+          selectionError={selectionError}
           timezone={state.instance!.timezone}
           onClose={() => controller.selectHouse(null)}
         />
@@ -469,10 +669,19 @@ export default function MapExperience({
         <div className="route-confirm-backdrop">
           <section
             role="dialog"
+            onClick={(event) => event.stopPropagation()}
             aria-modal="true"
             aria-labelledby="route-launch-title"
             className="route-confirm route-dialog"
           >
+            <button
+              type="button"
+              className="close"
+              aria-label="Fermer la confirmation de départ"
+              onClick={() => setLaunch(false)}
+            >
+              <X />
+            </button>
             <h2 id="route-launch-title">Avant de commencer 🎃</h2>
             <p>
               Halloween Map vous aide à repérer les maisons participantes
@@ -481,7 +690,7 @@ export default function MapExperience({
             <p>
               Vous restez libre de choisir les maisons que vous souhaitez
               visiter, leur ordre, votre chemin et le moment où vous souhaitez
-              arrêter votre parcours.
+              arrêter votre collecte.
             </p>
             <p>
               Les distances et durées affichées sont uniquement indicatives.
@@ -501,7 +710,7 @@ export default function MapExperience({
                   setLaunch(false);
                 }}
               >
-                J’ai compris — lancer le parcours
+                J’ai compris — commencer ma collecte
               </button>
             </div>
           </section>
@@ -512,10 +721,21 @@ export default function MapExperience({
           <section
             className="route-confirm route-dialog collection-summary"
             role="dialog"
+            onClick={(event) => event.stopPropagation()}
             aria-modal="true"
             aria-labelledby="collection-summary-title"
           >
-            <h2 id="collection-summary-title">Parcours terminé 🎃</h2>
+            <button
+              className="close"
+              aria-label="Fermer le récapitulatif"
+              onClick={() => {
+                setConfirmation(false);
+                controller.deletePreparedRoute();
+              }}
+            >
+              <X />
+            </button>
+            <h2 id="collection-summary-title">Collecte terminée 🎃</h2>
             <p className="collection-result">
               {stats.visited} / {stats.selected} maisons visitées ·{" "}
               {stats.completion} %
@@ -523,10 +743,9 @@ export default function MapExperience({
             <dl>
               <dt>Distance réellement observée</dt>
               <dd>
-                {(stats.distanceMeters / 1000).toLocaleString("fr-FR", {
-                  maximumFractionDigits: 2,
-                })}{" "}
-                km
+                {distanceKnown
+                  ? `${(stats.distanceMeters / 1000).toLocaleString("fr-FR", { maximumFractionDigits: 2 })} km${distanceComplete ? "" : " · mesure partielle"}`
+                  : "Distance non disponible · GPS insuffisant"}
               </dd>
               <dt>Durée réelle</dt>
               <dd>
@@ -569,6 +788,7 @@ export default function MapExperience({
         <div className="route-confirm-backdrop">
           <section
             role="dialog"
+            onClick={(event) => event.stopPropagation()}
             aria-modal="true"
             aria-labelledby="route-end-title"
             className="route-confirm route-dialog"
@@ -576,15 +796,15 @@ export default function MapExperience({
             <button
               type="button"
               className="close"
-              aria-label="Annuler"
+              aria-label="Fermer la confirmation"
               onClick={() => setConfirmation(false)}
             >
               <X size={18} />
             </button>
             <h2 id="route-end-title">
               {controller.phase === "active"
-                ? "Arrêter ce parcours ?"
-                : "Supprimer ce parcours ?"}
+                ? "Arrêter cette collecte ?"
+                : "Supprimer cette sélection ?"}
             </h2>
             <p>
               {controller.phase === "active"

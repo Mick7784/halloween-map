@@ -951,7 +951,7 @@ export async function route(
   } catch (e) {
     throw new HttpError(400, (e as Error).message);
   }
-  let result;
+  let result: Awaited<ReturnType<typeof planRoute>>;
   try {
     const candidates = await routeCandidates(
       db(),
@@ -961,12 +961,25 @@ export async function route(
       input.end,
     );
     result = await planRoute(
-      candidates.filter((h) => !input.excludedHouseIds.includes(h.id)),
+      candidates.filter((h) =>
+        input.selectedHouseIds
+          ? input.selectedHouseIds.includes(h.id)
+          : !input.excludedHouseIds.includes(h.id),
+      ),
       s,
       input,
       context.now,
       undefined,
     );
+    if (
+      input.selectedHouseIds?.some(
+        (id) => !result.stops.some((stop) => stop.house.id === id),
+      )
+    )
+      throw new HttpError(
+        422,
+        "Toutes les maisons sélectionnées ne peuvent pas être incluses avec ces horaires. Élargissez le créneau ou ajustez votre sélection ; aucune maison n’a été retirée de votre préparation.",
+      );
   } catch (e) {
     if (e instanceof RoutingError)
       throw new HttpError(e.reason === "no_route" ? 422 : 503, e.message);

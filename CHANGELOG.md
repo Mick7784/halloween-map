@@ -1,5 +1,15 @@
 # Changelog
 
+## V0.7.3
+
+- Refonte mobile-first de la carte : consultation épurée, contrôles compacts et fiches maisons flottantes.
+- Collecte libre plein écran : panneau supérieur extensible, liste des maisons et commande d'arrêt en bas.
+- Progression globale sans ordre ni étapes imposés ; maisons visitées et indisponibles distinguées.
+- Mise en avant GPS fiable de la maison éligible la plus proche, sans tracé obligatoire.
+- Préparation : sélection libre et niveaux de frayeur cumulatifs sans option « Je m'adapte » côté visiteur.
+- Amélioration des menus, fenêtres, reprise et suivi de collecte ; validations automatisées ciblées.
+- Préparation technique d'une préproduction isolée sans impact sur la stack de production.
+
 ## V0.7.2
 
 - Corrections de modération : retour REFUSED vers PENDING après correction propriétaire et réexamen Admin explicite.

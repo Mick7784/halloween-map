@@ -1,4 +1,5 @@
 "use client";
+import { X } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 import { DateTime } from "luxon";
@@ -146,6 +147,7 @@ export default function AdminUsers({
           <section
             className="dialog panel user-sheet"
             role="dialog"
+            onClick={(event) => event.stopPropagation()}
             aria-modal="true"
             aria-labelledby="user-title"
           >
@@ -157,7 +159,7 @@ export default function AdminUsers({
                 setSelected(null);
               }}
             >
-              ×
+              <X />
             </button>
             <h2 id="user-title">
               {current?.display_name ?? "Créer un utilisateur"}

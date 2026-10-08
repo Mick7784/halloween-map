@@ -332,8 +332,8 @@ describe("free collection GPS and persistence", () => {
         +new Date("2026-10-31T21:00Z"),
       ),
     ).toMatchObject({
-      phase: "completed",
-      collection: { distanceMeters: 22, endedAt: "2026-10-31T20:00:00.000Z" },
+      phase: "active",
+      collection: { distanceMeters: 22, endedAt: null },
     });
     expect(Object.keys(active.collection).sort()).toEqual([
       "distanceMeters",

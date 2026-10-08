@@ -1,4 +1,5 @@
 "use client";
+import FloatingWindow from "./FloatingWindow";
 import {
   createContext,
   useContext,
@@ -7,7 +8,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { Download, X } from "lucide-react";
+import { Download } from "lucide-react";
 type InstallEvent = Event & {
   prompt: () => Promise<void>;
   userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
@@ -132,20 +133,13 @@ export default function InstallApp({ account = false }: { account?: boolean }) {
         </button>
       )}
       {help && (
-        <section
-          className="install-help"
-          aria-label="Ajouter à l’écran d’accueil"
+        <FloatingWindow
+          className="install-help-window"
+          title="Ajouter à l’écran d’accueil"
+          onClose={() => setHelp("")}
         >
-          <button
-            className="install-help-close"
-            aria-label="Fermer l’aide à l’installation"
-            onClick={() => setHelp("")}
-          >
-            <X size={16} />
-          </button>
-          <strong>Ajouter à l’écran d’accueil</strong>
           <p role="status">{help}</p>
-        </section>
+        </FloatingWindow>
       )}
     </div>
   );

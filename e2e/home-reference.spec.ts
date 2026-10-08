@@ -89,7 +89,7 @@ for (const size of [
     await arrange(page);
     await expect(page.locator("h1")).toContainText("La carte ouvre");
     await expect(page.locator(".home-explanation")).toHaveText(
-      "Découvrez les maisons participantes et préparez votre parcours d’Halloween.",
+      "Découvrez les maisons participantes et préparez votre collecte d’Halloween.",
     );
     await expect(page.locator(".home-houses")).toContainText("37 maisons");
     await expect(
@@ -182,7 +182,7 @@ test("desktop compact menu uses the same grid for account, install and logout", 
   await page.evaluate(() => window.dispatchEvent(new Event("appinstalled")));
   await expect(actions[1]).toHaveCount(0);
   await page
-    .getByRole("button", { name: "Fermer le menu", exact: true })
+    .getByRole("button", { name: "Fermer Menu utilisateur", exact: true })
     .click();
   await page
     .getByRole("button", { name: "Soutenir le projet", exact: true })
@@ -223,17 +223,20 @@ for (const mode of ["guest", "member", "house", "admin"]) {
       await expect(
         dialog.getByLabel("Mot de passe", { exact: false }),
       ).toBeVisible();
-      for (const name of [
-        "La carte",
-        "Inscrire ma maison",
-        "Ma participation",
-        "Administration",
-        "Préparer mon parcours",
-      ]) {
+      for (const name of ["Ma participation", "Administration"]) {
         await expect(
           dialog.getByRole("link", { name, exact: true }),
         ).toHaveCount(0);
       }
+      await expect(
+        dialog.getByRole("link", { name: "La carte", exact: true }),
+      ).toHaveAttribute("href", "/map");
+      await expect(
+        dialog.getByRole("link", { name: "Inscrire ma maison", exact: true }),
+      ).toHaveAttribute("href", "/login?next=/participant");
+      await expect(
+        dialog.getByRole("link", { name: "Préparer ma collecte", exact: true }),
+      ).toHaveAttribute("href", "/map#parcours");
       await page.route("**/api/login", (r) =>
         r.fulfill({ status: 401, json: { error: "Identifiants incorrects" } }),
       );
@@ -286,7 +289,7 @@ for (const mode of ["guest", "member", "house", "admin"]) {
       .getByRole("button", { name: "Menu utilisateur", exact: true })
       .click();
     await page
-      .locator(".home-menu-overlay")
+      .locator(".floating-overlay")
       .click({ position: { x: 10, y: 200 } });
     await expect(dialog).toHaveCount(0);
   });
@@ -302,11 +305,16 @@ for (const width of [390, 1440]) {
         supportUrl: "https://example.org/support",
       },
     });
+    await expect(
+      page
+        .getByRole("contentinfo")
+        .getByRole("link", { name: "Soutenir le projet", exact: true }),
+    ).toHaveAttribute("href", "https://example.org/support");
     await page.goto("/map");
     await page
       .getByRole("button", { name: "Menu utilisateur", exact: true })
       .click();
-    const menu = page.getByRole("navigation", {
+    const menu = page.getByRole("dialog", {
       name: "Menu utilisateur",
       exact: true,
     });
@@ -318,18 +326,13 @@ for (const width of [390, 1440]) {
         'a[href="/terms"], a[href="/privacy"], a[href="/guidelines"], a[href="/legal"]',
       ),
     ).toHaveCount(0);
-    await expect(
-      page
-        .getByRole("contentinfo")
-        .getByRole("link", { name: "Soutenir le projet", exact: true }),
-    ).toHaveAttribute("href", "https://example.org/support");
     await expect(menu).toBeVisible();
     await menu.evaluate(async (el) => {
       await Promise.all(
         el.getAnimations({ subtree: true }).map((a) => a.finished),
       );
     });
-    expect((await menu.boundingBox())!.width).toBeLessThanOrEqual(320);
+    expect((await menu.boundingBox())!.width).toBeLessThanOrEqual(400);
     await page.screenshot({
       animations: "disabled",
       path: `${output}/menu-shared-${width}.png`,
@@ -468,7 +471,7 @@ for (const standalone of [false, true]) {
         ),
       ).toBe(true);
       await page
-        .getByRole("button", { name: "Fermer l’aide à l’installation" })
+        .getByRole("button", { name: "Fermer Ajouter à l’écran d’accueil" })
         .click();
       await expect(page.getByRole("status")).toHaveCount(0);
     }

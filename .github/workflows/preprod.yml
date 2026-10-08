@@ -1,0 +1,85 @@
+name: UX preproduction image
+on:
+  push:
+    branches: [work/v072-ux-from-main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: halloween-ux-preprod-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  preprod:
+    if: github.ref == 'refs/heads/work/v072-ux-from-main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    env:
+      PREPROD_IMAGE: halloween-map:ux-preprod-${{ github.sha }}
+      PREPROD_APP_ORIGIN: https://ux-preprod.example.invalid
+      PREPROD_PROXY_NETWORK: halloween-ux-ci-edge
+      # Disposable CI credentials only; never deployment credentials.
+      PREPROD_DB_PASSWORD: ci-preprod-database-password-32-characters
+      PREPROD_ADMIN_PASSWORD: ci-preprod-admin-password-only
+      PREPROD_USER_PASSWORD: ci-preprod-user-password-only
+      PREPROD_TERRITORY: CI fictive
+      PREPROD_POSTAL_CODE: "00000"
+      PREPROD_LATITUDE: "48.8"
+      PREPROD_LONGITUDE: "2.8"
+      TEST_DATABASE_URL: ""
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - name: Targeted preproduction checks only
+        run: npx vitest run tests/preprod.test.ts
+      - name: Validate dedicated Compose
+        run: node scripts/check-preprod.mjs deploy/preprod/.env.example
+      - name: Read version without changing it
+        run: echo "IMAGE_VERSION=$(tr -d '\r\n' < VERSION)" >> "$GITHUB_ENV"
+      - uses: docker/setup-buildx-action@v3
+      - name: Build the existing Dockerfile once
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          push: false
+          tags: ${{ env.PREPROD_IMAGE }}
+          labels: |
+            org.opencontainers.image.version=${{ env.IMAGE_VERSION }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.description=Isolated mobile UX preproduction
+      - name: Smoke check isolated PostgreSQL, migrations, seed, app and worker
+        run: |
+          docker network create "$PREPROD_PROXY_NETWORK"
+          docker compose --env-file deploy/preprod/.env.example -f deploy/preprod/compose.yaml up -d --wait --wait-timeout 180 app worker
+          test "$(docker compose --env-file deploy/preprod/.env.example -f deploy/preprod/compose.yaml exec -T app cat VERSION | tr -d '\r\n')" = "$IMAGE_VERSION"
+          test "$(docker compose --env-file deploy/preprod/.env.example -f deploy/preprod/compose.yaml exec -T db psql -U halloween_ux_preprod -d halloween_ux_preprod -Atc 'SELECT count(*) FROM participations')" = 18
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Publish dedicated tag only after verification
+        run: |
+          remote="ghcr.io/mick7784/halloween-map:ux-preprod-${GITHUB_SHA}"
+          docker tag "$PREPROD_IMAGE" "$remote"
+          docker push "$remote"
+          echo "### UX preproduction" >> "$GITHUB_STEP_SUMMARY"
+          echo "PREPROD_IMAGE=$remote" >> "$GITHUB_STEP_SUMMARY"
+          echo 'VERSION unchanged. No latest, Git tag, release or deployment.' >> "$GITHUB_STEP_SUMMARY"
+          docker image inspect "$remote" --format '{{json .RepoDigests}}' >> "$GITHUB_STEP_SUMMARY"
+      - name: Isolated stack logs
+        if: failure()
+        run: docker compose --env-file deploy/preprod/.env.example -f deploy/preprod/compose.yaml logs --no-color
+      - name: Remove disposable CI stack only
+        if: always()
+        run: |
+          docker compose --env-file deploy/preprod/.env.example -f deploy/preprod/compose.yaml down --volumes --remove-orphans
+          docker network rm "$PREPROD_PROXY_NETWORK" || true

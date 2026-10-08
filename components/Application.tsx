@@ -2,26 +2,17 @@
 import MapExperience from "./MapExperience";
 import PasswordRecovery from "./PasswordRecovery";
 import Account, { Signup, Activation } from "./Account";
-import InstallApp from "./InstallApp";
+import UserMenu from "./UserMenu";
+import "./FloatingWindow.css";
 import ProjectSupport from "./ProjectSupport";
-import { bugHref, publicProjectLinks } from "../lib/project-links";
+
 import Editorial from "./Editorial";
 import { useDialogFocus } from "./useDialogFocus";
 import ManorMark from "./ManorMark";
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { DateTime } from "luxon";
-import {
-  House as HouseIcon,
-  Map,
-  ShieldCheck,
-  Settings,
-  Route,
-  CircleUserRound,
-  ArrowRight,
-  LogOut,
-  Bug,
-} from "lucide-react";
+import { CircleUserRound, House as HouseIcon, ArrowRight } from "lucide-react";
 import type { User } from "../lib/domain";
 import {
   api,
@@ -101,22 +92,7 @@ export default function Application({
   useEffect(() => {
     if (!accountVisible) return;
     const previousBackground = background.current;
-    const body = document.body,
-      html = document.documentElement;
-    const y = window.scrollY,
-      x = window.scrollX;
-    const oldBody = body.style.overflow,
-      oldHtml = html.style.overflow;
-    const oldPadding = body.style.paddingRight;
-    const gap = window.innerWidth - html.clientWidth;
-    body.style.overflow = "hidden";
-    html.style.overflow = "hidden";
-    if (gap) body.style.paddingRight = gap + "px";
     return () => {
-      body.style.overflow = oldBody;
-      html.style.overflow = oldHtml;
-      body.style.paddingRight = oldPadding;
-      window.scrollTo({ left: x, top: y, behavior: "instant" });
       const origin = accountOrigin.current;
       if (origin?.isConnected) origin.focus({ preventScroll: true });
       else
@@ -389,80 +365,6 @@ export default function Application({
             <CircleUserRound size={22} />
           </button>
         </div>
-        {menu && (
-          <nav
-            className="user-menu open"
-            id="user-menu"
-            aria-label="Menu utilisateur"
-          >
-            {!user && (
-              <div className="mobile-login">
-                <LoginForm compact={false} destination="/map" />
-              </div>
-            )}
-            <Link href="/map" onClick={() => setMenu(false)}>
-              <Map size={20} />
-              <span>La carte</span>
-              <ArrowRight size={15} />
-            </Link>
-            <Link
-              href={user ? "/participant" : "/login?next=/participant"}
-              onClick={() => setMenu(false)}
-            >
-              <HouseIcon size={20} />
-              <span>Inscrire ma maison</span>
-              <ArrowRight size={15} />
-            </Link>
-            <Link href="/map#parcours" onClick={() => setMenu(false)}>
-              <Route size={20} />
-              <span>Préparer mon parcours</span>
-              <ArrowRight size={15} />
-            </Link>
-            {user?.permissions.includes("admin.access") && (
-              <div className="user-menu-group">
-                <Link href="/admin">
-                  <ShieldCheck size={20} />
-                  <span>Administration</span>
-                  <ArrowRight size={15} />
-                </Link>
-              </div>
-            )}
-            <div className="user-menu-account">
-              {user && (
-                <Link href="/account" onClick={() => setMenu(false)}>
-                  <Settings size={20} />
-                  <span>Mon compte</span>
-                  <ArrowRight size={15} />
-                </Link>
-              )}
-              <InstallApp />
-              {user && (
-                <AsyncButton
-                  onClick={async () => {
-                    await api("logout", {});
-                    window.location.href = "/";
-                  }}
-                >
-                  <LogOut size={20} />
-                  <span>Se déconnecter</span>
-                </AsyncButton>
-              )}
-            </div>
-            <div className="user-menu-group">
-              <a
-                href={bugHref(
-                  publicProjectLinks(state?.projectLinks, state?.privacy),
-                  version,
-                )}
-                onClick={() => setMenu(false)}
-              >
-                <Bug size={20} />
-                <span>Signaler un bug</span>
-                <ArrowRight size={15} />
-              </a>
-            </div>
-          </nav>
-        )}
       </header>
       {error && state && (
         <div className="notice global-notice" role="alert">
@@ -475,6 +377,15 @@ export default function Application({
         </div>
       )}
       {content}
+      {menu && (
+        <UserMenu
+          user={user}
+          state={state}
+          version={version}
+          onClose={() => setMenu(false)}
+          login={<LoginForm compact={false} destination="/map" />}
+        />
+      )}
       <footer>
         <span>Halloween Map · {version}</span>
         <span>

@@ -8,3 +8,5 @@ playwright-report/
 *.tsbuildinfo
 next-env.d.ts
 public/maplibre/
+.env.preprod
+.env.dockhand

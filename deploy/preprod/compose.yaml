@@ -1,0 +1,117 @@
+# Independent stack: never combine this file with the production compose.yaml.
+name: halloween-map-ux-preprod
+x-runtime: &runtime
+  image: ${PREPROD_IMAGE:?Set the ux-preprod commit image tag}
+  init: true
+  entrypoint: [node, scripts/preprod-runtime.mjs]
+  environment: &environment
+    HALLOWEEN_PREPROD: "true"
+    APP_ORIGIN: ${PREPROD_APP_ORIGIN:?Set the exact HTTPS origin}
+    COOKIE_SECURE: "true"
+    SMTP_HOST: ""
+    SMTP_FROM: ""
+    SMTP_USER: ""
+    SMTP_PASSWORD: ""
+    SMTP_REPLY_TO: ""
+    MAP_STYLE_URL: ${PREPROD_MAP_STYLE_URL:-https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json}
+  secrets: [preprod_db_password]
+  networks: [database]
+services:
+  db:
+    image: postgres:17-bookworm
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: halloween_ux_preprod
+      POSTGRES_USER: halloween_ux_preprod
+      POSTGRES_PASSWORD_FILE: /run/secrets/preprod_db_password
+    secrets: [preprod_db_password]
+    volumes: [postgres_data:/var/lib/postgresql/data]
+    networks: [database]
+    healthcheck:
+      test:
+        [
+          CMD-SHELL,
+          "pg_isready -U halloween_ux_preprod -d halloween_ux_preprod",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+  migrate:
+    <<: *runtime
+    command: [node, node_modules/tsx/dist/cli.mjs, scripts/migrate.ts]
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      disable: true
+  seed:
+    <<: *runtime
+    command: [node, node_modules/tsx/dist/cli.mjs, scripts/preprod-seed.ts]
+    environment:
+      <<: *environment
+      PREPROD_TERRITORY: ${PREPROD_TERRITORY:?Set the test map territory}
+      PREPROD_POSTAL_CODE: ${PREPROD_POSTAL_CODE:?Set the test postal code}
+      PREPROD_LATITUDE: ${PREPROD_LATITUDE:?Set the test map latitude}
+      PREPROD_LONGITUDE: ${PREPROD_LONGITUDE:?Set the test map longitude}
+      PREPROD_TIMEZONE: ${PREPROD_TIMEZONE:-Europe/Paris}
+    secrets:
+      [preprod_db_password, preprod_admin_password, preprod_user_password]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      disable: true
+  app:
+    <<: *runtime
+    command: [node, server.js]
+    restart: unless-stopped
+    environment:
+      <<: *environment
+      ORS_BASE_URL: ${PREPROD_ORS_BASE_URL:-https://api.heigit.org/openrouteservice}
+      ORS_API_KEY: ${PREPROD_ORS_API_KEY:-}
+    expose: ["3000"]
+    labels:
+      traefik.enable: "false"
+    networks:
+      database:
+      proxy:
+        aliases: [halloween-map-ux-preprod]
+    depends_on:
+      seed:
+        condition: service_completed_successfully
+  worker:
+    <<: *runtime
+    command: [node, node_modules/tsx/dist/cli.mjs, scripts/worker.ts]
+    restart: unless-stopped
+    depends_on:
+      seed:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        [
+          CMD,
+          node,
+          scripts/preprod-runtime.mjs,
+          node,
+          -e,
+          "const{Pool}=require('pg');const p=new Pool({connectionString:process.env.DATABASE_URL});p.query('SELECT 1').then(()=>p.end()).catch(()=>process.exit(1));",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+volumes:
+  postgres_data:
+    name: halloween-map-ux-preprod-postgres
+networks:
+  database:
+    internal: true
+  proxy:
+    external: true
+    name: ${PREPROD_PROXY_NETWORK:?Set the existing proxy or Newt Docker network}
+secrets:
+  preprod_db_password:
+    environment: PREPROD_DB_PASSWORD
+  preprod_admin_password:
+    environment: PREPROD_ADMIN_PASSWORD
+  preprod_user_password:
+    environment: PREPROD_USER_PASSWORD

@@ -21,6 +21,10 @@ export default function VisitorHouse({
   timezone,
   onClose,
   fearLabels,
+  onSelection,
+  selected,
+  selectionDisabled,
+  selectionError,
 }: {
   house: PublicHouse;
   stop?: RouteResult["stops"][number];
@@ -29,6 +33,10 @@ export default function VisitorHouse({
   timezone: string;
   onClose: () => void;
   fearLabels?: string[];
+  onSelection?: () => void;
+  selected?: boolean;
+  selectionDisabled?: boolean;
+  selectionError?: string;
 }) {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -56,6 +64,7 @@ export default function VisitorHouse({
       <section
         className="visitor-house route-dialog"
         role="dialog"
+        onClick={(event) => event.stopPropagation()}
         aria-modal="true"
         aria-labelledby="visitor-house-title"
       >
@@ -166,6 +175,16 @@ export default function VisitorHouse({
               </div>
             )}
           </div>
+          {selectionError && <p role="alert">{selectionError}</p>}
+          {onSelection && (
+            <button
+              type="button"
+              disabled={selectionDisabled}
+              onClick={onSelection}
+            >
+              {selected ? "Retirer de ma sélection" : "Ajouter à ma collecte"}
+            </button>
+          )}
           {!visited &&
             onVisit &&
             +new Date(house.starts_at) <= now &&

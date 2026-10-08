@@ -5,7 +5,7 @@ export const reportSchema = z
     seasonId: z.uuid(),
     event: z.enum(["start", "finish"]),
     visited: z.number().int().min(0).max(30).default(0),
-    planned: z.number().int().min(1).max(30),
+    planned: z.number().int().min(0).max(30),
     distanceMeters: z.number().finite().min(0).max(200000).default(0),
     durationSeconds: z.number().finite().min(0).max(86400).default(0),
   })

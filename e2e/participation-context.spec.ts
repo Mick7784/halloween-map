@@ -157,7 +157,7 @@ async function arrange(page: Page, edit = false, candyOnly = false) {
   await expect(page.locator(".participation-dialog")).toBeVisible();
   await expect(page.locator("#participation-form")).toBeVisible();
   await page.locator(".participation-overlay").evaluate(async (el) => {
-    await Promise.all(
+    await Promise.allSettled(
       el.getAnimations({ subtree: true }).map((a) => a.finished),
     );
   });
@@ -411,7 +411,7 @@ test("candy alone offers confirmed closing only", async ({ page }) => {
     }),
   ).toHaveCount(0);
   await expect(
-    page.getByRole("button", { name: "Annuler la confirmation", exact: true }),
+    page.getByRole("button", { name: "Fermer ma participation", exact: true }),
   ).toBeFocused();
   await page.keyboard.press("Shift+Tab");
   await expect(
@@ -420,6 +420,10 @@ test("candy alone offers confirmed closing only", async ({ page }) => {
   await page.keyboard.press("Escape");
   await expect(page.locator(".participation-confirm")).toHaveCount(0);
   expect(calls.filter((c) => c.path === "participant")).toHaveLength(0);
+  await expect(page.locator(".participation-dialog")).toHaveCount(0);
+  await page.getByRole("button", { name: "Menu utilisateur", exact: true }).click();
+  await page.getByRole("link", { name: "Ma participation", exact: true }).click();
+  await expect(page.locator(".participation-dialog")).toBeVisible();
   await page
     .getByRole("button", { name: "Je n’ai plus de bonbons", exact: true })
     .click();

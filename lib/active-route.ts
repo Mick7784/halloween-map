@@ -66,7 +66,6 @@ const result = z.object({
         unavailable: z.boolean().optional(),
       }),
     )
-    .min(1)
     .max(30),
   distanceMeters: metric,
   walkingMinutes: metric,
@@ -85,6 +84,9 @@ export const storedRouteSchema = z.object({
     startedAt: date.nullable(),
     endedAt: date.nullable(),
     distanceMeters: metric,
+    gpsAcceptedFixes: z.number().int().nonnegative().optional(),
+    gpsObservedSeconds: metric.optional(),
+    distancePartial: z.boolean().optional(),
     visitedIds: z.array(z.string().uuid()).max(30),
   }),
   ownerId: z.string(),
@@ -139,24 +141,12 @@ export function restoreRoute(
       (value.phase === "completed" &&
         (!value.collection.startedAt || !value.collection.endedAt)) ||
       (value.phase === "calculated" &&
-        (value.collection.startedAt !== null ||
+        (!value.result.stops.length ||
+          value.collection.startedAt !== null ||
           value.collection.visitedIds.length > 0 ||
           value.collection.distanceMeters !== 0))
     )
       return null;
-    if (
-      value.phase === "active" &&
-      Math.min(+new Date(value.expiresAt), +new Date(value.parameters.end)) <=
-        now
-    ) {
-      value.phase = "completed";
-      value.collection.endedAt = new Date(
-        Math.max(
-          +new Date(value.collection.startedAt!),
-          Math.min(+new Date(value.expiresAt), +new Date(value.parameters.end)),
-        ),
-      ).toISOString();
-    }
     return value;
   } catch {
     return null;
