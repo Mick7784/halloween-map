@@ -146,6 +146,18 @@ afterEach(async () => {
 });
 
 describe("shared floating windows", () => {
+  it("does not reapply a parent lock released while a nested dialog closes", async () => {
+    host.inert = true;
+    host.setAttribute("aria-hidden", "true");
+    await render((onClose) =>
+      h(FloatingWindow, { title: "Fenêtre", onClose, children: "Contenu" }),
+    );
+    host.inert = false;
+    host.removeAttribute("aria-hidden");
+    await click(byLabel("Fermer Fenêtre"));
+    expect(host.inert).toBe(false);
+    expect(host.hasAttribute("aria-hidden")).toBe(false);
+  });
   for (const way of ["X", "backdrop", "Escape"])
     it(`${way} closes and restores trigger focus; inside clicks remain open`, async () => {
       await render((onClose) =>

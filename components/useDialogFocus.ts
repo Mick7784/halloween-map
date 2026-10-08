@@ -10,9 +10,12 @@ export function useDialogFocus() {
     >();
     function restoreBackground() {
       for (const [element, previous] of background) {
-        element.inert = previous.inert;
+        // Pre-existing locks belong to React/the parent overlay, which may
+        // have released them while this dialog was closing.
+        if (!previous.inert) element.inert = false;
         if (previous.aria === null) element.removeAttribute("aria-hidden");
-        else element.setAttribute("aria-hidden", previous.aria);
+        else if (previous.aria !== "true")
+          element.setAttribute("aria-hidden", previous.aria);
       }
       background.clear();
     }
