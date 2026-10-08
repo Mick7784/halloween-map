@@ -851,11 +851,18 @@ for (const width of [390, 1440])
             ),
           { longitude, latitude, accuracy },
         );
+      // Starting GPS and finishing server availability verification are separate effects.
+      await expect(page.locator(".route-gps-status")).toHaveText("Recherche GPS…");
       await emit(-1.668, 48.102, 180);
       expect((await read()).collection.visitedIds).toEqual([]);
+      expect((await read()).collection.gpsAcceptedFixes).toBe(0);
+      // A real GPS stream has strictly increasing timestamps, including rejected fixes.
+      await page.clock.runFor(1000);
       await emit(-1.668);
+      await expect.poll(async () => (await read()).collection.gpsAcceptedFixes).toBe(1);
       await page.clock.fastForward(3000);
       await emit(-1.668);
+      await expect.poll(async () => (await read()).collection.gpsAcceptedFixes).toBe(2);
       await page.clock.fastForward(3000);
       await emit(-1.668);
       await expect
