@@ -148,9 +148,8 @@ export default function RoutePreparation({
                 origin: { latitude: origin[1], longitude: origin[0] },
                 activities,
                 maxFear,
-                excludedHouseIds: candidates
-                  .filter((h) => !chosen.some((c) => c.id === h.id))
-                  .map((h) => h.id),
+                excludedHouseIds: [],
+                selectedHouseIds: chosen.map((house) => house.id),
                 acceptance: {
                   mode: "GUIDELINES_ONLY",
                   guidelines: true,

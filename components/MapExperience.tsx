@@ -63,6 +63,10 @@ export default function MapExperience({
     [selectionError, setSelectionError] = useState(""),
     [locating, setLocating] = useState(false),
     [locationError, setLocationError] = useState("");
+  const [consultationFix, setConsultationFix] = useState<{
+    point: [number, number];
+    token: number;
+  } | null>(null);
   const route = controller.result,
     routeShown = !!route,
     focused = routeShown && controller.phase === "active";
@@ -176,7 +180,10 @@ export default function MapExperience({
     setLocationError("");
     try {
       const fix = await locateOrigin(navigator.geolocation);
-      chooseOrigin(fix.point, fix.accuracy);
+      setConsultationFix((previous) => ({
+        point: fix.point,
+        token: (previous?.token ?? 0) + 1,
+      }));
     } catch (e) {
       setLocationError((e as Error).message);
     } finally {
@@ -281,9 +288,11 @@ export default function MapExperience({
             currentPosition={
               ["tracking", "low-accuracy"].includes(controller.gpsState)
                 ? controller.currentPosition
-                : null
+                : (consultationFix?.point ?? null)
             }
-            recenterTarget={controller.recenterTarget}
+            recenterTarget={
+              focused ? controller.recenterTarget : consultationFix
+            }
             unavailableIds={unavailableIds}
             selectedStepId={selected?.id ?? null}
             nearestHouseId={nearestId}

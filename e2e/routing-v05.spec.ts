@@ -139,7 +139,11 @@ async function arrange(page: Page) {
     return r.fulfill({
       json: {
         stops: houses
-          .filter((h) => !(input.excludedHouseIds ?? []).includes(h.id))
+          .filter((h) =>
+            input.selectedHouseIds
+              ? input.selectedHouseIds.includes(h.id)
+              : !(input.excludedHouseIds ?? []).includes(h.id),
+          )
           .map((house, n) => ({
             house,
             arrival: new Date(start + (n * 420 + 120) * 1000).toISOString(),
@@ -794,12 +798,25 @@ for (const width of [390, 1440])
         "calculated",
       );
       expect((await read()).collection.startedAt).toBeNull();
+      const prepared = await read();
       await page
         .getByRole("button", {
-          name: "Déplier ou replier ma sélection",
+          name: "Fermer Ma collecte Halloween",
           exact: true,
         })
-        .press("ArrowUp");
+        .click();
+      await page
+        .getByRole("button", { name: "Me localiser", exact: true })
+        .click();
+      await expect(page.locator(".route-experience")).toHaveAttribute(
+        "data-route-phase",
+        "calculated",
+      );
+      expect((await read()).parameters).toEqual(prepared.parameters);
+      expect((await read()).result.stops).toEqual(prepared.result.stops);
+      await page
+        .getByRole("button", { name: "Préparer ma collecte", exact: true })
+        .click();
       await page
         .getByRole("button", { name: "Commencer ma collecte", exact: true })
         .click();

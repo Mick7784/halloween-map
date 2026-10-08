@@ -131,6 +131,7 @@ beforeEach(() => {
     verified: true,
     remaining: 1,
     deletePreparedRoute: vi.fn(),
+    invalidate: vi.fn(),
     setSheet: vi.fn(),
     setCamera: vi.fn(),
     selectHouse: vi.fn(),
@@ -355,6 +356,18 @@ describe("map navigation surfaces", () => {
     await click(byLabel("Fermer Ma collecte Halloween"));
     expect(document.querySelector(".prepared-route-window")).toBeNull();
     expect(fixture.controller.deletePreparedRoute).not.toHaveBeenCalled();
+    Object.defineProperty(navigator, "geolocation", {
+      configurable: true,
+      value: {
+        getCurrentPosition: (success: PositionCallback) =>
+          success({
+            coords: { longitude: 2.81, latitude: 48.81, accuracy: 10 },
+          } as GeolocationPosition),
+      },
+    });
+    await click(byLabel("Me localiser"));
+    expect(fixture.controller.invalidate).not.toHaveBeenCalled();
+    expect(fixture.controller.phase).toBe("calculated");
     fixture.controller.phase = "active";
     await act(async () =>
       root.render(
@@ -409,7 +422,15 @@ describe("visitor collection preparation", () => {
       state: {
         ...state,
         houses,
-        routeCandidates: houses,
+        routeCandidates: [
+          ...houses,
+          ...Array.from({ length: 240 }, (_, index) => ({
+            ...houses[0],
+            id: `20000000-0000-4000-8000-${String(index).padStart(12, "0")}`,
+            fear: 5,
+            adaptable: false,
+          })),
+        ],
         documents: {
           GUIDELINES: {
             version: "2026.1",
@@ -447,7 +468,8 @@ describe("visitor collection preparation", () => {
     expect(calculate).toHaveBeenCalledOnce();
     expect(calculate.mock.calls[0][0]).toMatchObject({
       maxFear: 2,
-      excludedHouseIds: [houses[1].id],
+      excludedHouseIds: [],
+      selectedHouseIds: [houses[0].id, houses[2].id],
       acceptance: { guidelines: true },
     });
   });
