@@ -420,6 +420,10 @@ test("candy alone offers confirmed closing only", async ({ page }) => {
   await page.keyboard.press("Escape");
   await expect(page.locator(".participation-confirm")).toHaveCount(0);
   expect(calls.filter((c) => c.path === "participant")).toHaveLength(0);
+  await expect(page.locator(".participation-dialog")).toHaveCount(0);
+  await page.getByRole("button", { name: "Menu utilisateur", exact: true }).click();
+  await page.getByRole("link", { name: "Ma participation", exact: true }).click();
+  await expect(page.locator(".participation-dialog")).toBeVisible();
   await page
     .getByRole("button", { name: "Je n’ai plus de bonbons", exact: true })
     .click();

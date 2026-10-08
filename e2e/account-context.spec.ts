@@ -89,7 +89,7 @@ async function arrange(page: Page, path = "/", unverified = false) {
   });
   await page.goto(path);
   await expect(
-    page.getByRole("button", { name: "Menu utilisateur", exact: true }),
+    page.getByRole("button", { name: "Menu utilisateur", exact: true, includeHidden: path.startsWith("/account") }),
   ).toBeVisible();
   return calls;
 }
@@ -474,7 +474,9 @@ for (const installed of [false, true]) {
       await expect(page.locator(".install-help-window")).toContainText(
         "Touchez Partager",
       );
-      await expect(page.getByRole("dialog")).toHaveCount(2);
+      await expect(page.getByRole("dialog", { includeHidden: true })).toHaveCount(2);
+      await expect(page.getByRole("dialog")).toHaveCount(1);
+      await expect(page.locator(".account-dialog")).toHaveAttribute("inert", "");
       await page
         .getByRole("button", { name: "Fermer Ajouter à l’écran d’accueil" })
         .click();

@@ -147,7 +147,10 @@ test("admin hides a house publicly, retains it in administration, and restores i
     .getByRole("dialog")
     .getByRole("button", { name: "Masquer", exact: true })
     .click();
+  await expect(page.getByRole("dialog")).toContainText("Masquée");
+  await page.getByRole("dialog").getByRole("button", { name: "Fermer", exact: true }).click();
   await expect(row.getByText("Masquée", { exact: true })).toBeVisible();
+  await row.getByRole("button", { name: "Gérer", exact: true }).click();
   const context = await browser.newContext({ baseURL: origin }),
     visitor = await context.newPage();
   await login(visitor, "visitor0@example.invalid");

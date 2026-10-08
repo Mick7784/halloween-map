@@ -815,7 +815,7 @@ for (const width of [390, 1440])
       expect((await read()).parameters).toEqual(prepared.parameters);
       expect((await read()).result.stops).toEqual(prepared.result.stops);
       await page
-        .getByRole("button", { name: "Préparer ma collecte", exact: true })
+        .getByRole("button", { name: "Voir ma sélection", exact: true })
         .click();
       await page
         .getByRole("button", { name: "Commencer ma collecte", exact: true })
