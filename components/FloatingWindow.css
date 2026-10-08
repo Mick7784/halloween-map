@@ -1,0 +1,252 @@
+/* Shared surface and spacing, based on Mon compte. House details stay unchanged. */
+:is(
+  .floating-overlay,
+  .account-overlay,
+  .participation-overlay,
+  .beta-overlay,
+  .modal-backdrop,
+  .route-confirm-backdrop,
+  .route-preparation-overlay,
+  .route-guidelines-backdrop,
+  .participation-confirm-backdrop,
+  .participation-guidelines-backdrop,
+  .project-support-backdrop
+)[class] {
+  position: fixed;
+  inset: 0;
+  z-index: 150;
+  display: grid;
+  place-items: center;
+  padding: max(16px, env(safe-area-inset-top))
+    max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom))
+    max(16px, env(safe-area-inset-left));
+  background: #03050ac2;
+  backdrop-filter: blur(5px);
+}
+[role="dialog"]:is(
+  .floating-window,
+  .account-dialog,
+  .participation-dialog,
+  .beta-panel,
+  .dialog,
+  .route-preparation,
+  .route-confirm,
+  .route-guidelines,
+  .participation-confirm,
+  .participation-guidelines-dialog,
+  .project-support-dialog
+) {
+  position: relative;
+  inset: auto;
+  color: #f4edf5;
+  background: #10131c;
+  border: 1px solid #6b607d;
+  border-radius: 20px;
+  box-shadow:
+    0 28px 100px #000a,
+    0 0 0 4px #ffffff03;
+  max-width: 100%;
+  max-height: calc(
+    100dvh - 48px - env(safe-area-inset-top) - env(safe-area-inset-bottom)
+  );
+  overscroll-behavior: contain;
+}
+[role="dialog"]:is(
+  .beta-panel,
+  .dialog,
+  .route-confirm,
+  .route-guidelines,
+  .participation-confirm,
+  .participation-guidelines-dialog,
+  .project-support-dialog
+) {
+  height: auto;
+  overflow-y: auto;
+}
+[role="dialog"]:is(
+    .beta-panel,
+    .dialog,
+    .route-confirm,
+    .route-guidelines,
+    .participation-confirm,
+    .participation-guidelines-dialog,
+    .project-support-dialog
+  )
+  > :is(h1, h2) {
+  padding-right: 44px;
+}
+[role="dialog"]:not(.visitor-house) button.close {
+  position: absolute;
+  right: 16px;
+  top: 16px;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 10px;
+  border: 1px solid #ffffff12;
+  border-radius: 12px;
+  color: #ddd2f0;
+  background: #11131cbb;
+  z-index: 2;
+}
+[role="dialog"]:is(.beta-panel) > header {
+  padding-right: 52px;
+}
+.floating-window {
+  width: min(560px, 100%);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.floating-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 20px 74px 16px 24px;
+  flex-shrink: 0;
+}
+.floating-header h2 {
+  margin: 0;
+  font-family: var(--font-editorial);
+  font-size: 26px;
+}
+.floating-scroll {
+  padding: 0 24px 24px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.user-navigation-window {
+  width: min(400px, 100%);
+}
+.user-navigation-window .home-drawer-links {
+  margin-top: 16px;
+}
+.map-options-list {
+  margin-top: 16px;
+}
+.map-options-list > button {
+  display: flex;
+  gap: 12px;
+  width: 100%;
+  margin-bottom: 8px;
+  text-align: left;
+}
+.map-options-list > button > span {
+  display: grid;
+  gap: 4px;
+}
+.map-options-list small {
+  color: #b8b1cd;
+}
+.map-options-window .route-discovery-filters {
+  margin-top: 16px;
+  flex-wrap: wrap;
+}
+@media (max-width: 767px) {
+  [role="dialog"]:is(
+    .account-dialog,
+    .participation-dialog,
+    .route-preparation
+  ) {
+    height: auto;
+    max-height: calc(
+      100dvh - 48px - env(safe-area-inset-top) - env(safe-area-inset-bottom)
+    );
+  }
+  .floating-header {
+    padding-left: 18px;
+  }
+  .floating-scroll {
+    padding-left: 18px;
+    padding-right: 18px;
+  }
+  .map-header-prepare {
+    font-size: 11px;
+    padding: 8px;
+  }
+  .map-app .site-header .brand em,
+  .map-app .site-header .account-name {
+    display: none;
+  }
+  .map-app .site-header {
+    gap: 8px;
+  }
+  .map-app .header-account {
+    gap: 6px;
+  }
+}
+.floating-back {
+  width: 44px;
+  height: 44px;
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  padding: 10px;
+  border: 1px solid #ffffff12;
+  border-radius: 12px;
+  color: #ddd2f0;
+  background: #11131cbb;
+}
+[role="dialog"]:is(.route-guidelines, .participation-confirm) > h2 {
+  padding-left: 44px;
+}
+.prepared-route-window .route-sheet[data-sheet-position] {
+  position: static;
+  inset: auto;
+  width: 100%;
+  height: auto;
+  max-height: none;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  transform: none;
+}
+.prepared-route-window .route-sheet[data-sheet-position] .route-sheet-content {
+  display: block;
+  overflow: visible;
+}
+.prepared-route-window .route-sheet-grip {
+  display: none;
+}
+/* One scroll lock; no competing inline locks when nested dialogs close. */
+html:has([role="dialog"]:not([inert], [hidden], [inert] *, [hidden] *)),
+body:has([role="dialog"]:not([inert], [hidden], [inert] *, [hidden] *)),
+html:has(.route-experience.is-focused),
+body:has(.route-experience.is-focused) {
+  overflow: hidden;
+}
+.prepared-route-window .route-sheet-handle {
+  display: none;
+}
+
+[role="dialog"].participation-dialog {
+  width: min(980px, 100%);
+}
+@media (max-width: 767px) {
+  .application .map-header-prepare {
+    width: 42px;
+    height: 42px;
+    display: grid;
+    place-items: center;
+    padding: 8px;
+  }
+  .application .map-header-prepare span {
+    display: none;
+  }
+  .application.map-app .brand {
+    gap: 6px;
+    min-width: 0;
+  }
+}
+.account-dialog .account-header {
+  padding-right: 74px;
+}
+.participation-dialog .participation-header {
+  padding: 20px 74px 12px 24px;
+}
+.participation-dialog .participation-scroll {
+  padding: 16px 24px 24px;
+}

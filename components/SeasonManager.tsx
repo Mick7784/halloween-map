@@ -31,12 +31,17 @@ function Statistics({
       <section
         className="beta-panel"
         role="dialog"
+        onClick={(event) => event.stopPropagation()}
         aria-modal="true"
         aria-label="Statistiques historiques"
       >
         <header>
           <h2>{season.name} · Statistiques</h2>
-          <button aria-label="Fermer les statistiques" onClick={onClose}>
+          <button
+            className="close"
+            aria-label="Fermer les statistiques"
+            onClick={onClose}
+          >
             <X />
           </button>
         </header>
@@ -389,12 +394,14 @@ export default function SeasonManager({
           <section
             className="beta-panel"
             role="dialog"
+            onClick={(event) => event.stopPropagation()}
             aria-modal="true"
             aria-label="Nouvelle saison"
           >
             <header>
               <h2>Nouvelle saison</h2>
               <button
+                className="close"
                 aria-label="Fermer la création"
                 onClick={() => setCreating(false)}
               >

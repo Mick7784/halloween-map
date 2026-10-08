@@ -763,12 +763,19 @@ export default function Admin({
           <section
             className="beta-panel"
             role="dialog"
+            onClick={(event) => event.stopPropagation()}
             aria-modal="true"
             aria-label="Nouvelle maison"
           >
             <header>
               <h2>Nouvelle maison</h2>
-              <button onClick={() => setCreating(false)}>Fermer</button>
+              <button
+                className="close"
+                aria-label="Fermer la création"
+                onClick={() => setCreating(false)}
+              >
+                <X />
+              </button>
             </header>
             <label>
               Rechercher un propriétaire
@@ -851,14 +858,15 @@ export default function Admin({
           <section
             className="beta-panel"
             role="dialog"
+            onClick={(event) => event.stopPropagation()}
             aria-modal="true"
             aria-label={current.name}
           >
             <header>
               <h2>{current.name}</h2>
               <button
+                className="close secondary"
                 aria-label="Fermer"
-                className="secondary"
                 onClick={() => setSelected(null)}
               >
                 <X size={20} />

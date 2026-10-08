@@ -21,7 +21,7 @@ import MapView from "./Map";
 import RoutePreparation from "./RoutePreparation";
 import RouteSheet, { routeSummary } from "./RouteSheet";
 import VisitorHouse from "./VisitorHouse";
-import ManorMark from "./ManorMark";
+import FloatingWindow from "./FloatingWindow";
 import "./MapExperience.css";
 
 export default function MapExperience({
@@ -50,18 +50,22 @@ export default function MapExperience({
     [maxFear, setMaxFear] = useState(2),
     [filters, setFilters] = useState<Activity[]>([]),
     [list, setList] = useState(false),
+    [optionsOpen, setOptionsOpen] = useState(false),
+    [previewOpen, setPreviewOpen] = useState(true),
     [confirmation, setConfirmation] = useState(false),
     [launch, setLaunch] = useState(false),
     [dismissedNotification, setDismissedNotification] = useState(""),
     [sheetHeight, setSheetHeight] = useState(96);
   const route = controller.result,
     routeShown = !!route,
-    focused = routeShown && !!route.stops.length;
+    focused =
+      routeShown && !!route.stops.length && controller.phase === "active";
   useEffect(() => {
     if (!controller.ready) return;
     const open = () => {
       if (window.location.hash !== "#parcours") return;
       if (controller.phase === "preparation") setPreparing(true);
+      else if (controller.phase === "calculated") setPreviewOpen(true);
       window.history.replaceState(
         null,
         "",
@@ -72,24 +76,12 @@ export default function MapExperience({
     window.addEventListener("hashchange", open);
     return () => window.removeEventListener("hashchange", open);
   }, [controller.ready, controller.phase]);
-  const selected = controller.selectedHouse;
-  const locked =
-    focused || preparing || pick || !!selected || confirmation || launch;
   useEffect(() => {
-    if (!locked) return;
-    const body = document.body,
-      html = document.documentElement;
-    const previous = [body.style.overflow, html.style.overflow],
-      x = window.scrollX,
-      y = window.scrollY;
-    body.style.overflow = "hidden";
-    html.style.overflow = "hidden";
-    return () => {
-      body.style.overflow = previous[0];
-      html.style.overflow = previous[1];
-      window.scrollTo({ left: x, top: y, behavior: "instant" });
-    };
-  }, [locked]);
+    const open = () => setOptionsOpen(true);
+    window.addEventListener("map-options", open);
+    return () => window.removeEventListener("map-options", open);
+  }, []);
+  const selected = controller.selectedHouse;
   const retainedOrigin = useMemo(
     () =>
       origin ??
@@ -134,6 +126,7 @@ export default function MapExperience({
     controller.phase === "completed";
   async function calculate(parameters: RouteParameters) {
     await controller.calculateRoute(parameters);
+    setPreviewOpen(true);
     setPreparing(false);
     setList(false);
   }
@@ -167,6 +160,26 @@ export default function MapExperience({
     void refresh().catch(() => {});
   }
   const selectHouse = controller.selectHouse;
+  const routeSheet = routeShown &&
+    controller.phase !== "completed" &&
+    !preparing &&
+    !pick && (
+      <RouteSheet
+        result={route!}
+        phase={controller.phase === "active" ? "active" : "calculated"}
+        position={focused ? controller.sheet : "expanded"}
+        onPosition={controller.setSheet}
+        onHouse={selectHouse}
+        onEnd={() => setConfirmation(true)}
+        onStart={() => setLaunch(true)}
+        onSave={controller.savePreparedRoute}
+        visitedIds={controller.collection.visitedIds}
+        remaining={controller.remaining}
+        elapsedSeconds={stats.durationSeconds}
+        selectedStepId={controller.selectedStepId}
+        onHeight={setSheetHeight}
+      />
+    );
   return (
     <main
       className={"route-experience" + (focused || pick ? " is-focused" : "")}
@@ -185,7 +198,7 @@ export default function MapExperience({
             origin={(pick ? draftOrigin : retainedOrigin) ?? undefined}
             focusToken={pick ? 0 : focusToken}
             routeSteps={steps}
-            routePanelOpen={routeShown && !preparing}
+            routePanelOpen={focused && !preparing}
             sheetPosition={controller.sheet}
             initialCamera={controller.camera}
             onCameraChange={controller.setCamera}
@@ -202,58 +215,42 @@ export default function MapExperience({
             }
           />
         )}
-        <header className="route-map-toolbar">
-          {focused && route ? (
-            <button
-              type="button"
-              className="route-overview"
-              onClick={() =>
-                controller.setSheet(
-                  controller.sheet === "collapsed" ? "expanded" : "collapsed",
-                )
-              }
+        {focused && (
+          <header className="route-map-toolbar">
+            {focused && route ? (
+              <button
+                type="button"
+                className="route-overview"
+                onClick={() =>
+                  controller.setSheet(
+                    controller.sheet === "collapsed" ? "expanded" : "collapsed",
+                  )
+                }
+              >
+                <Route size={23} />
+                <span>
+                  <strong>Mon parcours Halloween</strong>
+                  <small>{routeSummary(route)}</small>
+                </span>
+                <ChevronDown size={17} />
+              </button>
+            ) : null}
+
+            <Link
+              className="route-account-link"
+              href="/account"
+              aria-label="Mon compte"
             >
-              <Route size={23} />
-              <span>
-                <strong>Mon parcours Halloween</strong>
-                <small>{routeSummary(route)}</small>
-              </span>
-              <ChevronDown size={17} />
-            </button>
-          ) : (
-            <div className="route-map-title">
-              <span className="route-brand">
-                <ManorMark />
-              </span>
-              <span>
-                <strong>Les maisons à découvrir</strong>
-                <small>{state.instance!.territory}</small>
-              </span>
-            </div>
-          )}
-          <Link
-            className="route-account-link"
-            href="/account"
-            aria-label="Mon compte"
+              <CircleUserRound size={21} />
+            </Link>
+          </header>
+        )}
+        {!focused && !pick && optionsOpen && (
+          <FloatingWindow
+            title="Maisons et filtres"
+            onClose={() => setOptionsOpen(false)}
+            className="map-options-window"
           >
-            <CircleUserRound size={21} />
-          </Link>
-        </header>
-        {!focused && !pick && (
-          <div className="route-map-discovery">
-            <button
-              className="primary"
-              type="button"
-              disabled={state.state !== "MAP_OPEN"}
-              onClick={() => {
-                setList(false);
-                setPreparing(true);
-              }}
-            >
-              {" "}
-              <Route size={18} />
-              Préparer mon parcours
-            </button>
             <button
               type="button"
               aria-label={
@@ -279,26 +276,33 @@ export default function MapExperience({
                 </button>
               ))}
             </div>
-          </div>
+            {list && (
+              <div className="map-options-list">
+                {houses.map((h) => (
+                  <button
+                    type="button"
+                    key={h.id}
+                    onClick={() => {
+                      setOptionsOpen(false);
+                      selectHouse(h);
+                    }}
+                  >
+                    <MapPin size={18} />
+                    <span>
+                      <strong>{h.name}</strong>
+                      <small>{h.address}</small>
+                    </span>
+                  </button>
+                ))}
+                {!houses.length && <p>Aucune maison disponible.</p>}
+              </div>
+            )}
+          </FloatingWindow>
         )}
         {state.state !== "MAP_OPEN" && (
           <p className="route-closed-notice">
             Les autres maisons seront visibles à l’ouverture de la carte.
           </p>
-        )}
-        {list && !focused && (
-          <div className="route-house-list">
-            {houses.map((h) => (
-              <button type="button" key={h.id} onClick={() => selectHouse(h)}>
-                <MapPin size={18} />
-                <span>
-                  <strong>{h.name}</strong>
-                  <small>{h.address}</small>
-                </span>
-              </button>
-            ))}
-            {!houses.length && <p>Aucune maison disponible.</p>}
-          </div>
         )}
         {focused && (
           <button
@@ -402,27 +406,24 @@ export default function MapExperience({
             </div>
           </div>
         )}
-        {routeShown &&
-          controller.phase !== "completed" &&
-          !preparing &&
-          !pick && (
-            <RouteSheet
-              result={route!}
-              phase={controller.phase === "active" ? "active" : "calculated"}
-              position={controller.sheet}
-              onPosition={controller.setSheet}
-              onHouse={selectHouse}
-              onEnd={() => setConfirmation(true)}
-              onStart={() => setLaunch(true)}
-              onSave={controller.savePreparedRoute}
-              visitedIds={controller.collection.visitedIds}
-              remaining={controller.remaining}
-              elapsedSeconds={stats.durationSeconds}
-              selectedStepId={controller.selectedStepId}
-              onHeight={setSheetHeight}
-            />
-          )}
+        {focused && routeSheet}
       </div>
+      {!focused &&
+        !preparing &&
+        !pick &&
+        !launch &&
+        !confirmation &&
+        !selectedHouse &&
+        routeSheet &&
+        previewOpen && (
+          <FloatingWindow
+            title="Mon parcours Halloween"
+            className="prepared-route-window"
+            onClose={() => setPreviewOpen(false)}
+          >
+            {routeSheet}
+          </FloatingWindow>
+        )}
       {(preparing || pick) && state.season && (
         <div hidden={!preparing} inert={!preparing}>
           <RoutePreparation
@@ -469,6 +470,7 @@ export default function MapExperience({
         <div className="route-confirm-backdrop">
           <section
             role="dialog"
+            onClick={(event) => event.stopPropagation()}
             aria-modal="true"
             aria-labelledby="route-launch-title"
             className="route-confirm route-dialog"
@@ -512,9 +514,20 @@ export default function MapExperience({
           <section
             className="route-confirm route-dialog collection-summary"
             role="dialog"
+            onClick={(event) => event.stopPropagation()}
             aria-modal="true"
             aria-labelledby="collection-summary-title"
           >
+            <button
+              className="close"
+              aria-label="Fermer le récapitulatif"
+              onClick={() => {
+                setConfirmation(false);
+                controller.deletePreparedRoute();
+              }}
+            >
+              <X />
+            </button>
             <h2 id="collection-summary-title">Parcours terminé 🎃</h2>
             <p className="collection-result">
               {stats.visited} / {stats.selected} maisons visitées ·{" "}
@@ -569,6 +582,7 @@ export default function MapExperience({
         <div className="route-confirm-backdrop">
           <section
             role="dialog"
+            onClick={(event) => event.stopPropagation()}
             aria-modal="true"
             aria-labelledby="route-end-title"
             className="route-confirm route-dialog"

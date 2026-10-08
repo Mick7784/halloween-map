@@ -411,7 +411,7 @@ test("candy alone offers confirmed closing only", async ({ page }) => {
     }),
   ).toHaveCount(0);
   await expect(
-    page.getByRole("button", { name: "Annuler la confirmation", exact: true }),
+    page.getByRole("button", { name: "Fermer ma participation", exact: true }),
   ).toBeFocused();
   await page.keyboard.press("Shift+Tab");
   await expect(

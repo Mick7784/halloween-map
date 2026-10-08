@@ -1,4 +1,5 @@
 "use client";
+import { X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { DateTime } from "luxon";
 import { mailLayout } from "../lib/mail-layout";
@@ -214,11 +215,12 @@ function CampaignForm({
       <section
         className="dialog panel campaign-sheet"
         role="dialog"
+        onClick={(event) => event.stopPropagation()}
         aria-modal="true"
         aria-labelledby="campaign-title"
       >
         <button className="close" aria-label="Fermer" onClick={close}>
-          ×
+          <X />
         </button>
         <h2 id="campaign-title">
           {campaign ? "Modifier la campagne" : "Nouvelle campagne"}

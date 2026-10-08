@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
   X,
+  ArrowLeft,
   Candy,
   Clock3,
   Power,
@@ -99,6 +100,7 @@ export default function ParticipationOverlay({
       <section
         className="participation-dialog"
         role="dialog"
+        onClick={(event) => event.stopPropagation()}
         aria-modal="true"
         aria-labelledby="participation-title"
       >
@@ -279,16 +281,26 @@ export default function ParticipationOverlay({
             <section
               className="participation-confirm"
               role="dialog"
+              onClick={(event) => event.stopPropagation()}
               aria-modal="true"
               aria-labelledby="participation-confirm-title"
             >
               <button
                 className="close"
-                aria-label="Annuler la confirmation"
-                onClick={() => setConfirmation(null)}
+                aria-label="Fermer ma participation"
+                onClick={close}
                 disabled={busy}
               >
                 <X />
+              </button>
+              <button
+                type="button"
+                className="floating-back"
+                aria-label="Revenir à ma participation"
+                onClick={() => setConfirmation(null)}
+                disabled={busy}
+              >
+                <ArrowLeft />
               </button>
               <h2 id="participation-confirm-title">
                 {confirmation === "candy"

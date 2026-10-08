@@ -182,7 +182,7 @@ test("desktop compact menu uses the same grid for account, install and logout", 
   await page.evaluate(() => window.dispatchEvent(new Event("appinstalled")));
   await expect(actions[1]).toHaveCount(0);
   await page
-    .getByRole("button", { name: "Fermer le menu", exact: true })
+    .getByRole("button", { name: "Fermer Menu utilisateur", exact: true })
     .click();
   await page
     .getByRole("button", { name: "Soutenir le projet", exact: true })
@@ -286,7 +286,7 @@ for (const mode of ["guest", "member", "house", "admin"]) {
       .getByRole("button", { name: "Menu utilisateur", exact: true })
       .click();
     await page
-      .locator(".home-menu-overlay")
+      .locator(".floating-overlay")
       .click({ position: { x: 10, y: 200 } });
     await expect(dialog).toHaveCount(0);
   });
@@ -306,7 +306,7 @@ for (const width of [390, 1440]) {
     await page
       .getByRole("button", { name: "Menu utilisateur", exact: true })
       .click();
-    const menu = page.getByRole("navigation", {
+    const menu = page.getByRole("dialog", {
       name: "Menu utilisateur",
       exact: true,
     });
@@ -329,7 +329,7 @@ for (const width of [390, 1440]) {
         el.getAnimations({ subtree: true }).map((a) => a.finished),
       );
     });
-    expect((await menu.boundingBox())!.width).toBeLessThanOrEqual(320);
+    expect((await menu.boundingBox())!.width).toBeLessThanOrEqual(400);
     await page.screenshot({
       animations: "disabled",
       path: `${output}/menu-shared-${width}.png`,

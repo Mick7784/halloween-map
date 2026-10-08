@@ -390,6 +390,15 @@ test("map canvas, filters and active route remain mounted across account", async
     );
   // Wait for this fixture’s fitBounds result, not a snapshot midway through its animation.
   await expect.poll(async () => (await read())?.camera?.zoom).toBe(16);
+  await page
+    .getByRole("button", { name: "Lancer le parcours", exact: true })
+    .click();
+  await page
+    .getByRole("button", {
+      name: "J’ai compris — lancer le parcours",
+      exact: true,
+    })
+    .click();
   const resultBefore = await page.locator(".route-sheet").textContent();
   const routeBefore = await read();
   await page.locator(".route-account-link").click();
@@ -422,7 +431,7 @@ test("account native PWA offer and installed hiding", async ({ page }) => {
   await expect(install).toHaveCount(0);
 });
 for (const installed of [false, true]) {
-  test(`account iOS inline help and standalone ${installed}`, async ({
+  test(`account iOS floating help and standalone ${installed}`, async ({
     page,
   }) => {
     await page.setViewportSize({ width: 390, height: 844 });
@@ -439,9 +448,13 @@ for (const installed of [false, true]) {
     if (installed) await expect(install).toHaveCount(0);
     else {
       await install.click();
-      await expect(page.locator(".install-help")).toContainText(
+      await expect(page.locator(".install-help-window")).toContainText(
         "Touchez Partager",
       );
+      await expect(page.getByRole("dialog")).toHaveCount(2);
+      await page
+        .getByRole("button", { name: "Fermer Ajouter à l’écran d’accueil" })
+        .click();
       await expect(page.getByRole("dialog")).toHaveCount(1);
       await page.screenshot({
         path: `${output}/mon-compte-ios.png`,

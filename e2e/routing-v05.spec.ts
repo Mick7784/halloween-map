@@ -476,9 +476,20 @@ test("preparation gates creation, opens administrable guidelines and accepts eve
   expect(payload).toMatchObject({
     acceptance: { guidelines: true, guidelines_version: "2026.1" },
   });
-  expect(await page.evaluate(() => document.body.style.overflow)).toBe(
-    "hidden",
-  );
+  expect(
+    await page.evaluate(() => getComputedStyle(document.body).overflow),
+  ).toBe("hidden");
+  await expect(page.locator(".route-experience")).not.toHaveClass(/is-focused/);
+  await expect(page.locator(".site-header")).toBeVisible();
+  await page
+    .getByRole("button", { name: "Lancer le parcours", exact: true })
+    .click();
+  await page
+    .getByRole("button", {
+      name: "J’ai compris — lancer le parcours",
+      exact: true,
+    })
+    .click();
   const box = await page.locator(".route-experience").boundingBox();
   expect(box!.y).toBe(0);
   expect(box!.height).toBe(844);

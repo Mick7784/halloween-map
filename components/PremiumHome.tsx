@@ -2,23 +2,11 @@
 import Link from "next/link";
 import { useEffect, useState, type ReactNode } from "react";
 import { DateTime } from "luxon";
-import {
-  Menu,
-  X,
-  House,
-  Map,
-  Route,
-  Settings,
-  ShieldCheck,
-  LogOut,
-  ArrowRight,
-  UserRound,
-  Bug,
-} from "lucide-react";
+import { Menu, House, ArrowRight } from "lucide-react";
 import ManorMark from "./ManorMark";
-import InstallApp from "./InstallApp";
+import UserMenu from "./UserMenu";
 import ProjectSupport from "./ProjectSupport";
-import { bugHref, publicProjectLinks } from "../lib/project-links";
+import { publicProjectLinks } from "../lib/project-links";
 import { api, AsyncButton, Notice, type PublicState } from "./common";
 import type { House as Participation, User } from "../lib/domain";
 import "./PremiumHome.css";
@@ -109,26 +97,6 @@ export default function PremiumHome({
               label: user ? "Mon compte" : "Créer un compte",
               href: user ? "/account" : "/register",
             };
-  const entry = (
-    href: string,
-    label: string,
-    icon: ReactNode,
-    subtitle?: string,
-  ) => (
-    <Link
-      href={href}
-      aria-label={label}
-      aria-description={subtitle}
-      onClick={() => setMenu(false)}
-    >
-      {icon}
-      <span>
-        {label}
-        {subtitle && <small>{subtitle}</small>}
-      </span>
-      <ArrowRight size={15} />
-    </Link>
-  );
   return (
     <div className="home-reference">
       <div className="home-art" aria-hidden="true" />
@@ -146,7 +114,7 @@ export default function PremiumHome({
           className="home-menu-toggle"
           aria-label="Menu utilisateur"
           aria-expanded={menu}
-          aria-controls="home-menu"
+          aria-controls="user-menu"
           onClick={() => setMenu(true)}
         >
           <Menu size={26} />
@@ -233,107 +201,25 @@ export default function PremiumHome({
         <span className="home-version">{version}</span>
       </footer>
       {menu && (
-        <div className="home-menu-overlay" onClick={() => setMenu(false)}>
-          <aside
-            className="home-drawer"
-            role="dialog"
-            aria-modal="true"
-            aria-label="Menu utilisateur"
-            id="home-menu"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <button
-              className="close home-menu-close"
-              aria-label="Fermer le menu"
-              onClick={() => setMenu(false)}
-            >
-              <X size={23} />
-            </button>
-            {!user ? (
-              <div className="home-drawer-login">
-                <h2>Se connecter</h2>
-                {login}
-                <nav
-                  className="home-drawer-links home-menu-group home-install-guest"
-                  aria-label="Actions secondaires"
-                >
-                  <InstallApp />
-                </nav>
-              </div>
-            ) : (
-              <>
-                <div className="home-user">
-                  <span className="home-avatar">
-                    <UserRound size={25} />
-                  </span>
-                  <div>
-                    <strong>{user.display_name}</strong>
-                    <span>{user.email}</span>
-                    {user.permissions.includes("admin.access") && (
-                      <small>
-                        <ShieldCheck size={12} /> Administrateur
-                      </small>
-                    )}
-                  </div>
-                </div>
-                <nav
-                  aria-label="Navigation personnelle"
-                  className="home-drawer-links"
-                >
-                  {entry("/map", "La carte", <Map />)}
-                  {entry(
-                    "/participant",
-                    participation ? "Ma participation" : "Inscrire ma maison",
-                    <House />,
-                    participation
-                      ? participation.status === "VISIBLE"
-                        ? "Maison visible"
-                        : "Maison masquée"
-                      : !participationKnown
-                        ? "Consulter ma participation"
-                        : undefined,
-                  )}
-                  {entry(
-                    "/map#parcours",
-                    participation ? "Mon parcours" : "Préparer mon parcours",
-                    <Route />,
-                  )}
-                  {user.permissions.includes("admin.access") && (
-                    <div className="home-menu-group">
-                      {entry("/admin", "Administration", <ShieldCheck />)}
-                    </div>
-                  )}
-                  <div className="home-menu-group">
-                    {entry("/account", "Mon compte", <Settings />)}
-                    <InstallApp />
-                    <AsyncButton
-                      onClick={async () => {
-                        await api("logout", {});
-                        window.location.href = "/";
-                      }}
-                    >
-                      <LogOut />
-                      <span>Se déconnecter</span>
-                    </AsyncButton>
-                  </div>
-                </nav>
-              </>
-            )}
-            <nav
-              className="home-drawer-links home-menu-group"
-              aria-label="Aide"
-            >
-              <a
-                href={bugHref(projectLinks, version)}
-                onClick={() => setMenu(false)}
-              >
-                <Bug />
-                <span>Signaler un bug</span>
-                <ArrowRight size={15} />
-              </a>
-            </nav>
-          </aside>
-        </div>
+        <UserMenu
+          user={user}
+          state={state}
+          version={version}
+          onClose={() => setMenu(false)}
+          login={login}
+          participationLabel={
+            participation ? "Ma participation" : "Inscrire ma maison"
+          }
+          participationSubtitle={
+            participation
+              ? participation.status === "VISIBLE"
+                ? "Maison visible"
+                : "Maison masquée"
+              : !participationKnown
+                ? "Consulter ma participation"
+                : undefined
+          }
+        />
       )}
     </div>
   );

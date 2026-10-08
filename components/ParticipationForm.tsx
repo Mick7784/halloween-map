@@ -335,6 +335,7 @@ export default function ParticipationForm({
           <section
             className="participation-guidelines-dialog"
             role="dialog"
+            onClick={(event) => event.stopPropagation()}
             aria-modal="true"
             aria-labelledby="participation-guidelines-title"
           >

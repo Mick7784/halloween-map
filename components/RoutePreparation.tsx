@@ -3,6 +3,7 @@ import { useState, useEffect, useRef } from "react";
 import { DateTime } from "luxon";
 import {
   X,
+  ArrowLeft,
   LocateFixed,
   MapPin,
   Clock3,
@@ -84,6 +85,7 @@ export default function RoutePreparation({
       <section
         className="route-preparation route-dialog"
         role="dialog"
+        onClick={(event) => event.stopPropagation()}
         aria-modal="true"
         aria-labelledby="route-preparation-title"
         inert={guidelinesOpen}
@@ -288,15 +290,24 @@ export default function RoutePreparation({
           <section
             className="route-guidelines route-dialog"
             role="dialog"
+            onClick={(event) => event.stopPropagation()}
             aria-modal="true"
             aria-labelledby="route-guidelines-title"
           >
             <button
               className="close"
-              aria-label="Fermer les bonnes pratiques"
-              onClick={() => setGuidelinesOpen(false)}
+              aria-label="Fermer la préparation"
+              onClick={onClose}
             >
               <X />
+            </button>
+            <button
+              type="button"
+              className="floating-back"
+              aria-label="Revenir à la préparation"
+              onClick={() => setGuidelinesOpen(false)}
+            >
+              <ArrowLeft />
             </button>
             <div className="route-guide-icon">
               <Ghost />

@@ -90,7 +90,10 @@ export default function AccountOverlay({
       previousView.current = view;
     }
   }, [view]);
+  const [history, setHistory] = useState<View[]>([]);
   function navigate(next: View) {
+    if (next !== "main") setHistory((previous) => [...previous, view]);
+    else setHistory([]);
     setReturning(next === "main");
     setView(next);
   }
@@ -187,6 +190,7 @@ export default function AccountOverlay({
     <div
       className={"account-overlay" + (closing ? " is-closing" : "")}
       onClick={(e) => {
+        e.stopPropagation();
         if (e.target === e.currentTarget) close();
       }}
     >
@@ -194,6 +198,7 @@ export default function AccountOverlay({
         ref={panel}
         className={"account-dialog account-view-" + view}
         role="dialog"
+        onClick={(event) => event.stopPropagation()}
         aria-modal="true"
         aria-labelledby="account-title"
       >
@@ -201,12 +206,13 @@ export default function AccountOverlay({
           {view !== "main" && (
             <button
               className="account-back"
-              aria-label={
-                view === "policy"
-                  ? "Revenir à Confidentialité et données"
-                  : "Revenir à Mon compte"
-              }
-              onClick={() => navigate(view === "policy" ? "privacy" : "main")}
+              aria-label={"Revenir à " + titles[history.at(-1) ?? "main"]}
+              onClick={() => {
+                const previous = history.at(-1) ?? "main";
+                setHistory((stack) => stack.slice(0, -1));
+                setReturning(previous === "main");
+                setView(previous);
+              }}
             >
               <ArrowLeft size={20} />
             </button>
