@@ -155,6 +155,8 @@ describe("shared floating windows", () => {
         }),
       );
       expect(document.activeElement).toBe(byLabel("Fermer Fenêtre"));
+      expect(host.inert).toBe(true);
+      expect(host.getAttribute("aria-hidden")).toBe("true");
       await click(document.querySelector("#inside")!);
       expect(document.querySelector('[role="dialog"]')).not.toBeNull();
       await key("Tab");
@@ -165,6 +167,8 @@ describe("shared floating windows", () => {
       else await key("Escape");
       expect(document.querySelector('[role="dialog"]')).toBeNull();
       expect(document.activeElement?.id).toBe("trigger");
+      expect(host.inert).toBeFalsy();
+      expect(host.hasAttribute("aria-hidden")).toBe(false);
     });
   for (const className of [
     "beta-overlay",

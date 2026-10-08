@@ -4,17 +4,52 @@ export function useDialogFocus() {
   useEffect(() => {
     let active: HTMLElement | null = null;
     const origins = new Map<HTMLElement, HTMLElement>();
+    const background = new Map<
+      HTMLElement,
+      { inert: boolean; aria: string | null }
+    >();
+    function restoreBackground() {
+      for (const [element, previous] of background) {
+        element.inert = previous.inert;
+        if (previous.aria === null) element.removeAttribute("aria-hidden");
+        else element.setAttribute("aria-hidden", previous.aria);
+      }
+      background.clear();
+    }
+    function isolate(dialog: HTMLElement) {
+      let branch: HTMLElement = dialog;
+      while (branch.parentElement) {
+        for (const sibling of branch.parentElement.children) {
+          if (
+            !(sibling instanceof HTMLElement) ||
+            sibling === branch ||
+            ["SCRIPT", "STYLE", "LINK"].includes(sibling.tagName)
+          )
+            continue;
+          background.set(sibling, {
+            inert: sibling.inert,
+            aria: sibling.getAttribute("aria-hidden"),
+          });
+          sibling.inert = true;
+          sibling.setAttribute("aria-hidden", "true");
+        }
+        if (branch.parentElement === document.body) break;
+        branch = branch.parentElement;
+      }
+    }
     const selector =
       'button:not([disabled]),a[href],input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex="0"]';
     const visible = (el: HTMLElement) =>
       !el.closest("[inert],[hidden]") && !!el.getClientRects().length;
     function sync() {
+      if (active && !active.isConnected) restoreBackground();
       const current =
         Array.from(
           document.querySelectorAll<HTMLElement>('[role="dialog"]'),
         ).findLast(visible) ?? null;
       if (current === active) return;
       const origin = active ? origins.get(active) : null;
+      restoreBackground();
       if (current) {
         if (!origins.has(current))
           origins.set(
@@ -31,6 +66,7 @@ export function useDialogFocus() {
             visible,
           )
         )?.focus({ preventScroll: true });
+        isolate(current);
       } else if (origin?.isConnected) origin.focus({ preventScroll: true });
       for (const dialog of origins.keys())
         if (!dialog.isConnected) origins.delete(dialog);
@@ -88,6 +124,7 @@ export function useDialogFocus() {
     document.addEventListener("keydown", key);
     return () => {
       observer.disconnect();
+      restoreBackground();
       document.removeEventListener("click", click);
       document.removeEventListener("keydown", key);
     };

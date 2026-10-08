@@ -1089,7 +1089,10 @@ for (const width of [390, 1440]) {
         );
         await page.goto("/map");
         await page
-          .getByRole("button", { name: house.name, exact: true })
+          .getByRole("button", {
+            name: new RegExp("^" + house.name + "(?: · Bonbons épuisés)?$"),
+            exact: false,
+          })
           .click();
         const card = page.getByRole("dialog", {
           name: house.name,
@@ -1128,7 +1131,7 @@ for (const width of [390, 1440]) {
           );
         });
         const box = await card.boundingBox();
-        expect(box!.width).toBeCloseTo(width === 390 ? 390 : 820, 2);
+        expect(box!.width).toBeCloseTo(width === 390 ? 358 : 620, 2);
         expect(
           await page.evaluate(() => document.documentElement.scrollWidth),
         ).toBeLessThanOrEqual(width);

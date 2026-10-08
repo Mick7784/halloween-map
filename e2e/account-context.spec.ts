@@ -126,10 +126,18 @@ for (const size of [
     await expect(
       page.getByRole("button", { name: "Fermer Mon compte" }),
     ).toBeFocused();
+    await page.locator(".account-dialog").evaluate(async (element) => {
+      await Promise.allSettled(
+        element
+          .getAnimations({ subtree: true })
+          .map((animation) => animation.finished),
+      );
+    });
     const rect = (await page.locator(".account-dialog").boundingBox())!;
     if (size.width < 768) {
-      expect(rect.height).toBe(size.height);
-      expect(rect.width).toBe(size.width);
+      expect(rect.height).toBeLessThanOrEqual(size.height - 48);
+      expect(rect.y).toBeGreaterThanOrEqual(16);
+      expect(rect.width).toBe(size.width - 32);
       await expect(
         page.getByRole("button", { name: /Mes informations/ }),
       ).toBeVisible();

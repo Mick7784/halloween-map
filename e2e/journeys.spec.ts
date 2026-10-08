@@ -127,7 +127,7 @@ test("login → preopening map is unavailable and fits the mobile viewport", asy
   await page.getByRole("button", { name: "Menu utilisateur" }).click();
   await expect(
     page
-      .getByRole("navigation", { name: "Menu utilisateur" })
+      .getByRole("dialog", { name: "Menu utilisateur" })
       .getByRole("link", { name: "La carte", exact: true }),
   ).toBeVisible();
 });
