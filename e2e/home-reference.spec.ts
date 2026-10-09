@@ -354,6 +354,9 @@ test("configured date, ticking seconds, zero count and safe unconfigured state",
   await expect(page.locator(".home-houses")).toContainText("0 maison");
   await expect(page.locator("h1")).toContainText("La prochaine édition");
   await expect(page.locator(".home-clock")).toHaveCount(0);
+  await page.goto("/map");
+  await expect(page.locator("h1")).toContainText("La prochaine édition");
+  await expect(page.locator(".home-clock")).toHaveCount(0);
   await expect(
     page.getByRole("link", { name: "Mon compte", exact: true }).first(),
   ).toBeVisible();

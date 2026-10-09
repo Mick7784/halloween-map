@@ -167,6 +167,12 @@ export default function ParticipationForm({
       }}
     >
       <div className="participation-form-grid" inert={guidelinesOpen}>
+        {house?.review_status === "VALIDATED" && (
+          <p className="notice info">
+            Les changements d’adresse, de position, d’horaires ou de
+            participation entraînent une nouvelle validation de votre maison.
+          </p>
+        )}
         {section(
           1,
           "Localisation de la maison",

@@ -331,7 +331,8 @@ export default function Application({
         />
       );
   if (
-    ((view === "home" && !(user && state?.mapAccessible)) ||
+    (((view === "home" || view === "map") &&
+      !(user && state?.mapAccessible && !closed)) ||
       (["account", "participant"].includes(view) && user)) &&
     state &&
     !state.setupRequired

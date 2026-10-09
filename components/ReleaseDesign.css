@@ -2,6 +2,7 @@
   --control-radius: 8px;
   --brand-accent: #f39a51;
 }
+.participation-form-grid > .notice { grid-column: 1 / -1; }
 button,
 .button,
 input,
