@@ -82,6 +82,9 @@ test("guest mobile entry offers authentication and legal documents; APIs reject 
 }) => {
   await page.setViewportSize({ width: 360, height: 640 });
   await page.goto("/");
+  const heading = (await page.locator(".home-center h1").boundingBox())!,
+    header = (await page.locator(".home-header").boundingBox())!;
+  expect(heading.y).toBeGreaterThanOrEqual(header.y + header.height);
   await expect(
     page
       .locator(".home-login")
@@ -100,6 +103,7 @@ test("guest mobile entry offers authentication and legal documents; APIs reject 
     await page.evaluate(() => document.documentElement.scrollWidth),
   ).toBeLessThanOrEqual(360);
   expect((await page.request.get("/api/admin/users")).status()).toBe(401);
+  await page.evaluate(() => window.scrollTo(0, 0));
   await page.screenshot({
     path: "test-results/release-guest-mobile.png",
     fullPage: true,

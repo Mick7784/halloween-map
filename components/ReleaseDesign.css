@@ -221,7 +221,7 @@ button:disabled {
 .settings-map.is-expanded {
   height: min(65dvh, 650px);
 }
-.home-reference {
+body .home-reference {
   height: auto;
   min-height: 100dvh;
   overflow: visible;
@@ -331,11 +331,11 @@ button:disabled {
     gap: 18px;
   }
 }
-.mobile-row-action {
+.row-actions details .mobile-row-action {
   display: none;
 }
 @media (max-width: 680px) {
-  .mobile-row-action {
+  .row-actions details .mobile-row-action {
     display: block;
   }
 }
