@@ -57,6 +57,20 @@ export default function AccountOverlay({
   const [closing, setClosing] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [participationYears, setParticipationYears] = useState<
+    { year: number }[] | null
+  >(null);
+  useEffect(() => {
+    let alive = true;
+    void api<{ year: number }[]>("history")
+      .then((rows) => {
+        if (alive) setParticipationYears(rows);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [user.id]);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const panel = useRef<HTMLElement>(null);
   const back = useRef<HTMLButtonElement>(null);
@@ -275,6 +289,26 @@ export default function AccountOverlay({
                 {security}
               </div>
               <div className="account-secondary">
+                {participationYears && (
+                  <details>
+                    <summary>Mes années de participation</summary>
+                    {participationYears.length ? (
+                      <ul>
+                        {participationYears.map((p, n) => (
+                          <li key={n}>
+                            Halloween {p.year} — Participation enregistrée
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p>Aucune participation validée conservée.</p>
+                    )}
+                    <p className="small">
+                      Inscription validée comme propriétaire. Années uniquement,
+                      conservées cinq ans et effacées avec le compte.
+                    </p>
+                  </details>
+                )}
                 <InstallApp account />
                 <AccountRow
                   icon={<ShieldCheck />}

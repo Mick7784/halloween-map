@@ -52,25 +52,16 @@ export default function PremiumHome({
     };
   }, [user]);
   const zone = state.instance?.timezone ?? "Europe/Paris";
-  const configured = state.season?.opens_at
-    ? DateTime.fromISO(state.season.opens_at).setZone(zone)
-    : null;
-  const fallback = DateTime.fromMillis(now).setZone(zone).set({
-    month: 10,
-    day: 31,
-    hour: 12,
-    minute: 0,
-    second: 0,
-    millisecond: 0,
-  });
-  const opening = configured?.isValid
-    ? configured
-    : fallback.toMillis() > now
-      ? fallback
-      : fallback.plus({ years: 1 });
+  const configured =
+    (state.season?.opens_at ?? state.nextOpening)
+      ? DateTime.fromISO(
+          (state.season?.opens_at ?? state.nextOpening)!,
+        ).setZone(zone)
+      : null;
+  const opening = configured?.isValid ? configured : null;
   const closed = ["CLOSED", "ARCHIVED"].includes(state.state ?? "");
   const open = state.state === "MAP_OPEN";
-  const remaining = Math.max(0, opening.toMillis() - now);
+  const remaining = Math.max(0, (opening?.toMillis() ?? now) - now);
   const clock = [
     Math.floor(remaining / 86400000),
     Math.floor(remaining / 3600000) % 24,
@@ -123,7 +114,13 @@ export default function PremiumHome({
       <main className="home-stage" inert={menu} aria-hidden={menu || undefined}>
         <div className="home-center">
           <h1>
-            {closed ? (
+            {!user ? (
+              <>
+                Halloween Map
+                <br />
+                <span>Une nuit à partager.</span>
+              </>
+            ) : closed ? (
               <>
                 La nuit s’achève.
                 <br />
@@ -135,7 +132,7 @@ export default function PremiumHome({
                 <br />
                 <span>Halloween vous attend.</span>
               </>
-            ) : (
+            ) : opening ? (
               <>
                 La carte ouvre
                 <br />
@@ -144,9 +141,15 @@ export default function PremiumHome({
                   {opening.toFormat("HH:mm")}
                 </span>
               </>
+            ) : (
+              <>
+                La prochaine édition
+                <br />
+                <span>se prépare.</span>
+              </>
             )}
           </h1>
-          {!closed && !open && (
+          {user && opening && !closed && !open && (
             <div
               className="home-clock"
               role="group"
@@ -160,7 +163,7 @@ export default function PremiumHome({
               ))}
             </div>
           )}
-          {!closed && (
+          {user && !closed && (
             <div className="home-houses">
               <House size={40} strokeWidth={1.8} />
               <div>
@@ -175,10 +178,20 @@ export default function PremiumHome({
             Découvrez les maisons participantes et préparez votre collecte
             d’Halloween.
           </p>
-          <Link className="home-cta" href={cta.href}>
-            {cta.label}
-            <ArrowRight size={21} />
-          </Link>
+          {!user && (
+            <section className="home-login" aria-label="Connexion">
+              {login}
+              <Link className="button secondary" href="/register">
+                Créer mon compte
+              </Link>
+            </section>
+          )}
+          {user && (
+            <Link className="home-cta" href={cta.href}>
+              {cta.label}
+              <ArrowRight size={21} />
+            </Link>
+          )}
           {error && (
             <div className="home-refresh-error">
               <Notice error="Actualisation indisponible." />

@@ -1,5 +1,16 @@
 # Changelog
 
+## V0.8
+
+- Sessions de 12 heures maximum, plafonnement des anciennes sessions et expiration des privilèges administratifs après 60 minutes d’inactivité. Reconfirmation du mot de passe pour les opérations sensibles ; protections individuelles contre les tentatives abusives.
+- Permissions individuelles ADMIN dans Utilisateurs, annuaire global indépendant des saisons et historique limité aux années de participation validée, conservé cinq ans puis effacé à la suppression du compte.
+- Six modèles transactionnels personnalisables, éditeur visuel commun avec campagnes et documents, aperçu HTML/texte et test strictement réservé à l’adresse vérifiée du Super Admin. Accusé de réception, validation et refus de maison via outbox idempotente ; protection TEST conservée.
+- Modération avec motifs guidés, aperçu du refus et retour en attente après modification substantielle du propriétaire. Actions rapides utilisateurs, journal filtré et paginé côté serveur, auteur réel et rétention de 90 jours.
+- Fréquentation réelle : présences éphémères par compte, mesures anonymes toutes les quinze minutes, moyennes par demi-heure et pic horodaté. Aucun historique artificiel pour les périodes sans relevés.
+- Accueil application selon session et calendrier réel, connexion immédiate sans session, accès anticipé Super Admin et menu permanent hors collecte. Harmonisation des thèmes, formulaires et interfaces mobiles, liens/contact centralisés et réglages de carte agrandissables.
+- Migrations additives 009/010 ; comptes, maisons, saisons, API et volumes existants préservés. Politique de confidentialité publiée dans une nouvelle version en conservant le texte d’exploitant.
+- Limites : pas d’images dans l’éditeur, de FAQ ni de tutoriels ; vérification des emails dans des boîtes Outlook/Gmail réelles non effectuée. Le HTML utilise des tables responsives et des formats limités avec couverture automatisée.
+
 ## V0.7.3
 
 - Refonte mobile-first de la carte : consultation épurée, contrôles compacts et fiches maisons flottantes.

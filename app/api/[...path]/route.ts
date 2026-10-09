@@ -1,11 +1,18 @@
 import { setupCookie, setupAuthorized } from "../../../lib/bootstrap";
 import { reportCollection } from "../../../lib/season-statistics";
 import { realTime } from "../../../lib/time";
+import { presence } from "../../../lib/attendance";
 import {
   smtpAvailable,
   campaignAction,
   campaignAdmin,
+  smtpSender,
 } from "../../../lib/mail";
+import {
+  templatesAdmin,
+  templateAction,
+  refusalPreview,
+} from "../../../lib/mail-templates";
 import {
   accountAction,
   adminUserAction,
@@ -20,7 +27,13 @@ import {
   frenchAddressReverse,
 } from "../../../lib/french-address";
 import { NextRequest, NextResponse } from "next/server";
-import { getUser, HttpError, hashToken, rateLimit } from "../../../lib/auth";
+import {
+  getUser,
+  HttpError,
+  hashToken,
+  rateLimit,
+  SESSION_SECONDS,
+} from "../../../lib/auth";
 import { db } from "../../../lib/db";
 import * as service from "../../../lib/service";
 import { ZodError } from "zod";
@@ -37,9 +50,11 @@ function withSession(token: string) {
   r.cookies.set(cookie, token, {
     httpOnly: true,
     sameSite: "lax",
-    secure: process.env.COOKIE_SECURE === "true",
+    secure:
+      process.env.COOKIE_SECURE === "true" ||
+      process.env.APP_ORIGIN?.startsWith("https://") === true,
     path: "/",
-    maxAge: 7 * 86400,
+    maxAge: SESSION_SECONDS,
   });
   return r;
 }
@@ -49,6 +64,11 @@ async function handle(
 ) {
   try {
     const path = (await params).path.join("/");
+    const sessionUser = () =>
+      getUser(
+        req.cookies.get(cookie)?.value,
+        path.startsWith("admin") || path === "geocode",
+      );
     if (req.method === "GET") {
       if (path === "health") {
         await db().query("SELECT 1");
@@ -62,15 +82,23 @@ async function handle(
         });
       if (path === "public")
         return response(
-          await service.publicState(
-            realTime(),
-            await getUser(req.cookies.get(cookie)?.value),
-          ),
+          await service.publicState(realTime(), await sessionUser()),
         );
-      if (path === "me")
-        return response(await getUser(req.cookies.get(cookie)?.value));
+      if (path === "me") return response(await sessionUser());
+      if (path === "history") {
+        const u = await sessionUser();
+        if (!u) throw new HttpError(401, "Connexion requise");
+        return response(
+          (
+            await db().query(
+              "SELECT year FROM participation_history WHERE user_id=$1 ORDER BY year DESC",
+              [u.id],
+            )
+          ).rows,
+        );
+      }
       if (path === "location") {
-        const u = await getUser(req.cookies.get(cookie)?.value);
+        const u = await sessionUser();
         if (!u) throw new HttpError(401, "Connexion requise");
         await rateLimit("address:" + u.id, 120);
         const q = req.nextUrl.searchParams;
@@ -94,22 +122,28 @@ async function handle(
         throw new HttpError(400, "Recherche inconnue");
       }
       if (path === "house")
-        return response(
-          await service.ownHouse(await getUser(req.cookies.get(cookie)?.value)),
-        );
+        return response(await service.ownHouse(await sessionUser()));
       if (path === "admin/content")
+        return response(await contentAdmin(await sessionUser()));
+      if (path === "admin/templates")
+        return response(await templatesAdmin(await sessionUser()));
+      if (path === "admin/refusal-preview")
         return response(
-          await contentAdmin(await getUser(req.cookies.get(cookie)?.value)),
+          await refusalPreview(
+            await sessionUser(),
+            req.nextUrl.searchParams.get("id") ?? "",
+            req.nextUrl.searchParams.get("reason") ?? "",
+          ),
         );
       if (path === "admin/communications")
         return response(
           await campaignAdmin(
-            await getUser(req.cookies.get(cookie)?.value),
+            await sessionUser(),
             req.nextUrl.searchParams.get("seasonId") ?? undefined,
           ),
         );
       if (path === "admin/mail") {
-        const u = await getUser(req.cookies.get(cookie)?.value);
+        const u = await sessionUser();
         if (
           !u?.permissions.includes("communications.manage") ||
           !u.permissions.includes("admin.access")
@@ -121,10 +155,15 @@ async function handle(
         await service.tick();
         return response(
           await service.adminRead(
-            await getUser(req.cookies.get(cookie)?.value),
+            await sessionUser(),
             path.slice(6),
             req.nextUrl.searchParams.get("seasonId") ?? undefined,
             req.nextUrl.searchParams.get("scope") ?? "season",
+            Object.fromEntries(
+              ["q", "category", "from", "to", "page"]
+                .filter((k) => req.nextUrl.searchParams.has(k))
+                .map((k) => [k, req.nextUrl.searchParams.get(k)!]),
+            ),
           ),
         );
       }
@@ -143,18 +182,8 @@ async function handle(
     if (raw.length > 20000)
       throw new HttpError(413, "Requête trop volumineuse");
     const input = JSON.parse(raw);
-    // Global persistent ceilings do not trust spoofable forwarded IP headers.
-    if (
-      [
-        "login",
-        "register",
-        "setup",
-        "activation",
-        "forgot-password",
-        "reset-password",
-      ].includes(path)
-    )
-      await rateLimit("auth-global", 150);
+    // Persistent limits are scoped to accounts/tokens in the service layer.
+    // Never use an untrusted forwarded address or a collective auth lockout.
     if (path === "setup") {
       const r = withSession(
         (await service.setup(input, req.cookies.get(setupCookie)?.value)).token,
@@ -183,7 +212,7 @@ async function handle(
     }
     if (path === "geocode") {
       const configured = await service.instance();
-      const user = await getUser(req.cookies.get(cookie)?.value);
+      const user = await sessionUser();
       if (
         !configured &&
         !(await setupAuthorized(req.cookies.get(setupCookie)?.value))
@@ -235,7 +264,16 @@ async function handle(
           )[data[0].address?.country_code] ?? null,
       });
     }
-    const user = await getUser(req.cookies.get(cookie)?.value);
+    const user = await sessionUser();
+    if (path === "presence") return response(await presence(user));
+    if (path === "admin/templates")
+      return response(
+        await templateAction(
+          user,
+          input,
+          smtpAvailable() ? smtpSender() : undefined,
+        ),
+      );
     if (path === "account") {
       const result = await accountAction(user, input);
       if ("token" in result && result.token) return withSession(result.token);

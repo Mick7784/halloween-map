@@ -4,12 +4,20 @@ import { Pool } from "pg";
 import { readFile, readdir } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { db, type Database } from "../lib/db";
-import * as service from "../lib/service";
-import { adminUserAction } from "../lib/accounts";
+import * as actualService from "../lib/service";
+const service = {
+  ...actualService,
+  adminAction: (user: User | null, input: unknown) =>
+    actualService.adminAction(user, {
+      current_password: "test-password-1234",
+      ...(input as Record<string, unknown>),
+    }),
+};
+import { adminUserAction as actualAdminUserAction } from "../lib/accounts";
 import { getUser, createSession } from "../lib/auth";
 import { campaignAction, campaignAdmin, dispatchEmails } from "../lib/mail";
 import { reportCollection } from "../lib/season-statistics";
-import { seasonLabel, type Season, type User } from "../lib/domain";
+import { seasonLabel, defaultRoles, type Season, type User } from "../lib/domain";
 import { fixtureRouter } from "./walking-fixture";
 vi.mock("../lib/walking-router", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../lib/walking-router")>()),
@@ -480,6 +488,7 @@ it("enforces REAL opening/closing, takes anonymous snapshot, purges details, fre
   ).rows[0];
   expect(purged.stats).toEqual(frozen.stats);
   expect(await service.adminRead(admin, "statistics", real.id)).toEqual({
+    attendance:{activeNow:0,peak:null,points:[]},
     seasonId: real.id,
     snapshot: true,
     stats: frozen.stats,
@@ -664,12 +673,14 @@ it("statistics follows the consulted season, including inactive data and empty R
     routes: 0,
   };
   expect(await service.adminRead(admin, "statistics", s.id)).toEqual({
+    attendance:{activeNow:0,peak:null,points:[]},
     seasonId: s.id,
     snapshot: false,
     stats: expected,
   });
   await activate(real);
   expect(await service.adminRead(admin, "statistics", s.id)).toEqual({
+    attendance:{activeNow:0,peak:null,points:[]},
     seasonId: s.id,
     snapshot: false,
     stats: expected,
@@ -709,6 +720,8 @@ it("manual creation validates ADMIN and Super Admin houses while public creation
     owner.id,
   ]);
   const manager = (await getUser(await createSession(owner.id)))!;
+  await db().query("UPDATE users SET admin_permissions=$1 WHERE id=$2",[[...defaultRoles.ADMIN],owner.id]);
+  manager.permissions=[...defaultRoles.ADMIN];
   for (const [actor, account] of [
     [manager, owner],
     [admin, superOwner],
@@ -1018,3 +1031,9 @@ it("finishes an emptied free selection with finite anonymous statistics", async 
     completion_sum: 0,
   });
 });
+
+const adminUserAction = (user: User | null, input: unknown) =>
+  actualAdminUserAction(user, {
+    current_password: "test-password-1234",
+    ...(input as Record<string, unknown>),
+  });

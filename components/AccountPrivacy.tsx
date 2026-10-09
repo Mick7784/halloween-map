@@ -79,6 +79,16 @@ export default function AccountPrivacy({
       </p>
       <div className="account-privacy-blocks">
         <section className="account-card">
+          <h3>Années de participation et fréquentation</h3>
+          <p>
+            Seules les années de participation validée sont conservées cinq ans
+            après enregistrement, sans ancienne information de maison. La
+            suppression du compte efface ces marqueurs. La présence active
+            expire après trois minutes ; seuls les relevés de quinze minutes et
+            le pic anonymes sont archivés.
+          </p>
+        </section>
+        <section className="account-card">
           <h3>
             <UserRound size={18} /> Compte
           </h3>

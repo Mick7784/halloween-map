@@ -8,6 +8,9 @@ import { db, transaction, type Database } from "./db";
 import { HttpError, hashToken, requirePermission, rateLimit } from "./auth";
 import { seasonFinished, localISO, type User, type Season } from "./domain";
 import { interpolate, sanitizeContent } from "./content";
+import { messageTemplate } from "./mail-templates";
+import { renderMessage, type MessageKind } from "./message-templates";
+import { editorialText } from "./editorial-format";
 export const mailVariables = [
   "name",
   "territory",
@@ -29,7 +32,7 @@ export type Sender = (mail: {
 export function smtpAvailable() {
   return !!process.env.SMTP_HOST && !!process.env.SMTP_FROM;
 }
-function smtpSender(): Sender {
+export function smtpSender(): Sender {
   const transport = nodemailer.createTransport({
     host: process.env.SMTP_HOST,
     port: Number(process.env.SMTP_PORT || 587),
@@ -153,6 +156,10 @@ export async function campaignAction(user: User | null, input: unknown) {
           [p.id],
         );
       }
+      await c.query(
+        "INSERT INTO audit_logs(instance_id,actor_id,action,target_id,season_id) VALUES($1,$2,$3,$4,$5)",
+        [u.instance_id, u.id, "campaign." + p.action, p.id, campaign.season_id],
+      );
       return { ok: true };
     });
   }
@@ -224,6 +231,10 @@ export async function campaignAction(user: User | null, input: unknown) {
         "INSERT INTO email_campaigns(name,subject,body,audience,active,schedule_mode,anchor,offset_days,scheduled_at,status,instance_id,season_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)",
         [...args, u.instance_id, v.season_id],
       );
+    await c.query(
+      "INSERT INTO audit_logs(instance_id,actor_id,action,target_id,season_id) VALUES($1,$2,'campaign.save',$3,$4)",
+      [u.instance_id, u.id, p.id ?? null, v.season_id],
+    );
     return { ok: true };
   });
 }
@@ -307,7 +318,63 @@ async function claimJob(now: Date) {
     let subject = "",
       text = "",
       html = "";
-    if (
+    if (String(job.kind).startsWith("HOUSE_")) {
+      const h = (
+        await c.query(
+          "SELECT p.*,s.is_test,s.archived,s.purged_at,s.opens_at,s.closes_at,s.registrations_open_at,s.year,i.public_name,i.territory,i.timezone FROM participations p JOIN seasons s ON s.id=p.season_id JOIN instances i ON i.id=p.instance_id WHERE p.id=$1 AND p.user_id=$2 AND p.season_id=$3 FOR SHARE OF p,s",
+          [job.participation_id, u.id, job.season_id],
+        )
+      ).rows[0];
+      const expected = {
+        HOUSE_SUBMITTED: "PENDING",
+        HOUSE_APPROVED: "VALIDATED",
+        HOUSE_REFUSED: "REFUSED",
+      }[
+        String(job.kind) as
+          "HOUSE_SUBMITTED" | "HOUSE_APPROVED" | "HOUSE_REFUSED"
+      ];
+      if (
+        !h ||
+        h.is_test ||
+        h.archived ||
+        h.purged_at ||
+        u.account_status !== "ACTIVE" ||
+        u.email_status !== "VERIFIED" ||
+        h.review_status !== expected ||
+        h.review_revision !== job.review_revision
+      ) {
+        await c.query(
+          "UPDATE email_outbox SET status='CANCELLED' WHERE id=$1",
+          [job.id],
+        );
+        return { skip: true };
+      }
+      const fmt = (v: unknown) =>
+        DateTime.fromJSDate(new Date(String(v)))
+          .setZone(String(h.timezone))
+          .setLocale("fr")
+          .toFormat("dd LLL yyyy à HH:mm");
+      const rendered = renderMessage(
+        await messageTemplate(
+          String(u.instance_id),
+          job.kind as MessageKind,
+          c,
+        ),
+        {
+          name: String(u.display_name),
+          event_name: String(h.public_name),
+          territory: String(h.territory),
+          season_year: String(h.year),
+          house_name: String(h.name),
+          house_start_time: fmt(h.starts_at),
+          map_open_date: fmt(h.opens_at),
+          map_close_date: fmt(h.closes_at),
+          registration_date: fmt(h.registrations_open_at),
+          refusal_reason: String(h.refusal_reason),
+        },
+      );
+      ({ subject, text, html } = rendered);
+    } else if (
       job.kind === "VERIFY" ||
       job.kind === "INVITE" ||
       job.kind === "RESET"
@@ -341,21 +408,49 @@ async function claimJob(now: Date) {
           : job.kind === "VERIFY"
             ? "Vérifiez votre email — Halloween Map"
             : "Votre invitation — Halloween Map";
-      const title =
-        job.kind === "VERIFY"
-          ? "Vérifiez votre adresse email"
-          : job.kind === "RESET"
-            ? "Réinitialisez votre mot de passe"
-            : "Votre invitation";
       const label =
         job.kind === "VERIFY"
           ? "Vérifier mon adresse"
           : job.kind === "RESET"
             ? "Choisir un nouveau mot de passe"
             : "Activer mon compte";
-      const body = `Bonjour ${u.display_name},\n\n${label}.\nCe lien est valable pendant ${job.kind === "RESET" ? "1 heure" : "48 heures"}.`;
-      html = mailLayout(title, body, { label, url: base.href });
-      text = `${body}\n${base.href}\n\nIgnorez ce message si vous n’êtes pas à l’origine de cette demande.`;
+      const template = await messageTemplate(
+        String(u.instance_id),
+        job.kind as MessageKind,
+        c,
+      );
+      const identity = (
+        await c.query(
+          "SELECT i.public_name,i.territory,i.timezone,s.year,s.opens_at,s.closes_at,s.registrations_open_at FROM instances i LEFT JOIN seasons s ON s.id=i.active_season_id WHERE i.id=$1",
+          [u.instance_id],
+        )
+      ).rows[0];
+      const identityDate = (value: unknown) =>
+        value
+          ? DateTime.fromJSDate(new Date(String(value)))
+              .setZone(String(identity.timezone))
+              .setLocale("fr")
+              .toFormat("dd LLL yyyy à HH:mm")
+          : "Date non définie";
+      const rendered = renderMessage(
+        {
+          ...template,
+          body:
+            template.body +
+            `\n\nCe lien est valable pendant ${job.kind === "RESET" ? "1 heure" : "48 heures"}.\nIgnorez ce message si vous n’êtes pas à l’origine de cette demande.`,
+        },
+        {
+          name: String(u.display_name),
+          event_name: String(identity.public_name),
+          territory: String(identity.territory),
+          season_year: identity.year ? String(identity.year) : "",
+          map_open_date: identityDate(identity.opens_at),
+          map_close_date: identityDate(identity.closes_at),
+          registration_date: identityDate(identity.registrations_open_at),
+        },
+        { label, url: base.href },
+      );
+      ({ subject, text, html } = rendered);
     } else if (campaign) {
       const h = (
         await c.query(
@@ -391,7 +486,8 @@ async function claimJob(now: Date) {
         " ",
       );
       text = interpolate(String(campaign.body), vars);
-      html = mailLayout(subject, text);
+      html = mailLayout(subject, String(campaign.body), undefined, vars);
+      text = interpolate(editorialText(String(campaign.body)), vars);
     }
     return {
       skip: false,

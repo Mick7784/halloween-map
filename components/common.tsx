@@ -1,6 +1,66 @@
 "use client";
 import FrenchDate from "./FrenchDate";
 import { useState } from "react";
+import { createRoot } from "react-dom/client";
+export function requestAdminConfirmation(): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const host = document.createElement("div");
+    document.body.append(host);
+    const root = createRoot(host);
+    function finish(password?: string) {
+      root.unmount();
+      host.remove();
+      if (password) resolve(password);
+      else reject(new Error("Action annulée"));
+    }
+    function Confirmation() {
+      const [password, setPassword] = useState("");
+      return (
+        <div className="modal-backdrop">
+          <section
+            className="dialog panel"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="confirm-admin-title"
+          >
+            <h2 id="confirm-admin-title">Confirmer l’action sensible</h2>
+            <p>Cette opération nécessite votre mot de passe actuel.</p>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                finish(password);
+              }}
+            >
+              <label className="field">
+                Mot de passe
+                <input
+                  type="password"
+                  autoComplete="current-password"
+                  value={password}
+                  maxLength={128}
+                  required
+                  onChange={(e) => setPassword(e.target.value)}
+                />
+              </label>
+              <div className="actions">
+                <button
+                  type="button"
+                  className="close"
+                  aria-label="Annuler"
+                  onClick={() => finish()}
+                >
+                  Annuler
+                </button>
+                <button className="primary">Confirmer</button>
+              </div>
+            </form>
+          </section>
+        </div>
+      );
+    }
+    root.render(<Confirmation />);
+  });
+}
 import { ACTIVE_ROUTE_KEY, clearStoredRoute } from "../lib/active-route";
 import { Sparkles, Candy, Drama } from "lucide-react";
 import { DateTime } from "luxon";
@@ -9,6 +69,8 @@ export type PublicHouse = ReturnType<
   typeof import("../lib/domain").publicHouse
 >;
 export type PublicState = {
+  nextOpening?: string | null;
+  earlyAccess?: boolean;
   projectLinks?: import("../lib/project-links").ProjectLinks;
   participation?: import("../lib/participation-settings").ParticipationSettings;
   closedHouseIds?: string[];
@@ -77,6 +139,25 @@ export const fears = [
   "Intense",
 ];
 export async function api<T>(path: string, body?: unknown): Promise<T> {
+  if (body && typeof body === "object") {
+    const input = body as Record<string, unknown>;
+    const sensitive =
+      (path === "admin" &&
+        [
+          "purge",
+          "deleteSeason",
+          "deleteHouse",
+          "activateSeason",
+          "deactivateSeason",
+          "settings",
+        ].includes(String(input.action))) ||
+      (path === "admin/users" &&
+        (["delete", "disable"].includes(String(input.action)) ||
+          !!input.role_id ||
+          !!input.permissions));
+    if (sensitive && !input.current_password)
+      body = { ...input, current_password: await requestAdminConfirmation() };
+  }
   const r = await fetch("/api/" + path, {
     method: body === undefined ? "GET" : "POST",
     headers:
@@ -85,6 +166,10 @@ export async function api<T>(path: string, body?: unknown): Promise<T> {
     cache: "no-store",
   });
   const data = await r.json();
+  if (r.status === 401 && path !== "login")
+    throw new Error(
+      "Session expirée ou absente. Reconnectez-vous pour poursuivre.",
+    );
   if (!r.ok)
     throw new Error(data.error ?? "Impossible de terminer cette action");
   if (path === "public") {
@@ -92,7 +177,8 @@ export async function api<T>(path: string, body?: unknown): Promise<T> {
       const raw = localStorage.getItem(ACTIVE_ROUTE_KEY);
       if (
         raw &&
-        (!data.mapAccessible || JSON.parse(raw).seasonId !== data.season?.id)
+        (data.state === "CLOSED" ||
+          (data.season?.id && JSON.parse(raw).seasonId !== data.season.id))
       )
         clearStoredRoute();
     } catch {

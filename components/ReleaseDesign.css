@@ -1,0 +1,342 @@
+:root {
+  --control-radius: 8px;
+  --brand-accent: #f39a51;
+}
+.participation-form-grid > .notice { grid-column: 1 / -1; }
+button,
+.button,
+input,
+select,
+textarea {
+  border-radius: var(--control-radius);
+}
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[contenteditable]:focus-visible,
+summary:focus-visible {
+  outline: 2px solid var(--accent, var(--brand-accent));
+  outline-offset: 3px;
+}
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.visual-editor {
+  display: grid;
+  gap: 8px;
+  margin: 16px 0;
+  min-width: 0;
+}
+.editor-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.editor-toolbar button {
+  min-height: 40px;
+}
+.editor-toolbar select {
+  max-width: 100%;
+}
+.editor-surface {
+  min-height: 180px;
+  max-height: 460px;
+  overflow: auto;
+  padding: 16px;
+  border: 1px solid var(--line, #45414b);
+  border-radius: 8px;
+  background: var(--surface, #22222a);
+  color: var(--text, #eee);
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.editor-surface p {
+  margin: 0 0 1em;
+}
+.editor-surface ul {
+  padding-left: 24px;
+}
+.editor-surface h3 {
+  margin: 12px 0;
+}
+.mail-frame {
+  width: 100%;
+  height: 460px;
+  border: 1px solid var(--line, #45414b);
+  border-radius: 8px;
+}
+.mail-preview {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.modal-backdrop {
+  z-index: 250;
+}
+.modal-backdrop .dialog {
+  max-height: calc(100dvh - 32px);
+  overflow: auto;
+}
+.dialog form .actions .close {
+  position: static;
+}
+.admin-beta .beta-card,
+.admin-beta .panel {
+  box-shadow: none;
+  border-radius: 12px;
+}
+.admin-beta .primary {
+  background: var(--accent);
+  color: #12151b;
+  border-color: var(--accent);
+  font-weight: 600;
+}
+.admin-beta[data-theme="light"] .primary {
+  color: #fff;
+}
+@media (prefers-color-scheme: light) {
+  .admin-beta[data-theme="system"] .primary {
+    color: #fff;
+  }
+}
+.admin-beta .notice.info {
+  border-color: var(--line);
+  background: var(--surface);
+  color: var(--text);
+}
+.admin-beta .beta-logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.admin-beta .beta-logo > span {
+  color: var(--text);
+  font-size: 16px;
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+.admin-beta .beta-logo .admin-brand-mark {
+  width: 42px;
+  height: 42px;
+  flex: none;
+  background: #e9977b;
+  border-radius: 10px;
+  padding: 4px;
+}
+.admin-brand-mark svg {
+  width: 100%;
+  height: 100%;
+}
+.admin-beta .beta-logo small {
+  display: block;
+  color: var(--muted);
+  font-weight: 400;
+  font-size: 12px;
+}
+.admin-beta fieldset {
+  margin: 16px 0;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 16px;
+}
+.permission-group {
+  padding: 6px 0;
+}
+.permission-group h4 {
+  margin: 8px 0;
+}
+.row-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.row-actions details {
+  margin: 0;
+  position: relative;
+}
+.row-actions summary {
+  min-width: 40px;
+  min-height: 40px;
+  display: grid;
+  place-items: center;
+  color: var(--text);
+}
+.row-actions details[open] {
+  min-width: 140px;
+}
+.row-actions details button {
+  display: block;
+  margin: 5px 0;
+}
+.attendance-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 32px;
+}
+.attendance-metrics p {
+  display: grid;
+  gap: 3px;
+}
+.attendance-metrics strong {
+  font-size: 28px;
+  color: var(--text);
+}
+.attendance-bars {
+  display: flex;
+  align-items: end;
+  gap: 3px;
+  height: 140px;
+  margin: 12px 0 4px;
+  border-bottom: 1px solid var(--line);
+}
+.attendance-bars > div {
+  flex: 1;
+  height: 100%;
+  display: flex;
+  align-items: end;
+  justify-content: center;
+}
+.attendance-bars span {
+  width: 100%;
+  background: var(--accent);
+  border-radius: 3px 3px 0 0;
+}
+.attendance-bars .partial {
+  opacity: 0.5;
+}
+.attendance-axis {
+  display: flex;
+  justify-content: space-between;
+  color: var(--muted);
+  font-size: 11px;
+  gap: 16px;
+}
+.settings-map {
+  height: 340px;
+}
+.settings-map.is-expanded {
+  height: min(65dvh, 650px);
+}
+body .home-reference {
+  height: auto;
+  min-height: 100dvh;
+  overflow: visible;
+  grid-template-rows: minmax(0, 1fr) auto;
+  background: #12151b;
+  font-family: Inter, Arial, sans-serif;
+}
+.home-reference .home-art {
+  display: none;
+}
+.home-reference .home-stage {
+  min-height: calc(100dvh - 100px);
+  padding: 100px 20px 50px;
+}
+.home-reference .home-center {
+  transform: none;
+}
+.home-reference .home-center h1 {
+  font-family: Inter, Arial, sans-serif;
+  font-size: clamp(28px, 4vw, 44px);
+  font-weight: 600;
+  line-height: 1.3;
+  text-shadow: none;
+}
+.home-reference .home-center h1 span {
+  color: #abb2bd;
+}
+.home-reference .home-header {
+  position: fixed;
+  inset: 0 0 auto;
+  background: #12151bf5;
+  z-index: 70;
+}
+.home-reference .home-signature {
+  position: static;
+  padding: 24px 18px;
+}
+.home-login {
+  max-width: 440px;
+  width: 100%;
+  margin: 20px auto;
+  padding: 24px;
+  text-align: left;
+  border: 1px solid #303743;
+  border-radius: 12px;
+  background: #1a1f28;
+}
+.home-login .field {
+  margin: 12px 0;
+}
+.home-login input {
+  width: 100%;
+}
+.home-login > .button {
+  display: block;
+  margin-top: 14px;
+  text-align: center;
+}
+.home-reference .home-clock {
+  background: transparent;
+  border: 1px solid #303743;
+  box-shadow: none;
+  border-radius: 12px;
+}
+.home-reference .home-cta {
+  background: #f39a51;
+  color: #12151b;
+  box-shadow: none;
+}
+@media (max-width: 680px) {
+  .mobile-row-action {
+    display: block;
+  }
+  button,
+  .button,
+  summary {
+    min-height: 44px;
+  }
+  .admin-beta .user-sheet,
+  .admin-beta .campaign-sheet {
+    width: 100%;
+    max-width: none;
+    border-radius: 0;
+    height: 100dvh;
+    max-height: 100dvh;
+  }
+  .admin-beta .row-actions > button,
+  .admin-beta .row-actions > a {
+    display: none;
+  }
+  .row-actions details[open] {
+    position: relative;
+  }
+  .admin-beta .table-wrap {
+    overflow-x: auto;
+  }
+  .home-reference .home-stage {
+    padding: 98px 16px 30px;
+  }
+  .home-login {
+    padding: 18px;
+  }
+  .home-reference .home-houses {
+    margin: 24px auto;
+  }
+  .attendance-metrics {
+    gap: 18px;
+  }
+}
+.row-actions details .mobile-row-action {
+  display: none;
+}
+@media (max-width: 680px) {
+  .row-actions details .mobile-row-action {
+    display: block;
+  }
+}

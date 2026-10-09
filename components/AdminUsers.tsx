@@ -3,18 +3,13 @@ import { X } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 import { DateTime } from "luxon";
-import { type User, type House } from "../lib/domain";
-import {
-  api,
-  Field,
-  Notice,
-  values,
-  labels,
-  AsyncButton,
-  Badges,
-} from "./common";
+import { type User, type House, defaultRoles } from "../lib/domain";
+import { permissionLabels } from "../lib/admin-presentation";
+import { api, Field, Notice, values, labels, AsyncButton } from "./common";
 type Role = { id: string; name: string; permissions: string[] };
 export type ManagedUser = User & {
+  participation_season?: string | null;
+  participation_history?: { year: number }[];
   created_at: string;
   last_login_at: string | null;
   participation: House | null;
@@ -39,12 +34,16 @@ export default function AdminUsers({
   user,
   reload,
   initialCreate = false,
+  onHouse,
+  seasonName,
 }: {
   users: ManagedUser[];
   roles: Role[];
   user: User;
   reload: () => Promise<void>;
   initialCreate?: boolean;
+  onHouse: (id: string) => void;
+  seasonName?: string;
 }) {
   const [search, setSearch] = useState(""),
     [filter, setFilter] = useState("ALL"),
@@ -56,7 +55,7 @@ export default function AdminUsers({
         .toLowerCase()
         .includes(search.toLowerCase()) &&
       (filter === "ALL" ||
-        (filter === "PARTICIPANTS" && u.participation) ||
+        (filter === "PARTICIPANTS" && u.role_name === "USER") ||
         (filter === "ADMIN" &&
           ["ADMIN", "SUPER_ADMIN"].includes(u.role_name ?? "")) ||
         (filter === "DISABLED" && u.account_status === "DISABLED") ||
@@ -64,6 +63,17 @@ export default function AdminUsers({
   );
   const current = users.find((u) => u.id === selected);
   const manageable = user.permissions.includes("users.manage");
+  const canManageTarget = (target: ManagedUser) =>
+    manageable &&
+    target.id !== user.id &&
+    (user.role_name === "SUPER_ADMIN" || target.role_name === "USER") &&
+    (target.role_name !== "SUPER_ADMIN" ||
+      users.some(
+        (other) =>
+          other.id !== target.id &&
+          other.role_name === "SUPER_ADMIN" &&
+          other.account_status === "ACTIVE",
+      ));
   const canEdit =
     manageable &&
     (!current ||
@@ -87,6 +97,10 @@ export default function AdminUsers({
       : "—";
   return (
     <>
+      <p className="small muted">
+        Annuaire global des comptes · Participation à la saison active :{" "}
+        {seasonName ?? "Aucune saison active"}
+      </p>
       <div className="toolbar">
         <input
           aria-label="Rechercher un utilisateur"
@@ -121,6 +135,7 @@ export default function AdminUsers({
               <th>Participation</th>
               <th>Profil</th>
               <th>Dernière connexion</th>
+              <th>Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -137,6 +152,116 @@ export default function AdminUsers({
                 <td>{u.participation?.name ?? "—"}</td>
                 <td>{labels[u.role_name ?? ""] ?? u.role_name}</td>
                 <td>{date(u.last_login_at)}</td>
+                <td>
+                  <div className="row-actions">
+                    <button
+                      aria-label={"Voir la fiche de " + u.display_name}
+                      onClick={() => setSelected(u.id)}
+                    >
+                      Voir
+                    </button>
+                    {canManageTarget(u) && (
+                      <button
+                        aria-label={"Modifier " + u.display_name}
+                        onClick={() => setSelected(u.id)}
+                      >
+                        Modifier
+                      </button>
+                    )}
+                    {u.id === user.id && (
+                      <Link href="/account">Mon compte</Link>
+                    )}
+                    {u.participation &&
+                      user.permissions.includes("participants.read") && (
+                        <button onClick={() => onHouse(u.participation!.id)}>
+                          Maison
+                        </button>
+                      )}
+                    <details>
+                      <summary
+                        aria-label={"Plus d’actions pour " + u.display_name}
+                      >
+                        …
+                      </summary>
+                      <button
+                        className="mobile-row-action"
+                        onClick={() => setSelected(u.id)}
+                      >
+                        Voir la fiche
+                      </button>
+                      {u.id === user.id && (
+                        <Link className="mobile-row-action" href="/account">
+                          Mon compte
+                        </Link>
+                      )}
+                      {canManageTarget(u) && (
+                        <button
+                          className="mobile-row-action"
+                          onClick={() => setSelected(u.id)}
+                        >
+                          Modifier
+                        </button>
+                      )}
+                      {u.participation &&
+                        user.permissions.includes("participants.read") && (
+                          <button
+                            className="mobile-row-action"
+                            onClick={() => onHouse(u.participation!.id)}
+                          >
+                            Voir la maison
+                          </button>
+                        )}
+                      {canManageTarget(u) && (
+                        <>
+                          <AsyncButton
+                            onClick={() =>
+                              act({
+                                action:
+                                  u.account_status === "DISABLED"
+                                    ? "enable"
+                                    : "disable",
+                                id: u.id,
+                              })
+                            }
+                          >
+                            {u.account_status === "DISABLED"
+                              ? "Activer"
+                              : "Désactiver"}
+                          </AsyncButton>
+                          {u.account_status !== "DISABLED" &&
+                            u.email_status !== "VERIFIED" && (
+                              <AsyncButton
+                                onClick={() =>
+                                  act({ action: "resend", id: u.id })
+                                }
+                              >
+                                Renvoyer la vérification
+                              </AsyncButton>
+                            )}
+                          {user.role_name === "SUPER_ADMIN" && (
+                            <AsyncButton
+                              danger
+                              onClick={async () => {
+                                if (
+                                  window.confirm(
+                                    "Supprimer définitivement ce compte et ses données ?",
+                                  )
+                                )
+                                  await act({
+                                    action: "delete",
+                                    id: u.id,
+                                    confirm: "SUPPRIMER CE COMPTE",
+                                  });
+                              }}
+                            >
+                              Supprimer le compte
+                            </AsyncButton>
+                          )}
+                        </>
+                      )}
+                    </details>
+                  </div>
+                </td>
               </tr>
             ))}
           </tbody>
@@ -175,28 +300,38 @@ export default function AdminUsers({
                   Création : {date(current.created_at)} · Dernière connexion :{" "}
                   {date(current.last_login_at)}
                 </p>
-                <h3>Participation actuelle</h3>
+                <h3>
+                  Participation :{" "}
+                  {current.participation_season ?? "Aucune saison active"}
+                </h3>
                 {current.participation ? (
                   <>
-                    <p>
-                      {current.participation.name} ·{" "}
-                      {current.participation.address}
-                    </p>
-                    <p>
-                      {date(String(current.participation.starts_at))} →{" "}
-                      {date(String(current.participation.ends_at))}
-                    </p>
-                    <Badges activities={current.participation.activities} />
-                    <p>
-                      Frayeur : {current.participation.fear}/5 ·{" "}
-                      {labels[current.participation.status]} ·{" "}
-                      {labels[current.participation.activity]}
-                    </p>
-                    <p>{current.participation.practical}</p>
+                    <p>{current.participation.name}</p>
+                    <button onClick={() => onHouse(current.participation!.id)}>
+                      Ouvrir la fiche maison
+                    </button>
                   </>
                 ) : (
                   <p>Aucune participation.</p>
                 )}
+                <details>
+                  <summary>Historique des participations validées</summary>
+                  {current.participation_history?.length ? (
+                    <ul>
+                      {current.participation_history.map((p, n) => (
+                        <li key={n}>
+                          Halloween {p.year} — Participation enregistrée
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p>Aucune participation validée conservée.</p>
+                  )}
+                  <p className="small muted">
+                    Inscription validée comme propriétaire, sans attestation de
+                    visite ou d’accueil. Années uniquement, conservées cinq ans.
+                  </p>
+                </details>
                 <h3>Communications</h3>
                 {current.communications.length ? (
                   current.communications.map((m, n) => (
@@ -223,6 +358,7 @@ export default function AdminUsers({
                 }
                 canChangeRole={user.role_name === "SUPER_ADMIN" || !current}
                 allowDirect={!current && user.role_name === "SUPER_ADMIN"}
+                admins={users.filter((u) => u.role_name === "ADMIN")}
                 submit={act}
               />
             )}
@@ -291,16 +427,24 @@ function UserEditor({
   canChangeRole,
   submit,
   allowDirect = false,
+  admins,
 }: {
   allowDirect?: boolean;
   current?: ManagedUser;
   roles: Role[];
   canChangeRole: boolean;
   submit: (p: unknown) => Promise<void>;
+  admins: ManagedUser[];
 }) {
   const [error, setError] = useState(""),
     [busy, setBusy] = useState(false);
   const [direct, setDirect] = useState(false);
+  const [roleId, setRoleId] = useState(
+    current?.role_id ?? roles.find((r) => r.name === "USER")?.id ?? "",
+  );
+  const [grants, setGrants] = useState<string[]>(
+    current?.role_name === "ADMIN" ? current.permissions : [],
+  );
   return (
     <form
       onSubmit={async (e) => {
@@ -315,6 +459,11 @@ function UserEditor({
             email: v.email || undefined,
             display_name: v.display_name,
             role_id: canChangeRole ? v.role_id : undefined,
+            permissions:
+              canChangeRole &&
+              roles.find((r) => r.id === roleId)?.name === "ADMIN"
+                ? grants
+                : undefined,
             without_invitation: direct,
             password: direct ? v.password : undefined,
           });
@@ -343,9 +492,8 @@ function UserEditor({
           <span>Profil</span>
           <select
             name="role_id"
-            defaultValue={
-              current?.role_id ?? roles.find((r) => r.name === "USER")?.id
-            }
+            value={roleId}
+            onChange={(e) => setRoleId(e.target.value)}
           >
             {roles
               .filter((r) => !direct || r.name === "USER")
@@ -357,6 +505,89 @@ function UserEditor({
           </select>
         </label>
       )}
+      {canChangeRole &&
+        roles.find((r) => r.id === roleId)?.name === "ADMIN" && (
+          <fieldset>
+            <legend>Permissions individuelles</legend>
+            <p className="small muted">
+              Le grade ouvre le back-office. Chaque rubrique et action exige son
+              autorisation.
+            </p>
+            <div className="actions">
+              <button
+                type="button"
+                onClick={() => setGrants([...defaultRoles.ADMIN])}
+              >
+                Tout sélectionner
+              </button>
+              <button type="button" onClick={() => setGrants([])}>
+                Aucun
+              </button>
+              <select
+                aria-label="Copier les droits d’un ADMIN"
+                defaultValue=""
+                onChange={(e) => {
+                  const source = admins.find((a) => a.id === e.target.value);
+                  if (source) setGrants(source.permissions);
+                }}
+              >
+                <option value="">Copier les droits de…</option>
+                {admins
+                  .filter((a) => a.id !== current?.id)
+                  .map((a) => (
+                    <option value={a.id} key={a.id}>
+                      {a.display_name}
+                    </option>
+                  ))}
+              </select>
+            </div>
+            {[
+              "participants",
+              "users",
+              "season",
+              "communications",
+              "content",
+              "stats",
+              "audit",
+            ].map((group) => (
+              <div className="permission-group" key={group}>
+                <h4>
+                  {
+                    (
+                      {
+                        participants: "Maisons",
+                        users: "Utilisateurs",
+                        season: "Saisons",
+                        communications: "Communications",
+                        content: "Contenus",
+                        stats: "Statistiques",
+                        audit: "Activité",
+                      } as Record<string, string>
+                    )[group]
+                  }
+                </h4>
+                {defaultRoles.ADMIN.filter((p) =>
+                  p.startsWith(group + "."),
+                ).map((p) => (
+                  <label key={p} className="check">
+                    <input
+                      type="checkbox"
+                      checked={grants.includes(p)}
+                      onChange={(e) =>
+                        setGrants((prev) =>
+                          e.target.checked
+                            ? [...prev, p]
+                            : prev.filter((v) => v !== p),
+                        )
+                      }
+                    />
+                    {permissionLabels[p]}
+                  </label>
+                ))}
+              </div>
+            ))}
+          </fieldset>
+        )}
       {allowDirect && (
         <label className="check">
           <input

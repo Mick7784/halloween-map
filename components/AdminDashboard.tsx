@@ -13,12 +13,14 @@ import {
   metricLabels,
 } from "../lib/admin-metrics";
 import { auditLabel } from "../lib/admin-presentation";
+import AttendanceChart from "./AttendanceChart";
 export type AdminMetrics = {
   approved?: number | null;
   pending?: number | null;
   routes?: number | null;
   users?: number | null;
   collectionStats?: Record<string, number | null | undefined>;
+  attendance?: import("../lib/attendance").Attendance;
 };
 export type AdminAudit = {
   id: string;
@@ -26,6 +28,9 @@ export type AdminAudit = {
   actor: string | null;
   created_at: string;
   target_label?: string | null;
+  actor_grade?: string | null;
+  target_kind?: string;
+  target_id?: string;
 };
 export function adminDate(value: string, zone: string) {
   return new Intl.DateTimeFormat("fr-FR", {
@@ -74,6 +79,7 @@ export default function AdminDashboard({
   ];
   return (
     <>
+      <AttendanceChart data={metrics?.attendance} zone={zone} compact />
       {metrics && (
         <div className="beta-kpis">
           {(

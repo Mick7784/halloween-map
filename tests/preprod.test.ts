@@ -139,11 +139,13 @@ it("uses existing setup/accounts/season/house rules and creates independent func
   const test = (await db().query("SELECT id FROM seasons WHERE is_test"))
     .rows[0];
   await adminAction(admin, {
+    current_password: env.PREPROD_ADMIN_PASSWORD,
     action: "deactivateSeason",
     id: publicMap.season!.id,
     payload: "DÉSACTIVER",
   });
   await adminAction(admin, {
+    current_password: env.PREPROD_ADMIN_PASSWORD,
     action: "activateSeason",
     id: test.id,
     payload: "ACTIVER",

@@ -71,7 +71,7 @@ export type User = {
   permissions: string[];
 };
 export type Participation = House;
-// Capabilities are derived exclusively from the three fixed roles.
+// ADMIN capabilities come from its individual persisted grants.
 export const permissions = [
   "admin.access",
   "communications.read",
@@ -99,7 +99,13 @@ export const defaultRoles: Record<string, readonly string[]> = {
 };
 export function can(user: User | null, permission: string) {
   return (
-    !!user && !!defaultRoles[user.role_name ?? "USER"]?.includes(permission)
+    !!user &&
+    ["ADMIN", "SUPER_ADMIN"].includes(user.role_name ?? "") &&
+    !(
+      user.role_name === "ADMIN" &&
+      ["settings.manage", "settings.read", "roles.manage"].includes(permission)
+    ) &&
+    user.permissions.includes(permission)
   );
 }
 export function seasonFinished(s: Season, now = new Date()) {
@@ -130,6 +136,29 @@ export function effectiveActivities(h: House) {
 }
 export function mapAccessible(s: Season | null, now = new Date()) {
   return !!s && seasonState(s, now) === "MAP_OPEN";
+}
+export function earlyMapAccess(
+  s: Season | null,
+  user: User | null,
+  now = new Date(),
+) {
+  return (
+    !!s &&
+    !!s.active &&
+    !s.is_test &&
+    !s.archived &&
+    !s.purged_at &&
+    user?.role_name === "SUPER_ADMIN" &&
+    can(user, "admin.access") &&
+    +now < +new Date(s.opens_at)
+  );
+}
+export function memberMapAccessible(
+  s: Season | null,
+  user: User | null,
+  now = new Date(),
+) {
+  return !!user && (mapAccessible(s, now) || earlyMapAccess(s, user, now));
 }
 export function visible(h: House, s: Season, now = new Date()) {
   return (

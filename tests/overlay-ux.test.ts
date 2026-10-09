@@ -90,8 +90,12 @@ beforeEach(() => {
   // jsdom does not reflect inert; match the native browser attribute behavior.
   Object.defineProperty(HTMLElement.prototype, "inert", {
     configurable: true,
-    get() { return this.hasAttribute("inert"); },
-    set(value: boolean) { this.toggleAttribute("inert", value); },
+    get() {
+      return this.hasAttribute("inert");
+    },
+    set(value: boolean) {
+      this.toggleAttribute("inert", value);
+    },
   });
   vi.spyOn(HTMLElement.prototype, "getClientRects").mockImplementation(
     function (this: HTMLElement) {
@@ -165,14 +169,42 @@ describe("shared floating windows", () => {
     expect(host.hasAttribute("aria-hidden")).toBe(false);
   });
   it("returns from inline guidelines and then closes preparation with Escape", async () => {
-    await render((onClose) => h(RoutePreparation, {
-      state: { ...state, documents: { ...state.documents, GUIDELINES: { title: "Bonnes pratiques", version: "1", body: "Respectez les habitants.", kind: "GUIDELINES", status: "PUBLISHED", active: true, requires_reaccept: false, published_at: new Date().toISOString() } } } as unknown as PublicState,
-      origin: [2.8, 48.8], originLabel: "GPS", activities: ["CANDY"],
-      onOrigin: vi.fn(), onPick: vi.fn(), onClose,
-      onCalculate: async () => {}, onInvalidate: vi.fn(), maxFear: 2, onFear: vi.fn(),
-    }));
+    await render((onClose) =>
+      h(RoutePreparation, {
+        state: {
+          ...state,
+          documents: {
+            ...state.documents,
+            GUIDELINES: {
+              title: "Bonnes pratiques",
+              version: "1",
+              body: "Respectez les habitants.",
+              kind: "GUIDELINES",
+              status: "PUBLISHED",
+              active: true,
+              requires_reaccept: false,
+              published_at: new Date().toISOString(),
+            },
+          },
+        } as unknown as PublicState,
+        origin: [2.8, 48.8],
+        originLabel: "GPS",
+        activities: ["CANDY"],
+        onOrigin: vi.fn(),
+        onPick: vi.fn(),
+        onClose,
+        onCalculate: async () => {},
+        onInvalidate: vi.fn(),
+        maxFear: 2,
+        onFear: vi.fn(),
+      }),
+    );
     const prep = document.querySelector(".route-preparation") as HTMLElement;
-    await click(Array.from(prep.querySelectorAll("button")).find(b => b.textContent === "bonnes pratiques")!);
+    await click(
+      Array.from(prep.querySelectorAll("button")).find(
+        (b) => b.textContent === "bonnes pratiques",
+      )!,
+    );
     expect(prep.inert).toBe(true);
     await click(byLabel("Revenir à la préparation"));
     expect(prep.inert).toBe(false);
@@ -317,7 +349,13 @@ describe("shared floating windows", () => {
         configurable: true,
       });
       await render((onClose) =>
-        h(UserMenu, { user, state, version: "V0.7.2", onClose, login: null }),
+        h(UserMenu, {
+          user,
+          state: { ...state, mapAccessible: true },
+          version: "V0.7.2",
+          onClose,
+          login: null,
+        }),
       );
       const dialog = document.querySelector('[role="dialog"]')!;
       for (const href of [

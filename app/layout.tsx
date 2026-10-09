@@ -5,6 +5,7 @@ import "@fontsource/inter/600.css";
 import "@fontsource/cormorant-garamond/500.css";
 import "@fontsource/cormorant-garamond/600.css";
 import "./globals.css";
+import "../components/ReleaseDesign.css";
 import { InstallAppProvider } from "../components/InstallApp";
 export const viewport: Viewport = {
   themeColor: "#17171e",

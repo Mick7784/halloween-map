@@ -1,3 +1,4 @@
+import { defaultRoles } from "../lib/domain";
 import { pathToFileURL } from "node:url";
 import { Pool } from "pg";
 import { z } from "zod";
@@ -88,6 +89,7 @@ export async function seedPreproduction(
   async function account(name: string, email?: string): Promise<User> {
     const created = z.object({ id: z.uuid() }).parse(
       await adminUserAction(admin, {
+        current_password: configuration.PREPROD_ADMIN_PASSWORD,
         action: "invite",
         without_invitation: true,
         display_name: name,
@@ -101,9 +103,11 @@ export async function seedPreproduction(
   await account("Visiteur UX", "visiteur-ux@example.invalid");
   const testAdmin = await account("Admin UX", "admin-ux@example.invalid");
   await adminUserAction(admin, {
+    current_password: configuration.PREPROD_ADMIN_PASSWORD,
     action: "edit",
     id: testAdmin.id,
     role_id: roles.find((r) => r.name === "ADMIN")!.id,
+    permissions: [...defaultRoles.ADMIN],
   });
   const owners: User[] = [];
   for (let n = 0; n < 9; n++)
@@ -114,6 +118,7 @@ export async function seedPreproduction(
     ])
   ).rows[0];
   await adminAction(admin, {
+    current_password: configuration.PREPROD_ADMIN_PASSWORD,
     action: "activateSeason",
     id: real.id,
     payload: "ACTIVER",
@@ -199,22 +204,26 @@ export async function seedPreproduction(
   ).rows[0];
   await adminAction(admin, {
     action: "deactivateSeason",
+    current_password: configuration.PREPROD_ADMIN_PASSWORD,
     id: real.id,
     payload: "DÉSACTIVER",
   });
   await adminAction(admin, {
     action: "activateSeason",
+    current_password: configuration.PREPROD_ADMIN_PASSWORD,
     id: test.id,
     payload: "ACTIVER",
   });
   await houses(String(test.id));
   await adminAction(admin, {
     action: "deactivateSeason",
+    current_password: configuration.PREPROD_ADMIN_PASSWORD,
     id: test.id,
     payload: "DÉSACTIVER",
   });
   await adminAction(admin, {
     action: "activateSeason",
+    current_password: configuration.PREPROD_ADMIN_PASSWORD,
     id: real.id,
     payload: "ACTIVER",
   });

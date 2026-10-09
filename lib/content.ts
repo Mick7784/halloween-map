@@ -4,6 +4,7 @@ import { z } from "zod";
 import { db, transaction, type Database } from "./db";
 import { HttpError, requirePermission } from "./auth";
 import type { User } from "./domain";
+import { publicProjectLinks } from "./project-links";
 export const variables = [
   "territory",
   "season_year",
@@ -74,12 +75,12 @@ export const contentDefaults: Record<
     [
       "participation.intro",
       "Participation",
-      "Une décoration, quelques bonbons, une mise en scène : à vous de choisir. Votre maison est inscrite automatiquement.",
+      "Une décoration, quelques bonbons, une mise en scène : à vous de choisir. Votre maison sera examinée avant son affichage à l’ouverture de la carte.",
     ],
     [
       "participation.confirmation",
       "Participation",
-      "Votre participation est enregistrée.",
+      "Votre participation est enregistrée et attend sa validation.",
     ],
     ["privacy.title", "Confidentialité", "Vos données restent les vôtres."],
     [
@@ -90,7 +91,7 @@ export const contentDefaults: Record<
     [
       "privacy.account",
       "Confidentialité",
-      "Votre compte, nom, email, mot de passe chiffré par empreinte et rôle sont conservés pour les prochaines éditions. Votre maison, adresse, position, horaires et descriptions sont supprimés à la purge.",
+      "Votre compte, nom, email, mot de passe chiffré par empreinte et rôle sont conservés pour les prochaines éditions. Votre maison, adresse, position, horaires et descriptions sont supprimés à la purge. Seules les années de participation validée sont conservées cinq ans, puis effacées ; supprimer le compte efface aussi ces marqueurs.",
     ],
     ["footer.signature", "Interface", "Une expérience DomotiK Studio"],
   ].map(([key, category, value]) => [
@@ -197,8 +198,30 @@ export async function legalState(
 export async function contentAdmin(user: User | null) {
   const u = requirePermission(user, "admin.access");
   requirePermission(u, "content.manage");
+  const config = (
+    await db().query("SELECT config FROM instances WHERE id=$1", [
+      u.instance_id,
+    ])
+  ).rows[0].config as Record<string, unknown>;
   return {
-    catalog: contentDefaults,
+    catalog: Object.fromEntries(
+      Object.entries(contentDefaults).filter(([key]) =>
+        [
+          "home.preparation",
+          "home.final",
+          "home.closedBody",
+          "account.verify",
+          "account.activation",
+          "account.confirmation",
+          "participation.intro",
+          "participation.confirmation",
+          "privacy.signup",
+          "privacy.account",
+          "footer.signature",
+        ].includes(key),
+      ),
+    ),
+    links: publicProjectLinks(config.projectLinks, config.privacy),
     values: await contentState(u.instance_id),
     documents: (
       await db().query(
@@ -214,7 +237,19 @@ export async function contentAction(user: User | null, input: unknown) {
   requirePermission(u, "content.manage");
   const p = z
     .object({
-      action: z.enum(["save", "reset", "draft", "publish"]),
+      action: z.enum(["save", "reset", "draft", "publish", "links"]),
+      links: z
+        .object({
+          bugEnabled: z.boolean(),
+          supportEnabled: z.boolean(),
+          contactEnabled: z.boolean(),
+          bugEmail: z.email(),
+          contactEmail: z.email().or(z.literal("")),
+          bugUrl: z.url().or(z.literal("")),
+          supportUrl: z.url().or(z.literal("")),
+          contactUrl: z.url().or(z.literal("")),
+        })
+        .optional(),
       key: z.string().optional(),
       value: z.string().max(10000).optional(),
       id: z.uuid().optional(),
@@ -229,23 +264,50 @@ export async function contentAction(user: User | null, input: unknown) {
         .optional(),
     })
     .parse(input);
+  if (p.action === "links") {
+    if (!p.links) throw new HttpError(400, "Liens requis");
+    for (const key of ["bugUrl", "supportUrl", "contactUrl"] as const)
+      if (p.links[key]) {
+        const url = new URL(p.links[key]);
+        if (url.protocol !== "https:" || url.username || url.password)
+          throw new HttpError(400, "Utilisez une URL HTTPS sûre");
+      }
+    await transaction(async (c) => {
+      await c.query(
+        "UPDATE instances SET config=jsonb_set(config,'{projectLinks}',$1::jsonb) WHERE id=$2",
+        [JSON.stringify(p.links), u.instance_id],
+      );
+      await c.query(
+        "INSERT INTO audit_logs(instance_id,actor_id,action) VALUES($1,$2,'content.links.updated')",
+        [u.instance_id, u.id],
+      );
+    });
+    return { ok: true };
+  }
   if (p.action === "save" || p.action === "reset") {
     if (!p.key || !contentDefaults[p.key])
       throw new HttpError(400, "Contenu inconnu");
-    if (p.action === "reset")
-      await db().query(
-        "DELETE FROM content_overrides WHERE instance_id=$1 AND key=$2",
-        [u.instance_id, p.key],
+    await transaction(async (c) => {
+      if (p.action === "reset")
+        await c.query(
+          "DELETE FROM content_overrides WHERE instance_id=$1 AND key=$2",
+          [u.instance_id, p.key],
+        );
+      else
+        await c.query(
+          "INSERT INTO content_overrides(instance_id,key,value) VALUES($1,$2,$3) ON CONFLICT(instance_id,key) DO UPDATE SET value=EXCLUDED.value,updated_at=now()",
+          [
+            u.instance_id,
+            p.key,
+            sanitizeContent(p.value ?? "", contentDefaults[p.key!].variables),
+          ],
+        );
+      await c.query(
+        "INSERT INTO audit_logs(instance_id,actor_id,action) VALUES($1,$2,$3)",
+        [u.instance_id, u.id, "content." + p.action],
       );
-    else
-      await db().query(
-        "INSERT INTO content_overrides(instance_id,key,value) VALUES($1,$2,$3) ON CONFLICT(instance_id,key) DO UPDATE SET value=EXCLUDED.value,updated_at=now()",
-        [
-          u.instance_id,
-          p.key,
-          sanitizeContent(p.value ?? "", contentDefaults[p.key].variables),
-        ],
-      );
+    });
+    return { ok: true };
   } else if (p.action === "draft") {
     if (!p.document) throw new HttpError(400, "Document requis");
     const d = p.document;
@@ -315,7 +377,16 @@ export async function contentAction(user: User | null, input: unknown) {
         "UPDATE legal_documents SET status='PUBLISHED',active=true,published_at=now() WHERE id=$1",
         [d.id],
       );
+      await c.query(
+        "INSERT INTO audit_logs(instance_id,actor_id,action,target_id) VALUES($1,$2,'content.publish',$3)",
+        [u.instance_id, u.id, d.id],
+      );
     });
+  if (p.action !== "publish")
+    await db().query(
+      "INSERT INTO audit_logs(instance_id,actor_id,action,target_id) VALUES($1,$2,$3,$4)",
+      [u.instance_id, u.id, "content." + p.action, p.id ?? null],
+    );
   return { ok: true };
 }
 export async function validateAcceptance(

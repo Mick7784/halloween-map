@@ -47,6 +47,7 @@ test.beforeAll(async () => {
   });
   const initial = (await pool.query("SELECT id FROM seasons")).rows[0];
   await adminAction((await getUser(installed.token))!, {
+    current_password: password,
     action: "activateSeason",
     id: initial.id,
     payload: "ACTIVER",
@@ -114,7 +115,7 @@ test("login → preopening map is unavailable and fits the mobile viewport", asy
       .getByRole("button", { name: "Se connecter", exact: true }),
   ).toBeVisible();
   await login(page, "visitor0@example.invalid");
-  await expect(page.locator(".map-experience")).toHaveCount(0);
+  await expect(page.locator(".route-experience")).toHaveCount(0);
   const state = await (await page.request.get("/api/public")).json();
   expect(state.houses).toEqual([]);
   expect(state.mapAccessible).toBe(false);
@@ -129,7 +130,7 @@ test("login → preopening map is unavailable and fits the mobile viewport", asy
     page
       .getByRole("dialog", { name: "Menu utilisateur" })
       .getByRole("link", { name: "La carte", exact: true }),
-  ).toBeVisible();
+  ).toHaveCount(0);
 });
 test("admin hides a house publicly, retains it in administration, and restores it", async ({
   page,
@@ -148,7 +149,10 @@ test("admin hides a house publicly, retains it in administration, and restores i
     .getByRole("button", { name: "Masquer", exact: true })
     .click();
   await expect(page.getByRole("dialog")).toContainText("Masquée");
-  await page.getByRole("dialog").getByRole("button", { name: "Fermer", exact: true }).click();
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "Fermer", exact: true })
+    .click();
   await expect(row.getByText("Masquée", { exact: true })).toBeVisible();
   await row.getByRole("button", { name: "Gérer", exact: true }).click();
   const context = await browser.newContext({ baseURL: origin }),
@@ -180,8 +184,9 @@ test("Super Admin has no obsolete demo action before REAL opening", async ({
     page.getByRole("button", { name: "Mode démo", exact: true }),
   ).toHaveCount(0);
   const state = await (await page.request.get("/api/public")).json();
-  expect(state.mapAccessible).toBe(false);
-  expect(state.houses).toEqual([]);
+  expect(state.mapAccessible).toBe(true);
+  expect(state.earlyAccess).toBe(true);
+  expect(state.houses).toHaveLength(2);
 });
 
 test("forgot password → email CTA → one-use reset → login", async ({

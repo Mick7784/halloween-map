@@ -6,6 +6,9 @@ export default defineConfig([
   ...nextTs,
   globalIgnores([
     ".next/**",
+    ".test-temp/**",
+    "release-edits.mjs",
+    "qa-adjustments.mjs",
     "next-env.d.ts",
     "playwright-report/**",
     "test-results/**",

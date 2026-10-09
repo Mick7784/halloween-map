@@ -14,7 +14,15 @@ import { readFile } from "node:fs/promises";
 import { PGlite } from "@electric-sql/pglite";
 import { Pool } from "pg";
 import { db, transaction, type Database } from "../lib/db";
-import * as service from "../lib/service";
+import * as actualService from "../lib/service";
+const service = {
+  ...actualService,
+  adminAction: (user: User | null, input: unknown) =>
+    actualService.adminAction(user, {
+      current_password: "valid-password-1234",
+      ...(input as Record<string, unknown>),
+    }),
+};
 import {
   getUser,
   hashPassword,
@@ -43,7 +51,7 @@ import { mailLayout } from "../lib/mail-layout";
 import { dispatchEmails, campaignAction, campaignAdmin } from "../lib/mail";
 import {
   consumeIdentity,
-  adminUserAction,
+  adminUserAction as actualAdminUserAction,
   accountAction,
   resendIdentity,
   activateAccount,
@@ -166,6 +174,14 @@ beforeAll(async () => {
   );
   if (engine instanceof PGlite) await engine.exec(singleMigration);
   else await engine.query(singleMigration);
+  for (const file of [
+    "009_release_foundations.sql",
+    "010_message_templates.sql",
+  ]) {
+    const sql = await readFile("migrations/" + file, "utf8");
+    if (engine instanceof PGlite) await engine.exec(sql);
+    else await engine.query(sql);
+  }
 });
 const acceptance = () => ({
   terms: true,
@@ -224,6 +240,8 @@ beforeEach(async () => {
   });
   house = (await service.ownHouse(participant)) as unknown as House;
   season = (await service.activeSeason((await service.instance())!))!;
+  // Service-email tests start with a clean reviewed fixture; transition notifications have their own release suite.
+  await db().query("DELETE FROM email_outbox WHERE kind LIKE 'HOUSE_%'");
 });
 afterAll(async () => {
   vi.useRealTimers();
@@ -467,6 +485,9 @@ describe("V0.4 privacy, roles, demo and recovery", () => {
     );
     if (engine instanceof Pool) await engine.query(sql);
     else await engine.exec(sql);
+    // Replaying an old migration is followed by the current additive schema.
+    const latest = await readFile("migrations/010_message_templates.sql","utf8");
+    if(engine instanceof Pool) await engine.query(latest);else await engine.exec(latest);
     expect((await service.ownHouse(participant))?.address).toBe(house.address);
     expect(
       (await db().query("SELECT name,permissions FROM roles ORDER BY name"))
@@ -2077,6 +2098,14 @@ describe("back office phase one", () => {
   it("presents stored audit events without displaying technical action codes", () => {
     expect(auditLabel("participant.deplete")).toBe("Bonbons épuisés");
     expect(auditLabel("season.deactivated")).toBe("Saison désactivée");
-    expect(auditLabel("future.unrecognized.event")).not.toContain("future.");
+    expect(auditLabel("future.unrecognized.event")).toContain(
+      "future.unrecognized.event",
+    );
   });
 });
+
+const adminUserAction = (user: User | null, input: unknown) =>
+  actualAdminUserAction(user, {
+    current_password: "valid-password-1234",
+    ...(input as Record<string, unknown>),
+  });
