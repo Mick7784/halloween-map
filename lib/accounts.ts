@@ -489,7 +489,10 @@ export async function adminUserAction(user: User | null, input: unknown) {
       if (!p.id) throw new HttpError(400, "Compte requis");
       if (p.action === "edit") {
         const old = (
-          await c.query("SELECT email FROM users WHERE id=$1", [p.id])
+          await c.query(
+            "SELECT email,role_id,admin_permissions FROM users WHERE id=$1",
+            [p.id],
+          )
         ).rows[0];
         await c.query(
           "UPDATE users SET display_name=COALESCE($1,display_name),email=COALESCE($2,email),role_id=COALESCE($3,role_id) WHERE id=$4",
@@ -512,6 +515,22 @@ export async function adminUserAction(user: User | null, input: unknown) {
             "UPDATE users SET admin_permissions=COALESCE($1,admin_permissions,'{}'::text[]) WHERE id=$2",
             [p.permissions ? grants : null, p.id],
           );
+        if (p.role_id && p.role_id !== old.role_id)
+          await c.query(
+            "INSERT INTO audit_logs(instance_id,actor_id,action,target_id) VALUES($1,$2,'user.grade.updated',$3)",
+            [u.instance_id, u.id, p.id],
+          );
+        if (
+          p.permissions &&
+          JSON.stringify([...grants].sort()) !==
+            JSON.stringify(
+              [...((old.admin_permissions as string[]) ?? [])].sort(),
+            )
+        )
+          await c.query(
+            "INSERT INTO audit_logs(instance_id,actor_id,action,target_id) VALUES($1,$2,'user.permissions.updated',$3)",
+            [u.instance_id, u.id, p.id],
+          );
       } else if (p.action === "delete") {
         if (p.confirm !== "SUPPRIMER CE COMPTE")
           throw new HttpError(400, "Confirmation requise");
@@ -532,16 +551,6 @@ export async function adminUserAction(user: User | null, input: unknown) {
       "INSERT INTO audit_logs(instance_id,actor_id,action,target_id,season_id) VALUES($1,$2,$3,$4,$5)",
       [u.instance_id, u.id, "user." + p.action, p.id ?? null, null],
     );
-    if (p.action === "edit" && (p.role_id || p.permissions))
-      await c.query(
-        "INSERT INTO audit_logs(instance_id,actor_id,action,target_id) VALUES($1,$2,$3,$4)",
-        [
-          u.instance_id,
-          u.id,
-          p.permissions ? "user.permissions.updated" : "user.grade.updated",
-          p.id,
-        ],
-      );
     return { ok: true };
   });
 }

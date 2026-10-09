@@ -166,6 +166,10 @@ export async function api<T>(path: string, body?: unknown): Promise<T> {
     cache: "no-store",
   });
   const data = await r.json();
+  if (r.status === 401 && path !== "login")
+    throw new Error(
+      "Session expirée ou absente. Reconnectez-vous pour poursuivre.",
+    );
   if (!r.ok)
     throw new Error(data.error ?? "Impossible de terminer cette action");
   if (path === "public") {

@@ -14,6 +14,7 @@ import {
 } from "./common";
 import { seasonFinished } from "../lib/domain";
 import VisualEditor from "./VisualEditor";
+import { editorialText } from "../lib/editorial-format";
 import type { Season, User } from "../lib/domain";
 type Campaign = {
   id: string;
@@ -193,6 +194,18 @@ function CampaignForm({
     ),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false);
+  const dirty =
+    subject !== (campaign?.subject ?? "Halloween arrive à {{territory}}") ||
+    body !==
+      (campaign?.body ??
+        "Bonjour {{name}},\n\n{{event_name}} ouvre le {{map_open_date}}. À bientôt !") ||
+    mode !== (campaign?.schedule_mode ?? "RELATIVE");
+  useEffect(() => {
+    if (!dirty) return;
+    const guard = (event: BeforeUnloadEvent) => event.preventDefault();
+    window.addEventListener("beforeunload", guard);
+    return () => window.removeEventListener("beforeunload", guard);
+  }, [dirty]);
   const preview = (text: string) =>
     text.replace(
       /\{\{(\w+)\}\}/g,
@@ -220,7 +233,17 @@ function CampaignForm({
         aria-modal="true"
         aria-labelledby="campaign-title"
       >
-        <button className="close" aria-label="Fermer" onClick={close}>
+        <button
+          className="close"
+          aria-label="Fermer"
+          onClick={() => {
+            if (
+              !dirty ||
+              window.confirm("Quitter la campagne sans enregistrer ?")
+            )
+              close();
+          }}
+        >
           <X />
         </button>
         <h2 id="campaign-title">
@@ -340,12 +363,19 @@ function CampaignForm({
         <iframe
           title="Aperçu de l’email HTML"
           sandbox=""
-          srcDoc={mailLayout(preview(subject), preview(body))}
+          srcDoc={mailLayout(
+            preview(subject),
+            body,
+            undefined,
+            Object.fromEntries(
+              variables.map((key) => [key, preview("{{" + key + "}}")]),
+            ),
+          )}
           style={{ width: "100%", height: 480, border: 0 }}
         />
         <details>
           <summary>Version texte</summary>
-          <p className="mail-preview">{preview(body)}</p>
+          <p className="mail-preview">{preview(editorialText(body))}</p>
         </details>
       </section>
     </div>

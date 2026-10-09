@@ -305,8 +305,15 @@ function LegalDraft({
   submit: (p: unknown) => Promise<void>;
 }) {
   const [body, setBody] = useState(current.body),
+    [dirty, setDirty] = useState(false),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false);
+  useEffect(() => {
+    if (!dirty) return;
+    const guard = (event: BeforeUnloadEvent) => event.preventDefault();
+    window.addEventListener("beforeunload", guard);
+    return () => window.removeEventListener("beforeunload", guard);
+  }, [dirty]);
   return (
     <details>
       <summary>
@@ -315,6 +322,7 @@ function LegalDraft({
           : "Préparer une nouvelle version"}
       </summary>
       <form
+        onChange={() => setDirty(true)}
         onSubmit={async (e) => {
           e.preventDefault();
           const v = values(e.currentTarget);
@@ -332,6 +340,7 @@ function LegalDraft({
                 requires_reaccept: v.requires_reaccept === "on",
               },
             });
+            setDirty(false);
           } catch (e) {
             setError((e as Error).message);
           } finally {
@@ -345,7 +354,14 @@ function LegalDraft({
           value={current.status === "DRAFT" ? current.version : undefined}
         />
         <Field name="title" label="Titre" value={current.title} />
-        <VisualEditor value={body} onChange={setBody} label="Document" />
+        <VisualEditor
+          value={body}
+          onChange={(value) => {
+            setBody(value);
+            setDirty(true);
+          }}
+          label="Document"
+        />
         {["TERMS", "GUIDELINES"].includes(current.kind) && (
           <Check
             name="requires_reaccept"

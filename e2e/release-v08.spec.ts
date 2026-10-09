@@ -259,7 +259,9 @@ test("shared visual editor produces the saved email format and SMTP failure is e
       exact: true,
     })
     .click();
-  await expect(page.getByRole("alert").filter({hasText:"SMTP non configuré"})).toBeVisible();
+  await expect(
+    page.getByRole("alert").filter({ hasText: "SMTP non configuré" }),
+  ).toBeVisible();
   expect((await pool.query("SELECT * FROM email_tokens")).rows).toHaveLength(0);
   expect((await pool.query("SELECT * FROM email_outbox")).rows).toHaveLength(0);
   expect(

@@ -63,6 +63,17 @@ export default function AdminUsers({
   );
   const current = users.find((u) => u.id === selected);
   const manageable = user.permissions.includes("users.manage");
+  const canManageTarget = (target: ManagedUser) =>
+    manageable &&
+    target.id !== user.id &&
+    (user.role_name === "SUPER_ADMIN" || target.role_name === "USER") &&
+    (target.role_name !== "SUPER_ADMIN" ||
+      users.some(
+        (other) =>
+          other.id !== target.id &&
+          other.role_name === "SUPER_ADMIN" &&
+          other.account_status === "ACTIVE",
+      ));
   const canEdit =
     manageable &&
     (!current ||
@@ -149,17 +160,14 @@ export default function AdminUsers({
                     >
                       Voir
                     </button>
-                    {manageable &&
-                      u.id !== user.id &&
-                      (user.role_name === "SUPER_ADMIN" ||
-                        u.role_name === "USER") && (
-                        <button
-                          aria-label={"Modifier " + u.display_name}
-                          onClick={() => setSelected(u.id)}
-                        >
-                          Modifier
-                        </button>
-                      )}
+                    {canManageTarget(u) && (
+                      <button
+                        aria-label={"Modifier " + u.display_name}
+                        onClick={() => setSelected(u.id)}
+                      >
+                        Modifier
+                      </button>
+                    )}
                     {u.id === user.id && (
                       <Link href="/account">Mon compte</Link>
                     )}
@@ -186,17 +194,14 @@ export default function AdminUsers({
                           Mon compte
                         </Link>
                       )}
-                      {manageable &&
-                        u.id !== user.id &&
-                        (user.role_name === "SUPER_ADMIN" ||
-                          u.role_name === "USER") && (
-                          <button
-                            className="mobile-row-action"
-                            onClick={() => setSelected(u.id)}
-                          >
-                            Modifier
-                          </button>
-                        )}
+                      {canManageTarget(u) && (
+                        <button
+                          className="mobile-row-action"
+                          onClick={() => setSelected(u.id)}
+                        >
+                          Modifier
+                        </button>
+                      )}
                       {u.participation &&
                         user.permissions.includes("participants.read") && (
                           <button
@@ -206,57 +211,54 @@ export default function AdminUsers({
                             Voir la maison
                           </button>
                         )}
-                      {manageable &&
-                        u.id !== user.id &&
-                        (user.role_name === "SUPER_ADMIN" ||
-                          u.role_name === "USER") && (
-                          <>
-                            <AsyncButton
-                              onClick={() =>
-                                act({
-                                  action:
-                                    u.account_status === "DISABLED"
-                                      ? "enable"
-                                      : "disable",
-                                  id: u.id,
-                                })
-                              }
-                            >
-                              {u.account_status === "DISABLED"
-                                ? "Activer"
-                                : "Désactiver"}
-                            </AsyncButton>
-                            {u.account_status !== "DISABLED" &&
-                              u.email_status !== "VERIFIED" && (
-                                <AsyncButton
-                                  onClick={() =>
-                                    act({ action: "resend", id: u.id })
-                                  }
-                                >
-                                  Renvoyer la vérification
-                                </AsyncButton>
-                              )}
-                            {user.role_name === "SUPER_ADMIN" && (
+                      {canManageTarget(u) && (
+                        <>
+                          <AsyncButton
+                            onClick={() =>
+                              act({
+                                action:
+                                  u.account_status === "DISABLED"
+                                    ? "enable"
+                                    : "disable",
+                                id: u.id,
+                              })
+                            }
+                          >
+                            {u.account_status === "DISABLED"
+                              ? "Activer"
+                              : "Désactiver"}
+                          </AsyncButton>
+                          {u.account_status !== "DISABLED" &&
+                            u.email_status !== "VERIFIED" && (
                               <AsyncButton
-                                danger
-                                onClick={async () => {
-                                  if (
-                                    window.confirm(
-                                      "Supprimer définitivement ce compte et ses données ?",
-                                    )
-                                  )
-                                    await act({
-                                      action: "delete",
-                                      id: u.id,
-                                      confirm: "SUPPRIMER CE COMPTE",
-                                    });
-                                }}
+                                onClick={() =>
+                                  act({ action: "resend", id: u.id })
+                                }
                               >
-                                Supprimer le compte
+                                Renvoyer la vérification
                               </AsyncButton>
                             )}
-                          </>
-                        )}
+                          {user.role_name === "SUPER_ADMIN" && (
+                            <AsyncButton
+                              danger
+                              onClick={async () => {
+                                if (
+                                  window.confirm(
+                                    "Supprimer définitivement ce compte et ses données ?",
+                                  )
+                                )
+                                  await act({
+                                    action: "delete",
+                                    id: u.id,
+                                    confirm: "SUPPRIMER CE COMPTE",
+                                  });
+                              }}
+                            >
+                              Supprimer le compte
+                            </AsyncButton>
+                          )}
+                        </>
+                      )}
                     </details>
                   </div>
                 </td>
