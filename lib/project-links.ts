@@ -1,6 +1,11 @@
 import { publicPrivacySettings } from "./privacy";
 export const projectLinkDefaults = { bugEmail: "domotikpro77@gmail.com" };
 export type ProjectLinks = {
+  bugEnabled?: boolean;
+  supportEnabled?: boolean;
+  contactEnabled?: boolean;
+  contactEmail?: string;
+  contactUrl?: string;
   bugUrl?: string;
   bugEmail: string;
   supportUrl?: string;
@@ -14,12 +19,18 @@ export function publicProjectLinks(
       ? (value as Record<string, unknown>)
       : {};
   const result: ProjectLinks = {
+    bugEnabled: input.bugEnabled !== false,
+    supportEnabled: input.supportEnabled !== false,
+    contactEnabled: input.contactEnabled !== false,
+    contactEmail:
+      publicPrivacySettings({ contactEmail: input.contactEmail })
+        .contactEmail ?? publicPrivacySettings(privacy).contactEmail,
     bugEmail:
       publicPrivacySettings({ contactEmail: input.bugEmail }).contactEmail ??
       publicPrivacySettings(privacy).contactEmail ??
       projectLinkDefaults.bugEmail,
   };
-  for (const key of ["bugUrl", "supportUrl"] as const) {
+  for (const key of ["bugUrl", "supportUrl", "contactUrl"] as const) {
     if (typeof input[key] !== "string") continue;
     try {
       const url = new URL(input[key]);

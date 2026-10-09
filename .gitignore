@@ -6,6 +6,13 @@ coverage/
 test-results/
 playwright-report/
 *.tsbuildinfo
+.test-temp/
+test-results-unit.log
+test-results-e2e.log
+test-results-build.log
+release-edits.mjs
+qa-adjustments.mjs
+test-results-*.log
 next-env.d.ts
 public/maplibre/
 .env.preprod

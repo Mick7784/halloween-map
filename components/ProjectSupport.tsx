@@ -10,6 +10,7 @@ export default function ProjectSupport({
 }) {
   const [open, setOpen] = useState(false);
   const links = publicProjectLinks(settings);
+  if (links.supportEnabled === false) return null;
   return (
     <>
       {links.supportUrl ? (

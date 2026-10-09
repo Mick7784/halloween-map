@@ -1,9 +1,11 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { LegalDocument, LegalKind } from "../lib/content";
 import { api, Field, Notice, AsyncButton, values, Check } from "./common";
 import Editorial from "./Editorial";
+import VisualEditor from "./VisualEditor";
 type Data = {
+  links?: import("../lib/project-links").ProjectLinks;
   catalog: Record<
     string,
     { category: string; value: string; variables: string[] }
@@ -23,6 +25,12 @@ export default function ContentAdmin({
     [category, setCategory] = useState("Accueil"),
     [value, setValue] = useState(data.values[key]),
     [kind, setKind] = useState<LegalKind>("TERMS");
+  useEffect(() => {
+    if (value === data.values[key]) return;
+    const guard = (event: BeforeUnloadEvent) => event.preventDefault();
+    window.addEventListener("beforeunload", guard);
+    return () => window.removeEventListener("beforeunload", guard);
+  }, [value, data.values, key]);
   async function action(p: unknown) {
     await api("admin/content", p);
     await reload();
@@ -37,11 +45,17 @@ export default function ContentAdmin({
           "Confidentialité",
           "Interface",
           "Documents",
+          "Liens & contact",
         ].map((c) => (
           <button
             key={c}
             className={category === c ? "active" : ""}
             onClick={() => {
+              if (
+                value !== data.values[key] &&
+                !window.confirm("Quitter ce texte sans enregistrer ?")
+              )
+                return;
               setCategory(c);
               const first = Object.entries(data.catalog).find(
                 ([, d]) => d.category === c,
@@ -56,7 +70,9 @@ export default function ContentAdmin({
           </button>
         ))}
       </div>
-      {category === "Documents" ? (
+      {category === "Liens & contact" ? (
+        <LinksEditor links={data.links} submit={action} />
+      ) : category === "Documents" ? (
         <section className="panel">
           <h2>Documents versionnés</h2>
           <label className="field">
@@ -119,6 +135,11 @@ export default function ContentAdmin({
             <select
               value={key}
               onChange={(e) => {
+                if (
+                  value !== data.values[key] &&
+                  !window.confirm("Quitter ce texte sans enregistrer ?")
+                )
+                  return;
                 setKey(e.target.value);
                 setValue(data.values[e.target.value]);
               }}
@@ -127,7 +148,23 @@ export default function ContentAdmin({
                 .filter(([, v]) => v.category === category)
                 .map(([k]) => (
                   <option key={k} value={k}>
-                    {k}
+                    {(
+                      {
+                        "home.preparation":
+                          "Introduction de la prochaine édition",
+                        "home.final": "Message de participation",
+                        "home.closedBody": "Fin de l’événement",
+                        "account.verify": "Vérification du compte",
+                        "account.activation": "Activation du compte",
+                        "account.confirmation": "Confirmation du compte",
+                        "participation.intro": "Consignes d’inscription",
+                        "participation.confirmation":
+                          "Confirmation de participation",
+                        "privacy.signup": "Confidentialité à l’inscription",
+                        "privacy.account": "Conservation des données du compte",
+                        "footer.signature": "Signature",
+                      } as Record<string, string>
+                    )[k] ?? k}
                   </option>
                 ))}
             </select>
@@ -138,16 +175,12 @@ export default function ContentAdmin({
               .map((v) => "{{" + v + "}}")
               .join(" · ")}
           </p>
-          <label className="field">
-            <span>Texte</span>
-            <textarea
-              aria-label="Texte"
-              rows={7}
-              maxLength={10000}
-              value={value}
-              onChange={(e) => setValue(e.target.value)}
-            />
-          </label>
+          <VisualEditor
+            value={value ?? ""}
+            onChange={setValue}
+            variables={data.catalog[key]?.variables}
+            label="Texte"
+          />
           <p className="small muted">
             Paragraphes, **gras**, *italique*, [lien](https://…), listes et
             titres. Aucun HTML.
@@ -170,6 +203,98 @@ export default function ContentAdmin({
         </section>
       )}
     </div>
+  );
+}
+function LinksEditor({
+  links,
+  submit,
+}: {
+  links?: import("../lib/project-links").ProjectLinks;
+  submit: (p: unknown) => Promise<void>;
+}) {
+  const [error, setError] = useState(""),
+    [busy, setBusy] = useState(false),
+    [done, setDone] = useState(false);
+  return (
+    <section className="panel">
+      <h2>Liens & contact</h2>
+      <p className="small muted">
+        Signaler un bug et contacter l’organisateur : menu utilisateur. Soutenir
+        le projet : accueil et pied de page. Les liens légaux restent toujours
+        disponibles.
+      </p>
+      <form
+        onSubmit={async (e) => {
+          e.preventDefault();
+          const v = values(e.currentTarget);
+          setBusy(true);
+          setError("");
+          try {
+            await submit({
+              action: "links",
+              links: {
+                bugEnabled: v.bugEnabled === "on",
+                supportEnabled: v.supportEnabled === "on",
+                contactEnabled: v.contactEnabled === "on",
+                bugEmail: v.bugEmail,
+                contactEmail: v.contactEmail,
+                bugUrl: v.bugUrl,
+                supportUrl: v.supportUrl,
+                contactUrl: v.contactUrl,
+              },
+            });
+            setDone(true);
+          } catch (err) {
+            setError((err as Error).message);
+          } finally {
+            setBusy(false);
+          }
+        }}
+      >
+        {[
+          ["bug", "Signaler un bug"],
+          ["support", "Soutenir le projet"],
+          ["contact", "Contacter l’organisateur"],
+        ].map(([key, label]) => (
+          <fieldset key={key}>
+            <legend>{label}</legend>
+            <Check
+              name={key + "Enabled"}
+              label="Activer"
+              checked={
+                links?.[
+                  (key + "Enabled") as
+                    "bugEnabled" | "supportEnabled" | "contactEnabled"
+                ] !== false
+              }
+            />
+            <Field
+              name={key + "Url"}
+              label="Destination HTTPS (facultatif)"
+              type="url"
+              required={false}
+              value={
+                links?.[(key + "Url") as "bugUrl" | "supportUrl" | "contactUrl"]
+              }
+            />
+            {key !== "support" && (
+              <Field
+                name={key + "Email"}
+                label="Adresse de contact"
+                type="email"
+                required={key === "bug"}
+                value={links?.[(key + "Email") as "bugEmail" | "contactEmail"]}
+              />
+            )}
+          </fieldset>
+        ))}
+        <Notice error={error} />
+        {done && <p role="status">Liens enregistrés.</p>}
+        <button disabled={busy} className="primary">
+          Enregistrer les liens
+        </button>
+      </form>
+    </section>
   );
 }
 function LegalDraft({
@@ -220,16 +345,7 @@ function LegalDraft({
           value={current.status === "DRAFT" ? current.version : undefined}
         />
         <Field name="title" label="Titre" value={current.title} />
-        <label className="field">
-          <span>Document</span>
-          <textarea
-            aria-label="Document"
-            rows={12}
-            maxLength={10000}
-            value={body}
-            onChange={(e) => setBody(e.target.value)}
-          />
-        </label>
+        <VisualEditor value={body} onChange={setBody} label="Document" />
         {["TERMS", "GUIDELINES"].includes(current.kind) && (
           <Check
             name="requires_reaccept"

@@ -12,7 +12,6 @@ import {
   Mail,
   Activity,
   Settings,
-  ShieldCheck,
   Menu,
   SunMoon,
   RefreshCw,
@@ -41,6 +40,14 @@ import AdminActivity from "./AdminActivity";
 import AdminExistingPage from "./AdminExistingPage";
 import { seasonFinished } from "../lib/domain";
 import "./AdminBeta.css";
+import ManorMark from "./ManorMark";
+import MessageTemplates from "./MessageTemplates";
+import RefusalPreview from "./RefusalPreview";
+import {
+  refusalReasons,
+  refusalText,
+  type RefusalCode,
+} from "../lib/refusal-reasons";
 type ManagedHouse = House & {
   email: string;
   owner_name: string;
@@ -63,6 +70,8 @@ const reviews: Record<string, string> = {
   REFUSED: "Refusée",
 };
 const open = (h: House) =>
+  h.review_status === "VALIDATED" &&
+  h.status === "VISIBLE" &&
   h.activity === "ACTIVE" &&
   new Date(h.starts_at).getTime() <= Date.now() &&
   new Date(h.ends_at).getTime() > Date.now();
@@ -77,7 +86,19 @@ export default function Admin({
   refresh: () => Promise<void>;
   mapStyle: string;
 }) {
-  const [section, setSection] = useState("dashboard"),
+  const [section, setSection] = useState(
+      () =>
+        [
+          ["dashboard", "stats.read"],
+          ["houses", "participants.read"],
+          ["users", "users.read"],
+          ["seasons", "season.read"],
+          ["communications", "communications.read"],
+          ["activity", "audit.read"],
+          ["content", "content.manage"],
+          ["settings", "settings.read"],
+        ].find(([, p]) => has(user, p))?.[0] ?? "none",
+    ),
     [houses, setHouses] = useState<ManagedHouse[]>([]),
     [statistics, setStatistics] = useState<SeasonStatistics | null>(null),
     [userCreate, setUserCreate] = useState(false),
@@ -90,6 +111,7 @@ export default function Admin({
     [selected, setSelected] = useState<string | null>(null),
     [edit, setEdit] = useState(false),
     [reason, setReason] = useState(""),
+    [reasonCode, setReasonCode] = useState<RefusalCode>("OTHER"),
     [search, setSearch] = useState(""),
     [review, setReview] = useState("ALL"),
     [availability, setAvailability] = useState("ALL"),
@@ -130,6 +152,22 @@ export default function Admin({
   const seasonStorageKey =
     "halloween.admin.season." + state.instance?.id + "." + user.id;
   const reloadSeasons = useCallback(async () => {
+    if (!has(user, "season.read")) {
+      const rows = state.season
+        ? [
+            {
+              ...state.season,
+              name: "Halloween " + state.season.year,
+              active: true,
+              archived: false,
+            } as Season,
+          ]
+        : [];
+      setSeasons(rows);
+      setSeasonsLoaded(true);
+      setSeasonId(rows[0]?.id ?? "");
+      return;
+    }
     const rows = await api<Season[]>("admin/seasons");
     setSeasons(rows);
     setSeasonsLoaded(true);
@@ -146,7 +184,7 @@ export default function Admin({
           rows[0]?.id ??
           ""),
     );
-  }, [seasonStorageKey]);
+  }, [seasonStorageKey, user, state.season]);
   useEffect(() => {
     void reloadSeasons().catch((e) => {
       setError(e.message);
@@ -348,7 +386,17 @@ export default function Admin({
                 ) : (
                   <>
                     <td>
-                      {open(h) ? "Ouverte" : "Fermée"}
+                      {h.status === "HIDDEN"
+                        ? "Masquée"
+                        : h.review_status !== "VALIDATED"
+                          ? "Non publiée"
+                          : +new Date(h.starts_at) > Date.now()
+                            ? "Pas encore ouverte"
+                            : h.activity === "PAUSED"
+                              ? "En pause"
+                              : open(h)
+                                ? "Ouverte"
+                                : "Fermée"}
                       <small>
                         {h.candy_available
                           ? "Bonbons disponibles"
@@ -404,7 +452,9 @@ export default function Admin({
           target="_blank"
           rel="noreferrer"
         >
-          <HouseIcon size={26} />
+          <span className="admin-brand-mark">
+            <ManorMark />
+          </span>
           <span>
             Halloween Map<small>Administration</small>
           </span>
@@ -421,12 +471,10 @@ export default function Admin({
               ["activity", "Activité", "audit.read", Activity],
               ["content", "Textes & documents", "content.manage", FileText],
               ["settings", "Paramètres", "settings.read", Settings],
-              ["roles", "Rôles & permissions", "roles.manage", ShieldCheck],
             ] as const
           ).map(
             ([id, title, permission, Icon]) =>
-              has(user, permission) &&
-              (id !== "roles" || user.role_name === "SUPER_ADMIN") && (
+              has(user, permission) && (
                 <button
                   key={id}
                   className={section === id ? "is-current" : ""}
@@ -638,11 +686,17 @@ export default function Admin({
               user={user}
             />
           )}
+        {section === "communications" && <MessageTemplates user={user} />}
         {section === "communications" && !selectedSeason && (
           <p>Aucune saison consultée.</p>
         )}
         {section === "activity" && !error && has(user, "audit.read") && (
           <AdminActivity
+            seasonId={viewSeasonId}
+            onHouse={(id) => {
+              setPendingHouseId(id);
+              setSection("houses");
+            }}
             audit={loadedView === viewKey ? audit : []}
             scope={auditScope}
             onScope={setAuditScope}
@@ -652,12 +706,13 @@ export default function Admin({
         )}
         {section === "statistics" && !error && (
           <AdminStatistics
+            zone={state.instance?.timezone}
             season={selectedSeason}
             data={loadedView === viewKey ? statistics : null}
             loading={!error && (loading || loadedView !== viewKey)}
           />
         )}
-        {["content", "settings", "roles"].includes(section) && (
+        {["content", "settings"].includes(section) && (
           <AdminExistingPage
             key={section}
             section={section}
@@ -668,6 +723,17 @@ export default function Admin({
         )}
         {section === "houses" && (
           <section className="beta-card">
+            <p className="small muted">
+              {
+                scopedHouses.filter((h) => h.review_status === "VALIDATED")
+                  .length
+              }{" "}
+              validées ·{" "}
+              {scopedHouses.filter((h) => h.review_status === "PENDING").length}{" "}
+              en attente ·{" "}
+              {scopedHouses.filter((h) => h.review_status === "REFUSED").length}{" "}
+              refusées
+            </p>
             {has(user, "participants.edit") && (
               <div className="beta-house-create">
                 <button
@@ -747,6 +813,12 @@ export default function Admin({
               user={user}
               initialCreate={userCreate}
               reload={reload}
+              seasonName={seasons.find((s) => s.active)?.name}
+              onHouse={(id) => {
+                setPendingHouseId(id);
+                setSection("houses");
+                setSeasonId(activeSeasonId);
+              }}
             />
           ))}
         {section === "seasons" && (
@@ -972,6 +1044,21 @@ export default function Admin({
                           </div>
                           <label>
                             Motif du refus
+                            <select
+                              value={reasonCode}
+                              onChange={(e) => {
+                                setReasonCode(e.target.value as RefusalCode);
+                                setReason("");
+                              }}
+                            >
+                              {Object.entries(refusalReasons).map(
+                                ([code, label]) => (
+                                  <option key={code} value={code}>
+                                    {label}
+                                  </option>
+                                ),
+                              )}
+                            </select>
                             <textarea
                               maxLength={500}
                               value={reason}
@@ -980,11 +1067,27 @@ export default function Admin({
                           </label>
                           <AsyncButton
                             onClick={() =>
-                              act("reviewHouse", { status: "REFUSED", reason })
+                              act("reviewHouse", {
+                                status: "REFUSED",
+                                reason,
+                                reason_code: reasonCode,
+                              })
                             }
                           >
                             Refuser avec motif
                           </AsyncButton>
+                          <p className="small">
+                            Motif transmis au propriétaire :{" "}
+                            {refusalText(reasonCode, reason) ||
+                              "Une explication est obligatoire."}
+                          </p>
+                          <RefusalPreview
+                            id={current.id}
+                            reason={refusalText(reasonCode, reason).slice(
+                              0,
+                              500,
+                            )}
+                          />
                         </section>
                       )}
                       <section>

@@ -1,3 +1,4 @@
+import { messageDefaults } from "../lib/message-templates";
 import { test, expect, type Page } from "@playwright/test";
 const real = "30000000-0000-4000-8000-000000000001",
   other = "30000000-0000-4000-8000-000000000002",
@@ -95,7 +96,8 @@ async function arrange(page: Page, role = "SUPER_ADMIN") {
             : { approved: 0, pending: 0, routes: 0, users: 0 };
     else if (path === "/api/admin/houses")
       data =
-        sid === other
+        sid === other ||
+        new URL(route.request().url()).searchParams.get("q") === "introuvable"
           ? []
           : [
               {
@@ -120,7 +122,8 @@ async function arrange(page: Page, role = "SUPER_ADMIN") {
             ];
     else if (path === "/api/admin/audit")
       data =
-        sid === other
+        sid === other ||
+        new URL(route.request().url()).searchParams.get("q") === "introuvable"
           ? []
           : [
               {
@@ -132,6 +135,7 @@ async function arrange(page: Page, role = "SUPER_ADMIN") {
                 created_at: new Date(now).toISOString(),
               },
             ];
+    else if (path === "/api/admin/templates") data = messageDefaults;
     else if (path === "/api/admin/communications")
       data = { campaigns: [], variables: [], smtpAvailable: true };
     else if (path === "/api/admin/users" || path === "/api/admin/roles")

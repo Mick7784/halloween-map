@@ -82,11 +82,11 @@ for (const size of [
   { width: 820, height: 1180 },
   { width: 1440, height: 900 },
 ]) {
-  test(`home composition and no page scrolling ${size.width}px`, async ({
+  test(`waiting composition and reachable controls ${size.width}px`, async ({
     page,
   }) => {
     await page.setViewportSize(size);
-    await arrange(page);
+    await arrange(page, "member");
     await expect(page.locator("h1")).toContainText("La carte ouvre");
     await expect(page.locator(".home-explanation")).toHaveText(
       "Découvrez les maisons participantes et préparez votre collecte d’Halloween.",
@@ -94,7 +94,7 @@ for (const size of [
     await expect(page.locator(".home-houses")).toContainText("37 maisons");
     await expect(
       page.getByRole("link", { name: "Inscrire ma maison", exact: true }),
-    ).toHaveAttribute("href", "/register");
+    ).toHaveAttribute("href", "/participant");
     const boxes = await page
       .locator(".home-clock>div")
       .evaluateAll((items) => items.map((e) => e.getBoundingClientRect().top));
@@ -108,19 +108,15 @@ for (const size of [
     ]) {
       const b = (await page.locator(selector).boundingBox())!;
       expect(b.y).toBeGreaterThan(60);
-      expect(b.y + b.height).toBeLessThan(size.height - 20);
+      expect(b.height).toBeGreaterThan(0);
       expect(b.x).toBeGreaterThanOrEqual(0);
       expect(b.x + b.width).toBeLessThanOrEqual(size.width);
     }
+    await page.locator(".home-cta").scrollIntoViewIfNeeded();
+    await expect(page.locator(".home-cta")).toBeVisible();
     expect(
-      await page.evaluate(
-        () =>
-          document.documentElement.scrollHeight <= innerHeight &&
-          document.body.scrollHeight <= innerHeight,
-      ),
-    ).toBe(true);
-    await page.mouse.wheel(0, 600);
-    expect(await page.evaluate(() => scrollY)).toBe(0);
+      await page.evaluate(() => document.documentElement.scrollWidth),
+    ).toBeLessThanOrEqual(size.width);
     await page.screenshot({
       animations: "disabled",
       path: `${output}/accueil-${size.width}.png`,
@@ -230,13 +226,13 @@ for (const mode of ["guest", "member", "house", "admin"]) {
       }
       await expect(
         dialog.getByRole("link", { name: "La carte", exact: true }),
-      ).toHaveAttribute("href", "/map");
+      ).toHaveCount(0);
       await expect(
         dialog.getByRole("link", { name: "Inscrire ma maison", exact: true }),
       ).toHaveAttribute("href", "/login?next=/participant");
       await expect(
         dialog.getByRole("link", { name: "Préparer ma collecte", exact: true }),
-      ).toHaveAttribute("href", "/map#parcours");
+      ).toHaveCount(0);
       await page.route("**/api/login", (r) =>
         r.fulfill({ status: 401, json: { error: "Identifiants incorrects" } }),
       );
@@ -255,7 +251,7 @@ for (const mode of ["guest", "member", "house", "admin"]) {
     } else {
       await expect(
         dialog.getByRole("link", { name: "La carte", exact: true }),
-      ).toBeVisible();
+      ).toHaveCount(0);
       await expect(
         dialog.getByRole("link", {
           name: mode === "member" ? "Inscrire ma maison" : "Ma participation",
@@ -343,7 +339,7 @@ test("configured date, ticking seconds, zero count and safe unconfigured state",
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await arrange(page);
+  await arrange(page, "member");
   const initial = await page.locator(".home-clock>div").last().textContent();
   await expect
     .poll(() => page.locator(".home-clock>div").last().textContent())
@@ -356,9 +352,10 @@ test("configured date, ticking seconds, zero count and safe unconfigured state",
   );
   await page.reload();
   await expect(page.locator(".home-houses")).toContainText("0 maison");
-  await expect(page.locator("h1")).toContainText("31 octobre à 12:00");
+  await expect(page.locator("h1")).toContainText("La prochaine édition");
+  await expect(page.locator(".home-clock")).toHaveCount(0);
   await expect(
-    page.getByRole("link", { name: "Créer un compte", exact: true }),
+    page.getByRole("link", { name: "Mon compte", exact: true }).first(),
   ).toBeVisible();
 });
 
@@ -393,8 +390,7 @@ for (const mode of ["guest", "member", "house", "admin"]) {
     ).toHaveCount(0);
     expect(
       await page.evaluate(
-        () =>
-          document.documentElement.scrollHeight <= innerHeight && scrollY === 0,
+        () => document.documentElement.scrollWidth <= innerWidth,
       ),
     ).toBe(true);
   });

@@ -1,4 +1,5 @@
 import type { Season } from "../lib/domain";
+import AttendanceChart from "./AttendanceChart";
 import {
   unavailableMetric as unavailable,
   measured,
@@ -11,6 +12,7 @@ import {
 } from "../lib/admin-metrics";
 
 export type SeasonStatistics = {
+  attendance?: import("../lib/attendance").Attendance;
   seasonId: string;
   snapshot: boolean;
   stats: Record<string, number | null | undefined>;
@@ -18,9 +20,11 @@ export type SeasonStatistics = {
 function Bars({
   title,
   items,
+  chart = true,
 }: {
   title: string;
   items: [string, number | null | undefined][];
+  chart?: boolean;
 }) {
   const available = items.filter(([, value]) => measured(value));
   const max = Math.max(1, ...available.map(([, value]) => value!));
@@ -35,7 +39,7 @@ function Bars({
             <li key={label}>
               <span>{label}</span>
               <strong>{formatCount(value)}</strong>
-              {measured(value) && (
+              {chart && measured(value) && (
                 <div className="stats-track" aria-hidden="true">
                   <div style={{ width: `${(value / max) * 100}%` }} />
                 </div>
@@ -44,6 +48,9 @@ function Bars({
           ))}
         </ul>
       )}
+      {chart && available.length > 0 && (
+        <p className="small muted">Échelle relative : 0 à {max} maisons.</p>
+      )}
     </section>
   );
 }
@@ -51,10 +58,12 @@ export default function AdminStatistics({
   data,
   season,
   loading,
+  zone = "Europe/Paris",
 }: {
   data: SeasonStatistics | null;
   season?: Season;
   loading: boolean;
+  zone?: string;
 }) {
   if (loading) return <p role="status">Chargement des statistiques…</p>;
   if (!season || !data)
@@ -105,6 +114,7 @@ export default function AdminStatistics({
   );
   return (
     <div className="stats-page">
+      <AttendanceChart data={data.attendance} zone={zone} />
       <p className="muted">
         {data.snapshot
           ? "Historique en lecture seule · snapshot anonyme conservé."
@@ -131,6 +141,7 @@ export default function AdminStatistics({
         />
         <Bars
           title="Parcours et collectes"
+          chart={false}
           items={[
             [metricLabels.routes, s.routes],
             [metricLabels.started, started],
@@ -148,7 +159,8 @@ export default function AdminStatistics({
       <p className="muted small">
         Visites, distances et durées : totaux déclarés par les appareils lors de
         la fin de collecte, sans trace GPS individuelle. Les anciennes collectes
-        ne sont pas reconstruites. Aucune série temporelle n’est collectée.
+        ne sont pas reconstruites. La fréquentation utilise uniquement les
+        relevés agrégés réellement mesurés.
       </p>
     </div>
   );

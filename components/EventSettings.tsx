@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import type { Instance } from "../lib/domain";
 import { api, Field, Notice, values } from "./common";
 import FrenchDate from "./FrenchDate";
@@ -21,9 +21,24 @@ export default function EventSettings({
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false),
     [success, setSuccess] = useState("");
+  const [expanded, setExpanded] = useState(false),
+    [dirty, setDirty] = useState(false);
+  useEffect(() => {
+    if (!dirty) return;
+    const warn = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [dirty]);
   return (
     <section className="panel">
       <form
+        onChange={() => {
+          setDirty(true);
+          setSuccess("");
+        }}
         onSubmit={async (e) => {
           e.preventDefault();
           const v = values(e.currentTarget);
@@ -40,6 +55,7 @@ export default function EventSettings({
               defaultClose: v.recurring_close.slice(5),
             });
             setSuccess("Paramètres enregistrés.");
+            setDirty(false);
           } catch (e) {
             setError((e as Error).message);
           } finally {
@@ -103,7 +119,15 @@ export default function EventSettings({
         <p className="small muted">
           {latitude.toFixed(5)}, {longitude.toFixed(5)} · {zone}
         </p>
-        <div className="settings-map">
+        <button type="button" onClick={() => setExpanded((v) => !v)}>
+          {expanded ? "Réduire la carte" : "Agrandir la carte"}
+        </button>
+        <p className="small muted">
+          Cliquez sur la carte pour ajuster le centre. Changer le territoire ou
+          le centre ne déplace pas les maisons existantes ; vérifiez la zone et
+          les règles d’inscription avant confirmation.
+        </p>
+        <div className={"settings-map" + (expanded ? " is-expanded" : "")}>
           <MapView
             key={latitude + "," + longitude + "," + zoom}
             houses={[]}
@@ -111,6 +135,12 @@ export default function EventSettings({
             zoom={zoom}
             styleUrl={mapStyle}
             onSelect={() => {}}
+            origin={[longitude, latitude]}
+            onPoint={(lat, lon) => {
+              setLatitude(lat);
+              setLongitude(lon);
+              setDirty(true);
+            }}
           />
         </div>
         <details>
@@ -150,24 +180,27 @@ export default function EventSettings({
             </label>
           </div>
         </details>
-        <h2>Dates récurrentes proposées</h2>
-        <p className="small muted">
-          Ces valeurs préremplissent l’ouverture et la fermeture d’une prochaine
-          édition. Le calendrier de la saison reste configurable séparément.
-        </p>
-        {[
-          ["open", "Ouverture", String(instance.config.defaultOpen)],
-          ["close", "Fermeture", String(instance.config.defaultClose)],
-        ].map(([key, label, v]) => (
-          <div className="grid two" key={key}>
-            <FrenchDate
-              recurring
-              label={label + " (jour et mois)"}
-              name={"recurring_" + key}
-              value={"2000-" + v}
-            />
-          </div>
-        ))}
+        <details>
+          <summary>Valeurs proposées pour les futures saisons</summary>
+          <p className="small muted">
+            Ces valeurs préremplissent l’ouverture et la fermeture d’une
+            prochaine édition. Le calendrier de la saison reste configurable
+            séparément.
+          </p>
+          {[
+            ["open", "Ouverture", String(instance.config.defaultOpen)],
+            ["close", "Fermeture", String(instance.config.defaultClose)],
+          ].map(([key, label, v]) => (
+            <div className="grid two" key={key}>
+              <FrenchDate
+                recurring
+                label={label + " (jour et mois)"}
+                name={"recurring_" + key}
+                value={"2000-" + v}
+              />
+            </div>
+          ))}
+        </details>
         <Notice error={error} />
         {success && (
           <p className="notice info" role="status">

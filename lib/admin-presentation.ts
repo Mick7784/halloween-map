@@ -1,4 +1,23 @@
 export const auditLabels: Record<string, string> = {
+  "email.template.save": "Modèle email enregistré",
+  "email.template.reset": "Modèle email restauré",
+  "email.template.test": "Email de test accepté par SMTP",
+  "user.permissions.updated": "Permissions individuelles modifiées",
+  "user.grade.updated": "Grade du compte modifié",
+  "content.save": "Texte public enregistré",
+  "content.reset": "Texte public restauré",
+  "content.draft": "Document légal préparé",
+  "content.publish": "Document légal publié",
+  "content.links.updated": "Liens et contact modifiés",
+  "campaign.save": "Campagne enregistrée",
+  "campaign.test": "Test de campagne demandé",
+  "campaign.retry": "Reprise des envois demandée",
+  "template.save": "Modèle email enregistré",
+  "template.reset": "Modèle email restauré",
+  "template.test": "Email de test accepté par SMTP",
+  "security.rate_limited":
+    "Protection contre les tentatives répétées déclenchée",
+  "account.password": "Mot de passe modifié",
   "house.review.validated": "Maison validée",
   "house.review.refused": "Maison refusée",
   "house.review.pending": "Maison remise en attente",
@@ -37,7 +56,7 @@ export const auditLabels: Record<string, string> = {
   "route.completed": "Parcours terminé",
 };
 export function auditLabel(action: string) {
-  return auditLabels[action] ?? "Action administrative enregistrée";
+  return auditLabels[action] ?? `Événement : ${action}`;
 }
 export const permissionLabels: Record<string, string> = {
   "admin.access": "Accéder à l’administration",

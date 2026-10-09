@@ -49,6 +49,7 @@ export default function UserMenu({
       <ChevronRight size={16} />
     </Link>
   );
+  const links = publicProjectLinks(state?.projectLinks, state?.privacy);
   return (
     <FloatingWindow
       title="Menu utilisateur"
@@ -73,14 +74,16 @@ export default function UserMenu({
         <div className="home-drawer-login">{login}</div>
       )}
       <nav className="home-drawer-links" aria-label="Navigation personnelle">
-        {entry("/map", "La carte", <Map />)}
+        {user && state?.mapAccessible && entry("/map", "La carte", <Map />)}
         {entry(
           user ? "/participant" : "/login?next=/participant",
           participationLabel,
           <House />,
           participationSubtitle,
         )}
-        {entry("/map#parcours", "Préparer ma collecte", <Route />)}
+        {user &&
+          state?.mapAccessible &&
+          entry("/map#parcours", "Préparer ma collecte", <Route />)}
         {user?.permissions.includes("admin.access") && (
           <div className="home-menu-group">
             {entry("/admin", "Administration", <ShieldCheck />)}
@@ -101,19 +104,31 @@ export default function UserMenu({
             </AsyncButton>
           )}
         </div>
-        <div className="home-menu-group">
-          <a
-            href={bugHref(
-              publicProjectLinks(state?.projectLinks, state?.privacy),
-              version,
-            )}
-            onClick={onClose}
-          >
-            <Bug />
-            <span>Signaler un bug</span>
-            <ChevronRight size={16} />
-          </a>
-        </div>
+        {links.contactEnabled && (links.contactUrl || links.contactEmail) && (
+          <div className="home-menu-group">
+            <a
+              href={links.contactUrl ?? `mailto:${links.contactEmail}`}
+              onClick={onClose}
+            >
+              Contacter l’organisateur
+            </a>
+          </div>
+        )}
+        {links.bugEnabled && (
+          <div className="home-menu-group">
+            <a
+              href={bugHref(
+                publicProjectLinks(state?.projectLinks, state?.privacy),
+                version,
+              )}
+              onClick={onClose}
+            >
+              <Bug />
+              <span>Signaler un bug</span>
+              <ChevronRight size={16} />
+            </a>
+          </div>
+        )}
       </nav>
     </FloatingWindow>
   );

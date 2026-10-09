@@ -19,6 +19,7 @@ import {
   verifyPassword,
   requirePermission,
   rateLimit,
+  confirmAdminPassword,
 } from "./auth";
 import {
   seasonFinished,
@@ -27,7 +28,8 @@ import {
   localISO,
   publicHouse,
   seasonState,
-  mapAccessible,
+  earlyMapAccess,
+  memberMapAccessible,
   visible,
   type Instance,
   type Season,
@@ -57,6 +59,8 @@ import {
 } from "./participation-settings";
 import { frenchCommunes, frenchAddressReverse } from "./french-address";
 import { z } from "zod";
+import { attendance } from "./attendance";
+import { refusalText } from "./refusal-reasons";
 export async function audit(
   client: Database,
   instanceId: string,
@@ -67,13 +71,7 @@ export async function audit(
 ) {
   await client.query(
     "INSERT INTO audit_logs(instance_id,actor_id,action,target_id,season_id) VALUES($1,$2,$3,$4,COALESCE($5::uuid,(SELECT season_id FROM participations WHERE id=$4 AND instance_id=$1),(SELECT id FROM seasons WHERE id=$4 AND instance_id=$1)))",
-    [
-      instanceId,
-      actor?.permissions.includes("admin.access") ? actor.id : null,
-      action,
-      target ?? null,
-      seasonId ?? null,
-    ],
+    [instanceId, actor?.id ?? null, action, target ?? null, seasonId ?? null],
   );
 }
 export async function instance(
@@ -291,6 +289,7 @@ export async function purgeSeason(
       [instanceId, s.id],
     );
     await c.query("DELETE FROM participations WHERE season_id=$1", [s.id]);
+    await c.query("DELETE FROM active_presence WHERE season_id=$1", [s.id]);
     await c.query("DELETE FROM email_outbox WHERE season_id=$1", [s.id]);
     await c.query("DELETE FROM reminder_deliveries WHERE season_id=$1", [s.id]);
     await c.query("DELETE FROM email_campaigns WHERE season_id=$1", [s.id]);
@@ -410,7 +409,10 @@ export async function publicState(
   const i = await instance();
   if (!i) return { setupRequired: true };
   const s = await applicationSeason(i, user),
-    state = mapAccessible(s, now) ? "MAP_OPEN" : seasonState(s, now);
+    state = memberMapAccessible(s, user, now)
+      ? "MAP_OPEN"
+      : seasonState(s, now);
+  const earlyAccess = earlyMapAccess(s, user, now);
   let count = 0,
     houses: ReturnType<typeof publicHouse>[] = [];
   let upcoming: ReturnType<typeof publicHouse>[] = [];
@@ -424,10 +426,10 @@ export async function publicState(
     if (state === "MAP_OPEN" && user) {
       const { rows } = await db().query(
         "SELECT * FROM participations WHERE instance_id=$1 AND season_id=$2 AND status='VISIBLE' AND review_status='VALIDATED' AND activity='ACTIVE' AND EXISTS(SELECT 1 FROM users u WHERE u.id=participations.user_id AND u.account_status='ACTIVE' AND (u.email_status='VERIFIED' OR participations.legacy_imported)) AND NOT EXISTS(SELECT 1 FROM legal_documents d WHERE d.instance_id=participations.instance_id AND d.active AND d.requires_reaccept AND ((d.kind='TERMS' AND participations.terms_version IS DISTINCT FROM d.version) OR (d.kind='GUIDELINES' AND participations.guidelines_version IS DISTINCT FROM d.version))) AND starts_at<=$3 AND ends_at>$3",
-        [i.id, s.id, now],
+        [i.id, s.id, earlyAccess ? s.opens_at : now],
       );
       houses = (rows as unknown as House[])
-        .filter((h) => visible(h, s, now))
+        .filter((h) => visible(h, s, earlyAccess ? new Date(s.opens_at) : now))
         .map(publicHouse);
     }
   }
@@ -453,6 +455,14 @@ export async function publicState(
     routeCandidates: upcoming,
     closedHouseIds,
     setupRequired: false,
+    nextOpening: s
+      ? null
+      : ((
+          await db().query(
+            "SELECT opens_at FROM seasons WHERE instance_id=$1 AND NOT is_test AND NOT archived AND purged_at IS NULL AND opens_at>$2 ORDER BY opens_at LIMIT 1",
+            [i.id, now],
+          )
+        ).rows[0]?.opens_at ?? null),
     contents: Object.fromEntries(
       Object.entries(await contentState(i.id)).map(([k, v]) => [
         k,
@@ -472,7 +482,8 @@ export async function publicState(
     privacy: publicPrivacySettings(i.config.privacy),
     projectLinks: publicProjectLinks(i.config.projectLinks, i.config.privacy),
     participation: publicParticipationSettings(i.config.participation),
-    mapAccessible: !!user && mapAccessible(s, now),
+    mapAccessible: memberMapAccessible(s, user, now),
+    earlyAccess,
     instance: {
       id: i.id,
       public_name: i.public_name,
@@ -666,7 +677,7 @@ export async function createParticipation(
     validateParticipationSettings(h, i);
     const [starts, ends] = houseDates(h, i, ss);
     await c.query(
-      "INSERT INTO participations(instance_id,season_id,user_id,name,address,latitude,longitude,activities,starts_at,ends_at,fear,adaptable,rp,practical,terms_version,terms_accepted_at,guidelines_version,guidelines_accepted_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,CASE WHEN $17 THEN now() ELSE NULL END,$16,now())",
+      "INSERT INTO participations(instance_id,season_id,user_id,name,address,latitude,longitude,activities,starts_at,ends_at,fear,adaptable,rp,practical,terms_version,terms_accepted_at,guidelines_version,guidelines_accepted_at,review_status) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,CASE WHEN $17 THEN now() ELSE NULL END,$16,now(),$18)",
       [
         i.id,
         ss.id,
@@ -685,6 +696,7 @@ export async function createParticipation(
         a.terms_version,
         a.guidelines_version,
         a.terms,
+        management ? "VALIDATED" : "PENDING",
       ],
     );
     await c.query(
@@ -811,7 +823,23 @@ export async function updateHouse(
         user.instance_id,
       ],
     );
-    if (!admin && old.review_status === "REFUSED") {
+    const substantial =
+      old.address !== data.address ||
+      Number(old.latitude) !== data.latitude ||
+      Number(old.longitude) !== data.longitude ||
+      +new Date(old.starts_at) !== +new Date(starts) ||
+      +new Date(old.ends_at) !== +new Date(ends) ||
+      JSON.stringify(old.activities) !== JSON.stringify(data.activities) ||
+      old.fear !== data.fear ||
+      old.adaptable !== data.adaptable ||
+      old.rp !== data.rp ||
+      old.practical !== data.practical ||
+      old.name !== data.name;
+    if (
+      !admin &&
+      (old.review_status === "REFUSED" ||
+        (old.review_status === "VALIDATED" && substantial))
+    ) {
       await c.query(
         "UPDATE participations SET review_status='PENDING',refusal_reason='',submitted_at=now() WHERE id=$1",
         [id],
@@ -943,7 +971,7 @@ export async function route(
   if (!i) throw new HttpError(404, "Instance manquante");
   const rawSeason = await applicationSeason(i, user);
   const s = rawSeason;
-  if (!s || !mapAccessible(s, context.now))
+  if (!s || !memberMapAccessible(s, user, context.now))
     throw new HttpError(403, "La carte est fermée");
   await validateAcceptance(db(), i.id, input.acceptance);
   try {
@@ -1012,7 +1040,7 @@ export async function route(
       currentInstance?.active_season_id !== s.id ||
       +new Date(current.opens_at) !== +new Date(rawSeason!.opens_at) ||
       +new Date(current.closes_at) !== +new Date(rawSeason!.closes_at) ||
-      !mapAccessible({ ...current, active: true }, context.now)
+      !memberMapAccessible({ ...current, active: true }, user, context.now)
     )
       throw new HttpError(409, "La saison a changé. Recalculez le parcours.");
     const latest = await routeCandidates(c, i, current, input.start, input.end);
@@ -1055,7 +1083,7 @@ export async function routeAvailability(
     input.instanceId !== i.id ||
     !s ||
     input.seasonId !== s.id ||
-    !mapAccessible(s, context.now)
+    !memberMapAccessible(s, user, context.now)
   )
     return {
       valid: false,
@@ -1131,6 +1159,7 @@ export async function adminRead(
   section: string,
   seasonId?: string,
   auditScope: string = "season",
+  filters: Record<string, string> = {},
 ) {
   const permission: Record<string, string> = {
     dashboard: "stats.read",
@@ -1169,6 +1198,7 @@ export async function adminRead(
         return {
           seasonId: s.id,
           snapshot,
+          attendance: await attendance(s.id),
           stats: snapshot ? s.stats : await statisticalSnapshot(c, s),
         };
       });
@@ -1209,10 +1239,43 @@ export async function adminRead(
       ).rows;
     case "audit": {
       const scope = z.enum(["season", "global", "all"]).parse(auditScope);
+      const f = z
+        .object({
+          q: z.string().max(100).default(""),
+          category: z
+            .enum(["all", "houses", "users", "admin", "security"])
+            .default("all"),
+          from: z.iso.datetime().optional(),
+          to: z.iso.datetime().optional(),
+          page: z.coerce.number().int().min(0).max(10000).default(0),
+        })
+        .parse(filters);
       return (
         await db().query(
-          "SELECT a.id,a.action,a.created_at,a.target_id,u.display_name actor,COALESCE(h.name,s.name,t.display_name) target_label FROM audit_logs a LEFT JOIN users u ON u.id=a.actor_id LEFT JOIN participations h ON h.id=a.target_id AND h.instance_id=a.instance_id LEFT JOIN seasons s ON s.id=a.target_id AND s.instance_id=a.instance_id LEFT JOIN users t ON t.id=a.target_id AND t.instance_id=a.instance_id WHERE a.instance_id=$1 AND ($3='all' OR ($3='global' AND a.season_id IS NULL) OR ($3='season' AND a.season_id=$2)) ORDER BY a.created_at DESC LIMIT 200",
-          [u.instance_id, scoped?.id ?? null, scope],
+          `SELECT a.id,a.action,a.created_at,a.target_id,u.display_name actor,r.name actor_grade,COALESCE(h.name,s.name,t.display_name) target_label,CASE WHEN h.id IS NOT NULL THEN 'house' WHEN t.id IS NOT NULL THEN 'user' WHEN s.id IS NOT NULL THEN 'season' END target_kind
+          FROM audit_logs a LEFT JOIN users u ON u.id=a.actor_id AND u.instance_id=a.instance_id LEFT JOIN roles r ON r.id=u.role_id
+          LEFT JOIN participations h ON h.id=a.target_id AND h.instance_id=a.instance_id AND $10
+          LEFT JOIN seasons s ON s.id=a.target_id AND s.instance_id=a.instance_id AND $12
+          LEFT JOIN users t ON t.id=a.target_id AND t.instance_id=a.instance_id AND $11
+          WHERE a.instance_id=$1 AND ($3='all' OR ($3='global' AND a.season_id IS NULL) OR ($3='season' AND a.season_id=$2))
+          AND ($4='' OR concat_ws(' ',a.action,u.display_name,h.name,s.name,t.display_name) ILIKE '%'||$4||'%')
+          AND ($5='all' OR ($5='houses' AND a.action ~ '^(house|participant|participation)\\.') OR ($5='users' AND a.action LIKE 'user.%') OR ($5='security' AND a.action LIKE 'security.%') OR ($5='admin' AND a.action ~ '^(season|settings|content|email)\\.'))
+          AND ($6::timestamptz IS NULL OR a.created_at>=$6) AND ($7::timestamptz IS NULL OR a.created_at<=$7)
+          ORDER BY a.created_at DESC,a.id DESC LIMIT $8 OFFSET $9`,
+          [
+            u.instance_id,
+            scoped?.id ?? null,
+            scope,
+            f.q,
+            f.category,
+            f.from ?? null,
+            f.to ?? null,
+            50,
+            f.page * 50,
+            u.permissions.includes("participants.read"),
+            u.permissions.includes("users.read"),
+            u.permissions.includes("season.read"),
+          ],
         )
       ).rows;
     }
@@ -1229,6 +1292,7 @@ export async function adminRead(
       );
       return {
         ...rows[0],
+        attendance: await attendance(s?.id),
         users: users[0].total,
         routes: s?.routes_count ?? 0,
         collectionStats: s?.stats ?? {},
@@ -1253,9 +1317,21 @@ export async function adminAction(user: User | null, input: unknown) {
       seasonId: z.uuid().optional(),
       id: z.uuid().optional(),
       payload: z.unknown().optional(),
+      current_password: z.string().max(128).optional(),
     })
     .parse(input);
   const u = user;
+  if (
+    [
+      "purge",
+      "deleteSeason",
+      "deleteHouse",
+      "activateSeason",
+      "deactivateSeason",
+      "settings",
+    ].includes(data.action)
+  )
+    await confirmAdminPassword(u, data.current_password);
   if (
     [
       "houseActivity",
@@ -1360,8 +1436,22 @@ export async function adminAction(user: User | null, input: unknown) {
       .object({
         status: z.enum(["PENDING", "VALIDATED", "REFUSED"]),
         reason: z.string().trim().max(500).default(""),
+        reason_code: z
+          .enum([
+            "ADDRESS",
+            "AREA",
+            "INFORMATION",
+            "RULES",
+            "DUPLICATE",
+            "OTHER",
+          ])
+          .optional(),
       })
       .parse(data.payload);
+    if (payload.reason_code)
+      payload.reason = refusalText(payload.reason_code, payload.reason);
+    if (payload.reason.length > 500)
+      throw new HttpError(400, "Motif limité à 500 caractères");
     if (payload.status === "REFUSED" && !payload.reason)
       throw new HttpError(400, "Précisez le motif du refus");
     return transaction(async (c) => {

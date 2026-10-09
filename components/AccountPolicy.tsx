@@ -29,6 +29,12 @@ export default function AccountPolicy({ state }: { state: PublicState }) {
         </p>
       )}
       <Editorial text={body} />
+      <p>
+        Après purge, seules vos années de participation validée sont conservées
+        cinq ans et sont effacées avec le compte. La fréquentation repose sur
+        une présence éphémère de trois minutes et des relevés anonymes de quinze
+        minutes ; aucun historique individuel de navigation n’est conservé.
+      </p>
     </section>
   );
 }

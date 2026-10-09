@@ -22,7 +22,13 @@ test("live APIs: REAL/TEST isolation, phone session, reusable accounts, purge an
       opens = new Date(now + 86400000).toISOString(),
       closes = new Date(now + 2 * 86400000).toISOString();
     const post = async (path: string, body: unknown) =>
-      page.request.post("/api/" + path, { headers: { origin }, data: body });
+      page.request.post("/api/" + path, {
+        headers: { origin },
+        data: {
+          current_password: password,
+          ...(body as Record<string, unknown>),
+        },
+      });
     const installed = await post("setup", {
       token: process.env.SETUP_TOKEN,
       instance: {
@@ -130,7 +136,17 @@ test("live APIs: REAL/TEST isolation, phone session, reusable accounts, purge an
         await post("admin", {
           action: "createHouse",
           seasonId: testSeason.id,
-          payload: { userId: account.id, participation },
+          payload: {
+            userId: account.id,
+            participation: {
+              ...participation,
+              house: {
+                ...participation.house,
+                starts_at: new Date(now - 3600000).toISOString(),
+                ends_at: new Date(now + 3600000).toISOString(),
+              },
+            },
+          },
         })
       ).ok(),
     ).toBe(true);

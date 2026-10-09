@@ -48,6 +48,32 @@ export default function Application({
     ),
     [now, setNow] = useState(() => Date.now());
   useCollectionReports(user?.id, user?.instance_id);
+  const presenceUserId = user?.id;
+  useEffect(() => {
+    if (!presenceUserId) return;
+    let lastActivity = Date.now();
+    const active = () => {
+      lastActivity = Date.now();
+    };
+    const signal = () => {
+      if (
+        document.visibilityState === "visible" &&
+        Date.now() - lastActivity < 120000
+      )
+        void api("presence", {}).catch(() => {});
+    };
+    signal();
+    const timer = setInterval(signal, 60000);
+    window.addEventListener("pointerdown", active);
+    window.addEventListener("keydown", active);
+    window.addEventListener("scroll", active, { passive: true });
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener("pointerdown", active);
+      window.removeEventListener("keydown", active);
+      window.removeEventListener("scroll", active);
+    };
+  }, [presenceUserId]);
   const refresh = useCallback(async () => {
     const [s, u] = await Promise.all([
       api<PublicState>("public"),
@@ -162,7 +188,7 @@ export default function Application({
         state: closed ? "CLOSED" : state.state,
         houses: closed
           ? []
-          : state.state !== "MAP_OPEN"
+          : state.state !== "MAP_OPEN" || state.earlyAccess
             ? (state.houses ?? [])
             : (state.houses ?? []).filter(
                 (h) =>
@@ -305,7 +331,8 @@ export default function Application({
         />
       );
   if (
-    (view === "home" || (["account", "participant"].includes(view) && user)) &&
+    ((view === "home" && !(user && state?.mapAccessible)) ||
+      (["account", "participant"].includes(view) && user)) &&
     state &&
     !state.setupRequired
   )
@@ -324,7 +351,9 @@ export default function Application({
     <div
       className={
         "application " +
-        (view === "map" && user ? "map-app" : "") +
+        ((view === "map" || view === "home") && user && state?.mapAccessible
+          ? "map-app"
+          : "") +
         (view === "admin" && user?.permissions.includes("admin.access")
           ? " admin-app"
           : "")

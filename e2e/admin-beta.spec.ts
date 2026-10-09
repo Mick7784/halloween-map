@@ -32,6 +32,7 @@ test("beta desktop exposes only useful navigation, pending moderation and normal
     permissions: [
       "admin.access",
       "stats.read",
+      "season.read",
       "participants.read",
       "participants.edit",
       "participants.delete",
@@ -104,7 +105,7 @@ test("beta desktop exposes only useful navigation, pending moderation and normal
   await expect(
     page.getByRole("heading", { name: "Tableau de bord", exact: true }),
   ).toBeVisible();
-  await expect(page.locator(".beta-sidebar nav button")).toHaveCount(3);
+  await expect(page.locator(".beta-sidebar nav button")).toHaveCount(4);
   await expect(page.locator(".beta-pending-list li")).toHaveCount(1);
   await page
     .locator(".beta-sidebar")
@@ -219,11 +220,11 @@ test("global direct accounts need neither a TEST season nor an email", async ({
     await r.fulfill({ json: data });
   });
   await page.goto("/admin");
-  await expect(page.getByLabel("Saison du back-office")).toHaveCount(0);
   await page
     .locator(".beta-sidebar")
     .getByRole("button", { name: "Utilisateurs", exact: true })
     .click();
+  await expect(page.getByLabel("Saison du back-office")).toHaveCount(0);
   await page
     .getByRole("button", { name: "Créer un utilisateur", exact: true })
     .click();
@@ -234,6 +235,17 @@ test("global direct accounts need neither a TEST season nor an email", async ({
     .fill("valid-password-1234");
   await page
     .getByRole("button", { name: "Créer le compte", exact: true })
+    .click();
+  const confirmation = page.getByRole("dialog", {
+    name: "Confirmer l’action sensible",
+  });
+  await expect(confirmation.getByLabel("Mot de passe")).toHaveAttribute(
+    "type",
+    "password",
+  );
+  await confirmation.getByLabel("Mot de passe").fill("valid-password-1234");
+  await confirmation
+    .getByRole("button", { name: "Confirmer", exact: true })
     .click();
   await expect
     .poll(() => created)

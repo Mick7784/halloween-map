@@ -10,9 +10,10 @@ import {
   rateLimit,
   requirePermission,
   verifyPassword,
+  confirmAdminPassword,
 } from "./auth";
 import { credentials } from "./validation";
-import { defaultRoles, type User } from "./domain";
+import { defaultRoles, permissions, type User } from "./domain";
 export async function queueIdentity(
   client: Database,
   userId: string,
@@ -124,12 +125,14 @@ export async function resendIdentity(user: User | null, id?: string) {
   return transaction(async (c) => {
     const u = (
       await c.query(
-        "SELECT * FROM users WHERE id=$1 AND instance_id=$2 FOR UPDATE",
+        "SELECT u.*,r.name role_name FROM users u LEFT JOIN roles r ON r.id=u.role_id WHERE u.id=$1 AND u.instance_id=$2 FOR UPDATE OF u",
         [target, user.instance_id],
       )
     ).rows[0];
     if (!u || u.account_status === "DISABLED")
       throw new HttpError(400, "Compte indisponible");
+    if (id && user.role_name !== "SUPER_ADMIN" && u.role_name !== "USER")
+      throw new HttpError(403, "Compte protégé");
     if (
       u.email_status === "VERIFIED" &&
       u.account_status !== "PENDING_ACTIVATION"
@@ -288,6 +291,10 @@ export async function accountAction(user: User | null, input: unknown) {
           await hashPassword(p.password),
           user.id,
         ]);
+        await c.query(
+          "INSERT INTO audit_logs(instance_id,actor_id,action,target_id) VALUES($1,$2,'account.password',$2)",
+          [user.instance_id, user.id],
+        );
         await c.query("DELETE FROM sessions WHERE user_id=$1", [user.id]);
         return { token: await createSession(user.id, c) };
       }
@@ -315,7 +322,9 @@ export async function adminUsers(
   const context = await selectedSeason(u, seasonId);
   return (
     await db().query(
-      `SELECT u.id,u.email,u.display_name,u.email_status,u.email_verified_at,u.account_status,u.created_at,u.last_login_at,u.role_id,COALESCE(r.name,'USER') role_name,
+      `SELECT u.id,u.email,u.display_name,u.email_status,u.email_verified_at,u.account_status,u.created_at,u.last_login_at,u.role_id,u.admin_permissions,COALESCE(r.name,'USER') role_name,
+ (SELECT COALESCE(json_agg(x),'[]'::json) FROM (SELECT year FROM participation_history WHERE user_id=u.id ORDER BY year DESC) x) participation_history,
+ (SELECT name FROM seasons WHERE id=$2) participation_season,
  (SELECT row_to_json(p) FROM participations p WHERE p.season_id=$2 AND p.user_id=u.id) participation,
  (SELECT COALESCE(json_agg(x),'[]'::json) FROM (SELECT kind,status,scheduled_at,sent_at,last_error FROM email_outbox WHERE user_id=u.id AND (season_id=$2 OR season_id IS NULL) ORDER BY created_at DESC LIMIT 50) x) communications
  FROM users u LEFT JOIN roles r ON r.id=u.role_id WHERE u.instance_id=$1 ORDER BY u.created_at`,
@@ -323,7 +332,19 @@ export async function adminUsers(
     )
   ).rows.map((row) => ({
     ...row,
-    permissions: [...(defaultRoles[String(row.role_name)] ?? [])],
+    participation: u.permissions.includes("participants.read")
+      ? row.participation
+      : null,
+    communications: u.permissions.includes("communications.read")
+      ? row.communications
+      : [],
+    permissions:
+      row.role_name === "ADMIN"
+        ? [
+            "admin.access",
+            ...((row.admin_permissions as string[] | null) ?? []),
+          ]
+        : [...(defaultRoles[String(row.role_name)] ?? [])],
   }));
 }
 export async function adminUserAction(user: User | null, input: unknown) {
@@ -343,11 +364,22 @@ export async function adminUserAction(user: User | null, input: unknown) {
       email: credentials.shape.email.optional(),
       display_name: z.string().trim().min(1).max(80).optional(),
       role_id: z.uuid().optional(),
+      permissions: z.array(z.enum(permissions)).optional(),
+      current_password: z.string().max(128).optional(),
       confirm: z.string().optional(),
       without_invitation: z.boolean().default(false),
       password: credentials.shape.password.optional(),
     })
     .parse(input);
+  if ((p.role_id || p.permissions) && u.role_name !== "SUPER_ADMIN") {
+    if (p.action !== "invite" || p.permissions)
+      throw new HttpError(
+        403,
+        "Seul le Super Admin peut modifier les grades et droits",
+      );
+  }
+  if (["delete", "disable"].includes(p.action) || p.permissions || p.role_id)
+    await confirmAdminPassword(u, p.current_password);
   if (
     p.without_invitation &&
     (p.action !== "invite" || u.role_name !== "SUPER_ADMIN")
@@ -383,6 +415,24 @@ export async function adminUserAction(user: User | null, input: unknown) {
       ).rows[0];
       if (!role) throw new HttpError(400, "Profil invalide");
     }
+    if (
+      p.permissions &&
+      role?.name !== "ADMIN" &&
+      (!p.id ||
+        (
+          await c.query(
+            "SELECT r.name FROM users u JOIN roles r ON r.id=u.role_id WHERE u.id=$1",
+            [p.id],
+          )
+        ).rows[0]?.name !== "ADMIN")
+    )
+      throw new HttpError(
+        400,
+        "Les permissions individuelles concernent les ADMIN",
+      );
+    const grants = (p.permissions ?? []).filter(
+      (p) => !["roles.manage", "settings.manage", "settings.read"].includes(p),
+    );
     if (u.role_name !== "SUPER_ADMIN" && role && role.name !== "USER")
       throw new HttpError(
         403,
@@ -419,6 +469,11 @@ export async function adminUserAction(user: User | null, input: unknown) {
       ).rows[0];
       if (!p.without_invitation)
         await queueIdentity(c, String(target.id), "INVITE");
+      if (role?.name === "ADMIN")
+        await c.query("UPDATE users SET admin_permissions=$1 WHERE id=$2", [
+          grants,
+          target.id,
+        ]);
       await c.query(
         "INSERT INTO audit_logs(instance_id,actor_id,action,target_id,season_id) VALUES($1,$2,$3,$4,$5)",
         [
@@ -452,6 +507,11 @@ export async function adminUserAction(user: User | null, input: unknown) {
           await queueIdentity(c, p.id, "VERIFY");
         }
         await c.query("DELETE FROM sessions WHERE user_id=$1", [p.id]);
+        if (p.permissions || role?.name === "ADMIN")
+          await c.query(
+            "UPDATE users SET admin_permissions=COALESCE($1,admin_permissions,'{}'::text[]) WHERE id=$2",
+            [p.permissions ? grants : null, p.id],
+          );
       } else if (p.action === "delete") {
         if (p.confirm !== "SUPPRIMER CE COMPTE")
           throw new HttpError(400, "Confirmation requise");
@@ -472,6 +532,16 @@ export async function adminUserAction(user: User | null, input: unknown) {
       "INSERT INTO audit_logs(instance_id,actor_id,action,target_id,season_id) VALUES($1,$2,$3,$4,$5)",
       [u.instance_id, u.id, "user." + p.action, p.id ?? null, null],
     );
+    if (p.action === "edit" && (p.role_id || p.permissions))
+      await c.query(
+        "INSERT INTO audit_logs(instance_id,actor_id,action,target_id) VALUES($1,$2,$3,$4)",
+        [
+          u.instance_id,
+          u.id,
+          p.permissions ? "user.permissions.updated" : "user.grade.updated",
+          p.id,
+        ],
+      );
     return { ok: true };
   });
 }

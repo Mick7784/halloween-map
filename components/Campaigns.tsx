@@ -13,6 +13,7 @@ import {
   localDate,
 } from "./common";
 import { seasonFinished } from "../lib/domain";
+import VisualEditor from "./VisualEditor";
 import type { Season, User } from "../lib/domain";
 type Campaign = {
   id: string;
@@ -266,16 +267,12 @@ function CampaignForm({
               onChange={(e) => setSubject(e.target.value)}
             />
           </label>
-          <label className="field">
-            <span>Message</span>
-            <textarea
-              required
-              rows={7}
-              maxLength={5000}
-              value={body}
-              onChange={(e) => setBody(e.target.value)}
-            />
-          </label>
+          <VisualEditor
+            value={body}
+            onChange={setBody}
+            variables={variables}
+            maxLength={5000}
+          />
           <p className="small muted">
             Variables : {variables.map((v) => "{{" + v + "}}").join(" · ")}
           </p>

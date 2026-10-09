@@ -226,6 +226,14 @@ test("TEST activation replaces REAL, dashboard follows active, deactivation leav
   const row = page.locator("tr").filter({ hasText: "Essais octobre" });
   page.once("dialog", (d) => d.accept());
   await row.getByRole("button", { name: "Activer", exact: true }).click();
+  await page
+    .getByRole("dialog", { name: "Confirmer l’action sensible" })
+    .getByLabel("Mot de passe")
+    .fill("fixture-password-1234");
+  await page
+    .getByRole("dialog", { name: "Confirmer l’action sensible" })
+    .getByRole("button", { name: "Confirmer", exact: true })
+    .click();
   await expect(page.locator(".beta-context")).toContainText(
     "Saison active : Essais octobre",
   );
@@ -241,6 +249,14 @@ test("TEST activation replaces REAL, dashboard follows active, deactivation leav
   await openSeasons(page);
   page.once("dialog", (d) => d.accept());
   await row.getByRole("button", { name: "Désactiver", exact: true }).click();
+  await page
+    .getByRole("dialog", { name: "Confirmer l’action sensible" })
+    .getByLabel("Mot de passe")
+    .fill("fixture-password-1234");
+  await page
+    .getByRole("dialog", { name: "Confirmer l’action sensible" })
+    .getByRole("button", { name: "Confirmer", exact: true })
+    .click();
   await page
     .getByRole("navigation")
     .getByRole("button", { name: "Tableau de bord", exact: true })
