@@ -1,4 +1,5 @@
 "use client";
+import { Input, Button } from "./ui";
 import { useState } from "react";
 import { DateTime } from "luxon";
 export default function FrenchDate({
@@ -52,9 +53,9 @@ export default function FrenchDate({
         {label}
         {required && <b className="required"> *</b>}
       </span>
-      <input type="hidden" name={name} value={date + "T" + clock} />
+      <Input type="hidden" name={name} value={date + "T" + clock} />
       <div className="date-controls">
-        <button
+        <Button
           type="button"
           disabled={readOnly}
           aria-label={label + " : choisir la date"}
@@ -64,10 +65,10 @@ export default function FrenchDate({
           {parsed.isValid
             ? parsed.toFormat(recurring ? "dd LLLL" : "dd LLLL yyyy")
             : "Choisir une date"}
-        </button>
+        </Button>
         <label>
           <span className="sr-only">{label + " : heure"}</span>
-          <input
+          <Input
             aria-label={label + " : heure"}
             type="time"
             readOnly={readOnly}
@@ -81,23 +82,23 @@ export default function FrenchDate({
       {open && (
         <div className="calendar-popover">
           <div className="calendar-heading">
-            <button
+            <Button
               type="button"
               aria-label="Mois précédent"
               onClick={() => setMonth(month.minus({ months: 1 }))}
             >
               ‹
-            </button>
+            </Button>
             <strong>
               {month.setLocale("fr").toFormat(recurring ? "LLLL" : "LLLL yyyy")}
             </strong>
-            <button
+            <Button
               type="button"
               aria-label="Mois suivant"
               onClick={() => setMonth(month.plus({ months: 1 }))}
             >
               ›
-            </button>
+            </Button>
           </div>
           <div className="calendar-grid">
             {["L", "M", "M", "J", "V", "S", "D"].map((d, i) => (
@@ -109,7 +110,7 @@ export default function FrenchDate({
             {Array.from({ length: count }, (_, i) => {
               const d = month.set({ day: i + 1 }).toISODate()!;
               return (
-                <button
+                <Button
                   type="button"
                   className={d === date ? "selected" : ""}
                   key={d}
@@ -126,7 +127,7 @@ export default function FrenchDate({
                   }}
                 >
                   {i + 1}
-                </button>
+                </Button>
               );
             })}
           </div>

@@ -72,6 +72,7 @@ async function arrange(page: Page, role = "SUPER_ADMIN") {
     else if (path === "/api/public")
       data = {
         setupRequired: false,
+        serverTime: new Date().toISOString(),
         state: "MAP_OPEN",
         mapAccessible: true,
         instance: {
@@ -108,6 +109,8 @@ async function arrange(page: Page, role = "SUPER_ADMIN") {
                 owner_name: "Camille",
                 email: "camille@example.invalid",
                 address: "12 rue de Paris, Rennes",
+                latitude: 48.1,
+                longitude: -1.67,
                 address_parts: { city: "Rennes" },
                 review_status: reviews[sid!] ?? "PENDING",
                 status: "VISIBLE",
@@ -276,6 +279,8 @@ test("reexamining a refused house opens moderation without implicitly validating
           owner_name: "Camille",
           email: "camille@example.invalid",
           address: "12 rue",
+          latitude: 48.1,
+          longitude: -1.67,
           review_status: "REFUSED",
           refusal_reason: "Adresse",
           status: "VISIBLE",
@@ -322,6 +327,7 @@ test("own account and protected administrators expose no rejected user-managemen
           display_name: "Mon profil",
           email: "me@example.invalid",
           role_name: "ADMIN",
+          permissions: [],
           account_status: "ACTIVE",
           email_status: "VERIFIED",
           communications: [],

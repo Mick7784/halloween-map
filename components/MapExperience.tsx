@@ -7,7 +7,6 @@ import {
   Square,
   LocateFixed,
   AlertTriangle,
-  CircleUserRound,
   MapPin,
   List,
   Map as MapIcon,
@@ -24,6 +23,7 @@ import RoutePreparation from "./RoutePreparation";
 import RouteSheet from "./RouteSheet";
 import VisitorHouse from "./VisitorHouse";
 import FloatingWindow from "./FloatingWindow";
+import { ActionMenu, Button } from "./ui";
 import "./MapExperience.css";
 
 export default function MapExperience({
@@ -303,13 +303,35 @@ export default function MapExperience({
           />
         )}
         {focused && (
-          <Link
-            className="route-account-link collection-account"
-            href="/account"
-            aria-label="Mon compte"
-          >
-            <CircleUserRound size={21} />
-          </Link>
+          <div className="collection-context-menu">
+            <ActionMenu label="Commandes de collecte">
+              <Link href="/account" className="collection-context-account">
+                Mon compte
+              </Link>
+              <Button onClick={() => controller.setSheet("expanded")}>
+                Voir les étapes
+              </Button>
+              <Button
+                onClick={() => {
+                  setSelectionError("");
+                  setAdding(true);
+                }}
+              >
+                Ajouter une maison
+              </Button>
+              <Button
+                disabled={
+                  !["tracking", "low-accuracy"].includes(controller.gpsState)
+                }
+                onClick={controller.recenterCurrentPosition}
+              >
+                Recentrer sur ma position
+              </Button>
+              <Button onClick={() => setConfirmation(true)}>
+                Arrêter la collecte
+              </Button>
+            </ActionMenu>
+          </div>
         )}
         {!focused && !pick && (
           <>

@@ -9,9 +9,9 @@ export async function presence(user: User | null) {
   await db().query(
     `INSERT INTO active_presence(user_id,season_id,seen_at)
     SELECT $1,s.id,now() FROM instances i JOIN seasons s ON s.id=i.active_season_id
-    WHERE i.id=$2 AND NOT s.archived AND s.purged_at IS NULL AND (s.is_test OR s.closes_at>now())
+    WHERE i.id=$2 AND NOT s.archived AND s.purged_at IS NULL AND (s.is_test OR s.closes_at>now()) AND (NOT s.is_test OR $3)
     ON CONFLICT(user_id) DO UPDATE SET season_id=excluded.season_id,seen_at=excluded.seen_at`,
-    [user.id, user.instance_id],
+    [user.id, user.instance_id, user.permissions.includes("admin.access")],
   );
   return { ok: true };
 }
@@ -24,7 +24,7 @@ export async function measureAttendance(now = new Date()) {
   if (+now - slot <= 30000)
     await db().query(
       `INSERT INTO attendance_samples(season_id,sample_slot,sampled_at,active_count)
-      SELECT s.id,$1,$2,(SELECT count(*)::int FROM active_presence p JOIN users u ON u.id=p.user_id WHERE p.season_id=s.id AND u.account_status='ACTIVE' AND p.seen_at>$2::timestamptz-interval '3 minutes')
+      SELECT s.id,$1,$2,(SELECT count(*)::int FROM active_presence p JOIN users u ON u.id=p.user_id LEFT JOIN roles r ON r.id=u.role_id WHERE p.season_id=s.id AND u.account_status='ACTIVE' AND (NOT s.is_test OR r.name IN('ADMIN','SUPER_ADMIN')) AND p.seen_at>$2::timestamptz-interval '3 minutes')
       FROM seasons s JOIN instances i ON i.active_season_id=s.id WHERE NOT s.archived AND s.purged_at IS NULL AND (s.is_test OR s.closes_at>$2)
       ON CONFLICT DO NOTHING`,
       [new Date(slot), now],
@@ -48,7 +48,7 @@ export async function attendance(
   if (!seasonId) return { activeNow: 0, peak: null, points: [] };
   const active = (
     await db().query(
-      "SELECT count(*)::int n FROM active_presence p JOIN users u ON u.id=p.user_id WHERE p.season_id=$1 AND p.seen_at>now()-interval '3 minutes' AND u.account_status='ACTIVE'",
+      "SELECT count(*)::int n FROM active_presence p JOIN users u ON u.id=p.user_id JOIN seasons s ON s.id=p.season_id JOIN instances i ON i.active_season_id=s.id LEFT JOIN roles r ON r.id=u.role_id WHERE p.season_id=$1 AND p.seen_at>now()-interval '3 minutes' AND u.account_status='ACTIVE' AND NOT s.archived AND s.purged_at IS NULL AND (s.is_test OR s.closes_at>now()) AND (NOT s.is_test OR r.name IN('ADMIN','SUPER_ADMIN'))",
       [seasonId],
     )
   ).rows[0];

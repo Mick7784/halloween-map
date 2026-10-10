@@ -244,7 +244,7 @@ for (const isTest of [false, true])
     await expect(
       page
         .locator(".stats-kpis article")
-        .filter({ hasText: "Maisons visitées" }),
+        .filter({ hasText: "Visites déclarées" }),
     ).toContainText("Donnée non disponible");
     await page.setViewportSize({ width: 390, height: 844 });
     await page.getByLabel("Apparence", { exact: true }).selectOption("light");

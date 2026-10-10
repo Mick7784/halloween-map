@@ -1,5 +1,16 @@
 # Changelog
 
+## V0.8.1
+
+- Confirmations sensibles communes avec mot de passe masqué, annulation sans mutation et phrase de sécurité pour les suppressions et purges ; contrôles serveur conservés.
+- Validation française obligatoire pour les nouvelles participations et les changements d’adresse, sans contournement des activités, limites de texte ou communes autorisées. Conservation encadrée des adresses historiques inchangées.
+- Composants de contrôle partagés dans les neuf rubriques, fiches maison Informations / Modération / Gestion, actions rapides et menus mobiles, pagination, consultation et édition utilisateur distinctes, contrastes des fenêtres corrigés et protection des brouillons.
+- Prévisualisation et confirmation des changements de localisation ; maisons et calendriers existants préservés. Valeurs par défaut réellement utilisées pour les nouvelles saisons.
+- Auteur réel des suppressions de maison, liens facultatifs affichés uniquement avec une destination utilisable, résumés de confidentialité alignés sur l’historique minimal de cinq ans, présence TEST réservée aux administrateurs.
+- Statistiques : libellé « Visites déclarées », dénominateurs des taux explicites et cartes/timeline communes au tableau de bord.
+- Collecte plein écran avec commandes dédiées et accès au compte préservant le parcours ; restauration de la navigation générale hors collecte.
+- Vérification locale SMTP chiffré et STARTTLS, six modèles HTML/texte et notifications réelles idempotentes ; rendus mobiles contrôlés. Aucune validation de réception dans des boîtes Gmail/Outlook réelles.
+
 ## V0.8
 
 - Sessions de 12 heures maximum, plafonnement des anciennes sessions et expiration des privilèges administratifs après 60 minutes d’inactivité. Reconfirmation du mot de passe pour les opérations sensibles ; protections individuelles contre les tentatives abusives.

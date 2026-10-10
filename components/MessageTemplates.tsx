@@ -1,4 +1,6 @@
 "use client";
+import useDraftGuard from "./useDraftGuard";
+import { Select, Input } from "./ui";
 import { useEffect, useState } from "react";
 import type { User } from "../lib/domain";
 import {
@@ -35,15 +37,7 @@ export default function MessageTemplates({ user }: { user: User }) {
     models &&
     (models[kind].subject !== template.subject ||
       models[kind].body !== template.body);
-  useEffect(() => {
-    if (!dirty) return;
-    const warn = (e: BeforeUnloadEvent) => {
-      e.preventDefault();
-      e.returnValue = "";
-    };
-    window.addEventListener("beforeunload", warn);
-    return () => window.removeEventListener("beforeunload", warn);
-  }, [dirty]);
+  useDraftGuard(!!dirty);
   async function act(action: "save" | "reset" | "test") {
     setResult("");
     const answer = await api<{ message?: string }>("admin/templates", {
@@ -71,7 +65,7 @@ export default function MessageTemplates({ user }: { user: User }) {
       <Notice error={error} />
       <label className="field">
         <span>Type de message</span>
-        <select
+        <Select
           value={kind}
           onChange={(e) => {
             if (
@@ -90,11 +84,11 @@ export default function MessageTemplates({ user }: { user: User }) {
               {templateLabels[k]}
             </option>
           ))}
-        </select>
+        </Select>
       </label>
       <label className="field">
         <span>Objet</span>
-        <input
+        <Input
           value={template.subject}
           disabled={!manage}
           maxLength={150}

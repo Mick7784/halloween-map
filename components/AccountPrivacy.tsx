@@ -204,7 +204,10 @@ export default function AccountPrivacy({
                 </details>
                 <p className="account-retention">
                   {settings.participationRetention ??
-                    "Ces informations concernent l’édition en cours. Les données de votre participation sont supprimées à la purge de la saison ; seuls des totaux anonymes sont conservés."}
+                    "Les détails de cette participation (adresse, position, horaires et activités) sont supprimés à la purge de la saison."}{" "}
+                  Seules les années de participation validée sont conservées
+                  pendant cinq ans, sans information de maison, puis effacées
+                  avec le compte. Les autres archives sont des totaux anonymes.
                 </p>
               </>
             ) : (

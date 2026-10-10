@@ -1,3 +1,7 @@
+import {
+  addressParts,
+  installFrenchAddressFixture,
+} from "./french-address-fixture";
 import { auditLabel } from "../lib/admin-presentation";
 import manifest from "../app/manifest";
 import { runInNewContext } from "node:vm";
@@ -96,6 +100,7 @@ const setupData = () => ({
   },
 });
 const houseData = () => ({
+  address_parts: addressParts,
   position_confirmed: true,
   name: "La demeure des murmures",
   address: "1 allée fictive",
@@ -207,6 +212,7 @@ async function verifyQueued(
   return { linkToken: token, ...(await consumeIdentity(token, kind)) };
 }
 beforeEach(async () => {
+  installFrenchAddressFixture();
   vi.setSystemTime(new Date("2026-10-04T12:00:00Z"));
   await db().query(
     "TRUNCATE bootstrap,setup_sessions,instances,roles,users,seasons,participations,sessions,audit_logs,rate_limits RESTART IDENTITY CASCADE",
@@ -486,8 +492,12 @@ describe("V0.4 privacy, roles, demo and recovery", () => {
     if (engine instanceof Pool) await engine.query(sql);
     else await engine.exec(sql);
     // Replaying an old migration is followed by the current additive schema.
-    const latest = await readFile("migrations/010_message_templates.sql","utf8");
-    if(engine instanceof Pool) await engine.query(latest);else await engine.exec(latest);
+    const latest = await readFile(
+      "migrations/010_message_templates.sql",
+      "utf8",
+    );
+    if (engine instanceof Pool) await engine.query(latest);
+    else await engine.exec(latest);
     expect((await service.ownHouse(participant))?.address).toBe(house.address);
     expect(
       (await db().query("SELECT name,permissions FROM roles ORDER BY name"))

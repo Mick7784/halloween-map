@@ -1,3 +1,7 @@
+import {
+  addressParts,
+  installFrenchAddressFixture,
+} from "./french-address-fixture";
 import { beforeAll, beforeEach, afterAll, it, expect, vi } from "vitest";
 import { PGlite } from "@electric-sql/pglite";
 import { Pool } from "pg";
@@ -17,7 +21,12 @@ import { adminUserAction as actualAdminUserAction } from "../lib/accounts";
 import { getUser, createSession } from "../lib/auth";
 import { campaignAction, campaignAdmin, dispatchEmails } from "../lib/mail";
 import { reportCollection } from "../lib/season-statistics";
-import { seasonLabel, defaultRoles, type Season, type User } from "../lib/domain";
+import {
+  seasonLabel,
+  defaultRoles,
+  type Season,
+  type User,
+} from "../lib/domain";
 import { fixtureRouter } from "./walking-fixture";
 vi.mock("../lib/walking-router", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../lib/walking-router")>()),
@@ -39,6 +48,7 @@ const realDefinition = {
   purge_at: "2026-11-02T12:00Z",
 };
 const houseDefinition = {
+  address_parts: addressParts,
   name: "Maison test",
   address: "Adresse privée",
   position_confirmed: true,
@@ -129,6 +139,7 @@ beforeAll(async () => {
   }
 });
 beforeEach(async () => {
+  installFrenchAddressFixture();
   vi.setSystemTime(new Date("2026-10-07T12:00Z"));
   await db().query(
     "TRUNCATE instances,bootstrap,setup_sessions,rate_limits RESTART IDENTITY CASCADE",
@@ -488,7 +499,7 @@ it("enforces REAL opening/closing, takes anonymous snapshot, purges details, fre
   ).rows[0];
   expect(purged.stats).toEqual(frozen.stats);
   expect(await service.adminRead(admin, "statistics", real.id)).toEqual({
-    attendance:{activeNow:0,peak:null,points:[]},
+    attendance: { activeNow: 0, peak: null, points: [] },
     seasonId: real.id,
     snapshot: true,
     stats: frozen.stats,
@@ -673,14 +684,14 @@ it("statistics follows the consulted season, including inactive data and empty R
     routes: 0,
   };
   expect(await service.adminRead(admin, "statistics", s.id)).toEqual({
-    attendance:{activeNow:0,peak:null,points:[]},
+    attendance: { activeNow: 0, peak: null, points: [] },
     seasonId: s.id,
     snapshot: false,
     stats: expected,
   });
   await activate(real);
   expect(await service.adminRead(admin, "statistics", s.id)).toEqual({
-    attendance:{activeNow:0,peak:null,points:[]},
+    attendance: { activeNow: 0, peak: null, points: [] },
     seasonId: s.id,
     snapshot: false,
     stats: expected,
@@ -720,8 +731,11 @@ it("manual creation validates ADMIN and Super Admin houses while public creation
     owner.id,
   ]);
   const manager = (await getUser(await createSession(owner.id)))!;
-  await db().query("UPDATE users SET admin_permissions=$1 WHERE id=$2",[[...defaultRoles.ADMIN],owner.id]);
-  manager.permissions=[...defaultRoles.ADMIN];
+  await db().query("UPDATE users SET admin_permissions=$1 WHERE id=$2", [
+    [...defaultRoles.ADMIN],
+    owner.id,
+  ]);
+  manager.permissions = [...defaultRoles.ADMIN];
   for (const [actor, account] of [
     [manager, owner],
     [admin, superOwner],

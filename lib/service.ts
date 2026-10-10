@@ -60,6 +60,8 @@ import {
 import { frenchCommunes, frenchAddressReverse } from "./french-address";
 import { z } from "zod";
 import { attendance } from "./attendance";
+import { sensitiveAction } from "./sensitive-actions";
+import { locationImpact } from "./settings-impact";
 import { refusalText } from "./refusal-reasons";
 export async function audit(
   client: Database,
@@ -101,6 +103,24 @@ export function verifySetupToken(value: string) {
     b = Buffer.from(expected);
   if (a.length !== b.length || !timingSafeEqual(a, b))
     throw new HttpError(403, "Clé de configuration invalide");
+}
+export async function settingsImpact(user: User | null, input: unknown) {
+  const u = requirePermission(user, "admin.access");
+  requirePermission(u, "settings.manage");
+  const next = instanceSchema.parse(input);
+  const current = (
+    await db().query("SELECT * FROM instances WHERE id=$1", [u.instance_id])
+  ).rows[0] as unknown as Instance;
+  const impact = locationImpact(current, next);
+  const houses = Number(
+    (
+      await db().query(
+        "SELECT count(*)::int n FROM participations WHERE instance_id=$1",
+        [u.instance_id],
+      )
+    ).rows[0].n,
+  );
+  return { ...impact, houses };
 }
 export async function setup(input: unknown, setupSession?: string) {
   const data = setupSchema.parse(input);
@@ -566,7 +586,11 @@ async function validateFrenchAddress(data: {
   longitude: number;
   position_confirmed?: boolean;
 }) {
-  if (!data.address_parts) return; // Existing integrations and admin forms remain compatible.
+  if (!data.address_parts)
+    throw new HttpError(
+      400,
+      "Choisissez une adresse complète avec sa commune et confirmez sa position.",
+    );
   if (!data.position_confirmed)
     throw new HttpError(400, "Confirmez le point de votre maison.");
   const a = data.address_parts;
@@ -590,10 +614,15 @@ async function validateFrenchAddress(data: {
   data.address = formatAddress(a);
 }
 function validateParticipationSettings(
-  data: { address_parts?: AddressParts; rp: string; practical: string },
+  data: {
+    address_parts?: AddressParts;
+    rp: string;
+    practical: string;
+    activities: House["activities"];
+  },
   i: Instance,
+  legacyLocation = false,
 ) {
-  if (!data.address_parts) return;
   const settings = publicParticipationSettings(i.config.participation);
   if (
     data.rp.length > settings.descriptionLimit ||
@@ -604,12 +633,19 @@ function validateParticipationSettings(
       "Raccourcissez la description ou les informations pratiques.",
     );
   if (
+    !legacyLocation &&
     settings.allowedCommuneCodes.length &&
-    !settings.allowedCommuneCodes.includes(data.address_parts.cityCode)
+    (!data.address_parts ||
+      !settings.allowedCommuneCodes.includes(data.address_parts.cityCode))
   )
     throw new HttpError(
       400,
       "Cette commune n’est pas ouverte aux participations.",
+    );
+  if (data.activities.some((a) => !settings.activities.includes(a)))
+    throw new HttpError(
+      400,
+      "Une activité sélectionnée n’est pas autorisée pour cette édition.",
     );
 }
 export async function createParticipation(
@@ -627,12 +663,6 @@ export async function createParticipation(
   const raw = z
     .object({ house: houseSchema, acceptance: z.unknown() })
     .parse(input);
-  await validateFrenchAddress(raw.house);
-  if (!raw.house.position_confirmed)
-    throw new HttpError(
-      400,
-      "Choisissez ou confirmez explicitement le point de votre maison.",
-    );
   return transaction(async (c) => {
     const u = (
       await c.query(
@@ -674,7 +704,13 @@ export async function createParticipation(
       throw new HttpError(403, "Saison terminée");
     const a = await validateAcceptance(c, i.id, raw.acceptance);
     const h = raw.house;
-    validateParticipationSettings(h, i);
+    if (!h.position_confirmed)
+      throw new HttpError(
+        400,
+        "Choisissez ou confirmez explicitement le point de votre maison.",
+      );
+    if (!management || h.address_parts) await validateFrenchAddress(h);
+    if (!management) validateParticipationSettings(h, i);
     const [starts, ends] = houseDates(h, i, ss);
     await c.query(
       "INSERT INTO participations(instance_id,season_id,user_id,name,address,latitude,longitude,activities,starts_at,ends_at,fear,adaptable,rp,practical,terms_version,terms_accepted_at,guidelines_version,guidelines_accepted_at,review_status) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,CASE WHEN $17 THEN now() ELSE NULL END,$16,now(),$18)",
@@ -741,7 +777,6 @@ export async function updateHouse(
   if (!user) throw new HttpError(401, "Connexion requise");
   if (admin) requirePermission(user, "participants.edit");
   const data = houseSchema.parse(input);
-  if (!admin) await validateFrenchAddress(data);
   return transaction(async (c) => {
     const { rows } = await c.query(
       "SELECT * FROM participations WHERE id=$1 AND instance_id=$2 FOR UPDATE",
@@ -750,6 +785,19 @@ export async function updateHouse(
     const old = rows[0] as unknown as House;
     if (!old || (!admin && old.user_id !== user.id))
       throw new HttpError(404, "Maison introuvable");
+    const unchangedLocation =
+      old.address === data.address &&
+      Number(old.latitude) === data.latitude &&
+      Number(old.longitude) === data.longitude;
+    // Legacy houses may retain their existing location. Only authenticated owners
+    // of that exact row receive this compatibility path; new/moved houses never do.
+    const legacyLocation =
+      !old.address_parts && !data.address_parts && unchangedLocation;
+    if (!admin && !legacyLocation) {
+      if (!data.address_parts && unchangedLocation && old.address_parts)
+        data.address_parts = old.address_parts;
+      await validateFrenchAddress(data);
+    }
     const i = (await instance(c))!,
       s = admin
         ? ((
@@ -802,7 +850,7 @@ export async function updateHouse(
       }
     }
     const [starts, ends] = houseDates(data, i, s);
-    if (!admin) validateParticipationSettings(data, i);
+    if (!admin) validateParticipationSettings(data, i, legacyLocation);
     const status = old.status;
     await c.query(
       "UPDATE participations SET name=$1,address=$2,latitude=$3,longitude=$4,activities=$5,starts_at=$6,ends_at=$7,fear=$8,adaptable=$9,rp=$10,practical=$11,status=$12 WHERE id=$13 AND instance_id=$14",
@@ -912,7 +960,7 @@ export async function participantAction(
       await audit(
         c,
         user.instance_id,
-        null,
+        user,
         "participant.deleted",
         undefined,
         String(h.season_id),
@@ -1321,16 +1369,7 @@ export async function adminAction(user: User | null, input: unknown) {
     })
     .parse(input);
   const u = user;
-  if (
-    [
-      "purge",
-      "deleteSeason",
-      "deleteHouse",
-      "activateSeason",
-      "deactivateSeason",
-      "settings",
-    ].includes(data.action)
-  )
+  if (sensitiveAction("admin", data))
     await confirmAdminPassword(u, data.current_password);
   if (
     [
@@ -1525,28 +1564,49 @@ export async function adminAction(user: User | null, input: unknown) {
       .extend({
         defaultOpen: z.string().regex(/^\d{2}-\d{2}T\d{2}:\d{2}$/),
         defaultClose: z.string().regex(/^\d{2}-\d{2}T\d{2}:\d{2}$/),
+        location_confirmed: z.boolean().optional(),
+        location_fingerprint: z
+          .string()
+          .regex(/^[a-f0-9]{64}$/)
+          .optional(),
       })
       .parse(data.payload);
-    await db().query(
-      "UPDATE instances SET public_name=$1,territory=$2,postal_code=$3,country=$4,timezone=$5,latitude=$6,longitude=$7,zoom=$8,config=config || $9::jsonb WHERE id=$10",
-      [
-        p.public_name,
-        p.territory,
-        p.postal_code,
-        p.country,
-        p.timezone,
-        p.latitude,
-        p.longitude,
-        p.zoom,
-        JSON.stringify({
-          defaultOpen: p.defaultOpen,
-          defaultClose: p.defaultClose,
-        }),
-        u.instance_id,
-      ],
-    );
-    await audit(db(), u.instance_id, u, "settings.updated");
-    return { ok: true };
+    return transaction(async (c) => {
+      const current = (
+        await c.query("SELECT * FROM instances WHERE id=$1 FOR UPDATE", [
+          u.instance_id,
+        ])
+      ).rows[0] as unknown as Instance;
+      const impact = locationImpact(current, p);
+      if (
+        impact.changes.length &&
+        (!p.location_confirmed || p.location_fingerprint !== impact.fingerprint)
+      )
+        throw new HttpError(
+          409,
+          "Prévisualisez et confirmez les conséquences du changement de localisation avant d’enregistrer.",
+        );
+      await c.query(
+        "UPDATE instances SET public_name=$1,territory=$2,postal_code=$3,country=$4,timezone=$5,latitude=$6,longitude=$7,zoom=$8,config=config || $9::jsonb WHERE id=$10",
+        [
+          p.public_name,
+          p.territory,
+          p.postal_code,
+          p.country,
+          p.timezone,
+          p.latitude,
+          p.longitude,
+          p.zoom,
+          JSON.stringify({
+            defaultOpen: p.defaultOpen,
+            defaultClose: p.defaultClose,
+          }),
+          u.instance_id,
+        ],
+      );
+      await audit(c, u.instance_id, u, "settings.updated");
+      return { ok: true };
+    });
   }
   if (data.action === "purge") {
     if (u.role_name !== "SUPER_ADMIN")

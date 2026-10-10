@@ -14,6 +14,7 @@ import {
 } from "./auth";
 import { credentials } from "./validation";
 import { defaultRoles, permissions, type User } from "./domain";
+import { sensitiveAction } from "./sensitive-actions";
 export async function queueIdentity(
   client: Database,
   userId: string,
@@ -326,7 +327,7 @@ export async function adminUsers(
  (SELECT COALESCE(json_agg(x),'[]'::json) FROM (SELECT year FROM participation_history WHERE user_id=u.id ORDER BY year DESC) x) participation_history,
  (SELECT name FROM seasons WHERE id=$2) participation_season,
  (SELECT row_to_json(p) FROM participations p WHERE p.season_id=$2 AND p.user_id=u.id) participation,
- (SELECT COALESCE(json_agg(x),'[]'::json) FROM (SELECT kind,status,scheduled_at,sent_at,last_error FROM email_outbox WHERE user_id=u.id AND (season_id=$2 OR season_id IS NULL) ORDER BY created_at DESC LIMIT 50) x) communications
+ (SELECT COALESCE(json_agg(x),'[]'::json) FROM (SELECT kind,status,scheduled_at,sent_at,last_error,season_id,(SELECT name FROM seasons WHERE id=email_outbox.season_id) season_name FROM email_outbox WHERE user_id=u.id AND (season_id=$2 OR season_id IS NULL) ORDER BY created_at DESC LIMIT 50) x) communications
  FROM users u LEFT JOIN roles r ON r.id=u.role_id WHERE u.instance_id=$1 ORDER BY u.created_at`,
       [u.instance_id, context?.id ?? null],
     )
@@ -378,7 +379,7 @@ export async function adminUserAction(user: User | null, input: unknown) {
         "Seul le Super Admin peut modifier les grades et droits",
       );
   }
-  if (["delete", "disable"].includes(p.action) || p.permissions || p.role_id)
+  if (sensitiveAction("admin/users", p))
     await confirmAdminPassword(u, p.current_password);
   if (
     p.without_invitation &&

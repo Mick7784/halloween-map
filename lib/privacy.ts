@@ -29,6 +29,13 @@ export function publicPrivacySettings(value: unknown): PrivacySettings {
     if (typeof input[key] === "string" && input[key].trim())
       result[key] = input[key].trim().slice(0, 600);
   }
+  // Supersede the obsolete secondary summary, preserving published legal documents.
+  if (
+    result.participationRetention &&
+    /(?:seul\w*|uniquement)[^.]*anonym/i.test(result.participationRetention)
+  )
+    result.participationRetention =
+      "La purge supprime la maison, l’adresse, la position, les horaires et les descriptions. Les années de participation validée sont conservées cinq ans, sans détail de maison ; supprimer le compte efface ces marqueurs. Les statistiques agrégées de saison restent anonymes.";
   if (
     typeof input.contactEmail === "string" &&
     /^[^\s@?&#]+@[^\s@?&#]+\.[^\s@?&#]+$/.test(input.contactEmail.trim())

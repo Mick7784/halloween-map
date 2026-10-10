@@ -1,3 +1,7 @@
+import {
+  addressParts,
+  installFrenchAddressFixture,
+} from "./french-address-fixture";
 import { beforeAll, beforeEach, afterAll, it, expect, vi } from "vitest";
 import { PGlite } from "@electric-sql/pglite";
 import { readFile, readdir } from "node:fs/promises";
@@ -12,6 +16,8 @@ import {
   ownHouse,
   audit,
   purgeSeason,
+  settingsImpact,
+  participantAction,
 } from "../lib/service";
 import {
   createSession,
@@ -36,16 +42,18 @@ import {
 } from "../lib/message-templates";
 import { legalState } from "../lib/content";
 import { publicProjectLinks } from "../lib/project-links";
+import { supportHref, contactHref } from "../lib/project-links";
 import type { User, Season } from "../lib/domain";
 const globals = globalThis as unknown as { testDb?: Database };
 let pg: PGlite, admin: User, owner: User, season: Season, ownerToken: string;
 const password = "release-test-password-1234";
 const house = {
+  address_parts: addressParts,
   name: "Maison des lanternes",
   address: "12 Rue fictive",
   position_confirmed: true,
   latitude: 48.1,
-  longitude: 2.8,
+  longitude: -1.67,
   activities: ["CANDY"],
   starts_at: "2026-10-31T18:00Z",
   ends_at: "2026-10-31T21:00Z",
@@ -71,6 +79,7 @@ beforeAll(async () => {
   process.env.SETUP_TOKEN = "release-fixture-only";
 });
 beforeEach(async () => {
+  installFrenchAddressFixture();
   vi.setSystemTime(new Date("2026-10-09T12:00Z"));
   await db().query(
     "TRUNCATE instances,bootstrap,setup_sessions,rate_limits RESTART IDENTITY CASCADE",
@@ -84,7 +93,7 @@ beforeEach(async () => {
       country: "France",
       timezone: "Europe/Paris",
       latitude: 48.1,
-      longitude: 2.8,
+      longitude: -1.67,
       zoom: 14,
     },
     admin: { display_name: "Équipe", email: "admin@example.invalid", password },
@@ -330,6 +339,7 @@ it("returns substantive owner edits to moderation while operational candy change
   await updateHouse(owner, String(h.id), {
     ...house,
     address: "13 Rue fictive",
+    address_parts: { ...addressParts, number: "13" },
   });
   expect((await ownHouse(owner))?.review_status).toBe("PENDING");
   expect(
@@ -528,4 +538,183 @@ it("respects calendar/authentication states, canonical policy disclosures and in
   expect(
     publicProjectLinks({ contactUrl: "javascript:alert(1)" }).contactUrl,
   ).toBeUndefined();
+});
+it("rejects forged missing, mismatched and foreign addresses without bypassing participation limits", async () => {
+  const acceptance = {
+    mode: "GUIDELINES_ONLY",
+    guidelines: true,
+    guidelines_version: "2026.1",
+  };
+  for (const data of [
+    { ...house, address_parts: undefined },
+    {
+      ...house,
+      address_parts: { ...addressParts, cityCode: "75056", city: "Paris" },
+    },
+    { ...house, latitude: 51.5, longitude: -0.1 },
+  ])
+    await expect(
+      createParticipation(owner, { house: data, acceptance }),
+    ).rejects.toMatchObject({ status: 400 });
+  await db().query("UPDATE instances SET config=config || $1::jsonb", [
+    JSON.stringify({
+      participation: {
+        activities: ["DECORATION"],
+        descriptionLimit: 5,
+        practicalLimit: 5,
+        allowedCommuneCodes: ["75056"],
+      },
+    }),
+  ]);
+  await expect(
+    createParticipation(owner, { house, acceptance }),
+  ).rejects.toMatchObject({ status: 400 });
+  expect((await db().query("SELECT * FROM participations")).rows).toHaveLength(
+    0,
+  );
+});
+it("permits unchanged historical locations but rejects forged relocation and retains content limits", async () => {
+  const h = await submit();
+  await db().query("UPDATE participations SET address_parts=NULL WHERE id=$1", [
+    h.id,
+  ]);
+  const legacy = { ...house, address: h.address, address_parts: undefined };
+  await updateHouse(owner, String(h.id), { ...legacy, rp: "Une ambiance" });
+  await expect(
+    updateHouse(owner, String(h.id), { ...legacy, latitude: 49 }),
+  ).rejects.toMatchObject({ status: 400 });
+  await db().query("UPDATE instances SET config=config || $1::jsonb", [
+    JSON.stringify({ participation: { descriptionLimit: 5 } }),
+  ]);
+  await expect(
+    updateHouse(owner, String(h.id), { ...legacy, rp: "Texte trop long" }),
+  ).rejects.toMatchObject({ status: 400 });
+});
+it("records the USER who deletes their house with no personal target detail", async () => {
+  const h = await submit();
+  await participantAction(owner, { action: "delete", confirm: "SUPPRIMER" });
+  expect(
+    (await db().query("SELECT id FROM participations WHERE id=$1", [h.id]))
+      .rows,
+  ).toHaveLength(0);
+  expect(
+    (
+      await db().query(
+        "SELECT actor_id,target_id,season_id FROM audit_logs WHERE action='participant.deleted'",
+      )
+    ).rows,
+  ).toMatchObject([
+    { actor_id: owner.id, target_id: null, season_id: season.id },
+  ]);
+});
+it("requires a current location preview, applies only instance defaults and never moves houses or saved seasons", async () => {
+  const h = await submit();
+  const original = (await db().query("SELECT * FROM instances")).rows[0];
+  const before = (
+    await db().query("SELECT * FROM seasons WHERE id=$1", [season.id])
+  ).rows[0];
+  const payload = {
+    ...original,
+    territory: "Rennes",
+    latitude: 48.11,
+    defaultOpen: "10-30T18:00",
+    defaultClose: "10-31T22:00",
+  };
+  const action = { action: "settings", payload, current_password: password };
+  await expect(adminAction(admin, action)).rejects.toMatchObject({
+    status: 409,
+  });
+  const impact = await settingsImpact(admin, payload);
+  expect(impact).toMatchObject({
+    houses: 1,
+    changes: ["commune / territoire", "latitude du centre"],
+  });
+  await expect(
+    adminAction(admin, {
+      ...action,
+      payload: {
+        ...payload,
+        location_confirmed: true,
+        location_fingerprint: "0".repeat(64),
+      },
+    }),
+  ).rejects.toMatchObject({ status: 409 });
+  await adminAction(admin, {
+    ...action,
+    payload: {
+      ...payload,
+      location_confirmed: true,
+      location_fingerprint: impact.fingerprint,
+    },
+  });
+  expect(
+    (await db().query("SELECT * FROM seasons WHERE id=$1", [season.id]))
+      .rows[0],
+  ).toEqual(before);
+  expect((await ownHouse(owner))!).toMatchObject({
+    id: h.id,
+    latitude: house.latitude,
+    longitude: house.longitude,
+  });
+  expect((await publicState(undefined, admin)).instance).toMatchObject({
+    defaultOpen: "10-30T18:00",
+    defaultClose: "10-31T22:00",
+  });
+});
+it("omits disabled or unusable support/contact links and never borrows the bug destination", () => {
+  expect(supportHref(publicProjectLinks({}))).toBeUndefined();
+  expect(
+    supportHref(
+      publicProjectLinks({
+        supportUrl: "https://example.invalid/support",
+        supportEnabled: false,
+      }),
+    ),
+  ).toBeUndefined();
+  expect(
+    contactHref(
+      publicProjectLinks({
+        contactEmail: "hello@example.invalid",
+        contactEnabled: false,
+      }),
+    ),
+  ).toBeUndefined();
+  expect(
+    supportHref(publicProjectLinks({ contactEmail: "hello@example.invalid" })),
+  ).toBe("mailto:hello@example.invalid");
+  expect(
+    supportHref(
+      publicProjectLinks({
+        supportUrl: "https://example.invalid/support",
+        contactEnabled: false,
+      }),
+    ),
+  ).toBe("https://example.invalid/support");
+});
+it("excludes ordinary accounts from TEST attendance and switches current attendance without moving old samples", async () => {
+  await presence(owner);
+  await adminAction(admin, {
+    action: "season",
+    payload: { name: "Présence TEST", is_test: true },
+  });
+  const testSeason = (await db().query("SELECT id FROM seasons WHERE is_test"))
+    .rows[0];
+  await adminAction(admin, {
+    action: "activateSeason",
+    id: testSeason.id,
+    payload: "ACTIVER",
+    current_password: password,
+  });
+  await presence(owner);
+  await presence(admin);
+  expect((await attendance(season.id)).activeNow).toBe(0);
+  expect((await attendance(String(testSeason.id))).activeNow).toBe(1);
+  await db().query("UPDATE active_presence SET season_id=$1 WHERE user_id=$2", [
+    testSeason.id,
+    owner.id,
+  ]);
+  await measureAttendance(new Date("2026-10-09T12:00Z"));
+  const measured = await attendance(String(testSeason.id));
+  expect(measured.activeNow).toBe(1);
+  expect(measured.peak?.active_count).toBe(1);
 });

@@ -1,3 +1,4 @@
+import { MetricCard } from "./ui";
 import type { Season } from "../lib/domain";
 import AttendanceChart from "./AttendanceChart";
 import {
@@ -99,16 +100,18 @@ export default function AdminStatistics({
   const cards = (items: typeof metrics) => (
     <div className="stats-kpis">
       {items.map(([label, value]) => (
-        <article className="beta-card" key={label}>
-          <span>{label}</span>
-          <strong>
-            {value == null
+        <MetricCard
+          key={label}
+          className="beta-card"
+          label={label}
+          value={
+            value == null
               ? unavailable
               : typeof value === "number"
                 ? formatCount(value)
-                : value}
-          </strong>
-        </article>
+                : value
+          }
+        />
       ))}
     </div>
   );
@@ -121,6 +124,7 @@ export default function AdminStatistics({
           : "Agrégats de la saison consultée."}{" "}
         Les participants uniques sont les utilisateurs ayant proposé une maison.
       </p>
+      <h2>Vue d’ensemble</h2>
       {cards(metrics)}
       <div className="stats-charts">
         <Bars
@@ -156,6 +160,11 @@ export default function AdminStatistics({
       </p>
       <h2>Performance des collectes</h2>
       {cards(performance)}
+      <p className="small muted">
+        Taux de fin : {formatCount(finished)} collectes terminées /{" "}
+        {formatCount(started)} lancées. Complétion moyenne : moyenne des parts
+        de maisons déclarées visitées dans les collectes terminées.
+      </p>
       <p className="muted small">
         Visites, distances et durées : totaux déclarés par les appareils lors de
         la fin de collecte, sans trace GPS individuelle. Les anciennes collectes

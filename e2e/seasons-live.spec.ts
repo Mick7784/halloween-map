@@ -113,6 +113,13 @@ test("live APIs: REAL/TEST isolation, phone session, reusable accounts, purge an
     const participation = {
       house: {
         name: "Maison live",
+        address_parts: {
+          number: "12",
+          street: "Rue des Lanternes",
+          postalCode: "35000",
+          city: "Rennes",
+          cityCode: "35238",
+        },
         address: "12 rue fictive",
         latitude: 48.1001,
         longitude: -1.67,

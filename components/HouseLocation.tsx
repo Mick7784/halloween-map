@@ -1,4 +1,5 @@
 "use client";
+import { Input, Select, Button } from "./ui";
 import { useEffect, useRef, useState } from "react";
 import { MapPin, LocateFixed, Check, Search } from "lucide-react";
 import { locateOrigin } from "../lib/geolocation";
@@ -253,7 +254,7 @@ export default function HouseLocation({
       <div className="participation-address-grid">
         <label className="field">
           <span>Code postal *</span>
-          <input
+          <Input
             name="postalCode"
             required
             inputMode="numeric"
@@ -271,7 +272,7 @@ export default function HouseLocation({
         </label>
         <label className="field">
           <span>Ville *</span>
-          <select
+          <Select
             name="cityCode"
             required
             disabled={citiesBusy}
@@ -297,11 +298,11 @@ export default function HouseLocation({
                 {c.nom}
               </option>
             ))}
-          </select>
+          </Select>
         </label>
         <label className="field">
           <span>Numéro *</span>
-          <input
+          <Input
             name="number"
             required
             maxLength={20}
@@ -312,7 +313,7 @@ export default function HouseLocation({
         </label>
         <label className="field">
           <span>Rue *</span>
-          <input
+          <Input
             name="street"
             required
             autoComplete="off"
@@ -329,10 +330,10 @@ export default function HouseLocation({
         >
           {suggestions.map((s, n) => (
             <li key={n}>
-              <button type="button" onClick={() => choose(s)}>
+              <Button type="button" onClick={() => choose(s)}>
                 <Search size={15} />
                 {s.label}
-              </button>
+              </Button>
             </li>
           ))}
         </ul>
@@ -345,11 +346,11 @@ export default function HouseLocation({
         onPoint={place}
       />
       <div className="participation-location-actions">
-        <button type="button" onClick={locate} disabled={busy}>
+        <Button type="button" onClick={locate} disabled={busy}>
           <LocateFixed size={16} />
           Me localiser
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
           aria-pressed={choosing}
           onClick={() => {
@@ -361,7 +362,7 @@ export default function HouseLocation({
         >
           <MapPin size={16} />
           {choosing ? "Ajustement en cours" : "Placer manuellement"}
-        </button>
+        </Button>
       </div>
       <p className="participation-help">
         Vérifiez que le point correspond bien à l’entrée de votre maison.
@@ -371,7 +372,7 @@ export default function HouseLocation({
         <div className="participation-address-grid">
           <label className="field">
             <span>Latitude</span>
-            <input
+            <Input
               type="number"
               step="any"
               value={value.point?.[1] ?? ""}
@@ -385,7 +386,7 @@ export default function HouseLocation({
           </label>
           <label className="field">
             <span>Longitude</span>
-            <input
+            <Input
               type="number"
               step="any"
               value={value.point?.[0] ?? ""}
@@ -399,7 +400,7 @@ export default function HouseLocation({
           </label>
         </div>
       </details>
-      <button
+      <Button
         type="button"
         className="participation-confirm-point"
         disabled={
@@ -413,7 +414,7 @@ export default function HouseLocation({
           : busy
             ? "Vérification du point…"
             : "Confirmer le point de ma maison"}
-      </button>
+      </Button>
       {message && (
         <p className="participation-help" role="status">
           {message}
@@ -422,7 +423,7 @@ export default function HouseLocation({
       {error && (
         <div role="alert" className="notice error">
           {error}
-          <button
+          <Button
             type="button"
             disabled={citiesBusy}
             onClick={() => {
@@ -431,7 +432,7 @@ export default function HouseLocation({
             }}
           >
             Réessayer
-          </button>
+          </Button>
         </div>
       )}
     </>

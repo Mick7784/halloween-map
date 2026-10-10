@@ -13,6 +13,8 @@ test("beta desktop exposes only useful navigation, pending moderation and normal
     owner_name: "Mr Test " + (n + 1),
     email: "mr-test-" + (n + 1) + "@example.invalid",
     address: "12 rue des Tests, Rennes",
+    latitude: 48.1,
+    longitude: -1.67,
     season_is_test: true,
     review_status: n === 0 ? "PENDING" : "VALIDATED",
     status: "VISIBLE",
@@ -41,6 +43,7 @@ test("beta desktop exposes only useful navigation, pending moderation and normal
   };
   const state = {
     setupRequired: false,
+    serverTime: new Date().toISOString(),
     state: "MAP_OPEN",
     instance: {
       id: "instance",
@@ -190,6 +193,7 @@ test("global direct accounts need neither a TEST season nor an email", async ({
     else if (path === "/api/public")
       data = {
         setupRequired: false,
+        serverTime: new Date().toISOString(),
         state: "MAP_OPEN",
         instance: {
           id: "instance",

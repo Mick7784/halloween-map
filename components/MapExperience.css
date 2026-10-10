@@ -1562,3 +1562,27 @@
 .application.map-app:has(.route-experience.is-focused) > .site-header {
   display: none;
 }
+
+.collection-context-menu {
+  position: absolute;
+  z-index: 15;
+  left: max(12px, env(safe-area-inset-left));
+  bottom: calc(168px + env(safe-area-inset-bottom));
+}
+.collection-context-menu summary {
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border: 1px solid #9bacc5;
+  border-radius: 10px;
+  background: #151c28;
+  color: #edf3fc;
+  cursor: pointer;
+  font-size: 24px;
+}
+.collection-context-menu .ui-action-menu-items {
+  background: #151c28;
+  color: #edf3fc;
+  border-color: #9bacc5;
+}

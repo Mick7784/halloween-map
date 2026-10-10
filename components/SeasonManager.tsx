@@ -1,5 +1,9 @@
 "use client";
+import { ActionCancelled } from "./AdminConfirmation";
+import { Dialog, Button, Select, DataTable, Input } from "./ui";
+import useDraftGuard, { confirmDraftNavigation } from "./useDraftGuard";
 import AdminStatistics from "./AdminStatistics";
+import { DateTime } from "luxon";
 import { Fragment, useState } from "react";
 import { ChevronDown, ChevronUp, CircleCheck, Plus, X } from "lucide-react";
 import {
@@ -28,7 +32,7 @@ function Statistics({
 }) {
   return (
     <div className="beta-overlay">
-      <section
+      <Dialog
         className="beta-panel"
         role="dialog"
         onClick={(event) => event.stopPropagation()}
@@ -37,13 +41,13 @@ function Statistics({
       >
         <header>
           <h2>{season.name} · Statistiques</h2>
-          <button
+          <Button
             className="close"
             aria-label="Fermer les statistiques"
             onClick={onClose}
           >
             <X />
-          </button>
+          </Button>
         </header>
         <p>Historique en lecture seule · chiffres agrégés uniquement.</p>
         {!season.stats_snapshot_at && !season.purged_at ? (
@@ -59,7 +63,7 @@ function Statistics({
             }}
           />
         )}
-      </section>
+      </Dialog>
     </div>
   );
 }
@@ -69,30 +73,55 @@ function SeasonEditor({
   act,
   onSaved,
   superAdmin,
+  defaults,
 }: {
   season?: Season;
   zone: string;
   act: Action;
   onSaved: () => void;
   superAdmin: boolean;
+  defaults?: { open: string; close: string };
 }) {
   const [test, setTest] = useState(!!season?.is_test),
     [busy, setBusy] = useState(false),
-    [error, setError] = useState("");
-  const year = season?.year ?? new Date().getFullYear();
+    [error, setError] = useState(""),
+    [dirty, setDirty] = useState(false),
+    [year, setYear] = useState(() => season?.year ?? new Date().getFullYear());
+  useDraftGuard(dirty);
+  const opening = DateTime.fromISO(
+      `${year}-${defaults?.open ?? "10-31T12:00"}`,
+      { zone },
+    ),
+    closing = DateTime.fromISO(`${year}-${defaults?.close ?? "11-01T00:00"}`, {
+      zone,
+    });
+  const closeDate = closing <= opening ? closing.plus({ years: 1 }) : closing;
   const dates = [
     [
       "registrations_open_at",
       "Ouverture des inscriptions",
-      `${year}-10-01T00:00`,
+      opening.minus({ days: 30 }).toFormat("yyyy-MM-dd'T'HH:mm"),
     ],
-    ["opens_at", "Ouverture de la carte", `${year}-10-31T12:00`],
-    ["closes_at", "Fermeture de la carte", `${year}-11-01T00:00`],
-    ["purge_at", "Purge des données personnelles", `${year}-11-02T12:00`],
+    [
+      "opens_at",
+      "Ouverture de la carte",
+      opening.toFormat("yyyy-MM-dd'T'HH:mm"),
+    ],
+    [
+      "closes_at",
+      "Fermeture de la carte",
+      closeDate.toFormat("yyyy-MM-dd'T'HH:mm"),
+    ],
+    [
+      "purge_at",
+      "Purge des données personnelles",
+      closeDate.plus({ days: 2 }).toFormat("yyyy-MM-dd'T'HH:mm"),
+    ],
   ] as const;
   return (
     <form
       className="season-editor"
+      onChange={() => setDirty(true)}
       onSubmit={async (e) => {
         e.preventDefault();
         const v = values(e.currentTarget);
@@ -112,7 +141,7 @@ function SeasonEditor({
           );
           onSaved();
         } catch (e) {
-          setError((e as Error).message);
+          if (!(e instanceof ActionCancelled)) setError((e as Error).message);
         } finally {
           setBusy(false);
         }
@@ -128,29 +157,32 @@ function SeasonEditor({
         {!season && (
           <label className="field">
             <span>Type</span>
-            <select
+            <Select
               aria-label="Type de saison"
               value={test ? "TEST" : "REAL"}
               onChange={(e) => setTest(e.target.value === "TEST")}
             >
               <option value="REAL">Saison normale</option>
               {superAdmin && <option value="TEST">Saison de test</option>}
-            </select>
+            </Select>
           </label>
         )}
         {!test && (
           <>
-            <Field
-              name="year"
-              label="Année"
-              type="number"
-              value={year}
-              min={2020}
-              max={2200}
-            />
+            <label className="field">
+              <span>Année</span>
+              <Input
+                name="year"
+                type="number"
+                value={year}
+                min={2020}
+                max={2200}
+                onChange={(e) => setYear(Number(e.target.value))}
+              />
+            </label>
             {dates.map(([key, label, fallback]) => (
               <Field
-                key={key}
+                key={key + ":" + (season?.id ?? year)}
                 name={key}
                 type="datetime-local"
                 label={label}
@@ -180,9 +212,9 @@ function SeasonEditor({
         </>
       )}
       <Notice error={error} />
-      <button className="primary" disabled={busy}>
+      <Button className="primary" disabled={busy}>
         {busy ? "Enregistrement…" : "Enregistrer"}
-      </button>
+      </Button>
     </form>
   );
 }
@@ -191,11 +223,13 @@ export default function SeasonManager({
   user,
   zone,
   act,
+  defaults,
 }: {
   seasons: Season[];
   user: User;
   zone: string;
   act: Action;
+  defaults?: { open: string; close: string };
 }) {
   const [expanded, setExpanded] = useState<string | null>(null),
     [creating, setCreating] = useState(false),
@@ -227,9 +261,9 @@ export default function SeasonManager({
           </p>
         </div>
         {manage && (
-          <button className="primary" onClick={() => setCreating(true)}>
+          <Button className="primary" onClick={() => setCreating(true)}>
             <Plus size={17} /> Nouvelle saison
-          </button>
+          </Button>
         )}
       </div>
       {!ordered.length ? (
@@ -238,7 +272,7 @@ export default function SeasonManager({
         </p>
       ) : (
         <div className="beta-table-scroll">
-          <table className="season-table">
+          <DataTable className="season-table">
             <thead>
               <tr>
                 <th>Saison</th>
@@ -297,27 +331,20 @@ export default function SeasonManager({
                                   const action = s.active
                                     ? "deactivateSeason"
                                     : "activateSeason";
-                                  if (
-                                    window.confirm(
-                                      s.active
-                                        ? `Désactiver ${s.name} ? La carte sera indisponible.`
-                                        : `Activer ${s.name} ? La saison actuellement active sera désactivée.${s.is_test ? " La carte sera réservée aux admins." : ""}`,
-                                    )
-                                  )
-                                    await act(
-                                      action,
-                                      s.active ? "DÉSACTIVER" : "ACTIVER",
-                                      s.id,
-                                    );
+                                  await act(
+                                    action,
+                                    s.active ? "DÉSACTIVER" : "ACTIVER",
+                                    s.id,
+                                  );
                                 }}
                               >
                                 {s.active ? "Désactiver" : "Activer"}
                               </AsyncButton>
                             )}
                           {ended && has(user, "stats.read") && (
-                            <button onClick={() => setStatistics(s)}>
+                            <Button onClick={() => setStatistics(s)}>
                               Voir les statistiques
-                            </button>
+                            </Button>
                           )}
                           {critical &&
                             !s.is_test &&
@@ -327,11 +354,7 @@ export default function SeasonManager({
                               <AsyncButton
                                 danger
                                 onClick={async () => {
-                                  const confirmation = window.prompt(
-                                    "Purger les données personnelles de cette saison ? La saison et son bilan anonyme seront conservés. Saisissez PURGER.",
-                                  );
-                                  if (confirmation === "PURGER")
-                                    await act("purge", "PURGER", s.id);
+                                  await act("purge", "PURGER", s.id);
                                 }}
                               >
                                 Purger les données
@@ -341,18 +364,14 @@ export default function SeasonManager({
                             <AsyncButton
                               danger
                               onClick={async () => {
-                                const confirmation = window.prompt(
-                                  `Suppression définitive de « ${s.name} ». Recopiez son nom pour confirmer. Les comptes utilisateurs sont conservés.`,
-                                );
-                                if (confirmation !== null)
-                                  await act("deleteSeason", confirmation, s.id);
+                                await act("deleteSeason", s.name, s.id);
                               }}
                             >
                               {ended ? "Supprimer définitivement" : "Supprimer"}
                             </AsyncButton>
                           )}
                           {!ended && !s.purged_at && !s.archived && manage && (
-                            <button
+                            <Button
                               aria-label={`Réglages de ${s.name}`}
                               aria-expanded={expanded === s.id}
                               onClick={() =>
@@ -364,7 +383,7 @@ export default function SeasonManager({
                               ) : (
                                 <ChevronDown size={17} />
                               )}
-                            </button>
+                            </Button>
                           )}
                         </div>
                       </td>
@@ -377,6 +396,7 @@ export default function SeasonManager({
                             zone={zone}
                             act={act}
                             superAdmin={critical}
+                            defaults={defaults}
                             onSaved={() => setExpanded(null)}
                           />
                         </td>
@@ -386,12 +406,12 @@ export default function SeasonManager({
                 );
               })}
             </tbody>
-          </table>
+          </DataTable>
         </div>
       )}
       {creating && (
         <div className="beta-overlay">
-          <section
+          <Dialog
             className="beta-panel"
             role="dialog"
             onClick={(event) => event.stopPropagation()}
@@ -400,21 +420,24 @@ export default function SeasonManager({
           >
             <header>
               <h2>Nouvelle saison</h2>
-              <button
+              <Button
                 className="close"
                 aria-label="Fermer la création"
-                onClick={() => setCreating(false)}
+                onClick={() => {
+                  if (confirmDraftNavigation()) setCreating(false);
+                }}
               >
                 <X />
-              </button>
+              </Button>
             </header>
             <SeasonEditor
               zone={zone}
               act={act}
               superAdmin={critical}
+              defaults={defaults}
               onSaved={() => setCreating(false)}
             />
-          </section>
+          </Dialog>
         </div>
       )}
       {statistics && (

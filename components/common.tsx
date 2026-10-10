@@ -1,66 +1,10 @@
 "use client";
 import FrenchDate from "./FrenchDate";
 import { useState } from "react";
-import { createRoot } from "react-dom/client";
-export function requestAdminConfirmation(): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const host = document.createElement("div");
-    document.body.append(host);
-    const root = createRoot(host);
-    function finish(password?: string) {
-      root.unmount();
-      host.remove();
-      if (password) resolve(password);
-      else reject(new Error("Action annulée"));
-    }
-    function Confirmation() {
-      const [password, setPassword] = useState("");
-      return (
-        <div className="modal-backdrop">
-          <section
-            className="dialog panel"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="confirm-admin-title"
-          >
-            <h2 id="confirm-admin-title">Confirmer l’action sensible</h2>
-            <p>Cette opération nécessite votre mot de passe actuel.</p>
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                finish(password);
-              }}
-            >
-              <label className="field">
-                Mot de passe
-                <input
-                  type="password"
-                  autoComplete="current-password"
-                  value={password}
-                  maxLength={128}
-                  required
-                  onChange={(e) => setPassword(e.target.value)}
-                />
-              </label>
-              <div className="actions">
-                <button
-                  type="button"
-                  className="close"
-                  aria-label="Annuler"
-                  onClick={() => finish()}
-                >
-                  Annuler
-                </button>
-                <button className="primary">Confirmer</button>
-              </div>
-            </form>
-          </section>
-        </div>
-      );
-    }
-    root.render(<Confirmation />);
-  });
-}
+import { requestAdminConfirmation, ActionCancelled } from "./AdminConfirmation";
+import { sensitiveAction } from "../lib/sensitive-actions";
+import { Input, Button } from "./ui";
+export { requestAdminConfirmation } from "./AdminConfirmation";
 import { ACTIVE_ROUTE_KEY, clearStoredRoute } from "../lib/active-route";
 import { Sparkles, Candy, Drama } from "lucide-react";
 import { DateTime } from "luxon";
@@ -141,22 +85,33 @@ export const fears = [
 export async function api<T>(path: string, body?: unknown): Promise<T> {
   if (body && typeof body === "object") {
     const input = body as Record<string, unknown>;
-    const sensitive =
-      (path === "admin" &&
-        [
-          "purge",
-          "deleteSeason",
-          "deleteHouse",
-          "activateSeason",
-          "deactivateSeason",
-          "settings",
-        ].includes(String(input.action))) ||
-      (path === "admin/users" &&
-        (["delete", "disable"].includes(String(input.action)) ||
-          !!input.role_id ||
-          !!input.permissions));
-    if (sensitive && !input.current_password)
-      body = { ...input, current_password: await requestAdminConfirmation() };
+    const sensitive = sensitiveAction(path, input);
+    if (sensitive && !input.current_password) {
+      let confirmed = input;
+      if (path === "admin" && input.action === "settings") {
+        const impact = await api<{
+          changes: string[];
+          houses: number;
+          fingerprint: string;
+        }>("admin/settings-impact", input.payload);
+        if (impact.changes.length) {
+          sensitive.message += ` Changements : ${impact.changes.join(", ")}. ${impact.houses} maison(s) existante(s) : leurs adresses, positions et horaires restent inchangés. Vérifiez les futures inscriptions et l’affichage des heures dans le nouveau fuseau.`;
+          sensitive.phrase = "MODIFIER LA LOCALISATION";
+          confirmed = {
+            ...input,
+            payload: {
+              ...(input.payload as Record<string, unknown>),
+              location_confirmed: true,
+              location_fingerprint: impact.fingerprint,
+            },
+          };
+        }
+      }
+      body = {
+        ...confirmed,
+        current_password: await requestAdminConfirmation(sensitive),
+      };
+    }
   }
   const r = await fetch("/api/" + path, {
     method: body === undefined ? "GET" : "POST",
@@ -261,7 +216,7 @@ export function Field({
         {label}
         {required && <b className="required"> *</b>}
       </span>
-      <input
+      <Input
         readOnly={readOnly}
         name={name}
         type={type}
@@ -277,10 +232,19 @@ export function Field({
     </label>
   );
 }
-export function Notice({ error }: { error: string }) {
-  return error ? (
-    <p className="notice" role="alert">
-      {error}
+export function Notice({
+  error = "",
+  message = "",
+}: {
+  error?: string;
+  message?: string;
+}) {
+  return error || message ? (
+    <p
+      className={"notice" + (error ? "" : " info")}
+      role={error ? "alert" : "status"}
+    >
+      {error || message}
     </p>
   ) : null;
 }
@@ -297,7 +261,7 @@ export function AsyncButton({
     [error, setError] = useState("");
   return (
     <>
-      <button
+      <Button
         type="button"
         className={danger ? "danger" : ""}
         disabled={busy}
@@ -307,14 +271,14 @@ export function AsyncButton({
           try {
             await onClick();
           } catch (e) {
-            setError((e as Error).message);
+            if (!(e instanceof ActionCancelled)) setError((e as Error).message);
           } finally {
             setBusy(false);
           }
         }}
       >
         {busy ? "Veuillez patienter…" : children}
-      </button>
+      </Button>
       <Notice error={error} />
     </>
   );
@@ -330,7 +294,7 @@ export function Check({
 }) {
   return (
     <label className="check">
-      <input type="checkbox" name={name} defaultChecked={checked} />
+      <Input type="checkbox" name={name} defaultChecked={checked} />
       {name === "DECORATION" ? (
         <Sparkles size={16} />
       ) : name === "CANDY" ? (

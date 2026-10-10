@@ -19,7 +19,7 @@ export const metricLabels = {
   houses: "Maisons inscrites",
   approved: "Maisons validées",
   pending: "Maisons en attente",
-  visited: "Maisons visitées",
+  visited: "Visites déclarées",
   routes: "Parcours préparés",
   started: "Collectes lancées",
   finished: "Collectes terminées",
