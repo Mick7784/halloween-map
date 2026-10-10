@@ -1,5 +1,7 @@
 "use client";
-import { useEffect, useState } from "react";
+import useDraftGuard from "./useDraftGuard";
+import { Button, Select } from "./ui";
+import { useState } from "react";
 import type { LegalDocument, LegalKind } from "../lib/content";
 import { api, Field, Notice, AsyncButton, values, Check } from "./common";
 import Editorial from "./Editorial";
@@ -25,12 +27,7 @@ export default function ContentAdmin({
     [category, setCategory] = useState("Accueil"),
     [value, setValue] = useState(data.values[key]),
     [kind, setKind] = useState<LegalKind>("TERMS");
-  useEffect(() => {
-    if (value === data.values[key]) return;
-    const guard = (event: BeforeUnloadEvent) => event.preventDefault();
-    window.addEventListener("beforeunload", guard);
-    return () => window.removeEventListener("beforeunload", guard);
-  }, [value, data.values, key]);
+  useDraftGuard(value !== data.values[key]);
   async function action(p: unknown) {
     await api("admin/content", p);
     await reload();
@@ -47,7 +44,7 @@ export default function ContentAdmin({
           "Documents",
           "Liens & contact",
         ].map((c) => (
-          <button
+          <Button
             key={c}
             className={category === c ? "active" : ""}
             onClick={() => {
@@ -67,7 +64,7 @@ export default function ContentAdmin({
             }}
           >
             {c}
-          </button>
+          </Button>
         ))}
       </div>
       {category === "Liens & contact" ? (
@@ -77,7 +74,7 @@ export default function ContentAdmin({
           <h2>Documents versionnés</h2>
           <label className="field">
             <span>Document</span>
-            <select
+            <Select
               value={kind}
               onChange={(e) => setKind(e.target.value as LegalKind)}
             >
@@ -86,7 +83,7 @@ export default function ContentAdmin({
                   {d.title}
                 </option>
               ))}
-            </select>
+            </Select>
           </label>
           <p>
             Version active : {data.active[kind].version}{" "}
@@ -132,7 +129,7 @@ export default function ContentAdmin({
         <section className="panel">
           <label className="field">
             <span>Contenu à modifier</span>
-            <select
+            <Select
               value={key}
               onChange={(e) => {
                 if (
@@ -167,7 +164,7 @@ export default function ContentAdmin({
                     )[k] ?? k}
                   </option>
                 ))}
-            </select>
+            </Select>
           </label>
           <p className="small muted">
             Variables disponibles :{" "}
@@ -214,7 +211,9 @@ function LinksEditor({
 }) {
   const [error, setError] = useState(""),
     [busy, setBusy] = useState(false),
-    [done, setDone] = useState(false);
+    [done, setDone] = useState(false),
+    [dirty, setDirty] = useState(false);
+  useDraftGuard(dirty);
   return (
     <section className="panel">
       <h2>Liens & contact</h2>
@@ -224,6 +223,10 @@ function LinksEditor({
         disponibles.
       </p>
       <form
+        onChange={() => {
+          setDirty(true);
+          setDone(false);
+        }}
         onSubmit={async (e) => {
           e.preventDefault();
           const v = values(e.currentTarget);
@@ -244,6 +247,7 @@ function LinksEditor({
               },
             });
             setDone(true);
+            setDirty(false);
           } catch (err) {
             setError((err as Error).message);
           } finally {
@@ -290,9 +294,9 @@ function LinksEditor({
         ))}
         <Notice error={error} />
         {done && <p role="status">Liens enregistrés.</p>}
-        <button disabled={busy} className="primary">
+        <Button disabled={busy} className="primary">
           Enregistrer les liens
-        </button>
+        </Button>
       </form>
     </section>
   );
@@ -308,12 +312,7 @@ function LegalDraft({
     [dirty, setDirty] = useState(false),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false);
-  useEffect(() => {
-    if (!dirty) return;
-    const guard = (event: BeforeUnloadEvent) => event.preventDefault();
-    window.addEventListener("beforeunload", guard);
-    return () => window.removeEventListener("beforeunload", guard);
-  }, [dirty]);
+  useDraftGuard(dirty);
   return (
     <details>
       <summary>
@@ -370,11 +369,11 @@ function LegalDraft({
           />
         )}
         <Notice error={error} />
-        <button className="primary" disabled={busy}>
+        <Button className="primary" disabled={busy}>
           {current.status === "DRAFT"
             ? "Enregistrer le brouillon"
             : "Créer le brouillon"}
-        </button>
+        </Button>
       </form>
       <h3>Aperçu du brouillon</h3>
       <Editorial text={body} />

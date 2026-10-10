@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useState, useRef } from "react";
 import Link from "next/link";
+import { confirmDraftNavigation } from "./useDraftGuard";
 import {
   X,
   LayoutDashboard,
@@ -39,10 +40,21 @@ import Campaigns from "./Campaigns";
 import AdminActivity from "./AdminActivity";
 import AdminExistingPage from "./AdminExistingPage";
 import { seasonFinished } from "../lib/domain";
+import { houseAvailability } from "../lib/house-availability";
 import "./AdminBeta.css";
 import ManorMark from "./ManorMark";
 import MessageTemplates from "./MessageTemplates";
 import RefusalPreview from "./RefusalPreview";
+import {
+  DataTable,
+  Button,
+  Select,
+  Input,
+  Dialog,
+  TextArea,
+  ActionMenu,
+  Pagination,
+} from "./ui";
 import {
   refusalReasons,
   refusalText,
@@ -69,12 +81,6 @@ const reviews: Record<string, string> = {
   PENDING: "En attente",
   REFUSED: "Refusée",
 };
-const open = (h: House) =>
-  h.review_status === "VALIDATED" &&
-  h.status === "VISIBLE" &&
-  h.activity === "ACTIVE" &&
-  new Date(h.starts_at).getTime() <= Date.now() &&
-  new Date(h.ends_at).getTime() > Date.now();
 export default function Admin({
   user,
   state,
@@ -115,6 +121,7 @@ export default function Admin({
     [search, setSearch] = useState(""),
     [review, setReview] = useState("ALL"),
     [availability, setAvailability] = useState("ALL"),
+    [housePage, setHousePage] = useState(1),
     [theme, setTheme] = useState("system"),
     [menuOpen, setMenuOpen] = useState(false),
     [loading, setLoading] = useState(true),
@@ -130,6 +137,7 @@ export default function Admin({
     [owners, setOwners] = useState<ManagedUser[]>([]);
   const [seasonsLoaded, setSeasonsLoaded] = useState(false);
   const [pendingHouseId, setPendingHouseId] = useState<string | null>(null);
+  const [pendingUserId, setPendingUserId] = useState<string | null>(null);
   const activeSeasonId = seasons.find((s) => s.active)?.id ?? "";
   const seasonScoped = [
     "houses",
@@ -148,7 +156,16 @@ export default function Admin({
     scheduleRef = useRef<HTMLElement | null>(null),
     generation = useRef(0),
     currentSeason = useRef(seasonId);
-  currentSeason.current = seasonId;
+  useEffect(() => {
+    currentSeason.current = seasonId;
+  }, [seasonId]);
+  const availabilityLabel = (h: ManagedHouse) =>
+    houseAvailability(
+      h,
+      state.serverTime ? +new Date(state.serverTime) : 0,
+      !!selectedSeason?.active,
+    );
+  const open = (h: ManagedHouse) => availabilityLabel(h) === "Ouverte";
   const seasonStorageKey =
     "halloween.admin.season." + state.instance?.id + "." + user.id;
   const reloadSeasons = useCallback(async () => {
@@ -332,16 +349,16 @@ export default function Admin({
           : h.review_status === review)) &&
       (availability === "ALL" || open(h) === (availability === "OPEN")),
   );
-  function select(h: ManagedHouse) {
+  function select(h: ManagedHouse, editing = false) {
     setSelected(h.id);
-    setEdit(false);
+    setEdit(editing);
     setReexamining(false);
     setReason(h.refusal_reason ?? "");
   }
   function table(items: ManagedHouse[], moderation = false) {
     return (
       <div className="beta-table-scroll">
-        <table>
+        <DataTable className="houses-table">
           <thead>
             <tr>
               <th>Maison / propriétaire</th>
@@ -360,69 +377,173 @@ export default function Admin({
             </tr>
           </thead>
           <tbody>
-            {items.map((h) => (
-              <tr key={h.id}>
-                <td>
-                  <strong>{h.name}</strong>
-                  {h.season_is_test && <span className="beta-badge">Test</span>}
-                  <small>
-                    {h.owner_name} · {h.email}
-                  </small>
-                </td>
-                <td>{h.address}</td>
-                <td>
-                  {reviews[h.review_status ?? "VALIDATED"]}
-                  {h.status === "HIDDEN" && <small>Masquée</small>}
-                </td>
-                {moderation ? (
-                  <td>
-                    {h.submitted_at
-                      ? dateLabel(
-                          h.submitted_at,
-                          state.instance?.timezone ?? "Europe/Paris",
-                        )
-                      : "—"}
+            {items
+              .slice(
+                (Math.min(
+                  housePage,
+                  Math.max(1, Math.ceil(items.length / 25)),
+                ) -
+                  1) *
+                  25,
+                Math.min(housePage, Math.max(1, Math.ceil(items.length / 25))) *
+                  25,
+              )
+              .map((h) => (
+                <tr key={h.id}>
+                  <td data-label="Maison">
+                    <strong>{h.name}</strong>
+                    {h.season_is_test && (
+                      <span className="beta-badge">Test</span>
+                    )}
+                    <small>
+                      {h.owner_name} · {h.email}
+                    </small>
                   </td>
-                ) : (
-                  <>
+                  <td data-label="Adresse">{h.address}</td>
+                  <td data-label="Modération">
+                    {reviews[h.review_status ?? "VALIDATED"]}
+                    {h.status === "HIDDEN" && <small>Masquée</small>}
+                  </td>
+                  {moderation ? (
                     <td>
-                      {h.status === "HIDDEN"
-                        ? "Masquée"
-                        : h.review_status !== "VALIDATED"
-                          ? "Non publiée"
-                          : +new Date(h.starts_at) > Date.now()
-                            ? "Pas encore ouverte"
-                            : h.activity === "PAUSED"
-                              ? "En pause"
-                              : open(h)
-                                ? "Ouverte"
-                                : "Fermée"}
-                      <small>
-                        {h.candy_available
-                          ? "Bonbons disponibles"
-                          : "Plus de bonbons"}
-                      </small>
-                    </td>
-                    <td>{h.activities.map((a) => labels[a]).join(" · ")}</td>
-                    <td>
-                      {h.updated_at
+                      {h.submitted_at
                         ? dateLabel(
-                            h.updated_at,
+                            h.submitted_at,
                             state.instance?.timezone ?? "Europe/Paris",
                           )
                         : "—"}
                     </td>
-                  </>
-                )}
-                <td>
-                  <button className="secondary" onClick={() => select(h)}>
-                    {moderation ? "Voir / Modérer" : "Gérer"}
-                  </button>
-                </td>
-              </tr>
-            ))}
+                  ) : (
+                    <>
+                      <td data-label="Disponibilité">
+                        {availabilityLabel(h)}
+                        <small>
+                          {h.candy_available
+                            ? "Bonbons disponibles"
+                            : "Plus de bonbons"}
+                        </small>
+                      </td>
+                      <td data-label="Activités">
+                        {h.activities.map((a) => labels[a]).join(" · ")}
+                      </td>
+                      <td data-label="Modification">
+                        {h.updated_at
+                          ? dateLabel(
+                              h.updated_at,
+                              state.instance?.timezone ?? "Europe/Paris",
+                            )
+                          : "—"}
+                      </td>
+                    </>
+                  )}
+                  <td data-label="Actions">
+                    <div className="row-actions house-row-actions">
+                      <Button
+                        className="secondary desktop-row-action"
+                        onClick={() => select(h)}
+                      >
+                        {moderation ? "Voir / Modérer" : "Gérer"}
+                      </Button>
+                      {has(user, "participants.edit") &&
+                        selectedSeason &&
+                        !seasonFinished(selectedSeason) && (
+                          <Button
+                            className="desktop-row-action"
+                            aria-label={"Modifier " + h.name}
+                            onClick={() => select(h, true)}
+                          >
+                            Modifier
+                          </Button>
+                        )}
+                      <ActionMenu label={"Actions pour " + h.name}>
+                        <Button onClick={() => select(h)}>Voir la fiche</Button>
+                        {has(user, "users.read") && (
+                          <Button
+                            onClick={() => {
+                              setPendingUserId(h.user_id);
+                              setSection("users");
+                            }}
+                          >
+                            Voir le propriétaire
+                          </Button>
+                        )}
+                        {has(user, "participants.edit") &&
+                          selectedSeason &&
+                          !seasonFinished(selectedSeason) && (
+                            <>
+                              <Button onClick={() => select(h, true)}>
+                                Modifier la maison
+                              </Button>
+                              <AsyncButton
+                                onClick={async () => {
+                                  await api("admin", {
+                                    action: "houseActivity",
+                                    id: h.id,
+                                    seasonId,
+                                    payload: {
+                                      action:
+                                        h.activity === "ACTIVE"
+                                          ? "pause"
+                                          : "resume",
+                                    },
+                                  });
+                                  await reload();
+                                }}
+                              >
+                                {h.activity === "ACTIVE"
+                                  ? "Mettre en pause"
+                                  : "Reprendre l’accueil"}
+                              </AsyncButton>
+                              <AsyncButton
+                                onClick={async () => {
+                                  await api("admin", {
+                                    action: "visibility",
+                                    id: h.id,
+                                    seasonId,
+                                    payload:
+                                      h.status === "HIDDEN"
+                                        ? "VISIBLE"
+                                        : "HIDDEN",
+                                  });
+                                  await reload();
+                                }}
+                              >
+                                {h.status === "HIDDEN"
+                                  ? "Réafficher"
+                                  : "Masquer"}
+                              </AsyncButton>
+                            </>
+                          )}
+                        {has(user, "participants.delete") &&
+                          selectedSeason &&
+                          !seasonFinished(selectedSeason) && (
+                            <AsyncButton
+                              danger
+                              onClick={async () => {
+                                await api("admin", {
+                                  action: "deleteHouse",
+                                  id: h.id,
+                                  seasonId,
+                                  payload: "SUPPRIMER LA MAISON",
+                                });
+                                await reload();
+                              }}
+                            >
+                              Supprimer la maison
+                            </AsyncButton>
+                          )}
+                      </ActionMenu>
+                    </div>
+                  </td>
+                </tr>
+              ))}
           </tbody>
-        </table>
+        </DataTable>
+        <Pagination
+          count={items.length}
+          page={Math.min(housePage, Math.max(1, Math.ceil(items.length / 25)))}
+          onPage={setHousePage}
+        />
         {!items.length && (
           <p className="beta-empty">
             {moderation
@@ -436,7 +557,7 @@ export default function Admin({
   return (
     <div className="admin-beta" data-theme={theme}>
       {menuOpen && (
-        <button
+        <Button
           className="beta-menu-backdrop"
           aria-label="Fermer la navigation"
           onClick={() => setMenuOpen(false)}
@@ -475,11 +596,12 @@ export default function Admin({
           ).map(
             ([id, title, permission, Icon]) =>
               has(user, permission) && (
-                <button
+                <Button
                   key={id}
                   className={section === id ? "is-current" : ""}
                   aria-current={section === id ? "page" : undefined}
                   onClick={() => {
+                    if (!confirmDraftNavigation()) return;
                     setUserCreate(false);
                     setSection(id);
                     setMenuOpen(false);
@@ -487,7 +609,7 @@ export default function Admin({
                 >
                   <Icon size={18} />
                   {title}
-                </button>
+                </Button>
               ),
           )}
         </nav>
@@ -498,7 +620,7 @@ export default function Admin({
       </aside>
       <main className="beta-content">
         <header className="beta-header">
-          <button
+          <Button
             className="beta-menu-toggle"
             aria-label="Ouvrir la navigation"
             aria-expanded={menuOpen}
@@ -506,7 +628,7 @@ export default function Admin({
             onClick={() => setMenuOpen(!menuOpen)}
           >
             <Menu size={20} />
-          </button>
+          </Button>
           <div className="beta-page-title">
             <h1>
               {
@@ -538,7 +660,7 @@ export default function Admin({
             {seasonScoped && (
               <label className="beta-season-select">
                 Saison consultée
-                <select
+                <Select
                   aria-label={
                     section === "statistics"
                       ? "Saison consultée"
@@ -559,12 +681,12 @@ export default function Admin({
                       {s.active ? " · ACTIVE" : ""}
                     </option>
                   ))}
-                </select>
+                </Select>
               </label>
             )}
             <label className="beta-theme-select">
               <SunMoon size={17} />
-              <select
+              <Select
                 aria-label="Apparence"
                 value={theme}
                 onChange={(e) => {
@@ -580,7 +702,7 @@ export default function Admin({
                 <option value="dark">Sombre</option>
                 <option value="light">Clair</option>
                 <option value="system">Système</option>
-              </select>
+              </Select>
             </label>
             <span className="beta-profile">
               <span>{user.display_name.slice(0, 1).toUpperCase()}</span>
@@ -608,9 +730,14 @@ export default function Admin({
           </div>
           <div>
             <span className="beta-service">
-              Carte : {state.mapAccessible ? "ouverte" : "indisponible"}
+              Carte :{" "}
+              {state.earlyAccess
+                ? "accès anticipé Super Admin"
+                : state.mapAccessible
+                  ? "ouverte"
+                  : "indisponible"}
             </span>
-            <button
+            <Button
               aria-label="Actualiser les données"
               onClick={() => {
                 void reloadSeasons().catch((e) => setError(e.message));
@@ -618,7 +745,7 @@ export default function Admin({
               }}
             >
               <RefreshCw size={15} />
-            </button>
+            </Button>
           </div>
         </div>
         <Notice error={error} />
@@ -628,13 +755,13 @@ export default function Admin({
             <section className="beta-card">
               <h2>Aucune saison active</h2>
               <p>Activez une saison pour consulter ses indicateurs.</p>
-              <button className="primary" onClick={() => setSection("seasons")}>
+              <Button className="primary" onClick={() => setSection("seasons")}>
                 Gérer les saisons
-              </button>
+              </Button>
             </section>
           )}
         {section === "dashboard" && seasons.some((s) => s.active) && (
-          <button
+          <Button
             className="stats-link"
             onClick={() => {
               setSeasonId(seasons.find((s) => s.active)!.id);
@@ -642,7 +769,7 @@ export default function Admin({
             }}
           >
             Voir toutes les statistiques
-          </button>
+          </Button>
         )}
         {section === "dashboard" && !error && seasons.some((s) => s.active) && (
           <AdminDashboard
@@ -736,7 +863,7 @@ export default function Admin({
             </p>
             {has(user, "participants.edit") && (
               <div className="beta-house-create">
-                <button
+                <Button
                   className="primary"
                   disabled={
                     !selectedSeason?.active || seasonFinished(selectedSeason)
@@ -746,36 +873,42 @@ export default function Admin({
                   }
                 >
                   + Nouvelle maison
-                </button>
+                </Button>
                 {!seasons.some((s) => s.active) ? (
                   <p>Activez une saison avant de créer une maison.</p>
                 ) : (
                   !selectedSeason?.active && (
                     <p>
                       La création est réservée à la saison active.{" "}
-                      <button
+                      <Button
                         onClick={() =>
                           setSeasonId(seasons.find((s) => s.active)!.id)
                         }
                       >
                         Revenir à la saison active
-                      </button>
+                      </Button>
                     </p>
                   )
                 )}
               </div>
             )}
             <div className="beta-filters">
-              <input
+              <Input
                 aria-label="Rechercher une maison"
                 placeholder="Maison, propriétaire, adresse…"
                 value={search}
-                onChange={(e) => setSearch(e.target.value)}
+                onChange={(e) => {
+                  setSearch(e.target.value);
+                  setHousePage(1);
+                }}
               />
-              <select
+              <Select
                 aria-label="Statut"
                 value={review}
-                onChange={(e) => setReview(e.target.value)}
+                onChange={(e) => {
+                  setReview(e.target.value);
+                  setHousePage(1);
+                }}
               >
                 <option value="ALL">Tous les statuts</option>
                 {Object.entries(reviews).map(([v, l]) => (
@@ -784,16 +917,19 @@ export default function Admin({
                   </option>
                 ))}
                 <option value="HIDDEN">Masquées</option>
-              </select>
-              <select
+              </Select>
+              <Select
                 aria-label="Disponibilité"
                 value={availability}
-                onChange={(e) => setAvailability(e.target.value)}
+                onChange={(e) => {
+                  setAvailability(e.target.value);
+                  setHousePage(1);
+                }}
               >
                 <option value="ALL">Ouvertes et fermées</option>
                 <option value="OPEN">Ouvertes</option>
                 <option value="CLOSED">Fermées</option>
-              </select>
+              </Select>
             </div>
             {loading && !error ? (
               <p role="status">Chargement des maisons…</p>
@@ -812,9 +948,12 @@ export default function Admin({
               roles={roles}
               user={user}
               initialCreate={userCreate}
+              initialUserId={pendingUserId}
+              onClose={() => setPendingUserId(null)}
               reload={reload}
               seasonName={seasons.find((s) => s.active)?.name}
               onHouse={(id) => {
+                setPendingUserId(null);
                 setPendingHouseId(id);
                 setSection("houses");
                 setSeasonId(activeSeasonId);
@@ -827,12 +966,20 @@ export default function Admin({
             user={user}
             zone={state.instance?.timezone ?? "Europe/Paris"}
             act={seasonAction}
+            defaults={
+              state.instance
+                ? {
+                    open: state.instance.defaultOpen,
+                    close: state.instance.defaultClose,
+                  }
+                : undefined
+            }
           />
         )}
       </main>
       {creating && selectedSeason && state.instance && (
         <div className="beta-overlay">
-          <section
+          <Dialog
             className="beta-panel"
             role="dialog"
             onClick={(event) => event.stopPropagation()}
@@ -841,17 +988,17 @@ export default function Admin({
           >
             <header>
               <h2>Nouvelle maison</h2>
-              <button
+              <Button
                 className="close"
                 aria-label="Fermer la création"
                 onClick={() => setCreating(false)}
               >
                 <X />
-              </button>
+              </Button>
             </header>
             <label>
               Rechercher un propriétaire
-              <input
+              <Input
                 aria-label="Rechercher un propriétaire"
                 placeholder="Nom ou email…"
                 value={ownerSearch}
@@ -860,7 +1007,7 @@ export default function Admin({
             </label>
             <label>
               Propriétaire
-              <select
+              <Select
                 aria-label="Propriétaire"
                 value={ownerId}
                 onChange={(e) => setOwnerId(e.target.value)}
@@ -879,10 +1026,10 @@ export default function Admin({
                       {u.display_name} · {u.email}
                     </option>
                   ))}
-              </select>
+              </Select>
             </label>
             {has(user, "users.manage") && (
-              <button
+              <Button
                 onClick={() => {
                   setCreating(false);
                   setUserCreate(true);
@@ -890,7 +1037,7 @@ export default function Admin({
                 }}
               >
                 Créer un utilisateur
-              </button>
+              </Button>
             )}
             {!ownerId ? (
               <p>
@@ -922,73 +1069,100 @@ export default function Admin({
                 }}
               />
             )}
-          </section>
+          </Dialog>
         </div>
       )}
       {current && (
         <div className="beta-overlay">
-          <section
+          <Dialog
             className="beta-panel"
             role="dialog"
             onClick={(event) => event.stopPropagation()}
             aria-modal="true"
             aria-label={current.name}
+            data-house-sheet="true"
           >
             <header>
               <h2>{current.name}</h2>
-              <button
+              <Button
                 className="close secondary"
                 aria-label="Fermer"
-                onClick={() => setSelected(null)}
+                onClick={() => {
+                  if (confirmDraftNavigation()) setSelected(null);
+                }}
               >
                 <X size={20} />
-              </button>
+              </Button>
             </header>
-            <p>
-              {current.owner_name} · {current.email}
-            </p>
-            <p>{current.address}</p>
-            <p>
-              {reviews[current.review_status ?? "VALIDATED"]} ·{" "}
-              {current.status === "HIDDEN" ? "Masquée" : "Visible"} ·{" "}
-              {open(current) ? "Ouverte" : "Fermée"}{" "}
-              {current.season_is_test && (
-                <span className="beta-badge">Test</span>
-              )}
-            </p>
-            <p>{current.activities.map((a) => labels[a]).join(" · ")}</p>
-            <p>
-              Accueil :{" "}
-              {dateLabel(
-                new Date(current.starts_at).toISOString(),
-                state.instance?.timezone ?? "Europe/Paris",
-              )}{" "}
-              →{" "}
-              {dateLabel(
-                new Date(current.ends_at).toISOString(),
-                state.instance?.timezone ?? "Europe/Paris",
-              )}
-            </p>
-            <p>
-              {current.adaptable
-                ? "Adapté aux visiteurs"
-                : "Niveau de frayeur : " + current.fear}{" "}
-              ·{" "}
-              {current.candy_available
-                ? "Bonbons disponibles"
-                : "Plus de bonbons"}
-            </p>
-            <p>{current.rp}</p>
-            <p>{current.practical}</p>
+            <section className="house-information">
+              <h3>Informations</h3>
+              <p>
+                {current.owner_name} · {current.email}
+                {has(user, "users.read") && (
+                  <Button
+                    onClick={() => {
+                      setPendingUserId(current.user_id);
+                      setSelected(null);
+                      setSection("users");
+                    }}
+                  >
+                    Voir le propriétaire
+                  </Button>
+                )}
+              </p>
+              <p>{current.address}</p>
+              <p className="small muted">
+                Position : {current.latitude.toFixed(5)},{" "}
+                {current.longitude.toFixed(5)}
+              </p>
+              <p>
+                {reviews[current.review_status ?? "VALIDATED"]} ·{" "}
+                {current.status === "HIDDEN" ? "Masquée" : "Visible"} ·{" "}
+                {availabilityLabel(current)}{" "}
+                {current.season_is_test && (
+                  <span className="beta-badge">Test</span>
+                )}
+              </p>
+              <p>{current.activities.map((a) => labels[a]).join(" · ")}</p>
+              <p>
+                Accueil :{" "}
+                {dateLabel(
+                  new Date(current.starts_at).toISOString(),
+                  state.instance?.timezone ?? "Europe/Paris",
+                )}{" "}
+                →{" "}
+                {dateLabel(
+                  new Date(current.ends_at).toISOString(),
+                  state.instance?.timezone ?? "Europe/Paris",
+                )}
+              </p>
+              <p>
+                {current.adaptable
+                  ? "Adapté aux visiteurs"
+                  : "Niveau de frayeur : " + current.fear}{" "}
+                ·{" "}
+                {current.candy_available
+                  ? "Bonbons disponibles"
+                  : "Plus de bonbons"}
+              </p>
+              <p>{current.rp}</p>
+              <p>{current.practical}</p>
+            </section>
             {selectedSeason &&
               !seasonFinished(selectedSeason) &&
-              has(user, "participants.edit") && (
+              has(user, "participants.edit") &&
+              edit && (
                 <div className="beta-actions">
-                  <button className="secondary" onClick={() => setEdit(!edit)}>
+                  <Button
+                    className="secondary"
+                    onClick={() => {
+                      if (!edit || confirmDraftNavigation()) setEdit(!edit);
+                    }}
+                  >
                     {edit
                       ? "Consulter / gérer"
                       : "Modifier les informations et horaires"}
-                  </button>
+                  </Button>
                 </div>
               )}
             {edit && state.instance ? (
@@ -1009,89 +1183,156 @@ export default function Admin({
               />
             ) : (
               <>
+                {(!selectedSeason ||
+                  seasonFinished(selectedSeason) ||
+                  !has(user, "participants.edit")) && (
+                  <>
+                    <section className="house-moderation">
+                      <h3>Modération</h3>
+                      <p>
+                        {reviews[current.review_status ?? "VALIDATED"]} ·
+                        Soumission :{" "}
+                        {current.submitted_at
+                          ? dateLabel(
+                              current.submitted_at,
+                              state.instance?.timezone ?? "Europe/Paris",
+                            )
+                          : "Date non disponible"}
+                      </p>
+                      <p>{current.refusal_reason}</p>
+                    </section>
+                    <section>
+                      <h3>Gestion</h3>
+                      <p>
+                        {availabilityLabel(current)} ·{" "}
+                        {current.status === "HIDDEN" ? "Masquée" : "Visible"} ·{" "}
+                        {current.candy_available
+                          ? "Bonbons disponibles"
+                          : "Plus de bonbons"}
+                      </p>
+                      <p className="small muted">
+                        Consultation en lecture seule.
+                      </p>
+                    </section>
+                  </>
+                )}
                 {selectedSeason &&
                   !seasonFinished(selectedSeason) &&
                   has(user, "participants.edit") && (
                     <>
-                      {current.review_status === "REFUSED" && !reexamining && (
-                        <button
-                          className="primary"
-                          onClick={() => setReexamining(true)}
-                        >
-                          Réexaminer
-                        </button>
-                      )}
-                      {(current.review_status === "PENDING" ||
-                        (current.review_status === "REFUSED" &&
-                          reexamining)) && (
-                        <section>
-                          <h3>Modération</h3>
-                          <div className="beta-actions">
-                            <AsyncButton
-                              onClick={() =>
-                                act("reviewHouse", { status: "VALIDATED" })
-                              }
-                            >
-                              Valider
-                            </AsyncButton>
-                            <AsyncButton
-                              onClick={() =>
-                                act("reviewHouse", { status: "PENDING" })
-                              }
-                            >
-                              Mettre en attente
-                            </AsyncButton>
-                          </div>
-                          <label>
-                            Motif du refus
-                            <select
-                              value={reasonCode}
-                              onChange={(e) => {
-                                setReasonCode(e.target.value as RefusalCode);
-                                setReason("");
-                              }}
-                            >
-                              {Object.entries(refusalReasons).map(
-                                ([code, label]) => (
-                                  <option key={code} value={code}>
-                                    {label}
-                                  </option>
-                                ),
-                              )}
-                            </select>
-                            <textarea
-                              maxLength={500}
-                              value={reason}
-                              onChange={(e) => setReason(e.target.value)}
-                            />
-                          </label>
+                      <section className="house-moderation">
+                        <h3>Modération</h3>
+                        <p>
+                          {reviews[current.review_status ?? "VALIDATED"]} ·
+                          Soumission :{" "}
+                          {current.submitted_at
+                            ? dateLabel(
+                                current.submitted_at,
+                                state.instance?.timezone ?? "Europe/Paris",
+                              )
+                            : "Date non disponible"}
+                        </p>
+                        {current.review_status === "VALIDATED" && (
                           <AsyncButton
                             onClick={() =>
-                              act("reviewHouse", {
-                                status: "REFUSED",
-                                reason,
-                                reason_code: reasonCode,
-                              })
+                              act("reviewHouse", { status: "PENDING" })
                             }
                           >
-                            Refuser avec motif
+                            Remettre en attente
                           </AsyncButton>
-                          <p className="small">
-                            Motif transmis au propriétaire :{" "}
-                            {refusalText(reasonCode, reason) ||
-                              "Une explication est obligatoire."}
-                          </p>
-                          <RefusalPreview
-                            id={current.id}
-                            reason={refusalText(reasonCode, reason).slice(
-                              0,
-                              500,
-                            )}
-                          />
-                        </section>
-                      )}
+                        )}
+                        {current.review_status === "REFUSED" &&
+                          !reexamining && (
+                            <Button
+                              className="primary"
+                              onClick={() => setReexamining(true)}
+                            >
+                              Réexaminer
+                            </Button>
+                          )}
+                        {(current.review_status === "PENDING" ||
+                          (current.review_status === "REFUSED" &&
+                            reexamining)) && (
+                          <section>
+                            <div className="beta-actions">
+                              <AsyncButton
+                                onClick={() =>
+                                  act("reviewHouse", { status: "VALIDATED" })
+                                }
+                              >
+                                Valider
+                              </AsyncButton>
+                              <AsyncButton
+                                onClick={() =>
+                                  act("reviewHouse", { status: "PENDING" })
+                                }
+                              >
+                                Mettre en attente
+                              </AsyncButton>
+                            </div>
+                            <label>
+                              Motif du refus
+                              <Select
+                                aria-label="Motif du refus"
+                                value={reasonCode}
+                                onChange={(e) => {
+                                  setReasonCode(e.target.value as RefusalCode);
+                                  setReason("");
+                                }}
+                              >
+                                {Object.entries(refusalReasons).map(
+                                  ([code, label]) => (
+                                    <option key={code} value={code}>
+                                      {label}
+                                    </option>
+                                  ),
+                                )}
+                              </Select>
+                              <TextArea
+                                aria-label="Précisions du refus"
+                                maxLength={500}
+                                value={reason}
+                                onChange={(e) => setReason(e.target.value)}
+                              />
+                            </label>
+                            <AsyncButton
+                              onClick={() =>
+                                act("reviewHouse", {
+                                  status: "REFUSED",
+                                  reason,
+                                  reason_code: reasonCode,
+                                })
+                              }
+                            >
+                              Refuser avec motif
+                            </AsyncButton>
+                            <p className="small">
+                              Motif transmis au propriétaire :{" "}
+                              {refusalText(reasonCode, reason) ||
+                                "Une explication est obligatoire."}
+                            </p>
+                            <RefusalPreview
+                              id={current.id}
+                              reason={refusalText(reasonCode, reason).slice(
+                                0,
+                                500,
+                              )}
+                            />
+                          </section>
+                        )}
+                      </section>
                       <section>
-                        <h3>Disponibilité</h3>
+                        <h3>Gestion</h3>
+                        <Button
+                          className="secondary"
+                          onClick={() => setEdit(true)}
+                        >
+                          Modifier les informations et horaires
+                        </Button>
+                        <p className="small muted">
+                          Disponibilité de l’accueil et bonbons, indépendants de
+                          la décision de modération.
+                        </p>
                         <div className="beta-actions">
                           <AsyncButton
                             onClick={() =>
@@ -1153,7 +1394,7 @@ export default function Admin({
                   !seasonFinished(selectedSeason) &&
                   has(user, "participants.edit") && (
                     <section>
-                      <h3>Visibilité administrative</h3>
+                      <h4>Visibilité administrative</h4>
                       <p>La visibilité est indépendante de la modération.</p>
                       <AsyncButton
                         onClick={() =>
@@ -1171,16 +1412,10 @@ export default function Admin({
                   !seasonFinished(selectedSeason) &&
                   has(user, "participants.delete") && (
                     <section>
-                      <h3>Suppression</h3>
+                      <h4>Suppression</h4>
                       <AsyncButton
                         danger
                         onClick={async () => {
-                          if (
-                            !window.confirm(
-                              "Supprimer définitivement cette maison ?",
-                            )
-                          )
-                            return;
                           await act("deleteHouse", "SUPPRIMER LA MAISON");
                           setSelected(null);
                         }}
@@ -1191,7 +1426,7 @@ export default function Admin({
                   )}
               </>
             )}
-          </section>
+          </Dialog>
         </div>
       )}
     </div>

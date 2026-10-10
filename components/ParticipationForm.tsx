@@ -1,4 +1,5 @@
 "use client";
+import { Input, Button, Dialog } from "./ui";
 import { useRef, useState, type ReactNode } from "react";
 import {
   Ghost,
@@ -292,14 +293,14 @@ export default function ParticipationForm({
         {acceptanceNeeded && (
           <section className="participation-section participation-consent">
             <label className="check">
-              <input
+              <Input
                 type="checkbox"
                 checked={guidelines}
                 onChange={(e) => setGuidelines(e.target.checked)}
               />
               <span>
                 J’ai pris connaissance des{" "}
-                <button
+                <Button
                   type="button"
                   className="participation-guidelines-link"
                   aria-haspopup="dialog"
@@ -309,7 +310,7 @@ export default function ParticipationForm({
                   }}
                 >
                   bonnes pratiques
-                </button>
+                </Button>
               </span>
             </label>
           </section>
@@ -322,7 +323,7 @@ export default function ParticipationForm({
             Modifications enregistrées.
           </p>
         )}
-        <button
+        <Button
           className="primary"
           disabled={
             busy || !location.confirmed || (!!acceptanceNeeded && !guidelines)
@@ -334,37 +335,37 @@ export default function ParticipationForm({
             : house
               ? "Enregistrer les modifications"
               : (submitLabel ?? "Envoyer ma participation")}
-        </button>
+        </Button>
       </div>
       {guidelinesOpen && (
         <div className="participation-guidelines-backdrop">
-          <section
+          <Dialog
             className="participation-guidelines-dialog"
             role="dialog"
             onClick={(event) => event.stopPropagation()}
             aria-modal="true"
             aria-labelledby="participation-guidelines-title"
           >
-            <button
+            <Button
               type="button"
               className="close"
               aria-label="Fermer les bonnes pratiques"
               onClick={() => setGuidelinesOpen(false)}
             >
               <X />
-            </button>
+            </Button>
             <h2 id="participation-guidelines-title">Bonnes pratiques</h2>
             <Editorial
               text={guidelinesDocument.body || legalDefaults.GUIDELINES.body}
             />
-            <button
+            <Button
               type="button"
               className="participation-guidelines-return"
               onClick={() => setGuidelinesOpen(false)}
             >
               Retour au formulaire
-            </button>
-          </section>
+            </Button>
+          </Dialog>
         </div>
       )}
     </form>

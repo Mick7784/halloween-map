@@ -1,11 +1,22 @@
 "use client";
+import { ActionCancelled } from "./AdminConfirmation";
 import { X } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
+import useDraftGuard, { confirmDraftNavigation } from "./useDraftGuard";
 import { DateTime } from "luxon";
 import { type User, type House, defaultRoles } from "../lib/domain";
 import { permissionLabels } from "../lib/admin-presentation";
 import { api, Field, Notice, values, labels, AsyncButton } from "./common";
+import {
+  Input,
+  Button,
+  DataTable,
+  Dialog,
+  Select,
+  ActionMenu,
+  Pagination,
+} from "./ui";
 type Role = { id: string; name: string; permissions: string[] };
 export type ManagedUser = User & {
   participation_season?: string | null;
@@ -19,6 +30,8 @@ export type ManagedUser = User & {
     scheduled_at: string;
     sent_at: string | null;
     last_error: string | null;
+    season_id?: string | null;
+    season_name?: string | null;
   }[];
 };
 const tabs = [
@@ -36,6 +49,8 @@ export default function AdminUsers({
   initialCreate = false,
   onHouse,
   seasonName,
+  initialUserId,
+  onClose,
 }: {
   users: ManagedUser[];
   roles: Role[];
@@ -44,10 +59,14 @@ export default function AdminUsers({
   initialCreate?: boolean;
   onHouse: (id: string) => void;
   seasonName?: string;
+  initialUserId?: string | null;
+  onClose?: () => void;
 }) {
   const [search, setSearch] = useState(""),
     [filter, setFilter] = useState("ALL"),
-    [selected, setSelected] = useState<string | null>(null),
+    [selected, setSelected] = useState<string | null>(initialUserId ?? null),
+    [editing, setEditing] = useState(false),
+    [page, setPage] = useState(1),
     [create, setCreate] = useState(initialCreate);
   const list = users.filter(
     (u) =>
@@ -62,6 +81,10 @@ export default function AdminUsers({
         (filter === "UNVERIFIED" && u.email_status !== "VERIFIED")),
   );
   const current = users.find((u) => u.id === selected);
+  function showUser(id: string, edit = false) {
+    setSelected(id);
+    setEditing(edit);
+  }
   const manageable = user.permissions.includes("users.manage");
   const canManageTarget = (target: ManagedUser) =>
     manageable &&
@@ -102,31 +125,37 @@ export default function AdminUsers({
         {seasonName ?? "Aucune saison active"}
       </p>
       <div className="toolbar">
-        <input
+        <Input
           aria-label="Rechercher un utilisateur"
           placeholder="Nom ou email…"
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onChange={(e) => {
+            setSearch(e.target.value);
+            setPage(1);
+          }}
         />
         {manageable && (
-          <button className="primary" onClick={() => setCreate(true)}>
+          <Button className="primary" onClick={() => setCreate(true)}>
             Créer un utilisateur
-          </button>
+          </Button>
         )}
       </div>
       <div className="tabs">
         {tabs.map(([id, label]) => (
-          <button
+          <Button
             key={id}
             className={filter === id ? "active" : ""}
-            onClick={() => setFilter(id)}
+            onClick={() => {
+              setFilter(id);
+              setPage(1);
+            }}
           >
             {label}
-          </button>
+          </Button>
         ))}
       </div>
       <div className="table-wrap">
-        <table>
+        <DataTable className="users-table">
           <thead>
             <tr>
               <th>Utilisateur</th>
@@ -139,153 +168,168 @@ export default function AdminUsers({
             </tr>
           </thead>
           <tbody>
-            {list.map((u) => (
-              <tr key={u.id}>
-                <td>
-                  <button onClick={() => setSelected(u.id)}>
-                    {u.display_name}
-                  </button>
-                  <small>{u.email}</small>
-                </td>
-                <td>{labels[u.email_status] ?? u.email_status}</td>
-                <td>{labels[u.account_status] ?? u.account_status}</td>
-                <td>{u.participation?.name ?? "—"}</td>
-                <td>{labels[u.role_name ?? ""] ?? u.role_name}</td>
-                <td>{date(u.last_login_at)}</td>
-                <td>
-                  <div className="row-actions">
-                    <button
-                      aria-label={"Voir la fiche de " + u.display_name}
-                      onClick={() => setSelected(u.id)}
-                    >
-                      Voir
-                    </button>
-                    {canManageTarget(u) && (
-                      <button
-                        aria-label={"Modifier " + u.display_name}
-                        onClick={() => setSelected(u.id)}
+            {list
+              .slice(
+                (Math.min(page, Math.max(1, Math.ceil(list.length / 25))) - 1) *
+                  25,
+                Math.min(page, Math.max(1, Math.ceil(list.length / 25))) * 25,
+              )
+              .map((u) => (
+                <tr key={u.id}>
+                  <td>
+                    <Button onClick={() => showUser(u.id)}>
+                      {u.display_name}
+                    </Button>
+                    <small>{u.email}</small>
+                  </td>
+                  <td data-label="Vérification">
+                    {labels[u.email_status] ?? u.email_status}
+                  </td>
+                  <td data-label="Compte">
+                    {labels[u.account_status] ?? u.account_status}
+                  </td>
+                  <td data-label="Participation">
+                    {u.participation?.name ?? "—"}
+                  </td>
+                  <td data-label="Profil">
+                    {labels[u.role_name ?? ""] ?? u.role_name}
+                  </td>
+                  <td data-label="Dernière connexion">
+                    {date(u.last_login_at)}
+                  </td>
+                  <td>
+                    <div className="row-actions">
+                      <Button
+                        aria-label={"Voir la fiche de " + u.display_name}
+                        onClick={() => showUser(u.id)}
                       >
-                        Modifier
-                      </button>
-                    )}
-                    {u.id === user.id && (
-                      <Link href="/account">Mon compte</Link>
-                    )}
-                    {u.participation &&
-                      user.permissions.includes("participants.read") && (
-                        <button onClick={() => onHouse(u.participation!.id)}>
-                          Maison
-                        </button>
-                      )}
-                    <details>
-                      <summary
-                        aria-label={"Plus d’actions pour " + u.display_name}
-                      >
-                        …
-                      </summary>
-                      <button
-                        className="mobile-row-action"
-                        onClick={() => setSelected(u.id)}
-                      >
-                        Voir la fiche
-                      </button>
-                      {u.id === user.id && (
-                        <Link className="mobile-row-action" href="/account">
-                          Mon compte
-                        </Link>
-                      )}
+                        Voir
+                      </Button>
                       {canManageTarget(u) && (
-                        <button
-                          className="mobile-row-action"
-                          onClick={() => setSelected(u.id)}
+                        <Button
+                          aria-label={"Modifier " + u.display_name}
+                          onClick={() => showUser(u.id, true)}
                         >
                           Modifier
-                        </button>
+                        </Button>
+                      )}
+                      {u.id === user.id && (
+                        <Link href="/account">Mon compte</Link>
                       )}
                       {u.participation &&
                         user.permissions.includes("participants.read") && (
-                          <button
-                            className="mobile-row-action"
-                            onClick={() => onHouse(u.participation!.id)}
-                          >
-                            Voir la maison
-                          </button>
+                          <Button onClick={() => onHouse(u.participation!.id)}>
+                            Maison
+                          </Button>
                         )}
-                      {canManageTarget(u) && (
-                        <>
-                          <AsyncButton
-                            onClick={() =>
-                              act({
-                                action:
-                                  u.account_status === "DISABLED"
-                                    ? "enable"
-                                    : "disable",
-                                id: u.id,
-                              })
-                            }
+                      <ActionMenu
+                        label={"Plus d’actions pour " + u.display_name}
+                      >
+                        <Button
+                          className="mobile-row-action"
+                          onClick={() => showUser(u.id)}
+                        >
+                          Voir la fiche
+                        </Button>
+                        {u.id === user.id && (
+                          <Link className="mobile-row-action" href="/account">
+                            Mon compte
+                          </Link>
+                        )}
+                        {canManageTarget(u) && (
+                          <Button
+                            className="mobile-row-action"
+                            onClick={() => showUser(u.id, true)}
                           >
-                            {u.account_status === "DISABLED"
-                              ? "Activer"
-                              : "Désactiver"}
-                          </AsyncButton>
-                          {u.account_status !== "DISABLED" &&
-                            u.email_status !== "VERIFIED" && (
-                              <AsyncButton
-                                onClick={() =>
-                                  act({ action: "resend", id: u.id })
-                                }
-                              >
-                                Renvoyer la vérification
-                              </AsyncButton>
-                            )}
-                          {user.role_name === "SUPER_ADMIN" && (
+                            Modifier
+                          </Button>
+                        )}
+                        {u.participation &&
+                          user.permissions.includes("participants.read") && (
+                            <Button
+                              className="mobile-row-action"
+                              onClick={() => onHouse(u.participation!.id)}
+                            >
+                              Voir la maison
+                            </Button>
+                          )}
+                        {canManageTarget(u) && (
+                          <>
                             <AsyncButton
-                              danger
-                              onClick={async () => {
-                                if (
-                                  window.confirm(
-                                    "Supprimer définitivement ce compte et ses données ?",
-                                  )
-                                )
+                              onClick={() =>
+                                act({
+                                  action:
+                                    u.account_status === "DISABLED"
+                                      ? "enable"
+                                      : "disable",
+                                  id: u.id,
+                                })
+                              }
+                            >
+                              {u.account_status === "DISABLED"
+                                ? "Activer"
+                                : "Désactiver"}
+                            </AsyncButton>
+                            {u.account_status !== "DISABLED" &&
+                              u.email_status !== "VERIFIED" && (
+                                <AsyncButton
+                                  onClick={() =>
+                                    act({ action: "resend", id: u.id })
+                                  }
+                                >
+                                  Renvoyer la vérification
+                                </AsyncButton>
+                              )}
+                            {user.role_name === "SUPER_ADMIN" && (
+                              <AsyncButton
+                                danger
+                                onClick={async () => {
                                   await act({
                                     action: "delete",
                                     id: u.id,
                                     confirm: "SUPPRIMER CE COMPTE",
                                   });
-                              }}
-                            >
-                              Supprimer le compte
-                            </AsyncButton>
-                          )}
-                        </>
-                      )}
-                    </details>
-                  </div>
-                </td>
-              </tr>
-            ))}
+                                }}
+                              >
+                                Supprimer le compte
+                              </AsyncButton>
+                            )}
+                          </>
+                        )}
+                      </ActionMenu>
+                    </div>
+                  </td>
+                </tr>
+              ))}
           </tbody>
-        </table>
+        </DataTable>
+        <Pagination
+          count={list.length}
+          page={Math.min(page, Math.max(1, Math.ceil(list.length / 25)))}
+          onPage={setPage}
+        />
       </div>
       {(create || current) && (
         <div className="modal-backdrop">
-          <section
+          <Dialog
             className="dialog panel user-sheet"
             role="dialog"
             onClick={(event) => event.stopPropagation()}
             aria-modal="true"
             aria-labelledby="user-title"
           >
-            <button
+            <Button
               className="close"
               aria-label="Fermer"
               onClick={() => {
+                if (!confirmDraftNavigation()) return;
                 setCreate(false);
                 setSelected(null);
+                onClose?.();
               }}
             >
               <X />
-            </button>
+            </Button>
             <h2 id="user-title">
               {current?.display_name ?? "Créer un utilisateur"}
             </h2>
@@ -296,6 +340,16 @@ export default function AdminUsers({
                   {current.email} · {labels[current.email_status]} ·{" "}
                   {labels[current.account_status] ?? current.account_status}
                 </p>
+                <h3>Accès</h3>
+                <p>{labels[current.role_name ?? "USER"]}</p>
+                {current.role_name === "ADMIN" && (
+                  <p className="small">
+                    {current.permissions
+                      .filter((p) => p !== "admin.access")
+                      .map((p) => permissionLabels[p] ?? p)
+                      .join(" · ") || "Aucune autorisation de rubrique."}
+                  </p>
+                )}
                 <p className="small">
                   Création : {date(current.created_at)} · Dernière connexion :{" "}
                   {date(current.last_login_at)}
@@ -307,9 +361,9 @@ export default function AdminUsers({
                 {current.participation ? (
                   <>
                     <p>{current.participation.name}</p>
-                    <button onClick={() => onHouse(current.participation!.id)}>
+                    <Button onClick={() => onHouse(current.participation!.id)}>
                       Ouvrir la fiche maison
-                    </button>
+                    </Button>
                   </>
                 ) : (
                   <p>Aucune participation.</p>
@@ -332,12 +386,28 @@ export default function AdminUsers({
                     visite ou d’accueil. Années uniquement, conservées cinq ans.
                   </p>
                 </details>
-                <h3>Communications</h3>
+                <h3>Messages du compte et notifications de saison</h3>
                 {current.communications.length ? (
                   current.communications.map((m, n) => (
                     <p className="small" key={n}>
-                      {m.kind} · {m.status} ·{" "}
-                      {date(m.sent_at ?? m.scheduled_at)}{" "}
+                      {(
+                        {
+                          VERIFY: "Vérification du compte",
+                          INVITE: "Invitation",
+                          RESET: "Récupération du compte",
+                          HOUSE_SUBMITTED: "Maison reçue",
+                          HOUSE_APPROVED: "Maison validée",
+                          HOUSE_REFUSED: "Maison refusée",
+                          CAMPAIGN: "Campagne",
+                        } as Record<string, string>
+                      )[m.kind] ?? m.kind}{" "}
+                      ·{" "}
+                      {m.season_id
+                        ? (m.season_name ??
+                          current.participation_season ??
+                          "Saison")
+                        : "Compte global"}{" "}
+                      · {m.status} · {date(m.sent_at ?? m.scheduled_at)}{" "}
                       {m.last_error && "· " + m.last_error}
                     </p>
                   ))
@@ -347,7 +417,12 @@ export default function AdminUsers({
               </>
             )}
             {current?.id === user.id && <Link href="/account">Mon compte</Link>}
-            {canEdit && (
+            {canEdit && current && !editing && (
+              <Button onClick={() => setEditing(true)}>
+                Modifier l’utilisateur
+              </Button>
+            )}
+            {canEdit && (!current || editing) && (
               <UserEditor
                 key={current?.id ?? "new"}
                 current={current}
@@ -397,17 +472,12 @@ export default function AdminUsers({
                   <AsyncButton
                     danger
                     onClick={async () => {
-                      const confirm = window.prompt(
-                        "Cette suppression est définitive. Saisissez SUPPRIMER CE COMPTE.",
-                      );
-                      if (confirm) {
-                        await act({
-                          action: "delete",
-                          id: current.id,
-                          confirm,
-                        });
-                        setSelected(null);
-                      }
+                      await act({
+                        action: "delete",
+                        id: current.id,
+                        confirm: "SUPPRIMER CE COMPTE",
+                      });
+                      setSelected(null);
                     }}
                   >
                     Supprimer le compte
@@ -415,7 +485,7 @@ export default function AdminUsers({
                 )}
               </div>
             )}
-          </section>
+          </Dialog>
         </div>
       )}
     </>
@@ -437,7 +507,9 @@ function UserEditor({
   admins: ManagedUser[];
 }) {
   const [error, setError] = useState(""),
-    [busy, setBusy] = useState(false);
+    [busy, setBusy] = useState(false),
+    [dirty, setDirty] = useState(false);
+  useDraftGuard(dirty);
   const [direct, setDirect] = useState(false);
   const [roleId, setRoleId] = useState(
     current?.role_id ?? roles.find((r) => r.name === "USER")?.id ?? "",
@@ -447,6 +519,7 @@ function UserEditor({
   );
   return (
     <form
+      onChange={() => setDirty(true)}
       onSubmit={async (e) => {
         e.preventDefault();
         const v = values(e.currentTarget);
@@ -467,8 +540,9 @@ function UserEditor({
             without_invitation: direct,
             password: direct ? v.password : undefined,
           });
+          setDirty(false);
         } catch (e) {
-          setError((e as Error).message);
+          if (!(e instanceof ActionCancelled)) setError((e as Error).message);
         } finally {
           setBusy(false);
         }
@@ -490,7 +564,7 @@ function UserEditor({
       {canChangeRole && (
         <label className="field">
           <span>Profil</span>
-          <select
+          <Select
             name="role_id"
             value={roleId}
             onChange={(e) => setRoleId(e.target.value)}
@@ -502,7 +576,7 @@ function UserEditor({
                   {labels[r.name] ?? r.name}
                 </option>
               ))}
-          </select>
+          </Select>
         </label>
       )}
       {canChangeRole &&
@@ -514,16 +588,25 @@ function UserEditor({
               autorisation.
             </p>
             <div className="actions">
-              <button
+              <Button
                 type="button"
-                onClick={() => setGrants([...defaultRoles.ADMIN])}
+                onClick={() => {
+                  setDirty(true);
+                  setGrants([...defaultRoles.ADMIN]);
+                }}
               >
                 Tout sélectionner
-              </button>
-              <button type="button" onClick={() => setGrants([])}>
+              </Button>
+              <Button
+                type="button"
+                onClick={() => {
+                  setDirty(true);
+                  setGrants([]);
+                }}
+              >
                 Aucun
-              </button>
-              <select
+              </Button>
+              <Select
                 aria-label="Copier les droits d’un ADMIN"
                 defaultValue=""
                 onChange={(e) => {
@@ -539,7 +622,7 @@ function UserEditor({
                       {a.display_name}
                     </option>
                   ))}
-              </select>
+              </Select>
             </div>
             {[
               "participants",
@@ -570,7 +653,7 @@ function UserEditor({
                   p.startsWith(group + "."),
                 ).map((p) => (
                   <label key={p} className="check">
-                    <input
+                    <Input
                       type="checkbox"
                       checked={grants.includes(p)}
                       onChange={(e) =>
@@ -590,7 +673,7 @@ function UserEditor({
         )}
       {allowDirect && (
         <label className="check">
-          <input
+          <Input
             type="checkbox"
             checked={direct}
             onChange={(e) => setDirect(e.target.checked)}
@@ -612,13 +695,13 @@ function UserEditor({
         />
       )}
       <Notice error={error} />
-      <button className="primary" disabled={busy}>
+      <Button className="primary" disabled={busy}>
         {current
           ? "Enregistrer l’utilisateur"
           : direct
             ? "Créer le compte"
             : "Envoyer une invitation"}
-      </button>
+      </Button>
       {!current && !direct && (
         <p className="small muted">
           Le destinataire valide son email et choisit son mot de passe. Aucun

@@ -180,20 +180,12 @@ test("desktop compact menu uses the same grid for account, install and logout", 
   await page
     .getByRole("button", { name: "Fermer Menu utilisateur", exact: true })
     .click();
-  await page
-    .getByRole("button", { name: "Soutenir le projet", exact: true })
-    .click();
   await expect(
-    page.getByRole("dialog", { name: "Soutenir le projet", exact: true }),
-  ).toContainText("Un lien de soutien sera proposé");
+    page.getByRole("button", { name: "Soutenir le projet", exact: true }),
+  ).toHaveCount(0);
   await expect(
-    page.getByRole("link", {
-      name: "Nous contacter pour proposer votre soutien",
-    }),
-  ).toHaveAttribute("href", /^mailto:domotikpro77@gmail\.com/);
-  await page
-    .getByRole("button", { name: "Fermer le soutien au projet" })
-    .click();
+    page.getByRole("link", { name: "Soutenir le projet", exact: true }),
+  ).toHaveCount(0);
 });
 
 for (const mode of ["guest", "member", "house", "admin"]) {

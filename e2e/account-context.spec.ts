@@ -89,7 +89,11 @@ async function arrange(page: Page, path = "/", unverified = false) {
   });
   await page.goto(path);
   await expect(
-    page.getByRole("button", { name: "Menu utilisateur", exact: true, includeHidden: path.startsWith("/account") }),
+    page.getByRole("button", {
+      name: "Menu utilisateur",
+      exact: true,
+      includeHidden: path.startsWith("/account"),
+    }),
   ).toBeVisible();
   return calls;
 }
@@ -424,7 +428,11 @@ test("map canvas, filters and active route remain mounted across account", async
     .click();
   const resultBefore = await page.locator(".route-sheet").textContent();
   const routeBefore = await read();
-  await page.locator(".route-account-link").click();
+  await page.getByLabel("Commandes de collecte", { exact: true }).click();
+  await page
+    .locator(".collection-context-menu")
+    .getByRole("link", { name: "Mon compte", exact: true })
+    .click();
   await expect(page.locator(".account-dialog")).toBeVisible();
   await page.getByRole("button", { name: "Fermer Mon compte" }).click();
   await expect(page.locator(".account-dialog")).toHaveCount(0);
@@ -474,9 +482,17 @@ for (const installed of [false, true]) {
       await expect(page.locator(".install-help-window")).toContainText(
         "Touchez Partager",
       );
-      await expect(page.getByRole("dialog", { includeHidden: true })).toHaveCount(2);
+      await expect(
+        page.getByRole("dialog", { includeHidden: true }),
+      ).toHaveCount(2);
       await expect(page.getByRole("dialog")).toHaveCount(1);
-      await expect.poll(() => page.locator(".account-dialog").evaluate(el => !!el.closest("[inert]"))).toBe(true);
+      await expect
+        .poll(() =>
+          page
+            .locator(".account-dialog")
+            .evaluate((el) => !!el.closest("[inert]")),
+        )
+        .toBe(true);
       await page
         .getByRole("button", { name: "Fermer Ajouter à l’écran d’accueil" })
         .click();

@@ -9,3 +9,6 @@ coverage
 deploy/preprod/.env
 .env.preprod
 *.bundle
+
+.test-temp
+test-results-*.log

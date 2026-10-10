@@ -1,5 +1,8 @@
 "use client";
-import { useState, useEffect } from "react";
+import { ActionCancelled } from "./AdminConfirmation";
+import useDraftGuard from "./useDraftGuard";
+import { Button, Input } from "./ui";
+import { useState } from "react";
 import type { Instance } from "../lib/domain";
 import { api, Field, Notice, values } from "./common";
 import FrenchDate from "./FrenchDate";
@@ -23,15 +26,7 @@ export default function EventSettings({
     [success, setSuccess] = useState("");
   const [expanded, setExpanded] = useState(false),
     [dirty, setDirty] = useState(false);
-  useEffect(() => {
-    if (!dirty) return;
-    const warn = (e: BeforeUnloadEvent) => {
-      e.preventDefault();
-      e.returnValue = "";
-    };
-    window.addEventListener("beforeunload", warn);
-    return () => window.removeEventListener("beforeunload", warn);
-  }, [dirty]);
+  useDraftGuard(dirty);
   return (
     <section className="panel">
       <form
@@ -57,7 +52,7 @@ export default function EventSettings({
             setSuccess("Paramètres enregistrés.");
             setDirty(false);
           } catch (e) {
-            setError((e as Error).message);
+            if (!(e instanceof ActionCancelled)) setError((e as Error).message);
           } finally {
             setBusy(false);
           }
@@ -83,7 +78,7 @@ export default function EventSettings({
         </div>
         <Field name="country" label="Pays" value={instance.country} />
         <h2>Localisation</h2>
-        <button
+        <Button
           type="button"
           disabled={busy}
           onClick={async (e) => {
@@ -107,21 +102,22 @@ export default function EventSettings({
               setPlace(g.place);
               setSuccess("Lieu détecté. Vérifiez la carte puis enregistrez.");
             } catch (e) {
-              setError((e as Error).message);
+              if (!(e instanceof ActionCancelled))
+                setError((e as Error).message);
             } finally {
               setBusy(false);
             }
           }}
         >
           Détecter automatiquement le lieu
-        </button>
+        </Button>
         <p>{place}</p>
         <p className="small muted">
           {latitude.toFixed(5)}, {longitude.toFixed(5)} · {zone}
         </p>
-        <button type="button" onClick={() => setExpanded((v) => !v)}>
+        <Button type="button" onClick={() => setExpanded((v) => !v)}>
           {expanded ? "Réduire la carte" : "Agrandir la carte"}
-        </button>
+        </Button>
         <p className="small muted">
           Cliquez sur la carte pour ajuster le centre. Changer le territoire ou
           le centre ne déplace pas les maisons existantes ; vérifiez la zone et
@@ -148,7 +144,7 @@ export default function EventSettings({
           <div className="grid two">
             <label className="field">
               <span>Latitude</span>
-              <input
+              <Input
                 type="number"
                 step="any"
                 value={latitude}
@@ -157,7 +153,7 @@ export default function EventSettings({
             </label>
             <label className="field">
               <span>Longitude</span>
-              <input
+              <Input
                 type="number"
                 step="any"
                 value={longitude}
@@ -166,7 +162,7 @@ export default function EventSettings({
             </label>
             <label className="field">
               <span>Zoom</span>
-              <input
+              <Input
                 type="number"
                 min={2}
                 max={18}
@@ -176,7 +172,7 @@ export default function EventSettings({
             </label>
             <label className="field">
               <span>Fuseau horaire</span>
-              <input value={zone} onChange={(e) => setZone(e.target.value)} />
+              <Input value={zone} onChange={(e) => setZone(e.target.value)} />
             </label>
           </div>
         </details>
@@ -207,9 +203,9 @@ export default function EventSettings({
             {success}
           </p>
         )}
-        <button disabled={busy} className="primary">
+        <Button disabled={busy} className="primary">
           Enregistrer les paramètres
-        </button>
+        </Button>
       </form>
     </section>
   );

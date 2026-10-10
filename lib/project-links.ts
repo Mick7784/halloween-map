@@ -48,3 +48,14 @@ export function bugHref(links: ProjectLinks, version: string) {
     `mailto:${links.bugEmail}?subject=${encodeURIComponent(`Halloween Map ${version} — Signaler un bug`)}&body=${encodeURIComponent("Page concernée :\nAppareil / navigateur :\nProblème rencontré :\nÉtapes pour le reproduire :\n")}`
   );
 }
+export function contactHref(links: ProjectLinks) {
+  if (links.contactEnabled === false) return undefined;
+  return (
+    links.contactUrl ??
+    (links.contactEmail ? `mailto:${links.contactEmail}` : undefined)
+  );
+}
+export function supportHref(links: ProjectLinks) {
+  if (links.supportEnabled === false) return undefined;
+  return links.supportUrl ?? contactHref(links);
+}

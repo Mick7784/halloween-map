@@ -6,6 +6,7 @@ import {
   ArrowUpRight,
   Activity,
 } from "lucide-react";
+import { Button, MetricCard, Timeline } from "./ui";
 import type { House as HouseData } from "../lib/domain";
 import {
   formatDistance,
@@ -107,10 +108,7 @@ export default function AdminDashboard({
           </div>
           <div className="season-statistics">
             {collections.map(([label, value]) => (
-              <article key={label}>
-                <span>{label}</span>
-                <strong>{value}</strong>
-              </article>
+              <MetricCard key={label} label={label} value={value} />
             ))}
           </div>
           <p className="small muted">
@@ -145,12 +143,12 @@ export default function AdminDashboard({
                     </time>
                   </div>
                   <span className="beta-status pending">En attente</span>
-                  <button
+                  <Button
                     aria-label={"Consulter " + h.name}
                     onClick={() => onHouse(h.id)}
                   >
                     <ArrowUpRight size={18} />
-                  </button>
+                  </Button>
                 </li>
               ))}
             </ul>
@@ -166,7 +164,7 @@ export default function AdminDashboard({
           <div className="beta-card-title">
             <h2>Activité récente</h2>
             {onActivity && (
-              <button onClick={onActivity}>Voir toute l’activité</button>
+              <Button onClick={onActivity}>Voir toute l’activité</Button>
             )}
             <Activity size={18} />
           </div>
@@ -175,7 +173,7 @@ export default function AdminDashboard({
               Aucune activité enregistrée pour cette saison.
             </p>
           ) : (
-            <ul className="beta-activity-list">
+            <Timeline>
               {audit.slice(0, 8).map((a) => (
                 <li key={a.id}>
                   <span className="beta-activity-dot" />
@@ -189,7 +187,7 @@ export default function AdminDashboard({
                   </time>
                 </li>
               ))}
-            </ul>
+            </Timeline>
           )}
         </section>
       </div>

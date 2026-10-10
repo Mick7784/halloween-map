@@ -852,17 +852,23 @@ for (const width of [390, 1440])
           { longitude, latitude, accuracy },
         );
       // Starting GPS and finishing server availability verification are separate effects.
-      await expect(page.locator(".route-gps-status")).toHaveText("Recherche GPS…");
+      await expect(page.locator(".route-gps-status")).toHaveText(
+        "Recherche GPS…",
+      );
       await emit(-1.668, 48.102, 180);
       expect((await read()).collection.visitedIds).toEqual([]);
       expect((await read()).collection.gpsAcceptedFixes).toBe(0);
       // A real GPS stream has strictly increasing timestamps, including rejected fixes.
       await page.clock.runFor(1000);
       await emit(-1.668);
-      await expect.poll(async () => (await read()).collection.gpsAcceptedFixes).toBe(1);
+      await expect
+        .poll(async () => (await read()).collection.gpsAcceptedFixes)
+        .toBe(1);
       await page.clock.fastForward(3000);
       await emit(-1.668);
-      await expect.poll(async () => (await read()).collection.gpsAcceptedFixes).toBe(2);
+      await expect
+        .poll(async () => (await read()).collection.gpsAcceptedFixes)
+        .toBe(2);
       await page.clock.fastForward(3000);
       await emit(-1.668);
       await expect
@@ -1175,6 +1181,16 @@ test("mobile free selection stays at the top with a permanent bottom stop and su
   await arrange(page);
   await generate(page);
   await expect(page.locator(".site-header")).toBeHidden();
+  const viewport = await page.locator(".route-experience").boundingBox();
+  expect(viewport).toMatchObject({ x: 0, y: 0, width: 390, height: 844 });
+  await page.getByLabel("Commandes de collecte", { exact: true }).click();
+  await page
+    .locator(".collection-context-menu")
+    .getByRole("button", { name: "Voir les étapes", exact: true })
+    .click();
+  await expect(
+    page.locator(".collection-context-menu details"),
+  ).not.toHaveAttribute("open", "");
   const top = page.locator(".collection-top-panel"),
     bottom = page.locator(".collection-bottom-bar");
   const topBox = await top.boundingBox(),

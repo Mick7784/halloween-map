@@ -468,7 +468,17 @@ describe("map navigation surfaces", () => {
       document.querySelector(".route-map-layer .route-sheet"),
     ).not.toBeNull();
     expect(byLabel("Recentrer sur ma position")).not.toBeNull();
-    expect(document.querySelector(".route-account-link")).not.toBeNull();
+    expect(byLabel("Commandes de collecte")).not.toBeNull();
+    expect(document.querySelector(".route-account-link")).toBeNull();
+    expect(
+      document.querySelector('.collection-context-menu a[href="/account"]'),
+    ).not.toBeNull();
+    expect(
+      document.querySelector(".collection-context-menu")?.textContent,
+    ).toContain("Voir les étapes");
+    expect(
+      document.querySelector(".collection-context-menu")?.textContent,
+    ).toContain("Ajouter une maison");
   });
 });
 

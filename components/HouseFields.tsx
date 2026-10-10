@@ -1,4 +1,5 @@
 "use client";
+import { Input, TextArea } from "./ui";
 import { Candy, Drama, Ghost, Sparkles } from "lucide-react";
 import type { Activity } from "../lib/domain";
 import { participationDefaults } from "../lib/participation-settings";
@@ -19,7 +20,7 @@ export function HouseNameField({
   return (
     <label className="field">
       <span className="visually-hidden">Nom de la maison *</span>
-      <input
+      <Input
         name="name"
         maxLength={100}
         required
@@ -51,7 +52,7 @@ export function HouseActivityFields({
           <label key={id} className={value.includes(id) ? "is-selected" : ""}>
             <Icon />
             <span>{label}</span>
-            <input
+            <Input
               type="checkbox"
               name={id}
               checked={value.includes(id)}
@@ -93,7 +94,7 @@ export function HouseScheduleFields({
       <div className="participation-address-grid">
         <label className="field">
           <span>Début *</span>
-          <input
+          <Input
             name="starts_at"
             type="datetime-local"
             required
@@ -105,7 +106,7 @@ export function HouseScheduleFields({
         </label>
         <label className="field">
           <span>Fin *</span>
-          <input
+          <Input
             name="ends_at"
             type="datetime-local"
             required
@@ -135,7 +136,7 @@ export function FearGauge({
   return (
     <div className={"house-fear-gauge" + (disabled ? " is-neutral" : "")}>
       {onChange ? (
-        <input
+        <Input
           aria-label="Niveau de frayeur"
           type="range"
           min={1}
@@ -215,7 +216,7 @@ export function HouseFearFields({
       <label className="participation-adapt">
         <Ghost size={22} />
         <span>Je m’adapte à mes visiteurs</span>
-        <input
+        <Input
           type="checkbox"
           role="switch"
           checked={adapt}
@@ -245,7 +246,7 @@ export function HouseTextField({
   return (
     <label className="field">
       <span>Facultatif</span>
-      <textarea
+      <TextArea
         name={name}
         rows={3}
         maxLength={limit}

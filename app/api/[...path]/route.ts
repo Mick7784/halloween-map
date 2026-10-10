@@ -336,6 +336,8 @@ async function handle(
       await service.tick();
       return response(await service.adminAction(user, input));
     }
+    if (path === "admin/settings-impact")
+      return response(await service.settingsImpact(user, input));
     throw new HttpError(404, "Page introuvable");
   } catch (e) {
     if (e instanceof ZodError)

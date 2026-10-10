@@ -1,5 +1,7 @@
 "use client";
+import { Input, Button } from "./ui";
 import { useState } from "react";
+import useDraftGuard from "./useDraftGuard";
 import type { House } from "../lib/domain";
 import {
   publicParticipationSettings,
@@ -56,13 +58,17 @@ export default function HouseForm({
     practical: house.practical,
   });
   const [busy, setBusy] = useState(false),
-    [error, setError] = useState("");
+    [error, setError] = useState(""),
+    [dirty, setDirty] = useState(false);
+  useDraftGuard(dirty);
   function patch(value: Partial<typeof draft>) {
+    setDirty(true);
     setDraft((s) => ({ ...s, ...value }));
   }
   return (
     <form
       className="participation-form admin-house-form"
+      onChange={() => setDirty(true)}
       onSubmit={async (e) => {
         e.preventDefault();
         setError("");
@@ -88,6 +94,7 @@ export default function HouseForm({
             { zone, opens, closes, isTest, adminEdit: true, settings },
           );
           await onSave(payload);
+          setDirty(false);
         } catch (error) {
           setError((error as Error).message);
         } finally {
@@ -105,7 +112,7 @@ export default function HouseForm({
             </p>
             <label className="field">
               <span>Adresse *</span>
-              <input
+              <Input
                 required
                 maxLength={200}
                 value={address}
@@ -118,7 +125,7 @@ export default function HouseForm({
             <div className="participation-address-grid">
               <label className="field">
                 <span>Latitude *</span>
-                <input
+                <Input
                   required
                   type="number"
                   min={-90}
@@ -133,7 +140,7 @@ export default function HouseForm({
               </label>
               <label className="field">
                 <span>Longitude *</span>
-                <input
+                <Input
                   required
                   type="number"
                   min={-180}
@@ -148,16 +155,16 @@ export default function HouseForm({
               </label>
             </div>
             <label className="check">
-              <input
+              <Input
                 type="checkbox"
                 checked={confirmed}
                 onChange={(e) => setConfirmed(e.target.checked)}
               />
               Je confirme que ce point correspond à la maison.
             </label>
-            <button type="button" onClick={() => setLegacy(false)}>
+            <Button type="button" onClick={() => setLegacy(false)}>
               Utiliser l’adresse structurée
-            </button>
+            </Button>
           </>
         ) : (
           <HouseLocation
@@ -230,12 +237,12 @@ export default function HouseForm({
         />
       </section>
       <Notice error={error} />
-      <button
+      <Button
         className="primary wide"
         disabled={busy || !(legacy ? confirmed : location.confirmed)}
       >
         {busy ? "Enregistrement…" : "Enregistrer les modifications"}
-      </button>
+      </Button>
     </form>
   );
 }

@@ -1,4 +1,6 @@
 "use client";
+import useDraftGuard from "./useDraftGuard";
+import { Button, Dialog, Input, Select } from "./ui";
 import { X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { DateTime } from "luxon";
@@ -84,7 +86,7 @@ export default function Campaigns({
       <div className="section-heading">
         <h2>Communications</h2>
         {manage && !season.purged_at && (
-          <button onClick={() => setCreating(true)}>Nouvelle campagne</button>
+          <Button onClick={() => setCreating(true)}>Nouvelle campagne</Button>
         )}
       </div>
       <Notice error={error} />
@@ -130,7 +132,7 @@ export default function Campaigns({
             {manage && !season.purged_at && (
               <div className="actions">
                 {["DRAFT", "SCHEDULED"].includes(c.status) && (
-                  <button onClick={() => setEditing(c)}>Modifier</button>
+                  <Button onClick={() => setEditing(c)}>Modifier</Button>
                 )}
                 {user.email_status === "VERIFIED" ? (
                   <AsyncButton
@@ -200,12 +202,7 @@ function CampaignForm({
       (campaign?.body ??
         "Bonjour {{name}},\n\n{{event_name}} ouvre le {{map_open_date}}. À bientôt !") ||
     mode !== (campaign?.schedule_mode ?? "RELATIVE");
-  useEffect(() => {
-    if (!dirty) return;
-    const guard = (event: BeforeUnloadEvent) => event.preventDefault();
-    window.addEventListener("beforeunload", guard);
-    return () => window.removeEventListener("beforeunload", guard);
-  }, [dirty]);
+  useDraftGuard(dirty);
   const preview = (text: string) =>
     text.replace(
       /\{\{(\w+)\}\}/g,
@@ -226,14 +223,14 @@ function CampaignForm({
     );
   return (
     <div className="modal-backdrop">
-      <section
+      <Dialog
         className="dialog panel campaign-sheet"
         role="dialog"
         onClick={(event) => event.stopPropagation()}
         aria-modal="true"
         aria-labelledby="campaign-title"
       >
-        <button
+        <Button
           className="close"
           aria-label="Fermer"
           onClick={() => {
@@ -245,7 +242,7 @@ function CampaignForm({
           }}
         >
           <X />
-        </button>
+        </Button>
         <h2 id="campaign-title">
           {campaign ? "Modifier la campagne" : "Nouvelle campagne"}
         </h2>
@@ -283,7 +280,7 @@ function CampaignForm({
           <Field name="name" label="Nom interne" value={campaign?.name} />
           <label className="field">
             <span>Sujet</span>
-            <input
+            <Input
               required
               maxLength={150}
               value={subject}
@@ -301,18 +298,18 @@ function CampaignForm({
           </p>
           <label className="field">
             <span>Audience</span>
-            <select name="audience" defaultValue={campaign?.audience ?? "ALL"}>
+            <Select name="audience" defaultValue={campaign?.audience ?? "ALL"}>
               <option value="ALL">Tous les participants</option>
               <option value="VISIBLE">Maisons visibles</option>
               <option value="ACTIVE">Actifs</option>
-            </select>
+            </Select>
           </label>
           <label className="field">
             <span>Planification</span>
-            <select value={mode} onChange={(e) => setMode(e.target.value)}>
+            <Select value={mode} onChange={(e) => setMode(e.target.value)}>
               <option value="RELATIVE">Relative à la saison</option>
               <option value="ABSOLUTE">Date fixe</option>
-            </select>
+            </Select>
           </label>
           {mode === "RELATIVE" ? (
             <div className="grid two">
@@ -324,7 +321,7 @@ function CampaignForm({
               />
               <label className="field">
                 <span>Date de référence</span>
-                <select
+                <Select
                   name="anchor"
                   defaultValue={campaign?.anchor ?? "opens_at"}
                 >
@@ -334,7 +331,7 @@ function CampaignForm({
                     Ouverture des inscriptions
                   </option>
                   <option value="purge_at">Purge</option>
-                </select>
+                </Select>
               </label>
             </div>
           ) : (
@@ -355,9 +352,9 @@ function CampaignForm({
             checked={campaign?.active ?? true}
           />
           <Notice error={error} />
-          <button className="primary" disabled={busy}>
+          <Button className="primary" disabled={busy}>
             Enregistrer la campagne
-          </button>
+          </Button>
         </form>
         <h3>Aperçu</h3>
         <iframe
@@ -377,7 +374,7 @@ function CampaignForm({
           <summary>Version texte</summary>
           <p className="mail-preview">{preview(editorialText(body))}</p>
         </details>
-      </section>
+      </Dialog>
     </div>
   );
 }

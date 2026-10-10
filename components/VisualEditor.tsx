@@ -1,4 +1,5 @@
 "use client";
+import { Button, Select } from "./ui";
 import { useEffect, useRef } from "react";
 import { editorialHtml } from "../lib/editorial-format";
 const variableLabels: Record<string, string> = {
@@ -97,7 +98,7 @@ export default function VisualEditor({
           ["Italique", "italic"],
           ["Liste", "insertUnorderedList"],
         ].map(([title, name]) => (
-          <button
+          <Button
             key={name}
             disabled={disabled}
             type="button"
@@ -105,17 +106,17 @@ export default function VisualEditor({
             onClick={() => command(name)}
           >
             {title}
-          </button>
+          </Button>
         ))}
-        <button
+        <Button
           disabled={disabled}
           type="button"
           onMouseDown={(e) => e.preventDefault()}
           onClick={() => command("formatBlock", "h3")}
         >
           Titre
-        </button>
-        <button
+        </Button>
+        <Button
           disabled={disabled}
           type="button"
           onMouseDown={(e) => e.preventDefault()}
@@ -126,9 +127,9 @@ export default function VisualEditor({
           }}
         >
           Lien
-        </button>
+        </Button>
         {variables.length > 0 && (
-          <select
+          <Select
             disabled={disabled}
             aria-label="Insérer une variable"
             defaultValue=""
@@ -145,7 +146,7 @@ export default function VisualEditor({
                 {variableLabels[v] ?? v}
               </option>
             ))}
-          </select>
+          </Select>
         )}
       </div>
       <div

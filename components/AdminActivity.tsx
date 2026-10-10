@@ -1,4 +1,6 @@
 "use client";
+import { Timeline } from "./ui";
+import { Select, Input, Button } from "./ui";
 import { useEffect, useState } from "react";
 import { adminDate, type AdminAudit } from "./AdminDashboard";
 import { auditLabel } from "../lib/admin-presentation";
@@ -64,7 +66,7 @@ export default function AdminActivity({
       <div className="beta-filters">
         <label>
           Périmètre
-          <select
+          <Select
             aria-label="Périmètre de l’activité"
             value={scope}
             onChange={(e) => {
@@ -75,11 +77,11 @@ export default function AdminActivity({
             <option value="season">Saison consultée</option>
             <option value="global">Global</option>
             <option value="all">Tout</option>
-          </select>
+          </Select>
         </label>
         <label>
           Catégorie
-          <select
+          <Select
             value={category}
             onChange={(e) => {
               setCategory(e.target.value);
@@ -97,9 +99,9 @@ export default function AdminActivity({
                 {l}
               </option>
             ))}
-          </select>
+          </Select>
         </label>
-        <input
+        <Input
           aria-label="Filtrer l’activité"
           placeholder="Action, auteur ou cible…"
           value={search}
@@ -110,7 +112,7 @@ export default function AdminActivity({
         />
         <label>
           Du
-          <input
+          <Input
             type="datetime-local"
             value={from}
             onChange={(e) => {
@@ -121,7 +123,7 @@ export default function AdminActivity({
         </label>
         <label>
           Au
-          <input
+          <Input
             type="datetime-local"
             value={to}
             onChange={(e) => {
@@ -137,16 +139,16 @@ export default function AdminActivity({
       ) : !rows.length ? (
         <p className="beta-empty">Aucune activité pour ces filtres.</p>
       ) : (
-        <ul className="beta-activity-list">
+        <Timeline>
           {rows.map((row) => (
             <li key={row.id}>
               <div>
                 <strong>{auditLabel(row.action)}</strong>
                 {row.target_label &&
                   (row.target_kind === "house" && row.target_id ? (
-                    <button onClick={() => onHouse(row.target_id!)}>
+                    <Button onClick={() => onHouse(row.target_id!)}>
                       {row.target_label}
-                    </button>
+                    </Button>
                   ) : (
                     <small>{row.target_label}</small>
                   ))}
@@ -160,22 +162,22 @@ export default function AdminActivity({
               </time>
             </li>
           ))}
-        </ul>
+        </Timeline>
       )}
       <div className="actions">
-        <button
+        <Button
           disabled={page === 0 || loading}
           onClick={() => setPage((p) => p - 1)}
         >
           Précédent
-        </button>
+        </Button>
         <span>Page {page + 1}</span>
-        <button
+        <Button
           disabled={rows.length < 50 || loading}
           onClick={() => setPage((p) => p + 1)}
         >
           Suivant
-        </button>
+        </Button>
       </div>
       <p className="small muted">
         Recherche serveur · Journal métier conservé au maximum 90 jours. Les
