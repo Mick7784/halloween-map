@@ -241,11 +241,11 @@ export default function MapExperience({
     }
     if (
       !house.adaptable &&
-      (house.fear === null || house.fear > preferences.maxFear)
+      (house.fear === null || house.fear > (preferences.maxFear ?? 5))
     ) {
       reasons.push(house.fear === null
         ? "Niveau de frayeur non précisé"
-        : `Frayeur ${house.fear} · limite choisie ${preferences.maxFear}`);
+        : `Frayeur ${house.fear} · limite choisie ${preferences.maxFear ?? 5}`);
     }
     if (preferences.excludedHouseIds.includes(house.id)) {
       reasons.push("Maison retirée de votre sélection initiale");
