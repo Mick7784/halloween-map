@@ -20,6 +20,7 @@ export async function applicationSeason(
   i: Instance,
   user: User | null,
   client: Database = db(),
+  now: Date = new Date(),
 ): Promise<Season | null> {
   // An inactive real season is still visible as a countdown to members and
   // a preview map to staff. Never expose a TEST season to ordinary accounts.
@@ -29,17 +30,22 @@ export async function applicationSeason(
   const { rows } = await client.query(
     `SELECT s.*, (s.id=i.active_season_id) active
      FROM seasons s JOIN instances i ON i.id=s.instance_id
-     WHERE s.instance_id=$1 AND (NOT s.is_test OR (s.id=i.active_season_id AND $2))
+     WHERE s.instance_id=$1
+       AND (NOT s.is_test OR (s.id=i.active_season_id AND $2))
+       AND ($2 OR NOT EXISTS(
+         SELECT 1 FROM seasons currently_active
+         WHERE currently_active.id=i.active_season_id AND currently_active.is_test
+       ))
      ORDER BY
        CASE WHEN s.id=i.active_season_id THEN 0
-            WHEN s.closes_at<=now() AND s.closes_at>now()-interval '14 days' THEN 1
-            WHEN NOT s.archived AND s.opens_at>now() THEN 2
-            WHEN NOT s.archived AND s.closes_at>now() THEN 3
+            WHEN s.closes_at<=$3::timestamptz AND s.closes_at>$3::timestamptz-interval '14 days' THEN 1
+            WHEN NOT s.archived AND s.opens_at>$3::timestamptz THEN 2
+            WHEN NOT s.archived AND s.closes_at>$3::timestamptz THEN 3
             ELSE 4 END,
-       CASE WHEN s.opens_at>now() THEN s.opens_at END ASC NULLS LAST,
+       CASE WHEN s.opens_at>$3::timestamptz THEN s.opens_at END ASC NULLS LAST,
        s.opens_at DESC
      LIMIT 1`,
-    [i.id, staff],
+    [i.id, staff, now],
   );
   return (rows[0] as unknown as Season) ?? null;
 }
