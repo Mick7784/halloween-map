@@ -198,7 +198,7 @@ export default function RouteSheet({
           </strong>
           <small>
             {phase === "active"
-              ? `${result.stops.length} maisons sélectionnées · ${visitedIds.length} visitées`
+              ? `${result.stops.length} ${result.stops.length === 1 ? "maison sélectionnée" : "maisons sélectionnées"} · ${visitedIds.length} ${visitedIds.length === 1 ? "visitée" : "visitées"}`
               : routeSummary(result)}
           </small>
         </span>

@@ -484,7 +484,7 @@ export default function MapExperience({
             <p className="route-gps-status" role="status">
               {!controller.verified
                 ? controller.checking
-                  ? "Vérification du parcours…"
+                  ? "Vérification de la sélection…"
                   : "Disponibilité non vérifiée"
                 : controller.gpsState === "low-accuracy"
                   ? `GPS approximatif · ±${Math.round(controller.accuracy ?? 0)} m`
@@ -581,13 +581,30 @@ export default function MapExperience({
               <small>
                 {stats.visited} / {stats.selected} maisons visitées
               </small>
-              <small aria-label="Chrono de collecte">
-                {Math.floor(stats.durationSeconds / 60)} min{" "}
-                {stats.durationSeconds % 60} s ·{" "}
-                {distanceKnown
-                  ? `${(stats.distanceMeters / 1000).toLocaleString("fr-FR", { maximumFractionDigits: 2 })} km${distanceComplete ? "" : " · partiel"}`
-                  : "Distance GPS indisponible"}
-              </small>
+              <div className="collection-live-metrics">
+                <div aria-label="Chrono de collecte">
+                  <small>Temps écoulé</small>
+                  <strong>
+                    {Math.floor(stats.durationSeconds / 60)} min{" "}
+                    {stats.durationSeconds % 60} s
+                  </strong>
+                </div>
+                <div aria-label="Distance parcourue">
+                  <small>Distance parcourue</small>
+                  <strong>
+                    {distanceKnown
+                      ? `${(stats.distanceMeters / 1000).toLocaleString("fr-FR", { maximumFractionDigits: 2 })} km`
+                      : "—"}
+                  </strong>
+                  <small>
+                    {distanceKnown
+                      ? distanceComplete
+                        ? "GPS actif"
+                        : "GPS · mesure partielle"
+                      : "GPS indisponible"}
+                  </small>
+                </div>
+              </div>
               <progress
                 aria-label="Progression de la collecte"
                 max={Math.max(1, stats.selected)}

@@ -607,6 +607,25 @@ for (const width of [390, 1440])
       })
       .click();
     await expect(page.locator(".collection-top-panel")).toBeVisible();
+    const metrics = page.locator(".collection-live-metrics");
+    await expect(metrics).toContainText("Temps écoulé");
+    await expect(metrics).toContainText("Distance parcourue");
+    const bar = (await page.locator(".collection-bottom-bar").boundingBox())!;
+    const metricBox = (await metrics.boundingBox())!;
+    const stopBox = (await page
+      .getByRole("button", { name: "Arrêter la collecte", exact: true })
+      .boundingBox())!;
+    expect(metricBox.x).toBeGreaterThanOrEqual(bar.x);
+    expect(metricBox.x + metricBox.width).toBeLessThanOrEqual(
+      bar.x + bar.width,
+    );
+    expect(metricBox.y).toBeGreaterThanOrEqual(stopBox.y + stopBox.height);
+    expect(
+      await metrics
+        .locator("strong")
+        .first()
+        .evaluate((el) => parseFloat(getComputedStyle(el).fontSize)),
+    ).toBeGreaterThanOrEqual(16);
     await expect(page.locator(".house-marker")).toBeVisible();
     await page.screenshot({
       path: `test-results/review-collection-${width}.png`,

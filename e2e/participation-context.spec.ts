@@ -289,6 +289,20 @@ for (const width of [390, 1440]) {
       .check();
     await page.getByLabel("Heure de début").fill("18:00");
     await page.getByLabel("Heure de fin").fill("22:00");
+    const consent = page.locator(".participation-consent");
+    const submit = page.locator(".participation-submit");
+    await submit.scrollIntoViewIfNeeded();
+    const consentBox = (await consent.boundingBox())!;
+    const submitBox = (await submit.boundingBox())!;
+    expect(consentBox.y + consentBox.height).toBeLessThanOrEqual(submitBox.y);
+    await expect(consent).toBeInViewport();
+    await expect(
+      page.getByRole("button", {
+        name: "Envoyer ma participation",
+        exact: true,
+      }),
+    ).toBeEnabled();
+    await page.screenshot({ path: `test-results/review-consent-${width}.png` });
     await page.screenshot({
       animations: "disabled",
       path: `${output}/creation-${width}.png`,

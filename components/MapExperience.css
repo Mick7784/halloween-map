@@ -1236,6 +1236,9 @@
 .route-experience .consultation-recenter {
   bottom: max(18px, env(safe-area-inset-bottom));
 }
+.route-experience.is-focused .route-recenter {
+  bottom: calc(280px + env(safe-area-inset-bottom));
+}
 .route-sheet.collection-top-panel {
   top: max(12px, env(safe-area-inset-top));
   left: max(12px, env(safe-area-inset-left));
@@ -1304,7 +1307,8 @@
   bottom: max(12px, env(safe-area-inset-bottom));
   left: max(12px, env(safe-area-inset-left));
   right: max(12px, env(safe-area-inset-right));
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 8px;
   align-items: stretch;
   padding: 10px;
@@ -1315,19 +1319,23 @@
   box-shadow: 0 -6px 30px #0005;
 }
 .collection-bottom-bar > div {
-  flex: 1;
-  min-width: 0;
-  display: grid;
-  gap: 5px;
+  display: contents;
+}
+.collection-bottom-bar > div > strong,
+.collection-bottom-bar > div > small {
+  grid-column: 1;
   font-size: 12px;
 }
 .collection-bottom-bar small {
-  font-size: 10px;
+  font-size: 12px;
   color: #c6bbd6;
 }
 .collection-bottom-bar button {
   flex: none;
-  max-width: 48%;
+  max-width: 120px;
+  align-self: start;
+  grid-column: 2;
+  grid-row: 1 / 3;
   min-height: 48px;
   padding: 8px 10px;
   font-size: 12px;
@@ -1335,7 +1343,27 @@
   gap: 5px;
   align-items: center;
 }
+.collection-live-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  grid-column: 1 / -1;
+}
+.collection-live-metrics > div {
+  display: grid;
+  align-content: start;
+  gap: 4px;
+  padding: 8px;
+  border: 1px solid #73608d;
+  border-radius: 10px;
+  background: #252032;
+}
+.collection-live-metrics strong {
+  font-size: 17px;
+  color: #fff4e8;
+}
 .collection-bottom-bar progress {
+  grid-column: 1 / -1;
   height: 6px;
   width: 100%;
   accent-color: #ff963a;
@@ -1345,19 +1373,19 @@
   z-index: 5;
   left: max(12px, env(safe-area-inset-left));
   right: auto;
-  bottom: calc(168px + env(safe-area-inset-bottom));
+  bottom: calc(220px + env(safe-area-inset-bottom));
   width: 44px;
   height: 44px;
 }
 .route-experience.is-focused .maplibregl-ctrl-top-right {
-  bottom: calc(112px + env(safe-area-inset-bottom));
+  bottom: calc(220px + env(safe-area-inset-bottom));
 }
 .collection-finish-suggestion {
   position: absolute;
   z-index: 4;
   left: 72px;
   right: 72px;
-  bottom: calc(116px + env(safe-area-inset-bottom));
+  bottom: calc(180px + env(safe-area-inset-bottom));
   background: #10131cee;
   border: 1px solid #73538e;
   border-radius: 10px;
@@ -1604,8 +1632,8 @@
 .collection-context-menu {
   position: absolute;
   z-index: 15;
-  left: max(12px, env(safe-area-inset-left));
-  bottom: calc(168px + env(safe-area-inset-bottom));
+  right: max(12px, env(safe-area-inset-right));
+  bottom: calc(330px + env(safe-area-inset-bottom));
 }
 .collection-context-menu summary {
   width: 44px;

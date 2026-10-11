@@ -416,15 +416,18 @@
   color: #ff8c8c;
 }
 .participation-consent {
-  font-size: 11px;
+  font-size: 14px;
+  color: #f4edf9;
+  background: #292235;
+  border: 1px solid #8c75a5;
   line-height: 1.6;
 }
 .participation-consent details {
   margin-bottom: 8px;
 }
 .participation-consent .check {
-  margin: 10px 0 0;
-  font-size: 11px;
+  margin: 0;
+  font-size: 14px;
   align-items: flex-start;
 }
 .participation-guidelines-link {
@@ -480,12 +483,19 @@
   color: #eee4fa;
 }
 .participation-submit {
-  position: sticky;
+  position: relative;
   bottom: 0;
   z-index: 2;
   margin-top: 10px;
   padding: 10px 0 calc(12px + env(safe-area-inset-bottom));
   background: linear-gradient(#10131aeb, #10131a);
+}
+.participation-submit > button:disabled {
+  opacity: 1;
+  background: #4a3c50;
+  color: #e2d8e8;
+  border-color: #8c75a5;
+  cursor: not-allowed;
 }
 .participation-submit > button {
   display: flex;
