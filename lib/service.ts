@@ -702,21 +702,21 @@ export async function createParticipation(
     const ss = (
       await c.query(
         "SELECT * FROM seasons WHERE id=$1 AND instance_id=$2 FOR UPDATE",
-        [i.active_season_id, i.id],
+        [management?.seasonId ?? i.active_season_id, i.id],
       )
     ).rows[0] as unknown as Season;
     if (!ss)
-      throw new HttpError(403, "Activez une saison avant de créer une maison.");
+      throw new HttpError(403, "Créez une saison avant d’inscrire une maison.");
     if (
       ss.purged_at ||
-      (!ss.is_test &&
+      (!management && !ss.is_test &&
         (!ss.registrations_open ||
           +new Date() < +new Date(ss.registrations_open_at) ||
           +new Date() >= +new Date(ss.closes_at)))
     )
       throw new HttpError(403, "Inscriptions fermées");
     if (management?.seasonId && management.seasonId !== ss.id)
-      throw new HttpError(409, "La saison active a changé");
+      throw new HttpError(409, "La saison sélectionnée a changé");
     if (ss.is_test && !management)
       throw new HttpError(
         403,
