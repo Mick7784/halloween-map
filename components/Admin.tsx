@@ -866,7 +866,7 @@ export default function Admin({
                 <Button
                   className="primary"
                   disabled={
-                    !selectedSeason?.active || seasonFinished(selectedSeason)
+                    !selectedSeason || seasonFinished(selectedSeason)
                   }
                   onClick={() =>
                     void startCreate().catch((e) => setError(e.message))
@@ -874,12 +874,12 @@ export default function Admin({
                 >
                   + Nouvelle maison
                 </Button>
-                {!seasons.some((s) => s.active) ? (
-                  <p>Activez une saison avant de créer une maison.</p>
-                ) : (
-                  !selectedSeason?.active && (
+                {!selectedSeason ? (
+                  <p>Créez une saison avant de créer une maison.</p>
+                ) : seasonFinished(selectedSeason) ? (
                     <p>
-                      La création est réservée à la saison active.{" "}
+                      Cette saison est terminée : lecture seule.{" "}
+                      {seasons.some((s) => s.active) && (
                       <Button
                         onClick={() =>
                           setSeasonId(seasons.find((s) => s.active)!.id)
@@ -887,8 +887,10 @@ export default function Admin({
                       >
                         Revenir à la saison active
                       </Button>
+                      )}
                     </p>
-                  )
+                ) : !selectedSeason.active && (
+                  <p>Préparation de la saison avant activation publique.</p>
                 )}
               </div>
             )}

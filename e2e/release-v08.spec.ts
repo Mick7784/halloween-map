@@ -614,7 +614,7 @@ for (const width of [390, 1440])
     const bar = (await page.locator(".collection-bottom-bar").boundingBox())!;
     const metricBox = (await metrics.boundingBox())!;
     const heading = (await page.locator(".collection-bottom-heading").boundingBox())!;
-    const stopBox = (await page.getByRole("button", { name: "Arrêter", exact: true }).boundingBox())!;
+    const stopBox = (await page.getByRole("button", { name: "Arrêter la collecte", exact: true }).boundingBox())!;
     expect(metricBox.x).toBeGreaterThanOrEqual(bar.x);
     expect(metricBox.x + metricBox.width).toBeLessThanOrEqual(bar.x + bar.width);
     expect(metricBox.y).toBeGreaterThanOrEqual(heading.y + heading.height);
