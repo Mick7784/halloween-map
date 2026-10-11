@@ -1,12 +1,12 @@
-# Saisons : modèle unique V0.7.1
+# Saisons : modèle unique V0.8.3
 
 ## Exploitation
 
 `instances.active_season_id` est l’unique source de vérité, nullable, REAL ou TEST. Les champs `active` des réponses BO sont dérivés de ce pointeur ; il n’existe pas de seconde activation. Activation/désactivation : Super Admin, transaction, verrou instance puis saison. Supprimer une saison active est refusé. Créer une saison, y compris pendant le setup, ne l’active pas. L’activation reste manuelle : aucun nouveau scheduler.
 
-REAL conserve inscriptions, ouverture, fermeture et purge. Aucun utilisateur, admin compris, n’accède à la carte avant l’ouverture. La sélection BO ne modifie pas l’exploitation. TEST active donne accès à ADMIN/SUPER_ADMIN avec le même modèle métier, sans calendrier public. Les utilisateurs ordinaires n’obtiennent ni contexte TEST, ni maisons, ni création de participation TEST. Les horaires réellement saisis des maisons TEST sont respectés à la création et à l’édition. Aucun email réel n’est envoyé pour une saison TEST : campagne, test email, retry et anciens jobs en attente sont bloqués côté serveur.
+REAL conserve inscriptions, ouverture, fermeture et purge. ADMIN/SUPER_ADMIN disposent d'une preview avant activation et ouverture. L'accès public exige simultanément activation et horaire d'ouverture, avant fermeture ; COUNTDOWN/PREPARATION ne divulguent ni maisons, ni candidats, ni identifiants de maisons fermées. Le compte à rebours utilise l'horloge serveur et apparaît pour tous, y compris sans connexion ; après clôture, l'accueil remercie les participants. La sélection BO ne modifie pas l'exploitation. La création TEST n'est plus proposée dans l'interface ; les saisons TEST historiques sont conservées. Seule une TEST active peut être résolue par la carte des administrateurs. Les utilisateurs ordinaires n'obtiennent ni contexte TEST, ni maisons, ni création de participation TEST. Les horaires réellement saisis des maisons TEST sont respectés. Aucun email réel n'est envoyé pour TEST : campagne, test email, retry et anciens jobs en attente sont bloqués côté serveur.
 
-Les comptes sont permanents et globaux. Le Super Admin peut créer un USER actif/vérifié sans invitation, avec mot de passe ; sans email, le serveur génère `test-<identifiant aléatoire>@example.invalid`. Ces adresses internes ne sont jamais livrées par SMTP. Leur identifiant reste visible dans Utilisateurs pour une connexion manuelle si nécessaire. Toute nouvelle participation utilise la saison active verrouillée côté serveur. Le contexte éventuellement transmis par le BO doit correspondre : sinon 409. Un même compte peut participer à plusieurs saisons.
+Les comptes sont permanents et globaux. Le Super Admin peut créer un USER actif/vérifié sans invitation, avec mot de passe ; sans email, le serveur génère `test-<identifiant aléatoire>@example.invalid`. Ces adresses internes ne sont jamais livrées par SMTP. Leur identifiant reste visible dans Utilisateurs pour une connexion manuelle si nécessaire. Les inscriptions publiques peuvent utiliser une saison réelle préparée avant activation si ses inscriptions sont ouvertes et leur horaire atteint. Le serveur verrouille instance et saison, et refuse les saisons fermées, archivées ou purgées. Les créations BO utilisent la saison sélectionnée et les permissions de gestion. Un même compte peut participer à plusieurs saisons.
 
 ## Migration 008
 
@@ -39,7 +39,7 @@ Le shell charge uniquement les données de la page : maisons, utilisateurs/rôle
 
 La purge manuelle REAL est réservée au SUPER_ADMIN, après fin et désactivation, avec confirmation `PURGER`. Elle conserve la saison et son snapshot anonyme ; elle est distincte de la suppression définitive.
 
-La carte est la vraie application, sans badge TEST ni menu spécial. Sur téléphone, une session ADMIN/SUPER_ADMIN résout la même saison active que le BO. Maisons actualisées toutes les 60 secondes et au retour dans l’application ; contrôle du parcours existant conservé. Le moteur ORS/GPS et les règles de collecte libre ne sont pas modifiés.
+La carte est la vraie application, sans badge TEST ni menu spécial. Sur téléphone, ADMIN/SUPER_ADMIN peuvent prévisualiser la saison réelle préparée quand aucun pointeur n'est actif. Maisons actualisées toutes les 60 secondes et au retour dans l'application. La collecte prépare une sélection sans moteur ORS, itinéraire, routage ou tracé. La liste se classe depuis le départ puis le GPS fiable. La distance cumulée vient exclusivement des positions GPS acceptées ; interruptions et mesures indisponibles sont signalées, sans reconstitution de trajet. À la fermeture, toute nouvelle collecte et mutation saisonnière sont refusées ; la preview administrative est en lecture seule jusqu'à purge.
 
 ## Vérification locale
 

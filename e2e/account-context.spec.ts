@@ -321,6 +321,8 @@ test("map canvas, filters and active route remain mounted across account", async
         ...state,
         state: seasonState(openSeason),
         mapAccessible: mapAccessible(openSeason),
+        collectionAccessible: true,
+        publicMapOpen: true,
         houses: [house],
         routeCandidates: [house],
         instance: {

@@ -28,6 +28,7 @@ import {
   type User,
 } from "../lib/domain";
 import { fixtureRouter } from "./walking-fixture";
+import { legacyTestSeason } from "./legacy-season-fixture";
 vi.mock("../lib/walking-router", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../lib/walking-router")>()),
   createWalkingRouter: () => fixtureRouter,
@@ -68,12 +69,7 @@ const acceptance = {
   guidelines_version: "2026.1",
 };
 async function testSeason(name = "Essais") {
-  await service.adminAction(admin, {
-    action: "season",
-    payload: { name, is_test: true },
-  });
-  return (await db().query("SELECT * FROM seasons WHERE name=$1", [name]))
-    .rows[0] as unknown as Season;
+  return await legacyTestSeason(admin.instance_id, name) as unknown as Season;
 }
 async function activate(s: Season, u = admin) {
   return service.adminAction(u, {
@@ -181,6 +177,16 @@ afterAll(async () => {
   else await engine.close();
 });
 
+it("rejects new TEST through creation, setup or conversion while preserving historical TEST", async () => {
+  const historical = await testSeason("Historique à conserver");
+  await expect(service.adminAction(admin, { action: "season", payload: { name: "Nouvelle TEST", is_test: true } })).rejects.toMatchObject({ status: 400 });
+  await expect(service.adminAction(admin, { action: "season", id: real.id, payload: { ...realDefinition, is_test: true } })).rejects.toMatchObject({ status: 400 });
+  await expect(service.setup({ token: "season-test-key", instance: { public_name: "Test", territory: "Rennes", postal_code: "35000", country: "France", timezone: "Europe/Paris", latitude: 48.1, longitude: -1.67, zoom: 14 }, admin: { display_name: "Admin", email: "other@example.invalid", password: "test-password-1234" }, season: { ...realDefinition, is_test: true } })).rejects.toMatchObject({ status: 400 });
+  await service.adminAction(admin, { action: "season", id: historical.id, payload: { name: "Historique renommé", is_test: true } });
+  expect((await db().query("SELECT name,is_test FROM seasons WHERE id=$1", [historical.id])).rows[0]).toMatchObject({ name: "Historique renommé", is_test: true });
+  expect((await db().query("SELECT id FROM seasons")).rows).toHaveLength(2);
+});
+
 it("uses one pointer for REAL/TEST, serializes competing activations, and rejects ADMIN critical actions", async () => {
   const a = await testSeason("A"),
     b = await testSeason("B");
@@ -213,20 +219,104 @@ it("uses one pointer for REAL/TEST, serializes competing activations, and reject
   const globalUser = await directAccount("Sans saison active");
   expect(globalUser.account_status).toBe("ACTIVE");
   expect(globalUser.email).toMatch(/^test-[a-f0-9]{32}@example[.]invalid$/);
-  const empty = await service.publicState(undefined, ordinary);
-  expect(empty.season).toBeNull();
-  expect(empty.mapAccessible).toBe(false);
-  await expect(
-    service.createParticipation(ordinary, {
-      house: houseDefinition,
-      acceptance,
-    }),
-  ).rejects.toMatchObject({ status: 403 });
+  const waiting = await service.publicState(undefined, ordinary);
+  expect(waiting.season?.id).toBe(real.id);
+  expect(waiting.state).toBe("PREPARATION");
+  expect(waiting.mapAccessible).toBe(false);
+  expect(waiting.houses).toEqual([]);
+  const registration = await service.createParticipation(ordinary, {
+    house: houseDefinition,
+    acceptance,
+  });
+  expect(registration).toMatchObject({ ok: true });
+  expect((await service.ownHouse(ordinary))?.season_id).toBe(real.id);
   expect(
     ((await service.adminRead(admin, "dashboard")) as { season: unknown })
       .season,
   ).toBeNull();
 });
+it("allows staff to prepare a real season with houses before public activation", async () => {
+  await service.adminAction(admin, {
+    action: "deactivateSeason",
+    id: real.id,
+    payload: "DÉSACTIVER",
+  });
+  const created = await createHouse(ordinary, real);
+  expect(created.review_status).toBe("VALIDATED");
+  const staff = await service.publicState(undefined, { ...admin, role_name: "ADMIN" });
+  expect(staff.mapAccessible).toBe(true);
+  expect(staff.houses?.map((h) => h.id)).toContain(created.id);
+  const visitor = await service.publicState(undefined, ordinary);
+  expect(visitor.mapAccessible).toBe(false);
+  expect(visitor.houses).toEqual([]);
+  const lateParticipant = await directAccount("Inscription avant activation");
+  const registration = await service.createParticipation(lateParticipant, {
+    house: houseDefinition,
+    acceptance,
+  });
+  expect(registration).toMatchObject({ ok: true });
+  expect((await service.ownHouse(lateParticipant))?.season_id).toBe(real.id);
+  expect((await service.publicState(undefined, lateParticipant)).houses).toEqual([]);
+});
+it("keeps admin preview independent of public activation and closes public access by time", async () => {
+  const staff = { ...admin, role_name: "ADMIN" };
+  await service.adminAction(admin, {
+    action: "deactivateSeason",
+    id: real.id,
+    payload: "DÉSACTIVER",
+  });
+  for (const manager of [admin, staff]) {
+    const preview = await service.publicState(undefined, manager);
+    expect(preview.season?.id).toBe(real.id);
+    expect(preview.mapAccessible).toBe(true);
+    expect(preview.collectionAccessible).toBe(true);
+    expect(preview.publicMapOpen).toBe(false);
+  }
+  let member = await service.publicState(undefined, ordinary);
+  expect(member.state).toBe("PREPARATION");
+  expect(member.mapAccessible).toBe(false);
+  expect(member.houses).toEqual([]);
+  await activate(real);
+  member = await service.publicState(undefined, ordinary);
+  expect(member.state).toBe("COUNTDOWN");
+  expect(member.mapAccessible).toBe(false);
+  expect((await service.publicState(undefined, staff)).mapAccessible).toBe(true);
+  vi.setSystemTime(new Date(real.opens_at));
+  member = await service.publicState(undefined, ordinary);
+  expect(member.state).toBe("MAP_OPEN");
+  expect(member.publicMapOpen).toBe(true);
+  expect(member.mapAccessible).toBe(true);
+  vi.setSystemTime(new Date(real.closes_at));
+  member = await service.publicState(undefined, ordinary);
+  expect(member.mapAccessible).toBe(false);
+  expect(member.state).toBe("CLOSED");
+  const archived = await service.publicState(undefined, staff);
+  expect(archived.mapAccessible).toBe(true);
+  expect(archived.collectionAccessible).toBe(false);
+  expect(archived.state).toBe("CLOSED");
+  expect(archived.routeCandidates).toEqual([]);
+});
+it("requires activation even after the opening time and withholds every house payload until then", async () => {
+  const house = await createHouse(ordinary, real);
+  await service.adminAction(admin, { action: "deactivateSeason", id: real.id, payload: "DÉSACTIVER" });
+  vi.setSystemTime(new Date(houseDefinition.starts_at));
+  for (const user of [null, ordinary]) {
+    const state = await service.publicState(undefined, user);
+    expect(state.state).toBe("PREPARATION");
+    expect(state.publicMapOpen).toBe(false);
+    expect(state.collectionAccessible).toBe(false);
+    expect(state.houses).toEqual([]);
+    expect(state.routeCandidates).toEqual([]);
+    expect(state.closedHouseIds).toEqual([]);
+    expect(JSON.stringify(state)).not.toContain(house.address);
+    expect(JSON.stringify(state)).not.toContain(house.id);
+  }
+  await activate(real);
+  const opened = await service.publicState(undefined, ordinary);
+  expect(opened.publicMapOpen).toBe(true);
+  expect(opened.houses?.map((h) => h.id)).toContain(house.id);
+});
+
 it("does not leak TEST to USER, while ADMIN/Super Admin use the same houses, route and availability APIs", async () => {
   const s = await testSeason();
   await activate(s);
@@ -339,9 +429,11 @@ it("keeps accounts/passwords/session on TEST deletion and reuses one account in 
       )
     ).rows,
   ).toHaveLength(2);
-  // The browser cannot attach a new house to an arbitrary inactive season.
+  // Staff may now prepare houses on inactive seasons without exposing them publicly.
   const another = await directAccount("Other");
-  await expect(createHouse(another, s)).rejects.toMatchObject({ status: 409 });
+  const inactiveHouse = await createHouse(another, s);
+  expect(inactiveHouse.season_id).toBe(s.id);
+  expect((await service.publicState(undefined, ordinary)).houses).toEqual([]);
   await service.deleteSeason(admin, s.id, s.name);
   expect(
     (
@@ -780,9 +872,9 @@ it("manual creation validates ADMIN and Super Admin houses while public creation
     payload: "DÉSACTIVER",
   });
   const another = await directAccount("Inactive owner");
-  await expect(createHouse(another, real)).rejects.toMatchObject({
-    status: 403,
-  });
+  const prepared = await createHouse(another, real);
+  expect(prepared.season_id).toBe(real.id);
+  expect((await service.publicState(undefined, ordinary)).mapAccessible).toBe(false);
 });
 
 // Reconstructed Lots 1 + 2: regressions against the V0.7.1 season model.

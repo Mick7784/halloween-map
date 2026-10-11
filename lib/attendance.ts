@@ -1,4 +1,4 @@
-import { db } from "./db";
+import { db, type Database } from "./db";
 import { HttpError, rateLimit } from "./auth";
 import type { User } from "./domain";
 import { DateTime } from "luxon";
@@ -44,22 +44,23 @@ export type Attendance = {
 };
 export async function attendance(
   seasonId: string | undefined,
+  client: Database = db(),
 ): Promise<Attendance> {
   if (!seasonId) return { activeNow: 0, peak: null, points: [] };
   const active = (
-    await db().query(
+    await client.query(
       "SELECT count(*)::int n FROM active_presence p JOIN users u ON u.id=p.user_id JOIN seasons s ON s.id=p.season_id JOIN instances i ON i.active_season_id=s.id LEFT JOIN roles r ON r.id=u.role_id WHERE p.season_id=$1 AND p.seen_at>now()-interval '3 minutes' AND u.account_status='ACTIVE' AND NOT s.archived AND s.purged_at IS NULL AND (s.is_test OR s.closes_at>now()) AND (NOT s.is_test OR r.name IN('ADMIN','SUPER_ADMIN'))",
       [seasonId],
     )
   ).rows[0];
   const peak = (
-    await db().query(
+    await client.query(
       "SELECT active_count,sampled_at FROM attendance_samples WHERE season_id=$1 ORDER BY active_count DESC,sampled_at LIMIT 1",
       [seasonId],
     )
   ).rows[0];
   const samples = (
-    await db().query(
+    await client.query(
       "SELECT a.sample_slot,a.active_count,i.timezone FROM attendance_samples a JOIN seasons s ON s.id=a.season_id JOIN instances i ON i.id=s.instance_id WHERE a.season_id=$1 ORDER BY sample_slot",
       [seasonId],
     )

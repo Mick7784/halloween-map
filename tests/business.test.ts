@@ -3,6 +3,7 @@ import {
   installFrenchAddressFixture,
 } from "./french-address-fixture";
 import { auditLabel } from "../lib/admin-presentation";
+import { legacyTestSeason } from "./legacy-season-fixture";
 import manifest from "../app/manifest";
 import { runInNewContext } from "node:vm";
 import {
@@ -853,7 +854,8 @@ describe("Seasons, privacy and participant activity", () => {
     const result = await service.publicState(new Date("2026-10-31T23:00:00Z"));
     expect(result.mapAccessible).toBe(false);
     expect(result.houses).toEqual([]);
-    expect(result.season).toBeNull();
+    expect(result.season?.id).toBe(season.id);
+    expect(result.state).toBe("CLOSED");
     expect(
       (await service.adminRead(admin, "houses", season.id)) as unknown[],
     ).toHaveLength(1);
@@ -2067,10 +2069,7 @@ describe("back office phase one", () => {
       "house.review.pending",
       house.id,
     );
-    await service.adminAction(admin, {
-      action: "season",
-      payload: { ...setupData().season, name: "TEST vide", is_test: true },
-    });
+    await legacyTestSeason(admin.instance_id, "TEST vide");
     const testId = String(
       (await db().query("SELECT id FROM seasons WHERE is_test")).rows[0].id,
     );

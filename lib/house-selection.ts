@@ -14,8 +14,9 @@ export function prepareSelection(
   season: Season,
   input: RouteInput,
   now: Date,
+  staffPreview = false,
 ): RouteResult {
-  validateRouteWindow(season, input, now);
+  validateRouteWindow(season, input, now, staffPreview);
   const start = +new Date(input.start),
     end = +new Date(input.end);
   const eligible = houses

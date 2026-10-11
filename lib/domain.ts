@@ -134,24 +134,27 @@ export function adminAccount(user: User | null) {
 export function effectiveActivities(h: House) {
   return h.activities.filter((a) => a !== "CANDY" || h.candy_available);
 }
+/** The public opening requires both the organiser's activation and the configured time. */
 export function mapAccessible(s: Season | null, now = new Date()) {
-  return !!s && seasonState(s, now) === "MAP_OPEN";
+  return (
+    !!s &&
+    !s.is_test &&
+    !!s.active &&
+    !s.archived &&
+    !s.purged_at &&
+    +now >= +new Date(s.opens_at) &&
+    +now < +new Date(s.closes_at)
+  );
 }
+/** Administrators may inspect any existing season, including an inactive or closed one.
+ * A closed/purged season is strictly read-only; no purged data may be restored.
+ */
 export function earlyMapAccess(
   s: Season | null,
   user: User | null,
   now = new Date(),
 ) {
-  return (
-    !!s &&
-    !!s.active &&
-    !s.is_test &&
-    !s.archived &&
-    !s.purged_at &&
-    user?.role_name === "SUPER_ADMIN" &&
-    can(user, "admin.access") &&
-    +now < +new Date(s.opens_at)
-  );
+  return !!s && can(user, "admin.access") && !mapAccessible(s, now);
 }
 export function memberMapAccessible(
   s: Season | null,
@@ -159,6 +162,19 @@ export function memberMapAccessible(
   now = new Date(),
 ) {
   return !!user && (mapAccessible(s, now) || earlyMapAccess(s, user, now));
+}
+export function collectionAccessible(
+  s: Season | null,
+  user: User | null,
+  now = new Date(),
+) {
+  return (
+    !!s &&
+    !s.archived &&
+    !s.purged_at &&
+    +now < +new Date(s.closes_at) &&
+    memberMapAccessible(s, user, now)
+  );
 }
 export function visible(h: House, s: Season, now = new Date()) {
   return (

@@ -58,9 +58,12 @@ export default function PremiumHome({
           (state.season?.opens_at ?? state.nextOpening)!,
         ).setZone(zone)
       : null;
-  const opening = configured?.isValid ? configured : null;
+  const opening = configured?.isValid && !state.season?.is_test ? configured : null;
   const closed = ["CLOSED", "ARCHIVED"].includes(state.state ?? "");
-  const open = state.state === "MAP_OPEN";
+  const open = !!state.publicMapOpen;
+  const countdownVisible = !!state.season && !!opening &&
+    opening.toMillis() > now && !closed && !open;
+  const canPreview = !!user && !!state.mapAccessible && !open;
   const remaining = Math.max(0, (opening?.toMillis() ?? now) - now);
   const clock = [
     Math.floor(remaining / 86400000),
@@ -114,17 +117,11 @@ export default function PremiumHome({
       <main className="home-stage" inert={menu} aria-hidden={menu || undefined}>
         <div className="home-center">
           <h1>
-            {!user ? (
+            {closed ? (
               <>
-                Halloween Map
+                Merci d’avoir partagé
                 <br />
-                <span>Une nuit à partager.</span>
-              </>
-            ) : closed ? (
-              <>
-                La nuit s’achève.
-                <br />
-                <span>À l’année prochaine.</span>
+                <span>cette nuit d’Halloween !</span>
               </>
             ) : open ? (
               <>
@@ -132,7 +129,7 @@ export default function PremiumHome({
                 <br />
                 <span>Halloween vous attend.</span>
               </>
-            ) : opening ? (
+            ) : countdownVisible && opening ? (
               <>
                 La carte ouvre
                 <br />
@@ -143,13 +140,13 @@ export default function PremiumHome({
               </>
             ) : (
               <>
-                La prochaine édition
+                Halloween se prépare…
                 <br />
-                <span>se prépare.</span>
+                <span>Revenez dans quelques jours !</span>
               </>
             )}
           </h1>
-          {user && opening && !closed && !open && (
+          {countdownVisible && (
             <div
               className="home-clock"
               role="group"
@@ -175,8 +172,13 @@ export default function PremiumHome({
             </div>
           )}
           <p className="home-explanation">
-            Découvrez les maisons participantes et préparez votre collecte
-            d’Halloween.
+            {closed
+              ? "Merci aux habitants, aux familles et à toutes les maisons participantes. À l’année prochaine !"
+              : !state.season
+                ? "La prochaine édition est en préparation."
+                : !open && !countdownVisible
+                  ? "La prochaine édition se prépare. La carte sera disponible prochainement."
+                  : "Découvrez les maisons participantes et préparez votre collecte d’Halloween."}
           </p>
           {!user && (
             <section className="home-login" aria-label="Connexion">
@@ -187,8 +189,8 @@ export default function PremiumHome({
             </section>
           )}
           {user && (
-            <Link className="home-cta" href={cta.href}>
-              {cta.label}
+            <Link className="home-cta" href={canPreview ? "/map" : cta.href}>
+              {canPreview ? "Accéder à la carte" : cta.label}
               <ArrowRight size={21} />
             </Link>
           )}

@@ -351,7 +351,7 @@ describe("shared floating windows", () => {
       await render((onClose) =>
         h(UserMenu, {
           user,
-          state: { ...state, mapAccessible: true },
+          state: { ...state, mapAccessible: true, collectionAccessible: true },
           version: "V0.7.2",
           onClose,
           login: null,
@@ -463,7 +463,7 @@ describe("map navigation surfaces", () => {
     ).not.toContain("Arrêter");
     expect(
       document.querySelector(".collection-bottom-bar")?.textContent,
-    ).toContain("Arrêter la collecte");
+    ).toContain("Arrêter");
     expect(
       document.querySelector(".route-map-layer .route-sheet"),
     ).not.toBeNull();
@@ -476,7 +476,7 @@ describe("map navigation surfaces", () => {
     ).not.toBeNull();
     expect(
       document.querySelector(".collection-top-panel")?.textContent,
-    ).toContain("Ma sélection");
+    ).toContain("Maisons — de la plus proche à la plus éloignée");
     expect(
       document.querySelector(".collection-top-panel")?.textContent,
     ).toContain("Ajouter des maisons");
@@ -551,7 +551,7 @@ describe("visitor collection preparation", () => {
     expect(calculate).toHaveBeenCalledOnce();
     expect(calculate.mock.calls[0][0]).toMatchObject({
       maxFear: 2,
-      excludedHouseIds: [],
+      excludedHouseIds: [houses[1].id],
       selectedHouseIds: [houses[0].id, houses[2].id],
       acceptance: { guidelines: true },
     });

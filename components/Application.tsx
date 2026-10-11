@@ -46,7 +46,8 @@ export default function Application({
     [participationOpen, setParticipationOpen] = useState(
       view === "participant",
     ),
-    [now, setNow] = useState(() => Date.now());
+    [now, setNow] = useState(() => Date.now()),
+    [clockOffset, setClockOffset] = useState(0);
   useCollectionReports(user?.id, user?.instance_id);
   const presenceUserId = user?.id;
   useEffect(() => {
@@ -79,6 +80,7 @@ export default function Application({
       api<PublicState>("public"),
       api<User | null>("me"),
     ]);
+    setClockOffset(s.serverTime ? Date.parse(s.serverTime) - Date.now() : 0);
     setState(s);
     setUser(u);
     setError("");
@@ -100,6 +102,17 @@ export default function Application({
       document.removeEventListener("visibilitychange", sync);
     };
   }, [refresh]);
+  useEffect(() => {
+    // Revalidate the actual opening moment; the server is authoritative.
+    if (state?.state !== "COUNTDOWN" || !state.season || state.season.is_test) return;
+    const remaining = +new Date(state.season.opens_at) - (Date.now() + clockOffset);
+    if (remaining <= 0) return;
+    const timer = window.setTimeout(
+      () => void refresh().catch((e) => setError(e.message)),
+      Math.min(remaining + 150, 2147483647),
+    );
+    return () => clearTimeout(timer);
+  }, [state?.state, state?.season, clockOffset, refresh]);
   useEffect(() => {
     const viewport = window.visualViewport;
     const resize = () =>
@@ -179,7 +192,7 @@ export default function Application({
     </>
   );
 
-  const effectiveNow = now;
+  const effectiveNow = now + clockOffset;
   const closed =
     !!state?.season && effectiveNow >= +new Date(state.season.closes_at);
   const liveState = state
@@ -197,6 +210,8 @@ export default function Application({
               ),
       }
     : null;
+  const automaticMap = state?.state === "MAP_OPEN" && !state.season?.is_test;
+  const canShowMap = !!user && !!state?.mapAccessible && (view === "map" || automaticMap);
   let content: React.ReactNode;
   if (!state)
     content = (
@@ -220,7 +235,7 @@ export default function Application({
         </Link>
       </main>
     );
-  else if (view === "login") content = <Login />;
+  else if (view === "login") content = <Login destination="/" />;
   else if (view === "forgot-password" || view === "reset-password")
     content = <PasswordRecovery reset={view === "reset-password"} />;
   else if (view === "register") content = <Signup state={state} />;
@@ -316,24 +331,19 @@ export default function Application({
   else
     content =
       !user && view === "map" ? (
-        <Login destination="/map" />
+        <Login destination="/" />
       ) : (
         <PublicMap
           refresh={refresh}
           state={liveState!}
           mapStyle={mapStyle}
           now={effectiveNow}
-          showMap={
-            !!user &&
-            !!state.mapAccessible &&
-            (view === "map" || state.state === "MAP_OPEN")
-          }
+          showMap={canShowMap}
           user={user}
         />
       );
   if (
-    (((view === "home" || view === "map") &&
-      !(user && state?.mapAccessible && !closed)) ||
+    (((view === "home" || view === "map") && !canShowMap) ||
       (["account", "participant"].includes(view) && user)) &&
     state &&
     !state.setupRequired
@@ -344,7 +354,7 @@ export default function Application({
         user={user}
         now={effectiveNow}
         version={version}
-        login={<LoginForm destination="/map" />}
+        login={<LoginForm destination="/" />}
         error={error}
         onRetry={refresh}
       />,
@@ -414,7 +424,7 @@ export default function Application({
           state={state}
           version={version}
           onClose={() => setMenu(false)}
-          login={<LoginForm compact={false} destination="/map" />}
+          login={<LoginForm compact={false} destination="/" />}
         />
       )}
       <footer>
@@ -495,10 +505,13 @@ function LoginForm({
         try {
           await api("login", values(e.currentTarget));
           const next = new URLSearchParams(window.location.search).get("next");
+          // Authentication always returns to the landing decision; explicit
+          // account/participant deep links still work, but a map URL cannot
+          // bypass the pre-opening countdown for staff.
           window.location.href =
-            next && /^\/(?!\/)/.test(next) && !next.includes("\\")
+            next && /^\/(?!\/)/.test(next) && !next.includes("\\") && !next.startsWith("/map")
               ? next
-              : (destination ?? "/map");
+              : (destination ?? "/");
         } catch (e) {
           setError((e as Error).message);
         } finally {
@@ -623,6 +636,7 @@ function PublicMap({
       user={user}
       mapStyle={mapStyle}
       refresh={refresh}
+      readOnly={!state.collectionAccessible}
     />
   );
 }

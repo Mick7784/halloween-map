@@ -1,10 +1,11 @@
 import { test, expect, type Page } from "@playwright/test";
+import { DateTime } from "luxon";
 const activeId = "30000000-0000-4000-8000-000000000001";
 const historyId = "30000000-0000-4000-8000-000000000002";
 const emptyId = "30000000-0000-4000-8000-000000000003";
-async function arrange(page: Page, isTest: boolean, isActive = true) {
+async function arrange(page: Page, isTest: boolean, isActive = true, hasSeason = true) {
   const now = Date.now();
-  const seasons = [
+  const seasons = (hasSeason ? [
     { id: activeId, name: "Saison active", is_test: isTest, active: isActive },
     {
       id: historyId,
@@ -14,11 +15,11 @@ async function arrange(page: Page, isTest: boolean, isActive = true) {
       purged_at: new Date(now).toISOString(),
     },
     { id: emptyId, name: "Saison planifiée", is_test: false },
-  ].map((s) => ({
+  ] : []).map((s) => ({
     ...s,
     year: new Date().getFullYear(),
-    opens_at: new Date(now - 3600000).toISOString(),
-    closes_at: new Date(now + 86400000).toISOString(),
+    opens_at: DateTime.now().setZone("Europe/Paris").startOf("day").toISO(),
+    closes_at: DateTime.now().setZone("Europe/Paris").plus({ days: 1 }).endOf("day").toISO(),
   }));
   const live = {
     houses: 4,
@@ -261,7 +262,7 @@ for (const isTest of [false, true])
       ),
     ).toBe(true);
   });
-test("new house uses shared form, searchable owner and refreshed validated list; inactive season disables creation", async ({
+test("new house uses shared form, searchable owner and refreshed validated list; purged season disables creation", async ({
   page,
 }) => {
   await arrange(page, false);
@@ -302,10 +303,10 @@ test("new house uses shared form, searchable owner and refreshed validated list;
   await page.getByRole("checkbox").last().check();
   await page
     .getByLabel("Date de début")
-    .fill(new Date().toISOString().slice(0, 10));
+    .fill(DateTime.now().setZone("Europe/Paris").toISODate()!);
   await page
     .getByLabel("Date de fin")
-    .fill(new Date().toISOString().slice(0, 10));
+    .fill(DateTime.now().setZone("Europe/Paris").toISODate()!);
   await page.getByLabel("Heure de début").fill("18:00");
   await page.getByLabel("Heure de fin").fill("22:00");
   await page.getByRole("button", { name: "Créer la maison" }).click();
@@ -341,10 +342,19 @@ test("owner creation opens the existing user flow", async ({ page }) => {
   ).toBeVisible();
 });
 
-test("no active season keeps the house CTA disabled with an explanation", async ({
+test("prepared real season allows house creation before activation", async ({ page }) => {
+  await arrange(page, false, false);
+  await page.locator(".beta-sidebar").getByRole("button", { name: "Maisons", exact: true }).click();
+  await expect(page.getByRole("button", { name: "+ Nouvelle maison", exact: true })).toBeEnabled();
+  await expect(page.getByText("Préparation de la saison avant activation publique.", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "+ Nouvelle maison", exact: true }).click();
+  await expect(page.getByRole("dialog", { name: "Nouvelle maison" })).toBeVisible();
+});
+
+test("no season keeps the house CTA disabled with an explanation", async ({
   page,
 }) => {
-  await arrange(page, false, false);
+  await arrange(page, false, false, false);
   await page
     .locator(".beta-sidebar")
     .getByRole("button", { name: "Maisons", exact: true })
@@ -353,7 +363,7 @@ test("no active season keeps the house CTA disabled with an explanation", async 
     page.getByRole("button", { name: "+ Nouvelle maison", exact: true }),
   ).toBeDisabled();
   await expect(
-    page.getByText("Activez une saison avant de créer une maison.", {
+    page.getByText("Créez une saison avant de créer une maison.", {
       exact: true,
     }),
   ).toBeVisible();

@@ -26,6 +26,8 @@ export type PublicState = {
     import("../lib/content").LegalDocument
   >;
   mapAccessible?: boolean;
+  collectionAccessible?: boolean;
+  publicMapOpen?: boolean;
   instance?: Pick<
     Instance,
     | "id"

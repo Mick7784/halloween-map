@@ -82,7 +82,7 @@ export default function UserMenu({
           participationSubtitle,
         )}
         {user &&
-          state?.mapAccessible &&
+          state?.collectionAccessible &&
           entry("/map#parcours", "Préparer ma collecte", <Route />)}
         {user?.permissions.includes("admin.access") && (
           <div className="home-menu-group">

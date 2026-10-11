@@ -1,6 +1,6 @@
 "use client";
 import { ActionCancelled } from "./AdminConfirmation";
-import { Dialog, Button, Select, DataTable, Input } from "./ui";
+import { Dialog, Button, DataTable, Input } from "./ui";
 import useDraftGuard, { confirmDraftNavigation } from "./useDraftGuard";
 import AdminStatistics from "./AdminStatistics";
 import { DateTime } from "luxon";
@@ -82,7 +82,7 @@ function SeasonEditor({
   superAdmin: boolean;
   defaults?: { open: string; close: string };
 }) {
-  const [test, setTest] = useState(!!season?.is_test),
+  const [test] = useState(!!season?.is_test),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
     [dirty, setDirty] = useState(false),
@@ -154,19 +154,6 @@ function SeasonEditor({
           value={season?.name}
           maxLength={100}
         />
-        {!season && (
-          <label className="field">
-            <span>Type</span>
-            <Select
-              aria-label="Type de saison"
-              value={test ? "TEST" : "REAL"}
-              onChange={(e) => setTest(e.target.value === "TEST")}
-            >
-              <option value="REAL">Saison normale</option>
-              {superAdmin && <option value="TEST">Saison de test</option>}
-            </Select>
-          </label>
-        )}
         {!test && (
           <>
             <label className="field">
@@ -257,7 +244,7 @@ export default function SeasonManager({
         <div>
           <h2>Les saisons</h2>
           <p className="small muted">
-            Une seule saison active, REAL ou TEST. Les comptes restent globaux.
+            Créez et préparez une saison avant son activation. Les comptes restent globaux.
           </p>
         </div>
         {manage && (
