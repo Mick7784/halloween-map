@@ -1197,6 +1197,7 @@ test("registration and login use actual forms, verification SMTP and persistent 
     .locator(".home-login")
     .getByRole("button", { name: "Se connecter", exact: true })
     .click();
+  await expect(page.locator(".home-login")).toHaveCount(0);
   await expect(page.locator(".home-clock")).toBeVisible();
   expect((await (await page.request.get("/api/me")).json()).id).toBe(
     account.id,

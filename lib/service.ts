@@ -127,6 +127,8 @@ export async function settingsImpact(user: User | null, input: unknown) {
 }
 export async function setup(input: unknown, setupSession?: string) {
   const data = setupSchema.parse(input);
+  if (data.season.is_test)
+    throw new HttpError(400, "Créez une saison réelle ; les saisons TEST historiques restent conservées.");
   if (data.token) verifySetupToken(data.token);
   else if (!(await setupAuthorized(setupSession)))
     throw new HttpError(
@@ -1659,6 +1661,8 @@ export async function adminAction(user: User | null, input: unknown) {
     const p = seasonSchema.parse(testSeasonDefinition(data.payload));
     if (p.is_test && u.role_name !== "SUPER_ADMIN")
       throw new HttpError(403, "Super Admin requis pour le mode TEST");
+    if (p.is_test && !data.id)
+      throw new HttpError(400, "Créez une saison réelle ; les saisons TEST historiques restent conservées.");
     const i = (await instance())!;
     return transaction(async (c) => {
       await c.query("SELECT id FROM instances WHERE id=$1 FOR UPDATE", [i.id]);
@@ -1675,6 +1679,8 @@ export async function adminAction(user: User | null, input: unknown) {
             "Une saison purgée ne peut pas être réouverte",
           );
         if (Boolean(s.is_test) !== p.is_test) {
+          if (p.is_test)
+            throw new HttpError(400, "Une saison réelle ne peut pas devenir une saison TEST.");
           if (u.role_name !== "SUPER_ADMIN")
             throw new HttpError(403, "Super Admin requis");
           const used = (

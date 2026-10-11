@@ -201,7 +201,8 @@ test("compact season list, creation of a real draft, and dark/light appearance",
   const dialog = page.getByRole("dialog", { name: "Nouvelle saison" });
   await expect(dialog.getByLabel("Type de saison")).toHaveCount(0);
   await dialog.getByLabel("Nom de la saison").fill("Halloween préparation");
-  await expect(dialog.locator('input[type="datetime-local"]')).toHaveCount(4);
+  await expect(dialog.locator('input[type="date"]')).toHaveCount(4);
+  await expect(dialog.locator('input[type="time"]')).toHaveCount(4);
   await dialog
     .getByRole("button", { name: "Enregistrer", exact: true })
     .click();

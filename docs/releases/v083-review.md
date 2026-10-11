@@ -7,7 +7,7 @@ La PR #18 reste en brouillon sur `work/v083-collection-seasons`. Tickets #16 et 
 - Préparation REAL : preview ADMIN/SUPER_ADMIN et création BO avant activation ; inscription publique si le calendrier d'inscription est ouvert. Le compte à rebours apparaît également sans connexion.
 - Accès public : activation ET ouverture atteinte, fermeture non atteinte. Sans ces conditions, aucune maison, aucun candidat ni identifiant de maison fermée ne figure dans la réponse publique destinée aux visiteurs.
 - Fin : remerciements pour tous, preview administrative en lecture seule, collecte refusée. Purge : détails saisonniers retirés selon le calendrier existant ; comptes globaux et statistiques anonymes conservés.
-- TEST historiques conservées et isolées : aucun contexte TEST aux visiteurs, aucune nouvelle création TEST proposée dans l'interface. Aucun changement de migration ni intervention sur une base de production.
+- TEST historiques conservées et isolées : aucun contexte TEST aux visiteurs, création TEST refusée dans l'interface et les API de création/setup, conversion REAL vers TEST refusée. Les données historiques de test sont injectées directement dans les seules bases jetables des fixtures. Aucun changement de migration ni intervention sur une base de production.
 - Collecte : sélection sans routage, géométrie neutralisée, aucune requête directions ; classement depuis le départ puis GPS fiable. Ajouts hors critères expliqués. Mesure GPS observée, interruptions signalées, aucun tracé sauvegardé.
 
 ## Vérifications

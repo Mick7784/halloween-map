@@ -28,6 +28,7 @@ import {
   type User,
 } from "../lib/domain";
 import { fixtureRouter } from "./walking-fixture";
+import { legacyTestSeason } from "./legacy-season-fixture";
 vi.mock("../lib/walking-router", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../lib/walking-router")>()),
   createWalkingRouter: () => fixtureRouter,
@@ -68,12 +69,7 @@ const acceptance = {
   guidelines_version: "2026.1",
 };
 async function testSeason(name = "Essais") {
-  await service.adminAction(admin, {
-    action: "season",
-    payload: { name, is_test: true },
-  });
-  return (await db().query("SELECT * FROM seasons WHERE name=$1", [name]))
-    .rows[0] as unknown as Season;
+  return await legacyTestSeason(admin.instance_id, name) as unknown as Season;
 }
 async function activate(s: Season, u = admin) {
   return service.adminAction(u, {
@@ -179,6 +175,16 @@ afterAll(async () => {
   delete globals.testDb;
   if (engine instanceof Pool) await engine.end();
   else await engine.close();
+});
+
+it("rejects new TEST through creation, setup or conversion while preserving historical TEST", async () => {
+  const historical = await testSeason("Historique à conserver");
+  await expect(service.adminAction(admin, { action: "season", payload: { name: "Nouvelle TEST", is_test: true } })).rejects.toMatchObject({ status: 400 });
+  await expect(service.adminAction(admin, { action: "season", id: real.id, payload: { ...realDefinition, is_test: true } })).rejects.toMatchObject({ status: 400 });
+  await expect(service.setup({ token: "season-test-key", instance: { public_name: "Test", territory: "Rennes", postal_code: "35000", country: "France", timezone: "Europe/Paris", latitude: 48.1, longitude: -1.67, zoom: 14 }, admin: { display_name: "Admin", email: "other@example.invalid", password: "test-password-1234" }, season: { ...realDefinition, is_test: true } })).rejects.toMatchObject({ status: 400 });
+  await service.adminAction(admin, { action: "season", id: historical.id, payload: { name: "Historique renommé", is_test: true } });
+  expect((await db().query("SELECT name,is_test FROM seasons WHERE id=$1", [historical.id])).rows[0]).toMatchObject({ name: "Historique renommé", is_test: true });
+  expect((await db().query("SELECT id FROM seasons")).rows).toHaveLength(2);
 });
 
 it("uses one pointer for REAL/TEST, serializes competing activations, and rejects ADMIN critical actions", async () => {

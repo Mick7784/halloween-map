@@ -96,7 +96,9 @@ test("live APIs: REAL/TEST isolation, phone session, reusable accounts, purge an
           payload: { name: "TEST live", is_test: true },
         })
       ).ok(),
-    ).toBe(true);
+    ).toBe(false);
+    // Retain coverage for legacy TEST seasons without creating one through the API.
+    await pool.query("INSERT INTO seasons(instance_id,year,name,is_test,registrations_open,registrations_open_at,opens_at,closes_at,purge_at) SELECT id,2026,'TEST live',true,true,'2000-01-01T00:00Z','2000-01-01T00:00Z','2201-01-01T00:00Z','2201-01-02T00:00Z' FROM instances");
     seasons = await (await page.request.get("/api/admin/seasons")).json();
     const testSeason = seasons.find((s: { is_test: boolean }) => s.is_test);
     expect(

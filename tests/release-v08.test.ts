@@ -1,3 +1,4 @@
+import { legacyTestSeason } from "./legacy-season-fixture";
 import {
   addressParts,
   installFrenchAddressFixture,
@@ -400,10 +401,7 @@ it("queues one notification per actual transition, cancels stale decisions and n
   ).toBe("CANCELLED");
 });
 it("never queues or sends real house notifications for TEST seasons", async () => {
-  await adminAction(admin, {
-    action: "season",
-    payload: { name: "Exemples", is_test: true },
-  });
+  await legacyTestSeason(admin.instance_id, "Exemples");
   await adminAction(admin, {
     action: "deactivateSeason",
     id: season.id,
@@ -711,10 +709,7 @@ it("omits disabled or unusable support/contact links and never borrows the bug d
 });
 it("excludes ordinary accounts from TEST attendance and switches current attendance without moving old samples", async () => {
   await presence(owner);
-  await adminAction(admin, {
-    action: "season",
-    payload: { name: "Présence TEST", is_test: true },
-  });
+  await legacyTestSeason(admin.instance_id, "Présence TEST");
   const testSeason = (await db().query("SELECT id FROM seasons WHERE is_test"))
     .rows[0];
   await adminAction(admin, {
