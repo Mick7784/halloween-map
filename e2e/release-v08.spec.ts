@@ -852,11 +852,14 @@ test("ADMIN grants are enforced on API requests immediately; idle rights require
     (await (await page.request.get("/api/me")).json()).permissions,
   ).toContain("admin.access");
 });
-test("Super Admin enters the real map early; cancelling masked confirmation prevents mutation", async ({
+test("Super Admin starts on the countdown and opens the real map by explicit preview; sensitive cancellation remains safe", async ({
   page,
 }) => {
   await login(page);
   await page.goto("/");
+  await expect(page.locator(".home-clock")).toBeVisible();
+  await expect(page.getByRole("link", { name: "Accéder à la carte" })).toBeVisible();
+  await page.getByRole("link", { name: "Accéder à la carte" }).click();
   await expect(page.locator(".route-experience")).toBeVisible();
   expect(
     (await (await page.request.get("/api/public")).json()).earlyAccess,
