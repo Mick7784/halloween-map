@@ -38,7 +38,8 @@ export async function reportCollection(
     if (!s || s.purged_at || s.archived || (s.is_test && !adminAccount(user)))
       throw new HttpError(409, "La saison n’est plus accessible");
     const accessible =
-      i?.active_season_id === s.id && mapAccessible({ ...s, active: true });
+      i?.active_season_id === s.id &&
+      (mapAccessible({ ...s, active: true }) || (s.is_test && adminAccount(user)));
     // A collection already started may finish after closing, until the privacy purge.
     // Only its numerical totals can change; house/configuration snapshots stay read-only.
     if (
