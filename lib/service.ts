@@ -1285,7 +1285,7 @@ export async function adminRead(
         return {
           seasonId: s.id,
           snapshot,
-          attendance: await attendance(s.id),
+          attendance: await attendance(s.id, c),
           stats: snapshot ? s.stats : await statisticalSnapshot(c, s),
         };
       });
