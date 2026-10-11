@@ -1,5 +1,15 @@
 # Changelog
 
+## V0.8.3
+
+- Carte accessible aux administrateurs dès qu'une saison réelle est créée ; activation explicite réservée à l'ouverture publique, transition automatique au début de l'événement et accueil de remerciement après clôture.
+- Suppression de la création de nouvelles saisons TEST dans l'interface ; compatibilité des saisons TEST historiques et conservation des données saisonnières et des comptes.
+- Collecte mobile plus dense : maisons sur une seule ligne classées par distance géographique depuis le départ puis GPS fiable, sans itinéraire imposé.
+- Panneau supérieur extensible, résumé inférieur sur deux lignes avec accès au compte et indicateurs réels, halo orange diffus sans cercle autour du pin le plus proche.
+- Ajouts hors critères avec motif exact ; sélection conservée pour plus tard avec fermeture de la fenêtre.
+- Contrôles d'accès côté serveur, lecture seule après fermeture, aucune donnée géographique détaillée après purge.
+
+
 ## V0.8.2
 
 - Carte sans aucune couche d’itinéraire ; sélection synchronisée pendant la préparation et la collecte, pins orange et halo de proximité, maisons visitées violet-gris. Accès explicite aux maisons et commandes de collecte sans menu redondant.
