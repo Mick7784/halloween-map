@@ -93,7 +93,7 @@ for (const width of [390, 1440])
     await expect(page.locator(".site-header")).toBeVisible();
     await expect(page.locator(".maplibregl-ctrl-zoom-in")).toBeVisible();
     await page
-      .getByRole("button", { name: "Options de la carte", exact: true })
+      .getByRole("button", { name: "Les maisons à découvrir", exact: false })
       .click();
     const options = page.getByRole("dialog", {
       name: "Maisons et filtres",
@@ -107,7 +107,10 @@ for (const width of [390, 1440])
     await page.keyboard.press("Escape");
     await expect(options).toHaveCount(0);
     await expect(
-      page.getByRole("button", { name: "Options de la carte", exact: true }),
+      page.getByRole("button", {
+        name: "Les maisons à découvrir",
+        exact: false,
+      }),
     ).toBeFocused();
     await page
       .getByRole("button", { name: "Préparer ma collecte", exact: true })

@@ -877,7 +877,7 @@ for (const width of [390, 1440])
       await expect(page.locator(".house-marker.is-visited")).toHaveCount(1);
       await expect(
         page.locator(".house-marker.is-visited .house-marker-visual"),
-      ).toHaveCSS("filter", "grayscale(1)");
+      ).toHaveCSS("filter", "none");
       await expect(page.locator(".route-marker-number")).toHaveCount(0);
       await page
         .getByRole("button", { name: "Déplier ou replier ma sélection" })
@@ -1183,14 +1183,9 @@ test("mobile free selection stays at the top with a permanent bottom stop and su
   await expect(page.locator(".site-header")).toBeHidden();
   const viewport = await page.locator(".route-experience").boundingBox();
   expect(viewport).toMatchObject({ x: 0, y: 0, width: 390, height: 844 });
-  await page.getByLabel("Commandes de collecte", { exact: true }).click();
-  await page
-    .locator(".collection-context-menu")
-    .getByRole("button", { name: "Voir les étapes", exact: true })
-    .click();
   await expect(
-    page.locator(".collection-context-menu details"),
-  ).not.toHaveAttribute("open", "");
+    page.getByLabel("Commandes de collecte", { exact: true }),
+  ).toHaveCount(0);
   const top = page.locator(".collection-top-panel"),
     bottom = page.locator(".collection-bottom-bar");
   const topBox = await top.boundingBox(),
@@ -1213,6 +1208,7 @@ test("mobile free selection stays at the top with a permanent bottom stop and su
     })
     .click();
   await expect(top).toContainText("1 maisons sélectionnées");
+  await expect(page.locator(".house-marker")).toHaveCount(1);
   await page
     .getByRole("button", { name: "Ajouter des maisons", exact: true })
     .click();
@@ -1220,9 +1216,13 @@ test("mobile free selection stays at the top with a permanent bottom stop and su
     name: "Ajouter des maisons",
     exact: true,
   });
+  await expect(dialog).toContainText("Bonbons");
+  await expect(dialog).toContainText("Frayeur non précisée");
+  await expect(dialog).toContainText("S’adapte aux visiteurs");
   await dialog.getByRole("button", { name: /Les lanternes 1/ }).click();
   await page.keyboard.press("Escape");
   await expect(top).toContainText("2 maisons sélectionnées");
+  await expect(page.locator(".house-marker")).toHaveCount(2);
   await expect(page.locator(".route-experience")).toHaveAttribute(
     "data-route-phase",
     "active",

@@ -370,7 +370,7 @@ export default function Application({
             <ManorMark />
           </span>
           <span>
-            <strong>Halloween</strong>
+            <strong>Halloween Map</strong>
             <small>CARTE DES MAISONS</small>
             <em>{state?.instance?.territory ?? "Une commune plus vivante"}</em>
           </span>

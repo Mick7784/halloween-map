@@ -1,6 +1,15 @@
 "use client";
 import { Button, Select } from "./ui";
 import { useEffect, useRef } from "react";
+import { useEditor, EditorContent } from "@tiptap/react";
+import StarterKit from "@tiptap/starter-kit";
+import { ListItem } from "@tiptap/extension-list";
+const FlatListItem = ListItem.extend({
+  content: "paragraph",
+  addKeyboardShortcuts() {
+    return { Enter: () => this.editor.commands.splitListItem(this.name) };
+  },
+});
 import { editorialHtml } from "../lib/editorial-format";
 const variableLabels: Record<string, string> = {
   name: "Prénom / pseudo",
@@ -17,22 +26,46 @@ const variableLabels: Record<string, string> = {
   purge_date: "Purge",
   house_count: "Nombre de maisons",
 };
-function serialize(node: Node): string {
-  if (node.nodeType === Node.TEXT_NODE) return node.textContent ?? "";
-  const element = node as HTMLElement,
-    children = Array.from(node.childNodes).map(serialize).join("");
+function serialize(
+  node: Node,
+  marks: { bold?: boolean; italic?: boolean; href?: string } = {},
+): string {
+  if (node.nodeType === Node.TEXT_NODE) {
+    let text = node.textContent ?? "";
+    if (!text) return "";
+    const delimiter =
+      marks.bold && marks.italic
+        ? "***"
+        : marks.bold
+          ? "**"
+          : marks.italic
+            ? "*"
+            : "";
+    text = delimiter + text + delimiter;
+    return marks.href ? `[${text}](${marks.href})` : text;
+  }
+  const element = node as HTMLElement;
+  const next = { ...marks };
+  if (["STRONG", "B"].includes(element.tagName)) next.bold = true;
+  if (["EM", "I"].includes(element.tagName)) next.italic = true;
+  const href = element.getAttribute("href") ?? "";
+  if (
+    element.tagName === "A" &&
+    /^(https:\/\/|\/(?!\/)|mailto:)[^\s]*$/i.test(href)
+  )
+    next.href = href;
+  const children = Array.from(node.childNodes)
+    .map((child) => serialize(child, next))
+    .join("");
   switch (element.tagName) {
     case "STRONG":
     case "B":
-      return `**${children}**`;
+      return children;
     case "EM":
     case "I":
-      return `*${children}*`;
+      return children;
     case "A": {
-      const url = element.getAttribute("href") ?? "";
-      return /^(https:\/\/|mailto:)[^\s]*$/i.test(url)
-        ? `[${children}](${url})`
-        : children;
+      return children;
     }
     case "H2":
       return `# ${children}\n\n`;
@@ -66,28 +99,79 @@ export default function VisualEditor({
   maxLength?: number;
   disabled?: boolean;
 }) {
-  const ref = useRef<HTMLDivElement>(null),
-    last = useRef<string | null>(null);
-  useEffect(() => {
-    if (ref.current && last.current !== value) {
-      ref.current.innerHTML = editorialHtml(value);
-      last.current = value;
-    }
-  }, [value]);
-  function update() {
-    if (ref.current) {
-      const next = Array.from(ref.current.childNodes)
-        .map(serialize)
+  const last = useRef(value);
+  const editor = useEditor({
+    immediatelyRender: false,
+    extensions: [
+      FlatListItem,
+      StarterKit.configure({
+        listItem: false,
+        heading: { levels: [2, 3] },
+        blockquote: false,
+        code: false,
+        codeBlock: false,
+        horizontalRule: false,
+        orderedList: false,
+        strike: false,
+        underline: false,
+        link: {
+          openOnClick: false,
+          autolink: false,
+          linkOnPaste: false,
+          isAllowedUri: (url) =>
+            /^(https:\/\/|\/(?!\/)|mailto:)[^\s]*$/i.test(url),
+        },
+      }),
+    ],
+    content: editorialHtml(value),
+    editable: !disabled,
+    editorProps: {
+      attributes: {
+        role: "textbox",
+        "aria-label": label,
+        "aria-multiline": "true",
+        class: "editor-surface",
+      },
+      handlePaste: (view, event) => {
+        event.preventDefault();
+        const text = event.clipboardData?.getData("text/plain") ?? "";
+        view.dispatch(view.state.tr.insertText(text));
+        return true;
+      },
+    },
+    onUpdate: ({ editor }) => {
+      const doc = new DOMParser().parseFromString(
+        editor.getHTML(),
+        "text/html",
+      );
+      const next = Array.from(doc.body.childNodes)
+        .map((node) => serialize(node))
         .join("")
         .trim();
       last.current = next;
       onChange(next);
+    },
+  });
+  useEffect(() => {
+    if (editor && last.current !== value) {
+      editor.commands.setContent(editorialHtml(value), { emitUpdate: false });
+      last.current = value;
     }
-  }
+  }, [editor, value]);
+  useEffect(() => {
+    editor?.setEditable(!disabled);
+  }, [editor, disabled]);
   function command(name: string, arg?: string) {
-    ref.current?.focus();
-    document.execCommand(name, false, arg);
-    update();
+    if (!editor || disabled) return;
+    const chain = editor.chain().focus();
+    if (name === "bold") chain.toggleBold().run();
+    if (name === "italic") chain.toggleItalic().run();
+    if (name === "insertUnorderedList") chain.toggleBulletList().run();
+    if (name === "formatBlock") chain.toggleHeading({ level: 3 }).run();
+    if (name === "createLink" && arg)
+      chain.extendMarkRange("link").setLink({ href: arg }).run();
+    if (name === "insertText" && arg)
+      chain.insertContent({ type: "text", text: arg }).run();
   }
   return (
     <div className="visual-editor">
@@ -109,6 +193,22 @@ export default function VisualEditor({
           </Button>
         ))}
         <Button
+          disabled={disabled || !editor}
+          type="button"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => editor?.chain().focus().undo().run()}
+        >
+          Annuler
+        </Button>
+        <Button
+          disabled={disabled || !editor}
+          type="button"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => editor?.chain().focus().redo().run()}
+        >
+          Rétablir
+        </Button>
+        <Button
           disabled={disabled}
           type="button"
           onMouseDown={(e) => e.preventDefault()}
@@ -122,7 +222,7 @@ export default function VisualEditor({
           onMouseDown={(e) => e.preventDefault()}
           onClick={() => {
             const url = window.prompt("Lien HTTPS ou mailto");
-            if (url && /^(https:\/\/|mailto:)[^\s]*$/i.test(url))
+            if (url && /^(https:\/\/|\/(?!\/)|mailto:)[^\s]*$/i.test(url))
               command("createLink", url);
           }}
         >
@@ -149,20 +249,7 @@ export default function VisualEditor({
           </Select>
         )}
       </div>
-      <div
-        ref={ref}
-        role="textbox"
-        aria-label={label}
-        aria-multiline="true"
-        contentEditable={!disabled}
-        suppressContentEditableWarning
-        className="editor-surface"
-        onInput={update}
-        onPaste={(e) => {
-          e.preventDefault();
-          command("insertText", e.clipboardData.getData("text/plain"));
-        }}
-      />
+      <EditorContent editor={editor} />
       {value.length > maxLength && (
         <p role="alert">Texte trop long : {maxLength} caractères maximum.</p>
       )}

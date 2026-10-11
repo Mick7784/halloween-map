@@ -3,6 +3,7 @@ import {
   initialHouseLocation,
   validateHouseForm,
   houseScheduleBounds,
+  houseScheduleInput,
 } from "../lib/house-form";
 import { participationDefaults } from "../lib/participation-settings";
 const context = {
@@ -32,6 +33,17 @@ const house = {
   practical: "Entrée par le portail",
 };
 describe("common public / BO house validation", () => {
+  it("never presents TEST sentinel dates in house schedule inputs", () => {
+    expect(
+      houseScheduleInput("2000-01-01T17:00:00Z", context.zone, true, 2026),
+    ).toBe("2026-10-31T18:00");
+    expect(
+      houseScheduleInput("2201-01-01T22:00:00Z", context.zone, true, 2026),
+    ).toBe("2026-10-31T23:00");
+    expect(
+      houseScheduleInput("2026-11-01T01:00:00Z", context.zone, false, 2026),
+    ).toBe("2026-11-01T02:00");
+  });
   it("keeps default creation hours within exact season timestamps", () => {
     const exact = {
       ...context,

@@ -33,8 +33,8 @@ test("live APIs: REAL/TEST isolation, phone session, reusable accounts, purge an
       token: process.env.SETUP_TOKEN,
       instance: {
         public_name: "Halloween live",
-        territory: "Commune",
-        postal_code: "00000",
+        territory: "Rennes",
+        postal_code: "35000",
         country: "France",
         timezone: "Europe/Paris",
         latitude: 48.1,

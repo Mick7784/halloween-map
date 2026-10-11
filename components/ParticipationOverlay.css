@@ -202,6 +202,27 @@
 .participation-confirm-point {
   width: 100%;
   margin-top: 7px;
+  min-height: 48px;
+  padding: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #23131b;
+  background: #ffa04a;
+  border-color: #ffc18b;
+}
+.participation-confirm-point[aria-pressed="true"] {
+  background: #d5c8e2;
+  color: #30223a;
+}
+.participation-consent .check input {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  margin-top: 2px;
+}
+.participation-consent .check > span {
+  min-width: 0;
+  font-size: 13px;
 }
 .participation-help {
   display: block;

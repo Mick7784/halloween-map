@@ -9,6 +9,7 @@ import type {
   Commune,
 } from "../lib/participation-settings";
 import { api } from "./common";
+import { communeName } from "../lib/participation-settings";
 import HouseLocationMap from "./HouseLocationMap";
 export type LocationValue = import("../lib/house-form").HouseLocationValue;
 const query = (mode: string, p: Record<string, string>) =>
@@ -20,6 +21,7 @@ export default function HouseLocation({
   styleUrl,
   allowedCommuneCodes,
   onChange,
+  configuredPlace,
 }: {
   initial: LocationValue;
   legacyAddress?: string;
@@ -27,6 +29,7 @@ export default function HouseLocation({
   styleUrl: string;
   allowedCommuneCodes: string[];
   onChange: (value: LocationValue) => void;
+  configuredPlace?: { city: string; postalCode: string };
 }) {
   const [value, setValue] = useState(initial),
     [communes, setCommunes] = useState<Commune[]>(
@@ -82,6 +85,31 @@ export default function HouseLocation({
         const choices = allowedCommuneCodes.length
           ? list.filter((c) => allowedCommuneCodes.includes(c.code))
           : list;
+        if (configuredPlace) {
+          const configured = choices.find(
+            (c) => communeName(c.nom) === communeName(configuredPlace.city),
+          );
+          if (!configured) {
+            setError(
+              "La commune configurée ne correspond pas au code postal. Contactez l’organisation.",
+            );
+            return;
+          }
+          update({
+            ...current.current,
+            confirmed:
+              current.current.confirmed &&
+              current.current.address.cityCode === configured.code &&
+              current.current.address.postalCode === configuredPlace.postalCode,
+            address: {
+              ...current.current.address,
+              city: configured.nom,
+              cityCode: configured.code,
+              postalCode: configuredPlace.postalCode,
+            },
+          });
+          return;
+        }
         setCommunes(choices);
         if (!choices.length) {
           setError("Aucune commune autorisée pour ce code postal.");
@@ -153,6 +181,14 @@ export default function HouseLocation({
     };
   }, [value.address]);
   function choose(s: AddressSuggestion) {
+    if (
+      configuredPlace &&
+      (s.postalCode !== configuredPlace.postalCode ||
+        communeName(s.city) !== communeName(configuredPlace.city))
+    ) {
+      setError("L’adresse doit appartenir à la commune configurée.");
+      return;
+    }
     const nextAddress = {
       postalCode: s.postalCode,
       city: s.city,
@@ -188,6 +224,14 @@ export default function HouseLocation({
         query("reverse", { lat: String(p.point[1]), lon: String(p.point[0]) }),
       );
       if (version !== revision.current) return;
+      if (
+        configuredPlace &&
+        (s.postalCode !== configuredPlace.postalCode ||
+          communeName(s.city) !== communeName(configuredPlace.city))
+      )
+        throw new Error(
+          "Votre position est hors de la commune configurée. Placez le point de votre maison manuellement.",
+        );
       if (
         allowedCommuneCodes.length &&
         !allowedCommuneCodes.includes(s.cityCode)
@@ -234,9 +278,7 @@ export default function HouseLocation({
         );
       update({ ...snapshot, confirmed: true });
       setChoosing(false);
-      setMessage(
-        "Point confirmé. Il sera utilisé sur la carte et pour les parcours.",
-      );
+      setMessage("Point confirmé. Il sera utilisé sur la carte des maisons.");
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -262,6 +304,7 @@ export default function HouseLocation({
             maxLength={5}
             autoComplete="postal-code"
             value={value.address.postalCode}
+            readOnly={!!configuredPlace}
             onChange={(e) =>
               address(
                 "postalCode",
@@ -272,33 +315,37 @@ export default function HouseLocation({
         </label>
         <label className="field">
           <span>Ville *</span>
-          <Select
-            name="cityCode"
-            required
-            disabled={citiesBusy}
-            value={value.address.cityCode}
-            onChange={(e) => {
-              const c = communes.find((c) => c.code === e.target.value);
-              update({
-                ...current.current,
-                address: {
-                  ...current.current.address,
-                  city: c?.nom ?? "",
-                  cityCode: c?.code ?? "",
-                },
-                confirmed: false,
-              });
-            }}
-          >
-            <option value="">
-              {citiesBusy ? "Recherche…" : "Choisir une commune"}
-            </option>
-            {communes.map((c) => (
-              <option key={c.code} value={c.code}>
-                {c.nom}
+          {configuredPlace ? (
+            <Input name="cityCode" value={configuredPlace.city} readOnly />
+          ) : (
+            <Select
+              name="cityCode"
+              required
+              disabled={citiesBusy}
+              value={value.address.cityCode}
+              onChange={(e) => {
+                const c = communes.find((c) => c.code === e.target.value);
+                update({
+                  ...current.current,
+                  address: {
+                    ...current.current.address,
+                    city: c?.nom ?? "",
+                    cityCode: c?.code ?? "",
+                  },
+                  confirmed: false,
+                });
+              }}
+            >
+              <option value="">
+                {citiesBusy ? "Recherche…" : "Choisir une commune"}
               </option>
-            ))}
-          </Select>
+              {communes.map((c) => (
+                <option key={c.code} value={c.code}>
+                  {c.nom}
+                </option>
+              ))}
+            </Select>
+          )}
         </label>
         <label className="field">
           <span>Numéro *</span>
@@ -403,6 +450,7 @@ export default function HouseLocation({
       <Button
         type="button"
         className="participation-confirm-point"
+        aria-pressed={value.confirmed}
         disabled={
           !value.point || !value.address.cityCode || busy || value.confirmed
         }

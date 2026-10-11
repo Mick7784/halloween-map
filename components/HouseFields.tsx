@@ -1,15 +1,15 @@
 "use client";
 import { Input, TextArea } from "./ui";
-import { Candy, Drama, Ghost, Sparkles } from "lucide-react";
+import { useState } from "react";
+import { Ghost } from "lucide-react";
+import ActivityIcon, { activityLabels } from "./ActivityIcon";
 import type { Activity } from "../lib/domain";
 import { participationDefaults } from "../lib/participation-settings";
 import { houseScheduleBounds } from "../lib/house-form";
 import "./HouseFields.css";
-export const houseActivityOptions = [
-  { id: "DECORATION", label: "Décoration", Icon: Sparkles },
-  { id: "CANDY", label: "Bonbons", Icon: Candy },
-  { id: "ACTING", label: "Mise en scène", Icon: Drama },
-] as const;
+export const houseActivityOptions = (
+  ["DECORATION", "CANDY", "ACTING"] as const
+).map((id) => ({ id, label: activityLabels[id] }));
 export function HouseNameField({
   value,
   onChange,
@@ -48,9 +48,9 @@ export function HouseActivityFields({
     >
       {houseActivityOptions
         .filter((a) => options.includes(a.id))
-        .map(({ id, label, Icon }) => (
+        .map(({ id, label }) => (
           <label key={id} className={value.includes(id) ? "is-selected" : ""}>
-            <Icon />
+            <ActivityIcon activity={id} size={24} />
             <span>{label}</span>
             <Input
               type="checkbox"
@@ -78,6 +78,7 @@ export function HouseScheduleFields({
   isTest = false,
   onStart,
   onEnd,
+  defaultDate,
 }: {
   starts: string;
   ends: string;
@@ -87,8 +88,81 @@ export function HouseScheduleFields({
   isTest?: boolean;
   onStart: (v: string) => void;
   onEnd: (v: string) => void;
+  defaultDate?: string;
 }) {
   const schedule = houseScheduleBounds(opens, closes, zone);
+  const [startDate, setStartDate] = useState(
+    starts.slice(0, 10) || defaultDate || "",
+  );
+  const [endDate, setEndDate] = useState(
+    ends.slice(0, 10) || defaultDate || "",
+  );
+  if (defaultDate)
+    return (
+      <>
+        <div className="participation-address-grid">
+          <label className="field">
+            <span>Date de début *</span>
+            <Input
+              type="date"
+              required
+              value={startDate}
+              onChange={(e) => {
+                setStartDate(e.target.value);
+                onStart(
+                  starts.slice(11)
+                    ? `${e.target.value}T${starts.slice(11)}`
+                    : "",
+                );
+              }}
+            />
+          </label>
+          <label className="field">
+            <span>Heure de début *</span>
+            <Input
+              name="starts_at"
+              type="time"
+              required
+              value={starts.slice(11)}
+              onChange={(e) =>
+                onStart(e.target.value ? `${startDate}T${e.target.value}` : "")
+              }
+            />
+          </label>
+          <label className="field">
+            <span>Date de fin *</span>
+            <Input
+              type="date"
+              required
+              min={startDate}
+              value={endDate}
+              onChange={(e) => {
+                setEndDate(e.target.value);
+                onEnd(
+                  ends.slice(11) ? `${e.target.value}T${ends.slice(11)}` : "",
+                );
+              }}
+            />
+          </label>
+          <label className="field">
+            <span>Heure de fin *</span>
+            <Input
+              name="ends_at"
+              type="time"
+              required
+              value={ends.slice(11)}
+              onChange={(e) =>
+                onEnd(e.target.value ? `${endDate}T${e.target.value}` : "")
+              }
+            />
+          </label>
+        </div>
+        <small className="participation-help">
+          Horaires obligatoires · {zone}. Pour finir après minuit, choisissez le
+          lendemain comme date de fin.
+        </small>
+      </>
+    );
   return (
     <>
       <div className="participation-address-grid">

@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { DateTime } from "luxon";
 import {
   X,
@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import { locateOrigin } from "../lib/geolocation";
 import type { RouteParameters } from "../lib/active-route";
-import type { PublicState } from "./common";
+import type { PublicState, PublicHouse } from "./common";
 import type { Activity } from "../lib/domain";
 import { Field, Notice, fears, values } from "./common";
 import Editorial from "./Editorial";
@@ -33,6 +33,7 @@ export default function RoutePreparation({
   maxFear,
   onFear,
   resultMessage,
+  onSelection,
 }: {
   state: PublicState;
   origin: [number, number] | null;
@@ -46,6 +47,7 @@ export default function RoutePreparation({
   maxFear: number;
   onFear: (value: number) => void;
   resultMessage?: string;
+  onSelection?: (houses: PublicHouse[]) => void;
 }) {
   const [locating, setLocating] = useState(false),
     [busy, setBusy] = useState(false),
@@ -70,7 +72,10 @@ export default function RoutePreparation({
     [guidelinesOpen, setGuidelinesOpen] = useState(false);
   const zone = state.instance!.timezone,
     guideline = state.documents?.GUIDELINES;
-  const candidates = state.routeCandidates ?? state.houses ?? [];
+  const candidates = useMemo(
+    () => state.routeCandidates ?? state.houses ?? [],
+    [state.routeCandidates, state.houses],
+  );
   const eligible = selectableHouses(
     candidates,
     maxFear,
@@ -78,7 +83,20 @@ export default function RoutePreparation({
     +DateTime.fromISO(windowStart, { zone }),
     +DateTime.fromISO(windowEnd, { zone }),
   );
-  const chosen = eligible.filter((h) => !excluded.includes(h.id));
+  const chosen = useMemo(
+    () =>
+      selectableHouses(
+        candidates,
+        maxFear,
+        activities,
+        +DateTime.fromISO(windowStart, { zone }),
+        +DateTime.fromISO(windowEnd, { zone }),
+      ).filter((h) => !excluded.includes(h.id)),
+    [candidates, maxFear, activities, windowStart, windowEnd, zone, excluded],
+  );
+  useEffect(() => {
+    onSelection?.(chosen);
+  }, [chosen, onSelection]);
   const accepted = !!guideline && acceptedVersion === guideline.version;
   const alive = useRef(true),
     form = useRef<HTMLFormElement>(null);

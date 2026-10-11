@@ -78,8 +78,8 @@ const setupData = () => ({
   token: "test-setup-secret",
   instance: {
     public_name: "Une fête locale",
-    territory: "Territoire fictif",
-    postal_code: "00000",
+    territory: "Rennes",
+    postal_code: "35000",
     country: "France",
     timezone: "Europe/Paris",
     latitude: 48.1,
@@ -514,7 +514,7 @@ describe("Setup, authentication and RBAC", () => {
     expect(admin.role_name).toBe("SUPER_ADMIN");
     expect(season.active).toBe(true);
     expect((await db().query("SELECT * FROM roles")).rows).toHaveLength(3);
-    expect((await service.instance())?.territory).toBe("Territoire fictif");
+    expect((await service.instance())?.territory).toBe("Rennes");
   });
   it("locks setup after creation and rejects an invalid key", async () => {
     await expect(service.setup(setupData())).rejects.toMatchObject({
@@ -712,6 +712,9 @@ describe("Seasons, privacy and participant activity", () => {
     ).toBeTruthy();
   });
   it("persists a verified structured French address and the explicitly adjusted point", async () => {
+    await db().query(
+      "UPDATE instances SET territory='Lyon 2e Arrondissement',postal_code='69002'",
+    );
     vi.stubGlobal(
       "fetch",
       vi.fn(async (value: URL) => {

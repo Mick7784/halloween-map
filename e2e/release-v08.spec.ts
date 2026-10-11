@@ -20,8 +20,8 @@ test.beforeEach(async () => {
     token: process.env.SETUP_TOKEN,
     instance: {
       public_name: "Halloween",
-      territory: "Commune fictive",
-      postal_code: "00000",
+      territory: "Rennes",
+      postal_code: "35000",
       country: "France",
       timezone: "Europe/Paris",
       latitude: 48.1,
@@ -263,8 +263,9 @@ test("real API rejects forged addresses; house decisions dispatch one message an
   await page.goto("/participant");
   const form = page.locator("#participation-form");
   await form.getByLabel("Nom de la maison").fill(house.name);
-  await form.getByLabel("Code postal").fill("35000");
-  await form.getByLabel("Ville").selectOption("35238");
+  await expect(form.getByLabel("Code postal")).toHaveValue("35000");
+  await expect(form.getByLabel("Code postal")).toHaveAttribute("readonly", "");
+  await expect(form.getByLabel("Ville")).toHaveValue("Rennes");
   await form.getByLabel("Numéro").fill("12");
   await form.getByLabel("Rue", { exact: false }).fill("Rue des Lanternes");
   await form
@@ -280,21 +281,19 @@ test("real API rejects forged addresses; house decisions dispatch one message an
     })
     .click();
   await form.getByLabel("Bonbons", { exact: true }).check();
-  await form
-    .getByLabel("Début")
-    .fill(
-      DateTime.fromISO(house.starts_at)
-        .setZone("Europe/Paris")
-        .plus({ minutes: 2 })
-        .toFormat("yyyy-MM-dd'T'HH:mm"),
-    );
-  await form
-    .getByLabel("Fin", { exact: false })
-    .fill(
-      DateTime.fromISO(house.ends_at)
-        .setZone("Europe/Paris")
-        .toFormat("yyyy-MM-dd'T'HH:mm"),
-    );
+  await expect(form.getByLabel("Heure de début")).toHaveValue("");
+  await expect(form.getByLabel("Heure de fin")).toHaveValue("");
+  await expect(form.getByLabel("Date de début")).toHaveValue(
+    `${new Date().getFullYear()}-10-31`,
+  );
+  const startDate = DateTime.fromISO(house.starts_at)
+    .setZone("Europe/Paris")
+    .plus({ minutes: 2 });
+  const endDate = DateTime.fromISO(house.ends_at).setZone("Europe/Paris");
+  await form.getByLabel("Date de début").fill(startDate.toFormat("yyyy-MM-dd"));
+  await form.getByLabel("Heure de début").fill(startDate.toFormat("HH:mm"));
+  await form.getByLabel("Date de fin").fill(endDate.toFormat("yyyy-MM-dd"));
+  await form.getByLabel("Heure de fin").fill(endDate.toFormat("HH:mm"));
   await form.getByRole("checkbox", { name: /J’ai pris connaissance/ }).check();
   const submittedPromise = page.waitForResponse(
     (r) =>
@@ -483,6 +482,86 @@ async function login(page: Page, email = "release-admin@example.invalid") {
   expect(r.status()).toBe(200);
   return r;
 }
+for (const width of [390, 1440])
+  test(`Tiptap saves combined formatting through the real API and PostgreSQL, with matching email preview ${width}`, async ({
+    page,
+  }) => {
+    await login(page);
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto("/admin");
+    if (width === 390)
+      await page
+        .getByRole("button", { name: "Ouvrir la navigation", exact: true })
+        .click();
+    await page
+      .getByRole("navigation", { name: "Navigation administration" })
+      .getByRole("button", { name: "Communications", exact: true })
+      .click();
+    const surface = page.getByRole("textbox", { name: "Message", exact: true });
+    await expect(surface).toBeVisible();
+    await expect(surface).toHaveAttribute("contenteditable", "true");
+    await surface.fill("Accueil sûr et convivial");
+    await expect(surface).toHaveText("Accueil sûr et convivial");
+    await surface.press("ControlOrMeta+A");
+    const editor = page.locator(".visual-editor").filter({ has: surface });
+    await editor.getByRole("button", { name: "Gras", exact: true }).click();
+    await editor.getByRole("button", { name: "Italique", exact: true }).click();
+    await expect(
+      page
+        .frameLocator('iframe[title="Aperçu du modèle"]')
+        .locator("strong em"),
+    ).toHaveText("Accueil sûr et convivial");
+    await page
+      .getByRole("button", { name: "Enregistrer le modèle", exact: true })
+      .click();
+    await expect(page.getByRole("status")).toContainText("Modèle enregistré");
+    expect(
+      (
+        await pool.query(
+          "SELECT body FROM message_templates WHERE kind='VERIFY'",
+        )
+      ).rows[0].body,
+    ).toBe("***Accueil sûr et convivial***");
+    await page.screenshot({
+      path: `test-results/ui-editor-${width}.png`,
+      fullPage: true,
+    });
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth),
+    ).toBeLessThanOrEqual(width);
+    await page.reload();
+    if (width === 390)
+      await page
+        .getByRole("button", { name: "Ouvrir la navigation", exact: true })
+        .click();
+    await page
+      .getByRole("navigation", { name: "Navigation administration" })
+      .getByRole("button", { name: "Communications", exact: true })
+      .click();
+    await expect(surface.locator("strong em")).toHaveText(
+      "Accueil sûr et convivial",
+    );
+    await surface.fill("Première maison");
+    await editor.getByRole("button", { name: "Liste", exact: true }).click();
+    await surface.press("End");
+    await surface.press("Enter");
+    await surface.pressSequentially("Deuxième maison");
+    await expect(surface.locator("li")).toHaveCount(2);
+    await page
+      .getByRole("button", { name: "Enregistrer le modèle", exact: true })
+      .click();
+    await expect(page.getByRole("status")).toContainText("Modèle enregistré");
+    expect(
+      (
+        await pool.query(
+          "SELECT body FROM message_templates WHERE kind='VERIFY'",
+        )
+      ).rows[0].body,
+    ).toBe("- ***Première maison***\n- ***Deuxième maison***");
+    await expect(
+      page.frameLocator('iframe[title="Aperçu du modèle"]').locator("li"),
+    ).toHaveCount(2);
+  });
 test("guest mobile entry offers authentication and legal documents; APIs reject anonymous access", async ({
   page,
 }) => {
@@ -691,7 +770,8 @@ test("settings preview confirms consequences; new seasons use defaults and exist
   const before = (
     await pool.query("SELECT * FROM seasons WHERE id=$1", [seasonId])
   ).rows[0];
-  await page.getByLabel("Territoire / commune").fill("Rennes");
+  await page.getByLabel("Territoire / commune").fill("Lyon");
+  await page.getByLabel("Code postal", { exact: false }).fill("69002");
   await page
     .getByText("Valeurs proposées pour les futures saisons", { exact: true })
     .click();
@@ -717,7 +797,7 @@ test("settings preview confirms consequences; new seasons use defaults and exist
   await dialog.getByLabel("Mot de passe").fill("incorrect-password");
   await dialog.getByRole("button", { name: "Confirmer", exact: true }).click();
   await expect(page.getByRole("alert")).toBeVisible();
-  await expect(page.getByLabel("Territoire / commune")).toHaveValue("Rennes");
+  await expect(page.getByLabel("Territoire / commune")).toHaveValue("Lyon");
   page.once("dialog", (d) => d.dismiss());
   await nav.getByRole("button", { name: "Utilisateurs", exact: true }).click();
   await expect(page.getByLabel("Territoire / commune")).toBeVisible();

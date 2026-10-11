@@ -14,6 +14,7 @@ import type { PublicHouse, RouteResult } from "./common";
 import { fears } from "./common";
 import type { SheetPosition } from "../lib/active-route";
 import ManorMark from "./ManorMark";
+import { gpsDistance } from "../lib/collection";
 export function routeSummary(result: RouteResult) {
   return `${result.stops.length} ${result.stops.length === 1 ? "maison" : "maisons"} · ${(result.distanceMeters / 1000).toLocaleString("fr-FR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} km · ~${result.durationMinutes} min`;
 }
@@ -39,6 +40,7 @@ export default function RouteSheet({
   selectedStepId,
   onAdd,
   onRemove,
+  proximityPoint,
 }: {
   result: RouteResult;
   phase: "calculated" | "active";
@@ -55,6 +57,7 @@ export default function RouteSheet({
   selectedStepId: string | null;
   onAdd?: () => void;
   onRemove?: (id: string) => void;
+  proximityPoint?: [number, number] | null;
 }) {
   const panel = useRef<HTMLElement>(null),
     drag = useRef<{
@@ -78,9 +81,14 @@ export default function RouteSheet({
     measure();
     return () => observer.disconnect();
   }, [onHeight]);
-  const ordered = result.stops
-    .slice()
-    .sort((a, b) => a.house.name.localeCompare(b.house.name, "fr"));
+  const [sort, setSort] = useState<"free" | "nearest">("free");
+  const ordered = result.stops.slice();
+  if (sort === "nearest" && proximityPoint)
+    ordered.sort(
+      (a, b) =>
+        gpsDistance(proximityPoint, [a.house.longitude, a.house.latitude]) -
+        gpsDistance(proximityPoint, [b.house.longitude, b.house.latitude]),
+    );
   const visible = ordered;
   return (
     <aside
@@ -198,6 +206,27 @@ export default function RouteSheet({
       </button>
       <div className="route-sheet-content" inert={position === "collapsed"}>
         <h2>Ma sélection · ordre libre</h2>
+        <div className="collection-sort" aria-label="Ordre de la liste">
+          <button
+            type="button"
+            aria-pressed={sort === "free"}
+            onClick={() => setSort("free")}
+          >
+            Ordre libre
+          </button>
+          <button
+            type="button"
+            disabled={!proximityPoint}
+            aria-pressed={sort === "nearest"}
+            onClick={() => setSort("nearest")}
+          >
+            Proximité
+          </button>
+        </div>
+        <p className="small">
+          La proximité classe la liste. Vous choisissez librement les maisons et
+          leur ordre de visite.
+        </p>
         {phase === "active" && onAdd && (
           <button className="collection-add" type="button" onClick={onAdd}>
             <Plus size={18} /> Ajouter des maisons

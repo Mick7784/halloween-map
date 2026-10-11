@@ -1260,6 +1260,9 @@
   padding: 10px 5px;
   touch-action: none;
 }
+.collection-top-panel .route-sheet-content {
+  padding-top: 8px;
+}
 .collection-top-panel .route-sheet-grip {
   display: none;
 }
@@ -1404,17 +1407,52 @@
   justify-content: center;
   align-items: flex-end;
   position: absolute;
+  color: #d98b59;
 }
 .route-experience
   .house-marker.is-selected:not(.is-visited):not(.is-unavailable)
   .house-marker-visual {
-  filter: drop-shadow(0 0 7px #c991ff);
+  filter: none;
 }
 .route-experience .house-marker.is-nearest .house-marker-visual {
+  color: #ffa044;
   border-radius: 50%;
   box-shadow:
     0 0 0 3px #ff963a,
     0 0 24px 10px #ff963a77;
+}
+.route-experience .house-marker.is-visited .house-marker-visual {
+  color: #91819e;
+  filter: none;
+  box-shadow: none;
+}
+.collection-sort {
+  display: flex;
+  gap: 8px;
+}
+.collection-sort button {
+  min-height: 44px;
+}
+.collection-sort button[aria-pressed="true"] {
+  border-color: #ff963a;
+}
+.collection-add-choice {
+  text-align: left;
+}
+.collection-add-choice .badges {
+  display: flex;
+  flex-wrap: wrap;
+}
+.collection-account {
+  width: auto;
+  height: auto;
+  min-height: 44px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid #73608d;
+  background: #10131cef;
+  color: #eee4fa;
+  text-decoration: none;
 }
 .route-experience .house-marker.is-unavailable .house-marker-visual {
   filter: sepia(1) saturate(4) hue-rotate(310deg);

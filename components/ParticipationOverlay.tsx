@@ -3,7 +3,6 @@ import { useEffect, useRef, useState } from "react";
 import {
   X,
   ArrowLeft,
-  Candy,
   Clock3,
   Power,
   Trash2,
@@ -16,6 +15,7 @@ import { api, Notice } from "./common";
 import { participationStatus } from "../lib/participation-settings";
 import ParticipationForm from "./ParticipationForm";
 import ManorMark from "./ManorMark";
+import ActivityIcon from "./ActivityIcon";
 import "./ParticipationOverlay.css";
 type Confirmation = "candy" | "end" | "delete" | null;
 export default function ParticipationOverlay({
@@ -166,7 +166,7 @@ export default function ParticipationOverlay({
                             void action("candy", { available: true })
                           }
                         >
-                          <Candy />
+                          <ActivityIcon activity="CANDY" size={24} />
                           <span>J’ai de nouveau des bonbons</span>
                         </button>
                       )}
@@ -175,7 +175,7 @@ export default function ParticipationOverlay({
                       house.activity !== "ENDED" &&
                       canEdit && (
                         <button onClick={() => setConfirmation("candy")}>
-                          <Candy />
+                          <ActivityIcon activity="CANDY" size={24} />
                           <span>Je n’ai plus de bonbons</span>
                         </button>
                       )}
@@ -191,7 +191,9 @@ export default function ParticipationOverlay({
                             block: "center",
                           });
                           schedule.current
-                            ?.querySelector<HTMLInputElement>("input")
+                            ?.querySelector<HTMLInputElement>(
+                              'input[name="starts_at"]',
+                            )
                             ?.focus({ preventScroll: true });
                         }}
                       >
@@ -242,6 +244,9 @@ export default function ParticipationOverlay({
                     key={(house?.id ?? "create") + generation}
                     house={house ?? undefined}
                     zone={instance.timezone}
+                    territory={instance.territory}
+                    postalCode={instance.postal_code}
+                    seasonYear={season.year}
                     opens={season.opens_at}
                     closes={season.closes_at}
                     center={[instance.longitude, instance.latitude]}
