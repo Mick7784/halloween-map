@@ -476,7 +476,7 @@ describe("map navigation surfaces", () => {
     ).not.toBeNull();
     expect(
       document.querySelector(".collection-top-panel")?.textContent,
-    ).toContain("Ma sélection");
+    ).toContain("Maisons — de la plus proche à la plus éloignée");
     expect(
       document.querySelector(".collection-top-panel")?.textContent,
     ).toContain("Ajouter des maisons");
