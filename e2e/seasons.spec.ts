@@ -170,7 +170,7 @@ async function openSeasons(page: Page) {
     .click();
 }
 
-test("compact ordered season list, compact TEST creation, and dark/light appearance", async ({
+test("compact season list, creation of a real draft, and dark/light appearance", async ({
   page,
 }) => {
   const { mutations } = await arrange(page);
@@ -199,20 +199,20 @@ test("compact ordered season list, compact TEST creation, and dark/light appeara
   await page.screenshot({ path: "test-results/seasons-desktop-light.png" });
   await page.getByRole("button", { name: "Nouvelle saison" }).click();
   const dialog = page.getByRole("dialog", { name: "Nouvelle saison" });
-  await dialog.getByLabel("Type de saison").selectOption("TEST");
-  await dialog.getByLabel("Nom de la saison").fill("Essais téléphone");
-  await expect(dialog.locator('input[type="datetime-local"]')).toHaveCount(0);
+  await expect(dialog.getByLabel("Type de saison")).toHaveCount(0);
+  await dialog.getByLabel("Nom de la saison").fill("Halloween préparation");
+  await expect(dialog.locator('input[type="datetime-local"]')).toHaveCount(4);
   await dialog
     .getByRole("button", { name: "Enregistrer", exact: true })
     .click();
   await expect(dialog).toHaveCount(0);
-  await expect(page.locator(".season-table")).toContainText("Essais téléphone");
+  await expect(page.locator(".season-table")).toContainText("Halloween préparation");
   expect(mutations).toEqual([
     expect.objectContaining({
       action: "season",
       payload: expect.objectContaining({
-        is_test: true,
-        name: "Essais téléphone",
+        is_test: false,
+        name: "Halloween préparation",
       }),
     }),
   ]);
