@@ -244,7 +244,7 @@ export default function SeasonManager({
         <div>
           <h2>Les saisons</h2>
           <p className="small muted">
-            Une seule saison active, REAL ou TEST. Les comptes restent globaux.
+            Créez et préparez une saison avant son activation. Les comptes restent globaux.
           </p>
         </div>
         {manage && (
