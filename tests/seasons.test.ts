@@ -229,6 +229,27 @@ it("uses one pointer for REAL/TEST, serializes competing activations, and reject
       .season,
   ).toBeNull();
 });
+it("allows staff to prepare a real season with houses before public activation", async () => {
+  await service.adminAction(admin, {
+    action: "deactivateSeason",
+    id: real.id,
+    payload: "DÉSACTIVER",
+  });
+  const created = await createHouse(ordinary, real);
+  expect(created.review_status).toBe("VALIDATED");
+  const staff = await service.publicState(undefined, { ...admin, role_name: "ADMIN" });
+  expect(staff.mapAccessible).toBe(true);
+  expect(staff.houses?.map((h) => h.id)).toContain(created.id);
+  const visitor = await service.publicState(undefined, ordinary);
+  expect(visitor.mapAccessible).toBe(false);
+  expect(visitor.houses).toEqual([]);
+  await expect(
+    service.createParticipation(ordinary, {
+      house: houseDefinition,
+      acceptance,
+    }),
+  ).rejects.toMatchObject({ status: 403 });
+});
 it("keeps admin preview independent of public activation and closes public access by time", async () => {
   const staff = { ...admin, role_name: "ADMIN" };
   await service.adminAction(admin, {
