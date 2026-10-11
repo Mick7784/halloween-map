@@ -20,7 +20,7 @@ import type { User, Activity } from "../lib/domain";
 import { locateOrigin } from "../lib/geolocation";
 import { nearestHouse, selectableHouses } from "../lib/collection-view";
 import { gpsDistance, collectionStats } from "../lib/collection";
-import type { RouteParameters } from "../lib/active-route";
+import { ACTIVE_ROUTE_KEY, type RouteParameters } from "../lib/active-route";
 import { Badges, Notice, labels, type PublicState } from "./common";
 import useActiveRoute from "./useActiveRoute";
 import MapView from "./Map";
@@ -329,9 +329,30 @@ export default function MapExperience({
         onEnd={() => setConfirmation(true)}
         onStart={() => setLaunch(true)}
         onSave={() => {
-          controller.savePreparedRoute();
-          setPreviewOpen(false);
-          setSelectionNotice("Votre sélection a été enregistrée");
+          setSelectionError("");
+          try {
+            if (controller.storageError) throw new Error(controller.storageError);
+            const raw = localStorage.getItem(ACTIVE_ROUTE_KEY);
+            const saved = raw ? JSON.parse(raw) as {
+              ownerId: string; seasonId: string; phase: string;
+              result: { stops: { house: { id: string } }[] }
+            } : null;
+            if (
+              !saved ||
+              saved.ownerId !== user?.id ||
+              saved.seasonId !== state.season?.id ||
+              saved.phase !== "calculated" ||
+              saved.result.stops.length !== (route?.stops.length ?? -1) ||
+              route?.stops.some((stop) =>
+                !saved.result.stops.some((entry) => entry.house.id === stop.house.id)
+              )
+            ) throw new Error("La sélection n'a pas pu être sauvegardée sur cet appareil.");
+            controller.savePreparedRoute();
+            setPreviewOpen(false);
+            setSelectionNotice("Votre sélection a été enregistrée");
+          } catch (error) {
+            setSelectionError((error as Error).message);
+          }
         }}
         visitedIds={controller.collection.visitedIds}
         remaining={controller.remaining}
@@ -671,6 +692,7 @@ export default function MapExperience({
             className="prepared-route-window"
             onClose={() => setPreviewOpen(false)}
           >
+            <Notice error={selectionError} />
             {routeSheet}
           </FloatingWindow>
         )}
