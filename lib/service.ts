@@ -417,7 +417,7 @@ async function routeCandidates(
   end: Date | string,
 ) {
   const { rows } = await client.query(
-    "SELECT * FROM participations WHERE instance_id=$1 AND season_id=$2 AND status='VISIBLE' AND review_status='VALIDATED' AND activity='ACTIVE' AND EXISTS(SELECT 1 FROM users u WHERE u.id=participations.user_id AND u.account_status='ACTIVE' AND (u.email_status='VERIFIED' OR participations.legacy_imported)) AND NOT EXISTS(SELECT 1 FROM legal_documents d WHERE d.instance_id=participations.instance_id AND d.active AND d.requires_reaccept AND ((d.kind='TERMS' AND participations.terms_version IS DISTINCT FROM d.version) OR (d.kind='GUIDELINES' AND participations.guidelines_version IS DISTINCT FROM d.version))) AND starts_at<$4 AND ends_at>$3",
+    "SELECT * FROM participations WHERE instance_id=$1 AND season_id=$2 AND status='VISIBLE' AND review_status='VALIDATED' AND EXISTS(SELECT 1 FROM users u WHERE u.id=participations.user_id AND u.account_status='ACTIVE' AND (u.email_status='VERIFIED' OR participations.legacy_imported)) AND NOT EXISTS(SELECT 1 FROM legal_documents d WHERE d.instance_id=participations.instance_id AND d.active AND d.requires_reaccept AND ((d.kind='TERMS' AND participations.terms_version IS DISTINCT FROM d.version) OR (d.kind='GUIDELINES' AND participations.guidelines_version IS DISTINCT FROM d.version))) AND starts_at<$4 AND ends_at>$3",
     [i.id, s.id, start, end],
   );
   return rows as unknown as House[];
