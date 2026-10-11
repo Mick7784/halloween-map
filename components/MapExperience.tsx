@@ -763,7 +763,9 @@ export default function MapExperience({
               arrêter votre collecte.
             </p>
             <p>
-              Les distances et durées affichées sont uniquement indicatives.
+              Le chrono mesure le temps écoulé. La distance parcourue est
+              mesurée avec le GPS ; elle peut être partielle si le signal est
+              interrompu.
             </p>
             <p>
               Les déplacements restent sous votre responsabilité. Les enfants

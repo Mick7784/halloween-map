@@ -5,6 +5,7 @@ import {
   type StoredRoute,
 } from "../lib/active-route";
 import { watchCurrentPosition } from "../lib/geolocation";
+import { neutralSelection } from "../lib/house-selection";
 const identity = {
   ownerId: "visitor",
   instanceId: "20000000-0000-4000-8000-000000000001",
@@ -76,7 +77,10 @@ const saved: StoredRoute = {
 describe("local active route", () => {
   it("restores the complete active route and rejects obsolete identity, expiry, formats and corrupt data", () => {
     const now = +new Date("2026-10-31T18:30Z");
-    expect(restoreRoute(JSON.stringify(saved), identity, now)).toEqual(saved);
+    expect(restoreRoute(JSON.stringify(saved), identity, now)).toEqual({
+      ...saved,
+      result: neutralSelection(saved.result),
+    });
     for (const value of [
       { ...saved, format: 3 },
       { ...saved, expiresAt: "2026-10-31T18:00:00Z" },
@@ -95,10 +99,14 @@ describe("local active route", () => {
       referenceFear: 4,
     });
     const now = +new Date("2026-10-31T18:30Z");
-    expect(restoreRoute(JSON.stringify(enriched), identity, now)).toEqual(
-      enriched,
-    );
-    expect(restoreRoute(JSON.stringify(saved), identity, now)).toEqual(saved);
+    expect(restoreRoute(JSON.stringify(enriched), identity, now)).toEqual({
+      ...enriched,
+      result: neutralSelection(enriched.result),
+    });
+    expect(restoreRoute(JSON.stringify(saved), identity, now)).toEqual({
+      ...saved,
+      result: neutralSelection(saved.result),
+    });
   });
   it("marks an unavailable step without changing its schedule, geometry or totals", () => {
     const result = annotateAvailability(saved.result, {

@@ -16,7 +16,7 @@ import type { SheetPosition } from "../lib/active-route";
 import ManorMark from "./ManorMark";
 import { gpsDistance } from "../lib/collection";
 export function routeSummary(result: RouteResult) {
-  return `${result.stops.length} ${result.stops.length === 1 ? "maison" : "maisons"} · ${(result.distanceMeters / 1000).toLocaleString("fr-FR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} km · ~${result.durationMinutes} min`;
+  return `${result.stops.length} ${result.stops.length === 1 ? "maison" : "maisons"} · Visites dans l’ordre de votre choix`;
 }
 export function fearLabel(house: PublicHouse) {
   return house.adaptable

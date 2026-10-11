@@ -1,9 +1,15 @@
 // Test-only ORS contract server. Never imported by the application.
 import http from "node:http";
 let failSnap = false;
+let routingRequests = 0;
 http
   .createServer(async (req, res) => {
     res.setHeader("Content-Type", "application/json");
+    if (req.url === "/test-only/request-count") {
+      res.end(JSON.stringify({ routingRequests }));
+      return;
+    }
+    if (req.url?.startsWith("/v2/")) routingRequests++;
     if (req.url === "/health") {
       res.end('{"testProvider":true}');
       return;
@@ -51,19 +57,17 @@ http
                 ...(body.instructions === false
                   ? {}
                   : {
-                      segments: body.coordinates
-                        .slice(1)
-                        .map(() => ({
-                          distance: 140,
-                          duration: 120,
-                          steps: [
-                            {
-                              instruction: "Test instruction ignored",
-                              distance: 140,
-                              duration: 120,
-                            },
-                          ],
-                        })),
+                      segments: body.coordinates.slice(1).map(() => ({
+                        distance: 140,
+                        duration: 120,
+                        steps: [
+                          {
+                            instruction: "Test instruction ignored",
+                            distance: 140,
+                            duration: 120,
+                          },
+                        ],
+                      })),
                     }),
               },
             },

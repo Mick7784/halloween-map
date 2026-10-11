@@ -215,8 +215,34 @@ for (const width of [390, 1440]) {
       })
       .click();
     await expect(
-      page.getByRole("button", { name: "Point confirmé", exact: true }),
+      page.getByText("Emplacement vérifié et confirmé", { exact: true }),
     ).toBeVisible();
+    await page.getByRole("button", { name: "Modifier", exact: true }).click();
+    await expect(
+      page.getByRole("heading", {
+        name: "Confirmez l’emplacement de votre maison",
+      }),
+    ).toBeVisible();
+    await page.screenshot({
+      path: `test-results/review-location-${width}.png`,
+    });
+    await page
+      .getByRole("button", {
+        name: "Confirmer le point de ma maison",
+        exact: true,
+      })
+      .click();
+    await page.getByLabel("Numéro", { exact: false }).fill("14");
+    await expect(
+      page.getByText("Emplacement vérifié et confirmé", { exact: true }),
+    ).toHaveCount(0);
+    await page.getByLabel("Numéro", { exact: false }).fill("12 bis");
+    await page
+      .getByRole("button", {
+        name: "Confirmer le point de ma maison",
+        exact: true,
+      })
+      .click();
     await page
       .getByLabel("Nom de la maison", { exact: false })
       .fill("Le jardin des petits fantômes");
@@ -317,7 +343,7 @@ for (const width of [390, 1440]) {
         exact: true,
       })
       .click();
-    await expect(page.getByRole("status")).toContainText(
+    await expect(page.locator(".participation-success")).toContainText(
       "Modifications enregistrées",
     );
     await page
@@ -400,7 +426,7 @@ test("GPS resolves a French address and requires explicit point confirmation", a
     })
     .click();
   await expect(
-    page.getByRole("button", { name: "Point confirmé", exact: true }),
+    page.getByText("Emplacement vérifié et confirmé", { exact: true }),
   ).toBeVisible();
 });
 test("candy alone offers confirmed closing only", async ({ page }) => {

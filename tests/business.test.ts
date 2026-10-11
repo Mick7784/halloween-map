@@ -17,7 +17,7 @@ import {
 import { readFile } from "node:fs/promises";
 import { PGlite } from "@electric-sql/pglite";
 import { Pool } from "pg";
-import { db, transaction, type Database } from "../lib/db";
+import { db, type Database } from "../lib/db";
 import * as actualService from "../lib/service";
 const service = {
   ...actualService,
@@ -947,49 +947,43 @@ describe("Routing, demo and canonical versions", () => {
       }),
     ).rejects.toMatchObject({ status: 400 });
   });
-  it("releases database locks before routing and rejects a house changed during the network call", async () => {
-    const context = { now: new Date("2026-10-31T18:00Z") };
-
-    const original = fixtureRouter.matrix.bind(fixtureRouter);
-    const spy = vi
-      .spyOn(fixtureRouter, "matrix")
-      .mockImplementationOnce(async (points) => {
-        await transaction(async (c) => {
-          await c.query("SELECT id FROM seasons WHERE id=$1 FOR UPDATE", [
-            season.id,
-          ]);
-          await c.query(
-            "UPDATE participations SET status='HIDDEN' WHERE id=$1",
-            [house.id],
-          );
-        });
-        return original(points);
-      });
-    await expect(
-      service.route(
-        {
-          acceptance: {
-            mode: "GUIDELINES_ONLY",
-            guidelines: true,
-            guidelines_version: "2026.1",
-          },
-          start: context.now.toISOString(),
-          end: "2026-10-31T20:00Z",
-          origin: { latitude: 48.1, longitude: -1.67 },
-          activities: [],
+  it("prepares a free selection without calling any routing provider", async () => {
+    const matrix = vi.spyOn(fixtureRouter, "matrix");
+    const directions = vi.spyOn(fixtureRouter, "directions");
+    const result = await service.route(
+      {
+        acceptance: {
+          mode: "GUIDELINES_ONLY",
+          guidelines: true,
+          guidelines_version: "2026.1",
         },
-        context,
-        participant,
-      ),
-    ).rejects.toMatchObject({ status: 409 });
+        start: "2026-10-31T18:00Z",
+        end: "2026-10-31T20:00Z",
+        origin: { latitude: 48.1, longitude: -1.67 },
+        activities: [],
+        selectedHouseIds: [house.id],
+      },
+      { now: new Date("2026-10-31T18:00Z") },
+      participant,
+    );
+    expect(result.stops.map((s) => s.house.id)).toEqual([house.id]);
+    expect(result).toMatchObject({
+      geometry: [],
+      distanceMeters: 0,
+      durationMinutes: 0,
+      walkingSeconds: 0,
+    });
+    expect(matrix).not.toHaveBeenCalled();
+    expect(directions).not.toHaveBeenCalled();
     expect(
       (
         await db().query("SELECT routes_count FROM seasons WHERE id=$1", [
           season.id,
         ])
       ).rows[0].routes_count,
-    ).toBe(0);
-    spy.mockRestore();
+    ).toBe(1);
+    matrix.mockRestore();
+    directions.mockRestore();
   });
   it("respects filters, walking time, availability and closing hours", async () => {
     const s = { ...season, active: true };
@@ -1142,12 +1136,22 @@ describe("Routing, demo and canonical versions", () => {
     };
     const result = await service.route(input, { now }, participant);
     expect(result.stops.map((stop) => stop.house.id)).toEqual([house.id]);
+    // A short window is valid: we do not estimate walking or visiting time.
+    expect(
+      (
+        await service.route(
+          { ...input, end: new Date(+now + 60000).toISOString() },
+          { now },
+          participant,
+        )
+      ).stops.map((s) => s.house.id),
+    ).toEqual([house.id]);
+    await db().query("UPDATE participations SET starts_at=$1 WHERE id=$2", [
+      input.end,
+      house.id,
+    ]);
     await expect(
-      service.route(
-        { ...input, end: new Date(+now + 60000).toISOString() },
-        { now },
-        participant,
-      ),
+      service.route(input, { now }, participant),
     ).rejects.toMatchObject({ status: 422 });
     await expect(
       service.route(

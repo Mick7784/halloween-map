@@ -55,6 +55,12 @@ export default function HouseLocation({
     selectedQuery = useRef(""),
     revision = useRef(0);
   function update(next: LocationValue) {
+    if (
+      JSON.stringify(next.address) !==
+        JSON.stringify(current.current.address) ||
+      JSON.stringify(next.point) !== JSON.stringify(current.current.point)
+    )
+      next = { ...next, confirmed: false };
     revision.current++;
     current.current = next;
     setValue(next);
@@ -447,22 +453,57 @@ export default function HouseLocation({
           </label>
         </div>
       </details>
-      <Button
-        type="button"
-        className="participation-confirm-point"
-        aria-pressed={value.confirmed}
-        disabled={
-          !value.point || !value.address.cityCode || busy || value.confirmed
+      <section
+        className={
+          "participation-confirmation" +
+          (value.confirmed ? " is-confirmed" : "")
         }
-        onClick={confirm}
+        aria-label="Confirmation de l’emplacement"
       >
-        <Check size={16} />
-        {value.confirmed
-          ? "Point confirmé"
-          : busy
-            ? "Vérification du point…"
-            : "Confirmer le point de ma maison"}
-      </Button>
+        <h3>
+          {value.confirmed
+            ? "Emplacement confirmé"
+            : "Confirmez l’emplacement de votre maison"}
+        </h3>
+        <p>
+          Placez le repère à l’entrée accessible aux visiteurs. Vérifiez
+          l’adresse et la position sur la carte avant de confirmer.
+        </p>
+        {value.confirmed ? (
+          <div className="participation-confirmed-status">
+            <span role="status">
+              <Check size={18} /> Emplacement vérifié et confirmé
+            </span>
+            <Button
+              type="button"
+              onClick={() => {
+                update({ ...current.current, confirmed: false });
+                setChoosing(true);
+                setMessage("");
+              }}
+            >
+              Modifier
+            </Button>
+          </div>
+        ) : (
+          <Button
+            type="button"
+            className="participation-confirm-point"
+            aria-pressed={value.confirmed}
+            disabled={
+              !value.point || !value.address.cityCode || busy || value.confirmed
+            }
+            onClick={confirm}
+          >
+            <Check size={16} />
+            {value.confirmed
+              ? "Point confirmé"
+              : busy
+                ? "Vérification du point…"
+                : "Confirmer le point de ma maison"}
+          </Button>
+        )}
+      </section>
       {message && (
         <p className="participation-help" role="status">
           {message}

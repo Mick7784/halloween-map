@@ -46,8 +46,8 @@ import {
   routeSchema,
   routeAvailabilitySchema,
 } from "./validation";
-import { planRoute, validateRouteWindow } from "./routing";
-import { RoutingError } from "./walking-router";
+import { validateRouteWindow } from "./selection-window";
+import { prepareSelection } from "./house-selection";
 import { houseRouteKey, houseTravelKey } from "./route-state";
 import type { RouteAvailability } from "./active-route";
 import { publicPrivacySettings } from "./privacy";
@@ -1050,7 +1050,7 @@ export async function route(
   } catch (e) {
     throw new HttpError(400, (e as Error).message);
   }
-  let result: Awaited<ReturnType<typeof planRoute>>;
+  let result: ReturnType<typeof prepareSelection>;
   try {
     const candidates = await routeCandidates(
       db(),
@@ -1059,8 +1059,13 @@ export async function route(
       input.start,
       input.end,
     );
-    result = await planRoute(
-      candidates.filter((h) =>
+    const chosen = input.selectedHouseIds
+      ? input.selectedHouseIds.flatMap((id) =>
+          candidates.filter((h) => h.id === id),
+        )
+      : candidates;
+    result = prepareSelection(
+      chosen.filter((h) =>
         input.selectedHouseIds
           ? input.selectedHouseIds.includes(h.id)
           : !input.excludedHouseIds.includes(h.id),
@@ -1068,7 +1073,6 @@ export async function route(
       s,
       input,
       context.now,
-      undefined,
     );
     if (
       input.selectedHouseIds?.some(
@@ -1080,13 +1084,11 @@ export async function route(
         "Toutes les maisons sélectionnées ne peuvent pas être incluses avec ces horaires. Élargissez le créneau ou ajustez votre sélection ; aucune maison n’a été retirée de votre préparation.",
       );
   } catch (e) {
-    if (e instanceof RoutingError)
-      throw new HttpError(e.reason === "no_route" ? 422 : 503, e.message);
     if (e instanceof Error && e.message.startsWith("Plus de 200"))
       throw new HttpError(400, e.message);
     throw e;
   }
-  // Network calls have completed before acquiring this short consistency lock.
+  // Recheck the database snapshot under a short consistency lock.
   await transaction(async (c) => {
     await validateAcceptance(c, i.id, input.acceptance);
     const currentInstance = (
@@ -1113,7 +1115,7 @@ export async function route(
       +new Date(current.closes_at) !== +new Date(rawSeason!.closes_at) ||
       !memberMapAccessible({ ...current, active: true }, user, context.now)
     )
-      throw new HttpError(409, "La saison a changé. Recalculez le parcours.");
+      throw new HttpError(409, "La saison a changé. Vérifiez la sélection.");
     const latest = await routeCandidates(c, i, current, input.start, input.end);
     if (
       result.stops.some(
@@ -1127,7 +1129,7 @@ export async function route(
     )
       throw new HttpError(
         409,
-        "Les maisons ont changé. Recalculez le parcours.",
+        "Les maisons ont changé. Vérifiez la sélection.",
       );
     if (result.stops.length)
       await c.query(
@@ -1190,11 +1192,10 @@ export async function routeAvailability(
         +new Date(step.arrival),
         +new Date(h.starts_at),
       );
-      const departure = Math.max(+new Date(step.departure), arrival + 300000);
       if (h.activity === "PAUSED") reason = "paused";
       else if (h.activity === "ENDED") reason = "ended";
       else if (
-        (input.mode !== "COLLECTION" && departure > +new Date(h.ends_at)) ||
+        (input.mode !== "COLLECTION" && arrival >= +new Date(h.ends_at)) ||
         (input.mode === "COLLECTION" &&
           input.end !== undefined &&
           +new Date(h.starts_at) >= +new Date(input.end)) ||

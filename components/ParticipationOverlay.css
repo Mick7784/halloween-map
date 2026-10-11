@@ -186,6 +186,36 @@
   gap: 7px;
 }
 .participation-location-actions button,
+.participation-confirmation {
+  padding: 18px;
+  border: 1px solid #ed8735;
+  border-radius: 12px;
+  background: color-mix(in srgb, #ed8735 10%, var(--surface));
+  margin-block: 16px;
+}
+.participation-confirmation h3 {
+  margin: 0 0 8px;
+}
+.participation-confirmation p {
+  line-height: 1.5;
+}
+.participation-confirmation.is-confirmed {
+  border-color: #5b9d77;
+  background: color-mix(in srgb, #5b9d77 12%, var(--surface));
+}
+.participation-confirmed-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.participation-confirmed-status span {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #5b9d77;
+}
 .participation-confirm-point {
   display: flex;
   align-items: center;

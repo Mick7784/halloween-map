@@ -787,7 +787,9 @@ for (const width of [390, 1440])
       await expect(
         page.getByRole("button", { name: "Garder pour plus tard" }),
       ).toBeVisible();
-      await expect(page.locator(".route-sheet")).toContainText("0,3 km");
+      await expect(page.locator(".route-sheet")).toContainText(
+        "Visites dans l’ordre de votre choix",
+      );
       expect(await page.evaluate(() => window.__routeGPS.callbacks.size)).toBe(
         0,
       );

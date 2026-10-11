@@ -301,7 +301,8 @@ export default function Application({
           <p>
             Les enfants restent accompagnés. Respectez les horaires, les
             propriétés privées, les indications d’accès et le niveau de frayeur.
-            Les parcours sont des estimations : empruntez les voies publiques.
+            Choisissez librement vos maisons et leur ordre de visite. Empruntez
+            les voies publiques.
           </p>
           <p>
             Fond cartographique : © OpenStreetMap contributors · © CARTO. Les

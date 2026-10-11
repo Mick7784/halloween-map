@@ -589,7 +589,7 @@ export default function useActiveRoute({
           {
             id: house.id,
             arrival: new Date().toISOString(),
-            departure: new Date(Date.now() + 300000).toISOString(),
+            departure: new Date().toISOString(),
             key: houseTravelKey(house),
           },
         ],
@@ -622,7 +622,7 @@ export default function useActiveRoute({
                   {
                     house: candidate.house!,
                     arrival: new Date().toISOString(),
-                    departure: new Date(Date.now() + 300000).toISOString(),
+                    departure: new Date().toISOString(),
                     walkingMinutes: 0,
                     walkingSeconds: 0,
                     distanceMeters: 0,

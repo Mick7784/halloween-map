@@ -98,6 +98,9 @@ export default function MessageTemplates({ user }: { user: User }) {
         />
       </label>
       <VisualEditor
+        saveStatus={
+          dirty ? "Modifications non enregistrées" : "Modèle enregistré"
+        }
         disabled={!manage || !models}
         value={template.body}
         onChange={(body) => setTemplate({ ...template, body })}

@@ -366,7 +366,7 @@ export default function RoutePreparation({
               }
             >
               <Send size={19} />
-              {busy ? "Calcul piéton…" : "Préparer ma collecte"}
+              {busy ? "Vérification des maisons…" : "Préparer ma collecte"}
             </button>
           </footer>
         </form>

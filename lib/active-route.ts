@@ -3,6 +3,7 @@ import { routeSchema } from "./validation";
 import type { Activity } from "./domain";
 import { emptyCollection } from "./collection";
 import type { RouteResult } from "./routing";
+import { neutralSelection } from "./house-selection";
 
 export const ACTIVE_ROUTE_KEY = "halloween.active-route";
 export const ROUTE_POLL_MS = 60000;
@@ -147,7 +148,7 @@ export function restoreRoute(
           value.collection.distanceMeters !== 0))
     )
       return null;
-    return value;
+    return { ...value, result: neutralSelection(value.result) };
   } catch {
     return null;
   }

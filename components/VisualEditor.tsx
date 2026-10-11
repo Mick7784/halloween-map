@@ -1,6 +1,17 @@
 "use client";
 import { Button, Select } from "./ui";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+import {
+  Bold,
+  Italic,
+  List,
+  Undo2,
+  Redo2,
+  Link2,
+  Unlink,
+  Eye,
+  Pencil,
+} from "lucide-react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { ListItem } from "@tiptap/extension-list";
@@ -91,6 +102,7 @@ export default function VisualEditor({
   label = "Message",
   maxLength = 10000,
   disabled = false,
+  saveStatus,
 }: {
   value: string;
   onChange: (value: string) => void;
@@ -98,8 +110,14 @@ export default function VisualEditor({
   label?: string;
   maxLength?: number;
   disabled?: boolean;
+  saveStatus?: string;
 }) {
   const last = useRef(value);
+  const [preview, setPreview] = useState(false),
+    [linkOpen, setLinkOpen] = useState(false),
+    [linkUrl, setLinkUrl] = useState(""),
+    [linkError, setLinkError] = useState("");
+  const [, refreshToolbar] = useState(0);
   const editor = useEditor({
     immediatelyRender: false,
     extensions: [
@@ -125,6 +143,8 @@ export default function VisualEditor({
     ],
     content: editorialHtml(value),
     editable: !disabled,
+    onSelectionUpdate: () => refreshToolbar((n) => n + 1),
+    onTransaction: () => refreshToolbar((n) => n + 1),
     editorProps: {
       attributes: {
         role: "textbox",
@@ -167,7 +187,6 @@ export default function VisualEditor({
     if (name === "bold") chain.toggleBold().run();
     if (name === "italic") chain.toggleItalic().run();
     if (name === "insertUnorderedList") chain.toggleBulletList().run();
-    if (name === "formatBlock") chain.toggleHeading({ level: 3 }).run();
     if (name === "createLink" && arg)
       chain.extendMarkRange("link").setLink({ href: arg }).run();
     if (name === "insertText" && arg)
@@ -175,81 +194,223 @@ export default function VisualEditor({
   }
   return (
     <div className="visual-editor">
-      <span className="small">{label}</span>
-      <div role="toolbar" aria-label="Mise en forme" className="editor-toolbar">
-        {[
-          ["Gras", "bold"],
-          ["Italique", "italic"],
-          ["Liste", "insertUnorderedList"],
-        ].map(([title, name]) => (
+      <div className="editor-header">
+        <strong>{label}</strong>
+        <div role="group" aria-label="Mode de l’éditeur">
           <Button
-            key={name}
-            disabled={disabled}
             type="button"
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={() => command(name)}
+            aria-pressed={!preview}
+            onClick={() => setPreview(false)}
           >
-            {title}
+            <Pencil size={15} /> Rédiger
           </Button>
-        ))}
-        <Button
-          disabled={disabled || !editor}
-          type="button"
-          onMouseDown={(e) => e.preventDefault()}
-          onClick={() => editor?.chain().focus().undo().run()}
-        >
-          Annuler
-        </Button>
-        <Button
-          disabled={disabled || !editor}
-          type="button"
-          onMouseDown={(e) => e.preventDefault()}
-          onClick={() => editor?.chain().focus().redo().run()}
-        >
-          Rétablir
-        </Button>
-        <Button
-          disabled={disabled}
-          type="button"
-          onMouseDown={(e) => e.preventDefault()}
-          onClick={() => command("formatBlock", "h3")}
-        >
-          Titre
-        </Button>
-        <Button
-          disabled={disabled}
-          type="button"
-          onMouseDown={(e) => e.preventDefault()}
-          onClick={() => {
-            const url = window.prompt("Lien HTTPS ou mailto");
-            if (url && /^(https:\/\/|\/(?!\/)|mailto:)[^\s]*$/i.test(url))
-              command("createLink", url);
-          }}
-        >
-          Lien
-        </Button>
-        {variables.length > 0 && (
-          <Select
-            disabled={disabled}
-            aria-label="Insérer une variable"
-            defaultValue=""
-            onChange={(e) => {
-              command("insertText", `{{${e.target.value}}}`);
-              e.target.value = "";
-            }}
+          <Button
+            type="button"
+            aria-pressed={preview}
+            onClick={() => setPreview(true)}
           >
-            <option value="" disabled>
-              Insérer une variable
-            </option>
-            {variables.map((v) => (
-              <option key={v} value={v}>
-                {variableLabels[v] ?? v}
-              </option>
-            ))}
-          </Select>
-        )}
+            <Eye size={15} /> Aperçu
+          </Button>
+        </div>
       </div>
-      <EditorContent editor={editor} />
+      {!preview && (
+        <>
+          <div
+            role="toolbar"
+            aria-label="Mise en forme"
+            className="editor-toolbar"
+          >
+            <Select
+              aria-label="Style de paragraphe"
+              disabled={disabled || !editor}
+              value={
+                editor?.isActive("heading", { level: 2 })
+                  ? "2"
+                  : editor?.isActive("heading", { level: 3 })
+                    ? "3"
+                    : "paragraph"
+              }
+              onChange={(e) => {
+                const chain = editor?.chain().focus();
+                if (editor?.isActive("bulletList"))
+                  chain?.liftListItem("listItem");
+                if (e.target.value === "paragraph") chain?.setParagraph().run();
+                else
+                  chain
+                    ?.setHeading({ level: Number(e.target.value) as 2 | 3 })
+                    .run();
+              }}
+            >
+              <option value="paragraph">Paragraphe</option>
+              <option value="2">Titre principal</option>
+              <option value="3">Sous-titre</option>
+            </Select>
+            <div
+              className="editor-tool-group"
+              role="group"
+              aria-label="Texte et listes"
+            >
+              {[
+                ["Gras", "bold"],
+                ["Italique", "italic"],
+                ["Liste", "insertUnorderedList"],
+              ].map(([title, name]) => (
+                <Button
+                  key={name}
+                  disabled={disabled || !editor}
+                  title={title}
+                  aria-label={title}
+                  aria-pressed={
+                    !!editor?.isActive(
+                      name === "insertUnorderedList" ? "bulletList" : name,
+                    )
+                  }
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => command(name)}
+                >
+                  {name === "bold" ? (
+                    <Bold size={17} />
+                  ) : name === "italic" ? (
+                    <Italic size={17} />
+                  ) : (
+                    <List size={17} />
+                  )}
+                </Button>
+              ))}
+            </div>
+            <div
+              className="editor-tool-group"
+              role="group"
+              aria-label="Historique"
+            >
+              <Button
+                disabled={disabled || !editor?.can().undo()}
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => editor?.chain().focus().undo().run()}
+              >
+                <Undo2 size={16} /> Annuler
+              </Button>
+              <Button
+                disabled={disabled || !editor?.can().redo()}
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => editor?.chain().focus().redo().run()}
+              >
+                <Redo2 size={16} /> Rétablir
+              </Button>
+            </div>
+            <div className="editor-tool-group" role="group" aria-label="Liens">
+              <Button
+                disabled={disabled}
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => {
+                  setLinkUrl(editor?.getAttributes("link").href ?? "");
+                  setLinkError("");
+                  setLinkOpen(!linkOpen);
+                }}
+              >
+                <Link2 size={16} /> Lien
+              </Button>
+              {editor?.isActive("link") && (
+                <Button
+                  type="button"
+                  disabled={disabled}
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() =>
+                    editor
+                      .chain()
+                      .focus()
+                      .extendMarkRange("link")
+                      .unsetLink()
+                      .run()
+                  }
+                >
+                  <Unlink size={16} /> Retirer le lien
+                </Button>
+              )}
+            </div>
+            {variables.length > 0 && (
+              <Select
+                disabled={disabled}
+                aria-label="Insérer une variable"
+                defaultValue=""
+                onChange={(e) => {
+                  command("insertText", `{{${e.target.value}}}`);
+                  e.target.value = "";
+                }}
+              >
+                <option value="" disabled>
+                  Insérer une variable
+                </option>
+                {variables.map((v) => (
+                  <option key={v} value={v}>
+                    {variableLabels[v] ?? v}
+                  </option>
+                ))}
+              </Select>
+            )}
+          </div>
+          {linkOpen && (
+            <div
+              className="editor-link-panel"
+              role="group"
+              aria-label="Éditer le lien"
+            >
+              <label>
+                Adresse du lien
+                <input
+                  aria-label="Adresse du lien"
+                  value={linkUrl}
+                  onChange={(e) => setLinkUrl(e.target.value)}
+                  placeholder="https://…"
+                  disabled={disabled}
+                />
+              </label>
+              <Button
+                type="button"
+                disabled={disabled}
+                onClick={() => {
+                  if (!/^(https:\/\/|\/(?!\/)|mailto:)[^\s]*$/i.test(linkUrl)) {
+                    setLinkError(
+                      "Utilisez un lien HTTPS, mailto ou une page interne.",
+                    );
+                    return;
+                  }
+                  command("createLink", linkUrl);
+                  setLinkOpen(false);
+                }}
+              >
+                Appliquer le lien
+              </Button>
+              <Button type="button" onClick={() => setLinkOpen(false)}>
+                Fermer
+              </Button>
+              {linkError && <p role="alert">{linkError}</p>}
+            </div>
+          )}
+          <EditorContent editor={editor} />
+        </>
+      )}
+      {preview && (
+        <section className="editor-preview" aria-label="Aperçu du contenu">
+          <div dangerouslySetInnerHTML={{ __html: editorialHtml(value) }} />
+          {!value && <p>Votre aperçu apparaîtra ici.</p>}
+        </section>
+      )}
+      <div className="editor-footer">
+        <span>
+          {value.length.toLocaleString("fr-FR")} /{" "}
+          {maxLength.toLocaleString("fr-FR")} caractères
+        </span>
+        <span>
+          {disabled
+            ? "Lecture seule"
+            : (saveStatus ?? "Utilisez Enregistrer pour sauvegarder")}
+        </span>
+      </div>
       {value.length > maxLength && (
         <p role="alert">Texte trop long : {maxLength} caractères maximum.</p>
       )}
