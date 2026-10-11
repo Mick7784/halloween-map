@@ -699,10 +699,11 @@ export async function createParticipation(
         user.instance_id,
       ])
     ).rows[0] as unknown as Instance;
+    const registrationSeason = management ? null : await applicationSeason(i, user, c);
     const ss = (
       await c.query(
         "SELECT * FROM seasons WHERE id=$1 AND instance_id=$2 FOR UPDATE",
-        [management?.seasonId ?? i.active_season_id, i.id],
+        [management?.seasonId ?? registrationSeason?.id ?? null, i.id],
       )
     ).rows[0] as unknown as Season;
     if (!ss)
@@ -782,11 +783,12 @@ export async function createParticipation(
 export async function ownHouse(user: User | null) {
   if (!user) throw new HttpError(401, "Connexion requise");
   const currentInstance = await instance();
-  if (!currentInstance || !(await applicationSeason(currentInstance, user)))
-    return null;
+  if (!currentInstance) return null;
+  const season = await applicationSeason(currentInstance, user);
+  if (!season || season.is_test) return null;
   const { rows } = await db().query(
-    "SELECT p.* FROM participations p JOIN instances i ON i.active_season_id=p.season_id WHERE p.user_id=$1 AND p.instance_id=$2",
-    [user.id, user.instance_id],
+    "SELECT p.* FROM participations p WHERE p.user_id=$1 AND p.instance_id=$2 AND p.season_id=$3",
+    [user.id, user.instance_id, season.id],
   );
   return rows[0]
     ? ({ ...rows[0], status: "VISIBLE" } as Record<string, unknown>)
@@ -835,7 +837,7 @@ export async function updateHouse(
               [old.season_id, user.instance_id],
             )
           ).rows[0] as unknown as Season)
-        : await activeSeason(i, c);
+        : await applicationSeason(i, user, c);
     if (
       !s ||
       s.purged_at ||
@@ -954,15 +956,19 @@ export async function participantAction(
   if (managedId && data.action === "delete")
     throw new HttpError(400, "Utilisez la suppression admin confirmée");
   return transaction(async (c) => {
+    const currentInstance = managedId ? null : await instance(c);
+    const currentSeason = currentInstance ? await applicationSeason(currentInstance, user, c) : null;
     const { rows } = await c.query(
-      "SELECT h.*,s.purged_at,s.closes_at,s.is_test season_is_test,s.archived FROM participations h JOIN seasons s ON s.id=h.season_id JOIN instances i ON i.id=h.instance_id WHERE " +
+      "SELECT h.*,s.purged_at,s.closes_at,s.is_test season_is_test,s.archived FROM participations h JOIN seasons s ON s.id=h.season_id WHERE " +
         (managedId ? "h.id" : "user_id") +
         "=$1 AND h.instance_id=$2" +
         (!managedId
-          ? " AND h.season_id=i.active_season_id AND NOT s.is_test"
+          ? " AND h.season_id=$3 AND NOT s.is_test"
           : "") +
         " FOR UPDATE OF h,s",
-      [managedId ?? user.id, user.instance_id],
+      managedId
+        ? [managedId, user.instance_id]
+        : [user.id, user.instance_id, currentSeason?.id ?? null],
     );
     const h = rows[0] as unknown as House & {
       purged_at: unknown;
