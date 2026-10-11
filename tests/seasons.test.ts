@@ -400,9 +400,11 @@ it("keeps accounts/passwords/session on TEST deletion and reuses one account in 
       )
     ).rows,
   ).toHaveLength(2);
-  // The browser cannot attach a new house to an arbitrary inactive season.
+  // Staff may now prepare houses on inactive seasons without exposing them publicly.
   const another = await directAccount("Other");
-  await expect(createHouse(another, s)).rejects.toMatchObject({ status: 409 });
+  const inactiveHouse = await createHouse(another, s);
+  expect(inactiveHouse.season_id).toBe(s.id);
+  expect((await service.publicState(undefined, ordinary)).houses).toEqual([]);
   await service.deleteSeason(admin, s.id, s.name);
   expect(
     (
@@ -841,9 +843,9 @@ it("manual creation validates ADMIN and Super Admin houses while public creation
     payload: "DÉSACTIVER",
   });
   const another = await directAccount("Inactive owner");
-  await expect(createHouse(another, real)).rejects.toMatchObject({
-    status: 403,
-  });
+  const prepared = await createHouse(another, real);
+  expect(prepared.season_id).toBe(real.id);
+  expect((await service.publicState(undefined, ordinary)).mapAccessible).toBe(false);
 });
 
 // Reconstructed Lots 1 + 2: regressions against the V0.7.1 season model.
