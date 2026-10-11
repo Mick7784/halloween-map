@@ -1193,7 +1193,24 @@ test("mobile free selection stays at the top with a permanent bottom stop and su
   const topBox = await top.boundingBox(),
     bottomBox = await bottom.boundingBox();
   expect(topBox!.y).toBeLessThan(40);
-  expect(bottomBox!.y).toBeGreaterThan(700);
+  // Readable metrics increase panel height; verify its bottom anchor and
+  // usable map space rather than the former compact panel's fixed top.
+  const bottomEdge = bottomBox!.y + bottomBox!.height;
+  expect(bottomEdge).toBeLessThanOrEqual(viewport!.height);
+  expect(viewport!.height - bottomEdge).toBeLessThanOrEqual(20);
+  expect(bottomBox!.y - (topBox!.y + topBox!.height)).toBeGreaterThan(200);
+  for (const control of [
+    page.locator(".collection-account"),
+    page.getByRole("button", {
+      name: "Recentrer sur ma position",
+      exact: true,
+    }),
+    page.locator(".maplibregl-ctrl-top-right"),
+  ]) {
+    await expect(control).toBeVisible();
+    const box = (await control.boundingBox())!;
+    expect(box.y + box.height).toBeLessThan(bottomBox!.y);
+  }
   await expect(
     top.getByRole("button", { name: "Arrêter la collecte" }),
   ).toHaveCount(0);
@@ -1209,7 +1226,7 @@ test("mobile free selection stays at the top with a permanent bottom stop and su
       exact: true,
     })
     .click();
-  await expect(top).toContainText("1 maisons sélectionnées");
+  await expect(top).toContainText("1 maison sélectionnée");
   await expect(page.locator(".house-marker")).toHaveCount(1);
   await page
     .getByRole("button", { name: "Ajouter des maisons", exact: true })
