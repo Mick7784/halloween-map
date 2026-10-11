@@ -431,7 +431,7 @@ export async function publicState(
   await tick(now);
   const i = await instance();
   if (!i) return { setupRequired: true };
-  const s = await applicationSeason(i, user),
+  const s = await applicationSeason(i, user, db(), now),
     state = seasonState(s, now);
   const earlyAccess = earlyMapAccess(s, user, now);
   const canSeeMap = memberMapAccessible(s, user, now);
@@ -1048,7 +1048,7 @@ export async function route(
   const input = routeSchema.parse(userInput);
   const i = await instance();
   if (!i) throw new HttpError(404, "Instance manquante");
-  const rawSeason = await applicationSeason(i, user);
+  const rawSeason = await applicationSeason(i, user, db(), context.now);
   const s = rawSeason;
   if (!s || !collectionAccessible(s, user, context.now))
     throw new HttpError(403, "La collecte est fermée");
@@ -1155,7 +1155,7 @@ export async function routeAvailability(
   if (!user) throw new HttpError(401, "Connexion requise");
   const input = routeAvailabilitySchema.parse(userInput);
   const i = await instance();
-  const raw = i && (await applicationSeason(i, user));
+  const raw = i && (await applicationSeason(i, user, db(), context.now));
   const s = raw;
   const checkedAt = context.now.toISOString();
   if (
