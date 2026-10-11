@@ -290,6 +290,27 @@ it("keeps admin preview independent of public activation and closes public acces
   expect(archived.state).toBe("CLOSED");
   expect(archived.routeCandidates).toEqual([]);
 });
+it("requires activation even after the opening time and withholds every house payload until then", async () => {
+  const house = await createHouse(ordinary, real);
+  await service.adminAction(admin, { action: "deactivateSeason", id: real.id, payload: "DÉSACTIVER" });
+  vi.setSystemTime(new Date(houseDefinition.starts_at));
+  for (const user of [null, ordinary]) {
+    const state = await service.publicState(undefined, user);
+    expect(state.state).toBe("PREPARATION");
+    expect(state.publicMapOpen).toBe(false);
+    expect(state.collectionAccessible).toBe(false);
+    expect(state.houses).toEqual([]);
+    expect(state.routeCandidates).toEqual([]);
+    expect(state.closedHouseIds).toEqual([]);
+    expect(JSON.stringify(state)).not.toContain(house.address);
+    expect(JSON.stringify(state)).not.toContain(house.id);
+  }
+  await activate(real);
+  const opened = await service.publicState(undefined, ordinary);
+  expect(opened.publicMapOpen).toBe(true);
+  expect(opened.houses?.map((h) => h.id)).toContain(house.id);
+});
+
 it("does not leak TEST to USER, while ADMIN/Super Admin use the same houses, route and availability APIs", async () => {
   const s = await testSeason();
   await activate(s);

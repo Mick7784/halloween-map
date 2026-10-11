@@ -762,6 +762,7 @@ test("guest mobile entry offers authentication and legal documents; APIs reject 
 }) => {
   await page.setViewportSize({ width: 360, height: 640 });
   await page.goto("/");
+  await expect(page.getByLabel("Temps restant avant l’ouverture", { exact: true })).toBeVisible();
   const heading = (await page.locator(".home-center h1").boundingBox())!,
     header = (await page.locator(".home-header").boundingBox())!;
   expect(heading.y).toBeGreaterThanOrEqual(header.y + header.height);
@@ -789,6 +790,27 @@ test("guest mobile entry offers authentication and legal documents; APIs reject 
     fullPage: true,
   });
 });
+test("anonymous countdown uses server time and becomes a thank-you after closure", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  // Put the device clock beyond the event; the server stays authoritative.
+  await page.clock.install({ time: new Date(Date.now() + 7 * 86400000) });
+  await page.goto("/");
+  const clock = page.getByLabel("Temps restant avant l’ouverture", { exact: true });
+  await expect(clock).toBeVisible();
+  await expect(clock.locator("strong").first()).toHaveText("00");
+  const state = await (await page.request.get("/api/public")).json();
+  expect(state.houses).toEqual([]);
+  expect(state.routeCandidates).toEqual([]);
+  expect(state.publicMapOpen).toBe(false);
+  await page.screenshot({ path: "test-results/v083-countdown-390.png", fullPage: true });
+  await pool.query("UPDATE seasons SET registrations_open_at=now()-interval '3 days',opens_at=now()-interval '2 days',closes_at=now()-interval '1 day',purge_at=now()+interval '1 day' WHERE id=$1", [seasonId]);
+  await page.reload();
+  await expect(page.getByRole("heading", { name: /Merci d’avoir partagé/ })).toBeVisible();
+  await expect(clock).toHaveCount(0);
+  await expect(page.locator(".route-experience")).toHaveCount(0);
+  await page.screenshot({ path: "test-results/v083-thanks-390.png", fullPage: true });
+});
+
 test("twelve-hour cookie and server expiry preserve accounts and request authentication again", async ({
   page,
 }) => {

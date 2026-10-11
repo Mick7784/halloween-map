@@ -61,9 +61,11 @@ test("live APIs: REAL/TEST isolation, phone session, reusable accounts, purge an
     let seasons = await (await page.request.get("/api/admin/seasons")).json();
     const real = seasons[0];
     expect(real.active).toBe(false);
-    expect(
-      (await (await page.request.get("/api/public")).json()).mapAccessible,
-    ).toBe(false);
+    const preview = await (await page.request.get("/api/public")).json();
+    expect(preview.mapAccessible).toBe(true);
+    expect(preview.earlyAccess).toBe(true);
+    expect(preview.publicMapOpen).toBe(false);
+    expect(preview.state).toBe("PREPARATION");
     expect(
       (
         await post("admin", {

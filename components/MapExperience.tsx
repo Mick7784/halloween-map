@@ -641,6 +641,7 @@ export default function MapExperience({
               <button
                 type="button"
                 className="route-danger"
+                aria-label="Arrêter la collecte"
                 onClick={() => setConfirmation(true)}
               >
                 <Square size={16} />

@@ -61,7 +61,7 @@ export default function PremiumHome({
   const opening = configured?.isValid && !state.season?.is_test ? configured : null;
   const closed = ["CLOSED", "ARCHIVED"].includes(state.state ?? "");
   const open = !!state.publicMapOpen;
-  const countdownVisible = !!user && !!state.season && !!opening &&
+  const countdownVisible = !!state.season && !!opening &&
     opening.toMillis() > now && !closed && !open;
   const canPreview = !!user && !!state.mapAccessible && !open;
   const remaining = Math.max(0, (opening?.toMillis() ?? now) - now);
@@ -117,13 +117,7 @@ export default function PremiumHome({
       <main className="home-stage" inert={menu} aria-hidden={menu || undefined}>
         <div className="home-center">
           <h1>
-            {!user ? (
-              <>
-                Halloween Map
-                <br />
-                <span>Une nuit à partager.</span>
-              </>
-            ) : closed ? (
+            {closed ? (
               <>
                 Merci d’avoir partagé
                 <br />

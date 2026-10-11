@@ -102,7 +102,7 @@ async function login(
     .locator("main")
     .getByRole("button", { name: "Se connecter", exact: true })
     .click();
-  await page.waitForURL("/map");
+  await page.waitForURL("/");
 }
 test("login → preopening map is unavailable and fits the mobile viewport", async ({
   page,
@@ -115,6 +115,8 @@ test("login → preopening map is unavailable and fits the mobile viewport", asy
       .getByRole("button", { name: "Se connecter", exact: true }),
   ).toBeVisible();
   await login(page, "visitor0@example.invalid");
+  await expect(page.getByLabel("Temps restant avant l’ouverture", { exact: true })).toBeVisible();
+  await page.goto("/map");
   await expect(page.locator(".route-experience")).toHaveCount(0);
   const state = await (await page.request.get("/api/public")).json();
   expect(state.houses).toEqual([]);

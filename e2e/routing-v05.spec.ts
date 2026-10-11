@@ -1022,9 +1022,7 @@ test("visiting every selected house suggests finishing and preserves the last ca
     "data-route-phase",
     "active",
   );
-  await expect(page.locator(".collection-bottom-bar")).toContainText(
-    "2 / 2 maisons visitées",
-  );
+  await expect(page.locator(".collection-bottom-bar").getByLabel("2 maisons visitées sur 2", { exact: true })).toHaveText("2/2");
   await page
     .getByRole("button", { name: "Arrêter la collecte", exact: true })
     .click();
@@ -1202,7 +1200,6 @@ test("mobile free selection stays at the top with a permanent bottom stop and su
   expect(viewport!.height - bottomEdge).toBeLessThanOrEqual(20);
   expect(bottomBox!.y - (topBox!.y + topBox!.height)).toBeGreaterThan(200);
   for (const control of [
-    page.locator(".collection-account"),
     page.getByRole("button", {
       name: "Recentrer sur ma position",
       exact: true,
@@ -1213,6 +1210,11 @@ test("mobile free selection stays at the top with a permanent bottom stop and su
     const box = (await control.boundingBox())!;
     expect(box.y + box.height).toBeLessThan(bottomBox!.y);
   }
+  const account = bottom.getByRole("link", { name: "Mon compte" });
+  await expect(account).toBeVisible();
+  const accountBox = (await account.boundingBox())!;
+  expect(accountBox.y).toBeGreaterThanOrEqual(bottomBox!.y);
+  expect(accountBox.y + accountBox.height).toBeLessThanOrEqual(bottomEdge);
   await expect(
     top.getByRole("button", { name: "Arrêter la collecte" }),
   ).toHaveCount(0);

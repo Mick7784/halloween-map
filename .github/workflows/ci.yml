@@ -59,6 +59,9 @@ jobs:
   docker:
     needs: verify
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
     steps:
       - uses: actions/checkout@v4
       - name: Build and verify the Docker stack
@@ -68,6 +71,24 @@ jobs:
           docker compose up -d --build --wait app worker
           curl --fail http://localhost:3000/api/health
           test "$(docker compose exec -T app cat VERSION | tr -d '\r\n')" = "$(cat VERSION | tr -d '\r\n')"
+      - uses: docker/login-action@v3
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'work/v083-collection-seasons'
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Publish and verify isolated PR image
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'work/v083-collection-seasons'
+        env:
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          image="ghcr.io/mick7784/halloween-map:pr-18-${PR_HEAD}"
+          docker tag halloween-map:local "$image"
+          docker push "$image"
+          docker pull "$image"
+          test "$(docker run --rm --entrypoint cat "$image" VERSION | tr -d '\r\n')" = "$(cat VERSION | tr -d '\r\n')"
+          echo "Verified image: $image" >> "$GITHUB_STEP_SUMMARY"
+          docker image inspect "$image" --format '{{json .RepoDigests}}' >> "$GITHUB_STEP_SUMMARY"
       - name: Logs
         if: always()
         run: docker compose logs --no-color

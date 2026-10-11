@@ -8,6 +8,8 @@
 - Panneau supérieur extensible, résumé inférieur sur deux lignes avec accès au compte et indicateurs réels, halo orange diffus sans cercle autour du pin le plus proche.
 - Ajouts hors critères avec motif exact ; sélection conservée pour plus tard avec fermeture de la fenêtre.
 - Contrôles d'accès côté serveur, lecture seule après fermeture, aucune donnée géographique détaillée après purge.
+- Compte à rebours et remerciements également visibles sans connexion ; horloge de l'accueil recalée sur le serveur. Libellé accessible complet du bouton compact d'arrêt.
+- Couverture navigateur conservée et adaptée aux nouveaux flux ; image GHCR isolée `pr-18-<SHA>` vérifiée après les tests et Docker, sans publication `latest` ni déploiement.
 
 
 ## V0.8.2
