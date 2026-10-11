@@ -213,9 +213,11 @@ it("uses one pointer for REAL/TEST, serializes competing activations, and reject
   const globalUser = await directAccount("Sans saison active");
   expect(globalUser.account_status).toBe("ACTIVE");
   expect(globalUser.email).toMatch(/^test-[a-f0-9]{32}@example[.]invalid$/);
-  const empty = await service.publicState(undefined, ordinary);
-  expect(empty.season).toBeNull();
-  expect(empty.mapAccessible).toBe(false);
+  const waiting = await service.publicState(undefined, ordinary);
+  expect(waiting.season?.id).toBe(real.id);
+  expect(waiting.state).toBe("PREPARATION");
+  expect(waiting.mapAccessible).toBe(false);
+  expect(waiting.houses).toEqual([]);
   await expect(
     service.createParticipation(ordinary, {
       house: houseDefinition,
@@ -226,6 +228,44 @@ it("uses one pointer for REAL/TEST, serializes competing activations, and reject
     ((await service.adminRead(admin, "dashboard")) as { season: unknown })
       .season,
   ).toBeNull();
+});
+it("keeps admin preview independent of public activation and closes public access by time", async () => {
+  const staff = { ...admin, role_name: "ADMIN" };
+  await service.adminAction(admin, {
+    action: "deactivateSeason",
+    id: real.id,
+    payload: "DÉSACTIVER",
+  });
+  for (const manager of [admin, staff]) {
+    const preview = await service.publicState(undefined, manager);
+    expect(preview.season?.id).toBe(real.id);
+    expect(preview.mapAccessible).toBe(true);
+    expect(preview.collectionAccessible).toBe(true);
+    expect(preview.publicMapOpen).toBe(false);
+  }
+  let member = await service.publicState(undefined, ordinary);
+  expect(member.state).toBe("PREPARATION");
+  expect(member.mapAccessible).toBe(false);
+  expect(member.houses).toEqual([]);
+  await activate(real);
+  member = await service.publicState(undefined, ordinary);
+  expect(member.state).toBe("COUNTDOWN");
+  expect(member.mapAccessible).toBe(false);
+  expect((await service.publicState(undefined, staff)).mapAccessible).toBe(true);
+  vi.setSystemTime(new Date(real.opens_at));
+  member = await service.publicState(undefined, ordinary);
+  expect(member.state).toBe("MAP_OPEN");
+  expect(member.publicMapOpen).toBe(true);
+  expect(member.mapAccessible).toBe(true);
+  vi.setSystemTime(new Date(real.closes_at));
+  member = await service.publicState(undefined, ordinary);
+  expect(member.mapAccessible).toBe(false);
+  expect(member.state).toBe("CLOSED");
+  const archived = await service.publicState(undefined, staff);
+  expect(archived.mapAccessible).toBe(true);
+  expect(archived.collectionAccessible).toBe(false);
+  expect(archived.state).toBe("CLOSED");
+  expect(archived.routeCandidates).toEqual([]);
 });
 it("does not leak TEST to USER, while ADMIN/Super Admin use the same houses, route and availability APIs", async () => {
   const s = await testSeason();
