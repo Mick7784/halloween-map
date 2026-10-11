@@ -5,7 +5,8 @@ import {
   Plus,
   Minus,
   Trash2,
-  Footprints,
+  MapPin,
+  Info,
   Play,
   Check,
   Bookmark,
@@ -15,6 +16,7 @@ import { fears } from "./common";
 import type { SheetPosition } from "../lib/active-route";
 import ManorMark from "./ManorMark";
 import { gpsDistance } from "../lib/collection";
+import ActivityIcon from "./ActivityIcon";
 export function routeSummary(result: RouteResult) {
   return `${result.stops.length} ${result.stops.length === 1 ? "maison" : "maisons"} · Visites dans l’ordre de votre choix`;
 }
@@ -70,7 +72,8 @@ export default function RouteSheet({
   const [dragHeight, setDragHeight] = useState<number | null>(null);
   function heights() {
     const h = window.visualViewport?.height ?? window.innerHeight;
-    return [78, Math.min(300, h * 0.42), Math.min(520, h * 0.52)];
+    const openHeight = phase === "active" ? Math.max(240, h - 160) : Math.min(520, h * 0.7);
+    return [78, Math.min(300, h * 0.42), openHeight];
   }
   useEffect(() => {
     const el = panel.current;
@@ -81,15 +84,18 @@ export default function RouteSheet({
     measure();
     return () => observer.disconnect();
   }, [onHeight]);
-  const [sort, setSort] = useState<"free" | "nearest">("free");
-  const ordered = result.stops.slice();
-  if (sort === "nearest" && proximityPoint)
-    ordered.sort(
-      (a, b) =>
-        gpsDistance(proximityPoint, [a.house.longitude, a.house.latitude]) -
-        gpsDistance(proximityPoint, [b.house.longitude, b.house.latitude]),
+  // A distance ranking is advisory, never a forced visit order or a route.
+  // Already visited houses stay visible after houses still to discover.
+  const visible = result.stops.slice().sort((a, b) => {
+    const aVisited = visitedIds.includes(a.house.id);
+    const bVisited = visitedIds.includes(b.house.id);
+    if (aVisited !== bVisited) return aVisited ? 1 : -1;
+    if (!proximityPoint) return 0;
+    return (
+      gpsDistance(proximityPoint, [a.house.longitude, a.house.latitude]) -
+      gpsDistance(proximityPoint, [b.house.longitude, b.house.latitude])
     );
-  const visible = ordered;
+  });
   return (
     <aside
       id="parcours"
@@ -205,38 +211,28 @@ export default function RouteSheet({
         <ChevronUp className="route-sheet-chevron" size={19} />
       </button>
       <div className="route-sheet-content" inert={position === "collapsed"}>
-        <h2>Ma sélection · ordre libre</h2>
-        <div className="collection-sort" aria-label="Ordre de la liste">
-          <button
-            type="button"
-            aria-pressed={sort === "free"}
-            onClick={() => setSort("free")}
-          >
-            Ordre libre
-          </button>
-          <button
-            type="button"
-            disabled={!proximityPoint}
-            aria-pressed={sort === "nearest"}
-            onClick={() => setSort("nearest")}
-          >
-            Proximité
-          </button>
-        </div>
-        <p className="small">
-          La proximité classe la liste. Vous choisissez librement les maisons et
-          leur ordre de visite.
-        </p>
+        <h2 className="collection-order-label">Maisons — de la plus proche à la plus éloignée</h2>
         {phase === "active" && onAdd && (
           <button className="collection-add" type="button" onClick={onAdd}>
             <Plus size={18} /> Ajouter des maisons
           </button>
         )}
-        <ul className="route-steps">
+        <ul className="route-steps collection-dense-steps">
           {visible.map((stop) => {
             const visited = visitedIds.includes(stop.house.id);
+            const distance =
+              proximityPoint &&
+              Number.isFinite(stop.house.latitude) &&
+              Number.isFinite(stop.house.longitude)
+                ? Math.round(
+                    gpsDistance(proximityPoint, [
+                      stop.house.longitude,
+                      stop.house.latitude,
+                    ]),
+                  )
+                : null;
             return (
-              <li key={stop.house.id}>
+              <li key={stop.house.id} className={visited ? "is-visited" : ""}>
                 <button
                   type="button"
                   className={
@@ -251,32 +247,26 @@ export default function RouteSheet({
                   aria-label={`Voir la maison : ${stop.house.name}`}
                   onClick={() => onHouse(stop.house)}
                 >
-                  {visited && <Check size={18} aria-label="Visitée" />}
-                  <span className="route-step-image" />
-                  <span className="route-step-info">
-                    <strong>{stop.house.name}</strong>
-                    <small>
-                      <Footprints size={11} />
-                      {visited
-                        ? "Visitée"
-                        : stop.unavailable
-                          ? "Indisponible"
-                          : "À découvrir"}
-                    </small>
-                    <span
-                      className={
-                        "route-fear-tag" +
-                        (stop.house.adaptable ? " adaptable" : "")
-                      }
-                    >
-                      {fearLabel(stop.house)}
-                    </span>
-                    {stop.unavailable && (
-                      <span className="route-unavailable-label">
-                        Indisponible
-                      </span>
-                    )}
+                  {visited ? (
+                    <Check size={17} className="collection-row-marker" aria-label="Visitée" />
+                  ) : (
+                    <MapPin size={17} className="collection-row-marker" aria-hidden="true" />
+                  )}
+                  <strong className="collection-row-name" title={stop.house.name}>
+                    {stop.house.name}
+                  </strong>
+                  <span className="collection-row-activities" aria-label="Activités">
+                    {stop.house.activities.map((activity) => (
+                      <ActivityIcon key={activity} activity={activity} />
+                    ))}
                   </span>
+                  <small className="collection-row-fear" title={fearLabel(stop.house)}>
+                    {stop.house.adaptable ? "Adapt." : stop.house.fear === null ? "?" : `F${stop.house.fear}`}
+                  </small>
+                  <small className="collection-row-distance" title="Distance à vol d'oiseau">
+                    {distance === null ? "—" : distance < 1000 ? `${distance} m` : `${(distance / 1000).toFixed(1)} km`}
+                  </small>
+                  {stop.unavailable && <Info size={14} aria-label="Indisponible" />}
                 </button>
                 {phase === "active" && onRemove && !visited && (
                   <button
@@ -285,7 +275,7 @@ export default function RouteSheet({
                     aria-label={`Retirer ${stop.house.name} de ma sélection`}
                     onClick={() => onRemove(stop.house.id)}
                   >
-                    <Minus size={18} />
+                    <Minus size={17} />
                   </button>
                 )}
               </li>
