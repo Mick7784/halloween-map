@@ -46,7 +46,8 @@ export default function Application({
     [participationOpen, setParticipationOpen] = useState(
       view === "participant",
     ),
-    [now, setNow] = useState(() => Date.now());
+    [now, setNow] = useState(() => Date.now()),
+    [clockOffset, setClockOffset] = useState(0);
   useCollectionReports(user?.id, user?.instance_id);
   const presenceUserId = user?.id;
   useEffect(() => {
@@ -79,6 +80,7 @@ export default function Application({
       api<PublicState>("public"),
       api<User | null>("me"),
     ]);
+    setClockOffset(s.serverTime ? Date.parse(s.serverTime) - Date.now() : 0);
     setState(s);
     setUser(u);
     setError("");
@@ -103,14 +105,14 @@ export default function Application({
   useEffect(() => {
     // Revalidate the actual opening moment; the server is authoritative.
     if (state?.state !== "COUNTDOWN" || !state.season || state.season.is_test) return;
-    const remaining = +new Date(state.season.opens_at) - Date.now();
+    const remaining = +new Date(state.season.opens_at) - (Date.now() + clockOffset);
     if (remaining <= 0) return;
     const timer = window.setTimeout(
       () => void refresh().catch((e) => setError(e.message)),
       Math.min(remaining + 150, 2147483647),
     );
     return () => clearTimeout(timer);
-  }, [state?.state, state?.season, refresh]);
+  }, [state?.state, state?.season, clockOffset, refresh]);
   useEffect(() => {
     const viewport = window.visualViewport;
     const resize = () =>
@@ -190,7 +192,7 @@ export default function Application({
     </>
   );
 
-  const effectiveNow = now;
+  const effectiveNow = now + clockOffset;
   const closed =
     !!state?.season && effectiveNow >= +new Date(state.season.closes_at);
   const liveState = state
