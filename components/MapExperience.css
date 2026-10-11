@@ -1329,6 +1329,10 @@
   color: #fff2e8;
 }
 .collection-bottom-heading .collection-account {
+  position: static;
+  left: auto;
+  right: auto;
+  bottom: auto;
   display: grid;
   place-items: center;
   flex-shrink: 0;
