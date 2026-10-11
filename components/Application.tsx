@@ -235,7 +235,7 @@ export default function Application({
         </Link>
       </main>
     );
-  else if (view === "login") content = <Login />;
+  else if (view === "login") content = <Login destination="/" />;
   else if (view === "forgot-password" || view === "reset-password")
     content = <PasswordRecovery reset={view === "reset-password"} />;
   else if (view === "register") content = <Signup state={state} />;
@@ -331,7 +331,7 @@ export default function Application({
   else
     content =
       !user && view === "map" ? (
-        <Login destination="/map" />
+        <Login destination="/" />
       ) : (
         <PublicMap
           refresh={refresh}
@@ -505,10 +505,13 @@ function LoginForm({
         try {
           await api("login", values(e.currentTarget));
           const next = new URLSearchParams(window.location.search).get("next");
+          // Authentication always returns to the landing decision; explicit
+          // account/participant deep links still work, but a map URL cannot
+          // bypass the pre-opening countdown for staff.
           window.location.href =
-            next && /^\/(?!\/)/.test(next) && !next.includes("\\")
+            next && /^\/(?!\/)/.test(next) && !next.includes("\\") && !next.startsWith("/map")
               ? next
-              : (destination ?? "/map");
+              : (destination ?? "/");
         } catch (e) {
           setError((e as Error).message);
         } finally {
