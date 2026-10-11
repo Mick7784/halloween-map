@@ -213,187 +213,185 @@ export default function VisualEditor({
           </Button>
         </div>
       </div>
-      {!preview && (
-        <>
-          <div
-            role="toolbar"
-            aria-label="Mise en forme"
-            className="editor-toolbar"
+      <div hidden={preview}>
+        <div
+          role="toolbar"
+          aria-label="Mise en forme"
+          className="editor-toolbar"
+        >
+          <Select
+            aria-label="Style de paragraphe"
+            disabled={disabled || !editor}
+            value={
+              editor?.isActive("heading", { level: 2 })
+                ? "2"
+                : editor?.isActive("heading", { level: 3 })
+                  ? "3"
+                  : "paragraph"
+            }
+            onChange={(e) => {
+              const chain = editor?.chain().focus();
+              if (editor?.isActive("bulletList"))
+                chain?.liftListItem("listItem");
+              if (e.target.value === "paragraph") chain?.setParagraph().run();
+              else
+                chain
+                  ?.setHeading({ level: Number(e.target.value) as 2 | 3 })
+                  .run();
+            }}
           >
-            <Select
-              aria-label="Style de paragraphe"
-              disabled={disabled || !editor}
-              value={
-                editor?.isActive("heading", { level: 2 })
-                  ? "2"
-                  : editor?.isActive("heading", { level: 3 })
-                    ? "3"
-                    : "paragraph"
-              }
-              onChange={(e) => {
-                const chain = editor?.chain().focus();
-                if (editor?.isActive("bulletList"))
-                  chain?.liftListItem("listItem");
-                if (e.target.value === "paragraph") chain?.setParagraph().run();
-                else
-                  chain
-                    ?.setHeading({ level: Number(e.target.value) as 2 | 3 })
-                    .run();
+            <option value="paragraph">Paragraphe</option>
+            <option value="2">Titre principal</option>
+            <option value="3">Sous-titre</option>
+          </Select>
+          <div
+            className="editor-tool-group"
+            role="group"
+            aria-label="Texte et listes"
+          >
+            {[
+              ["Gras", "bold"],
+              ["Italique", "italic"],
+              ["Liste", "insertUnorderedList"],
+            ].map(([title, name]) => (
+              <Button
+                key={name}
+                disabled={disabled || !editor}
+                title={title}
+                aria-label={title}
+                aria-pressed={
+                  !!editor?.isActive(
+                    name === "insertUnorderedList" ? "bulletList" : name,
+                  )
+                }
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => command(name)}
+              >
+                {name === "bold" ? (
+                  <Bold size={17} />
+                ) : name === "italic" ? (
+                  <Italic size={17} />
+                ) : (
+                  <List size={17} />
+                )}
+              </Button>
+            ))}
+          </div>
+          <div
+            className="editor-tool-group"
+            role="group"
+            aria-label="Historique"
+          >
+            <Button
+              disabled={disabled || !editor?.can().undo()}
+              type="button"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => editor?.chain().focus().undo().run()}
+            >
+              <Undo2 size={16} /> Annuler
+            </Button>
+            <Button
+              disabled={disabled || !editor?.can().redo()}
+              type="button"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => editor?.chain().focus().redo().run()}
+            >
+              <Redo2 size={16} /> Rétablir
+            </Button>
+          </div>
+          <div className="editor-tool-group" role="group" aria-label="Liens">
+            <Button
+              disabled={disabled}
+              type="button"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => {
+                setLinkUrl(editor?.getAttributes("link").href ?? "");
+                setLinkError("");
+                setLinkOpen(!linkOpen);
               }}
             >
-              <option value="paragraph">Paragraphe</option>
-              <option value="2">Titre principal</option>
-              <option value="3">Sous-titre</option>
-            </Select>
-            <div
-              className="editor-tool-group"
-              role="group"
-              aria-label="Texte et listes"
-            >
-              {[
-                ["Gras", "bold"],
-                ["Italique", "italic"],
-                ["Liste", "insertUnorderedList"],
-              ].map(([title, name]) => (
-                <Button
-                  key={name}
-                  disabled={disabled || !editor}
-                  title={title}
-                  aria-label={title}
-                  aria-pressed={
-                    !!editor?.isActive(
-                      name === "insertUnorderedList" ? "bulletList" : name,
-                    )
-                  }
-                  type="button"
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={() => command(name)}
-                >
-                  {name === "bold" ? (
-                    <Bold size={17} />
-                  ) : name === "italic" ? (
-                    <Italic size={17} />
-                  ) : (
-                    <List size={17} />
-                  )}
-                </Button>
-              ))}
-            </div>
-            <div
-              className="editor-tool-group"
-              role="group"
-              aria-label="Historique"
-            >
+              <Link2 size={16} /> Lien
+            </Button>
+            {editor?.isActive("link") && (
               <Button
-                disabled={disabled || !editor?.can().undo()}
                 type="button"
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={() => editor?.chain().focus().undo().run()}
-              >
-                <Undo2 size={16} /> Annuler
-              </Button>
-              <Button
-                disabled={disabled || !editor?.can().redo()}
-                type="button"
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={() => editor?.chain().focus().redo().run()}
-              >
-                <Redo2 size={16} /> Rétablir
-              </Button>
-            </div>
-            <div className="editor-tool-group" role="group" aria-label="Liens">
-              <Button
                 disabled={disabled}
-                type="button"
                 onMouseDown={(e) => e.preventDefault()}
-                onClick={() => {
-                  setLinkUrl(editor?.getAttributes("link").href ?? "");
-                  setLinkError("");
-                  setLinkOpen(!linkOpen);
-                }}
+                onClick={() =>
+                  editor
+                    .chain()
+                    .focus()
+                    .extendMarkRange("link")
+                    .unsetLink()
+                    .run()
+                }
               >
-                <Link2 size={16} /> Lien
+                <Unlink size={16} /> Retirer le lien
               </Button>
-              {editor?.isActive("link") && (
-                <Button
-                  type="button"
-                  disabled={disabled}
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={() =>
-                    editor
-                      .chain()
-                      .focus()
-                      .extendMarkRange("link")
-                      .unsetLink()
-                      .run()
-                  }
-                >
-                  <Unlink size={16} /> Retirer le lien
-                </Button>
-              )}
-            </div>
-            {variables.length > 0 && (
-              <Select
-                disabled={disabled}
-                aria-label="Insérer une variable"
-                defaultValue=""
-                onChange={(e) => {
-                  command("insertText", `{{${e.target.value}}}`);
-                  e.target.value = "";
-                }}
-              >
-                <option value="" disabled>
-                  Insérer une variable
-                </option>
-                {variables.map((v) => (
-                  <option key={v} value={v}>
-                    {variableLabels[v] ?? v}
-                  </option>
-                ))}
-              </Select>
             )}
           </div>
-          {linkOpen && (
-            <div
-              className="editor-link-panel"
-              role="group"
-              aria-label="Éditer le lien"
+          {variables.length > 0 && (
+            <Select
+              disabled={disabled}
+              aria-label="Insérer une variable"
+              defaultValue=""
+              onChange={(e) => {
+                command("insertText", `{{${e.target.value}}}`);
+                e.target.value = "";
+              }}
             >
-              <label>
-                Adresse du lien
-                <input
-                  aria-label="Adresse du lien"
-                  value={linkUrl}
-                  onChange={(e) => setLinkUrl(e.target.value)}
-                  placeholder="https://…"
-                  disabled={disabled}
-                />
-              </label>
-              <Button
-                type="button"
-                disabled={disabled}
-                onClick={() => {
-                  if (!/^(https:\/\/|\/(?!\/)|mailto:)[^\s]*$/i.test(linkUrl)) {
-                    setLinkError(
-                      "Utilisez un lien HTTPS, mailto ou une page interne.",
-                    );
-                    return;
-                  }
-                  command("createLink", linkUrl);
-                  setLinkOpen(false);
-                }}
-              >
-                Appliquer le lien
-              </Button>
-              <Button type="button" onClick={() => setLinkOpen(false)}>
-                Fermer
-              </Button>
-              {linkError && <p role="alert">{linkError}</p>}
-            </div>
+              <option value="" disabled>
+                Insérer une variable
+              </option>
+              {variables.map((v) => (
+                <option key={v} value={v}>
+                  {variableLabels[v] ?? v}
+                </option>
+              ))}
+            </Select>
           )}
-          <EditorContent editor={editor} />
-        </>
-      )}
+        </div>
+        {linkOpen && (
+          <div
+            className="editor-link-panel"
+            role="group"
+            aria-label="Éditer le lien"
+          >
+            <label>
+              Adresse du lien
+              <input
+                aria-label="Adresse du lien"
+                value={linkUrl}
+                onChange={(e) => setLinkUrl(e.target.value)}
+                placeholder="https://…"
+                disabled={disabled}
+              />
+            </label>
+            <Button
+              type="button"
+              disabled={disabled}
+              onClick={() => {
+                if (!/^(https:\/\/|\/(?!\/)|mailto:)[^\s]*$/i.test(linkUrl)) {
+                  setLinkError(
+                    "Utilisez un lien HTTPS, mailto ou une page interne.",
+                  );
+                  return;
+                }
+                command("createLink", linkUrl);
+                setLinkOpen(false);
+              }}
+            >
+              Appliquer le lien
+            </Button>
+            <Button type="button" onClick={() => setLinkOpen(false)}>
+              Fermer
+            </Button>
+            {linkError && <p role="alert">{linkError}</p>}
+          </div>
+        )}
+        <EditorContent editor={editor} />
+      </div>
       {preview && (
         <section className="editor-preview" aria-label="Aperçu du contenu">
           <div dangerouslySetInnerHTML={{ __html: editorialHtml(value) }} />

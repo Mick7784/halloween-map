@@ -722,6 +722,7 @@ for (const width of [390, 1440])
       editor.getByLabel("Aperçu du contenu").locator("h2 a"),
     ).toHaveText("Bienvenue");
     await editor.getByRole("button", { name: "Rédiger", exact: true }).click();
+    await expect(surface.locator("h2 a")).toHaveText("Bienvenue");
     await page
       .getByRole("button", { name: "Enregistrer le modèle", exact: true })
       .click();
@@ -734,6 +735,8 @@ for (const width of [390, 1440])
       ).rows[0].body,
     ).toContain("# [");
     await editor.scrollIntoViewIfNeeded();
+    await surface.locator("h2").click();
+    await expect(editor.getByLabel("Style de paragraphe")).toHaveValue("2");
     await page.screenshot({
       path: `test-results/review-editor-${width}.png`,
       fullPage: true,
