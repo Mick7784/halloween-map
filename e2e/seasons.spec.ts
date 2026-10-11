@@ -201,13 +201,31 @@ test("compact season list, creation of a real draft, and dark/light appearance",
   const dialog = page.getByRole("dialog", { name: "Nouvelle saison" });
   await expect(dialog.getByLabel("Type de saison")).toHaveCount(0);
   await dialog.getByLabel("Nom de la saison").fill("Halloween préparation");
-  await expect(dialog.locator('input[type="date"]')).toHaveCount(4);
-  await expect(dialog.locator('input[type="time"]')).toHaveCount(4);
+  for (const label of [
+    "Ouverture des inscriptions",
+    "Ouverture de la carte",
+    "Fermeture de la carte",
+    "Purge des données personnelles",
+  ]) {
+    await expect(
+      dialog.getByRole("button", { name: `${label} : choisir la date` }),
+    ).toBeVisible();
+    await expect(
+      dialog.getByRole("textbox", { name: `${label} : heure` }),
+    ).toHaveValue(/^\d{2}:\d{2}$/);
+  }
   await dialog
     .getByRole("button", { name: "Enregistrer", exact: true })
     .click();
   await expect(dialog).toHaveCount(0);
-  await expect(page.locator(".season-table")).toContainText("Halloween préparation");
+  await expect(page.locator(".season-table")).toContainText(
+    "Halloween préparation",
+  );
+  const createdRow = rows.filter({ hasText: "Halloween préparation" });
+  await expect(createdRow).toContainText("REAL");
+  await expect(
+    createdRow.getByRole("button", { name: "Activer", exact: true }),
+  ).toBeVisible();
   expect(mutations).toEqual([
     expect.objectContaining({
       action: "season",
