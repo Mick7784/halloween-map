@@ -6,7 +6,7 @@ import { sensitiveAction } from "../lib/sensitive-actions";
 import { Input, Button } from "./ui";
 export { requestAdminConfirmation } from "./AdminConfirmation";
 import { ACTIVE_ROUTE_KEY, clearStoredRoute } from "../lib/active-route";
-import { Sparkles, Candy, Drama } from "lucide-react";
+import ActivityIcon, { activityLabels } from "./ActivityIcon";
 import { DateTime } from "luxon";
 import type { Activity, Instance, Season, User } from "../lib/domain";
 export type PublicHouse = ReturnType<
@@ -35,7 +35,12 @@ export type PublicState = {
     | "latitude"
     | "longitude"
     | "zoom"
-  > & { footer: string; defaultOpen: string; defaultClose: string };
+  > & {
+    postal_code?: string;
+    footer: string;
+    defaultOpen: string;
+    defaultClose: string;
+  };
   season?:
     | (Pick<Season, "id" | "year" | "registrations_open"> & {
         is_test?: boolean;
@@ -53,9 +58,7 @@ export type PublicState = {
 };
 export type { RouteResult } from "../lib/routing";
 export const labels: Record<string, string> = {
-  DECORATION: "Décoration",
-  CANDY: "Bonbons",
-  ACTING: "Mise en scène",
+  ...activityLabels,
   VISIBLE: "Visible",
   HIDDEN: "Masquée",
   DISABLED: "Désactivée",
@@ -295,33 +298,22 @@ export function Check({
   return (
     <label className="check">
       <Input type="checkbox" name={name} defaultChecked={checked} />
-      {name === "DECORATION" ? (
-        <Sparkles size={16} />
-      ) : name === "CANDY" ? (
-        <Candy size={16} />
-      ) : name === "ACTING" ? (
-        <Drama size={16} />
-      ) : null}
+      {["DECORATION", "CANDY", "ACTING"].includes(name) && (
+        <ActivityIcon activity={name as Activity} />
+      )}
       <span>{label}</span>
     </label>
   );
 }
 export function Badges({ activities }: { activities: Activity[] }) {
   return (
-    <div className="badges">
+    <span className="badges">
       {activities.map((a) => (
         <span key={a} className="badge">
-          {a === "DECORATION" ? (
-            <Sparkles size={15} />
-          ) : a === "CANDY" ? (
-            <Candy size={15} />
-          ) : (
-            <Drama size={15} />
-          )}{" "}
-          {labels[a]}
+          <ActivityIcon activity={a} size={15} /> {labels[a]}
         </span>
       ))}
-    </div>
+    </span>
   );
 }
 export function has(user: User | null, p: string) {

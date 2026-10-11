@@ -174,6 +174,8 @@ it("adds through session-scoped availability, preserves visits, and persists eve
     instanceId: identity.instanceId,
     seasonId: identity.seasonId,
     mode: "COLLECTION",
+    activities: [],
+    maxFear: 5,
   });
   expect(controller.collection.visitedIds).toEqual([house(1).id]);
   await act(async () => root.unmount());

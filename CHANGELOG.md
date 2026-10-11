@@ -1,5 +1,16 @@
 # Changelog
 
+## V0.8.2
+
+- Carte sans aucune couche d’itinéraire ; sélection synchronisée pendant la préparation et la collecte, pins orange et halo de proximité, maisons visitées violet-gris. Accès explicite aux maisons et commandes de collecte sans menu redondant.
+- Collecte libre : tri de proximité distinct, ajouts hors critères initiaux avec activités, frayeur et adaptabilité, sans doublons ; progression, chrono et distance GPS observée dans le panneau bas. Aucun historique de positions ajouté.
+- Finitions mobiles : blocs Temps écoulé / Distance parcourue lisibles, statut GPS explicite, commandes espacées ; consentement contrasté et bouton d’envoi dans le flux pour ne jamais masquer la case. Libellés de sélection et singulier corrigés.
+- Icônes d’activités partagées, identité Halloween Map et logo canonique préservés, alignement des commandes du back-office.
+- Nouvelle maison : commune/code postal configurés en lecture seule et contrôlés côté serveur ; 31 octobre par défaut, heures obligatoires sans présélection, fin après minuit, confirmation GPS visible. Conservation des localisations historiques inchangées ; dates TEST sentinelles masquées.
+- Éditeur commun Tiptap avec undo/redo, formats compatibles avec les sauvegardes et aperçus existants, listes plates et liens sûrs. Aucun support d’images annoncé, aucune migration de contenu.
+- Revalidation des corrections V0.8.1 : reconfirmations sensibles, permissions, adresses forgées, saisons, modération, confidentialité et pipeline SMTP.
+- Validation visuelle contre les quatre maquettes non effectuée : références absentes du contexte accessible. GPS sur vrai mobile, tuiles externes et réception Gmail/Outlook réelle restent à tester après pull Dockhand par le propriétaire. Publication autorisée pour ces tests réels.
+
 ## V0.8.1
 
 - Confirmations sensibles communes avec mot de passe masqué, annulation sans mutation et phrase de sécurité pour les suppressions et purges ; contrôles serveur conservés.

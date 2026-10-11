@@ -15,6 +15,7 @@ import {
 import {
   api,
   AsyncButton,
+  Badges,
   labels,
   Notice,
   time,
@@ -156,7 +157,7 @@ export default function AccountPrivacy({
                   <div>
                     <dt>Activités</dt>
                     <dd>
-                      {house.activities.map((a) => labels[a] ?? a).join(", ")}
+                      <Badges activities={house.activities} />
                     </dd>
                   </div>
                 </dl>

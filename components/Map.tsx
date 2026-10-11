@@ -1,13 +1,12 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import type { Map as MapType } from "maplibre-gl";
-import type { Feature, LineString } from "geojson";
 import "maplibre-gl/dist/maplibre-gl.css";
 import type { PublicHouse } from "./common";
 import { frameRoute, mapPadding } from "../lib/map-framing";
 import type { MapCamera, SheetPosition } from "../lib/active-route";
 const houseSVG =
-  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 36" width="30" height="34"><path d="M3 16 16 3l13 13M7 14v17h18V14" fill="#252125" stroke="#ff922f" stroke-width="3" stroke-linejoin="round"/><path d="M13 31V21h6v10M11 15h3m4 0h3" stroke="#ff922f" stroke-width="2"/></svg>';
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 32" width="24" height="32"><path d="M12 31C10 27 2 18 2 11a10 10 0 0 1 20 0c0 7-8 16-10 20Z" fill="currentColor"/><circle cx="12" cy="11" r="3" fill="#211723"/></svg>';
 export default function MapView({
   houses,
   center,
@@ -185,11 +184,6 @@ export default function MapView({
           h.candy_available === false &&
           (h.offeredActivities ?? h.activities).includes("CANDY")
         ) {
-          const stock = document.createElement("span");
-          stock.className = "house-candy-badge";
-          stock.textContent = "🍬";
-          stock.title = "Bonbons épuisés";
-          button.append(stock);
           button.setAttribute(
             "aria-label",
             button.getAttribute("aria-label") + " · Bonbons épuisés",
@@ -234,48 +228,6 @@ export default function MapView({
     visitedIds,
     nearestHouseId,
   ]);
-  useEffect(() => {
-    const g = map.current;
-    if (!loaded || !g) return;
-    if (!geometry?.length && !g.getSource("route")) return;
-    const data: Feature<LineString> = {
-      type: "Feature",
-      properties: {},
-      geometry: {
-        type: "LineString",
-        coordinates: geometry && geometry.length > 1 ? geometry : [],
-      },
-    };
-    if (g.getSource("route"))
-      (g.getSource("route") as import("maplibre-gl").GeoJSONSource).setData(
-        data,
-      );
-    else {
-      g.addSource("route", { type: "geojson", data });
-      g.addLayer({
-        id: "route-halo",
-        type: "line",
-        source: "route",
-        layout: { "line-cap": "round", "line-join": "round" },
-        paint: {
-          "line-color": "#101216",
-          "line-width": 8,
-          "line-opacity": 0.85,
-        },
-      });
-      g.addLayer({
-        id: "route-line",
-        type: "line",
-        source: "route",
-        layout: { "line-cap": "round", "line-join": "round" },
-        paint: {
-          "line-color": "#b099da",
-          "line-width": 4,
-          "line-opacity": 0.95,
-        },
-      });
-    }
-  }, [geometry, loaded]);
   useEffect(() => {
     if (!loaded || !map.current || !origin) return;
     const g = map.current;

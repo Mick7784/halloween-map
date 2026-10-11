@@ -363,7 +363,7 @@
 }
 .beta-header-controls {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   gap: 16px;
   flex-wrap: wrap;
 }
@@ -381,6 +381,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
+  min-height: 44px;
 }
 .beta-theme-select select {
   max-width: 115px;
@@ -390,6 +391,7 @@
   align-items: center;
   gap: 9px;
   font-size: 12px;
+  min-height: 44px;
 }
 .beta-profile > span {
   border: 1px solid var(--line);

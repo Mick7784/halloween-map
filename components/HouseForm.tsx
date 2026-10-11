@@ -8,8 +8,12 @@ import {
   formatAddress,
   type ParticipationSettings,
 } from "../lib/participation-settings";
-import { initialHouseLocation, validateHouseForm } from "../lib/house-form";
-import { localDate, Notice } from "./common";
+import {
+  initialHouseLocation,
+  validateHouseForm,
+  houseScheduleInput,
+} from "../lib/house-form";
+import { Notice } from "./common";
 import HouseLocation from "./HouseLocation";
 import {
   HouseNameField,
@@ -50,8 +54,8 @@ export default function HouseForm({
   const [draft, setDraft] = useState({
     name: house.name,
     activities: house.activities,
-    starts_at: localDate(house.starts_at, zone),
-    ends_at: localDate(house.ends_at, zone),
+    starts_at: houseScheduleInput(house.starts_at, zone, isTest),
+    ends_at: houseScheduleInput(house.ends_at, zone, isTest),
     fear: house.fear,
     adaptable: house.adaptable,
     rp: house.rp,

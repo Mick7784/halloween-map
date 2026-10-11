@@ -321,8 +321,8 @@ export default function useActiveRoute({
         seasonId,
         mode: "COLLECTION",
         end: snapshot.parameters.end,
-        activities: snapshot.parameters.activities,
-        maxFear: snapshot.parameters.maxFear,
+        activities: [],
+        maxFear: 5,
         steps: snapshot.result.stops.map((s) => ({
           id: s.house.id,
           arrival: s.arrival,
@@ -583,13 +583,13 @@ export default function useActiveRoute({
         seasonId,
         mode: "COLLECTION",
         end: snapshot.parameters.end,
-        activities: snapshot.parameters.activities,
-        maxFear: snapshot.parameters.maxFear,
+        activities: [],
+        maxFear: 5,
         steps: [
           {
             id: house.id,
             arrival: new Date().toISOString(),
-            departure: new Date(Date.now() + 300000).toISOString(),
+            departure: new Date().toISOString(),
             key: houseTravelKey(house),
           },
         ],
@@ -622,7 +622,7 @@ export default function useActiveRoute({
                   {
                     house: candidate.house!,
                     arrival: new Date().toISOString(),
-                    departure: new Date(Date.now() + 300000).toISOString(),
+                    departure: new Date().toISOString(),
                     walkingMinutes: 0,
                     walkingSeconds: 0,
                     distanceMeters: 0,

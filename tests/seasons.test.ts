@@ -148,8 +148,8 @@ beforeEach(async () => {
     token: "season-test-key",
     instance: {
       public_name: "Halloween",
-      territory: "Commune",
-      postal_code: "00000",
+      territory: "Rennes",
+      postal_code: "35000",
       country: "France",
       timezone: "Europe/Paris",
       latitude: 48.1,

@@ -22,8 +22,8 @@ import type { House, User, Season } from "../lib/domain";
 import {
   api,
   has,
-  labels,
   Notice,
+  Badges,
   AsyncButton,
   type PublicState,
 } from "./common";
@@ -424,7 +424,7 @@ export default function Admin({
                         </small>
                       </td>
                       <td data-label="Activités">
-                        {h.activities.map((a) => labels[a]).join(" · ")}
+                        <Badges activities={h.activities} />
                       </td>
                       <td data-label="Modification">
                         {h.updated_at
@@ -1048,6 +1048,9 @@ export default function Admin({
               <ParticipationForm
                 key={ownerId}
                 submitLabel="Créer la maison"
+                territory={state.instance.territory}
+                postalCode={state.instance.postal_code}
+                seasonYear={selectedSeason.year}
                 zone={state.instance.timezone}
                 opens={new Date(selectedSeason.opens_at).toISOString()}
                 closes={new Date(selectedSeason.closes_at).toISOString()}
@@ -1123,7 +1126,7 @@ export default function Admin({
                   <span className="beta-badge">Test</span>
                 )}
               </p>
-              <p>{current.activities.map((a) => labels[a]).join(" · ")}</p>
+              <Badges activities={current.activities} />
               <p>
                 Accueil :{" "}
                 {dateLabel(

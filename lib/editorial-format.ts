@@ -12,15 +12,17 @@ export function editorialHtml(
 ) {
   function inline(text: string): string {
     return text
-      .split(/(\*\*[^*]+\*\*|\*[^*]+\*|\[[^\]]+\]\([^)]+\))/g)
+      .split(/(\*\*\*[^*]+\*\*\*|\*\*[^*]+\*\*|\*[^*]+\*|\[[^\]]+\]\([^)]+\))/g)
       .map((part) => {
+        if (part.startsWith("***") && part.endsWith("***"))
+          return `<strong><em>${escapeHtml(part.slice(3, -3))}</em></strong>`;
         if (part.startsWith("**"))
           return `<strong>${escapeHtml(part.slice(2, -2))}</strong>`;
         if (part.startsWith("*"))
           return `<em>${escapeHtml(part.slice(1, -1))}</em>`;
         const link = part.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
         if (link && /^(https:\/\/|\/(?!\/)|mailto:)[^\s]*$/i.test(link[2]))
-          return `<a href="${escapeHtml(link[2])}" rel="noopener noreferrer">${escapeHtml(link[1])}</a>`;
+          return `<a href="${escapeHtml(link[2])}" rel="noopener noreferrer">${inline(link[1])}</a>`;
         return escapeHtml(part);
       })
       .join("");
@@ -46,6 +48,7 @@ export function editorialHtml(
 }
 export function editorialText(value: string) {
   return value
+    .replace(/\*\*\*([^*]+)\*\*\*/g, "$1")
     .replace(/\[([^\]]+)\]\(([^)]+)\)/g, "$1 ($2)")
     .replace(/\*\*([^*]+)\*\*/g, "$1")
     .replace(/\*([^*]+)\*/g, "$1")

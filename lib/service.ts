@@ -46,14 +46,15 @@ import {
   routeSchema,
   routeAvailabilitySchema,
 } from "./validation";
-import { planRoute, validateRouteWindow } from "./routing";
-import { RoutingError } from "./walking-router";
+import { validateRouteWindow } from "./selection-window";
+import { prepareSelection } from "./house-selection";
 import { houseRouteKey, houseTravelKey } from "./route-state";
 import type { RouteAvailability } from "./active-route";
 import { publicPrivacySettings } from "./privacy";
 import { publicProjectLinks } from "./project-links";
 import {
   publicParticipationSettings,
+  communeName,
   formatAddress,
   type AddressParts,
 } from "./participation-settings";
@@ -508,6 +509,7 @@ export async function publicState(
       id: i.id,
       public_name: i.public_name,
       territory: i.territory,
+      postal_code: i.postal_code,
       timezone: i.timezone,
       latitude: i.latitude,
       longitude: i.longitude,
@@ -624,6 +626,7 @@ function validateParticipationSettings(
   legacyLocation = false,
 ) {
   const settings = publicParticipationSettings(i.config.participation);
+  if (!legacyLocation) validateConfiguredAddress(data.address_parts, i);
   if (
     data.rp.length > settings.descriptionLimit ||
     data.practical.length > settings.practicalLimit
@@ -646,6 +649,17 @@ function validateParticipationSettings(
     throw new HttpError(
       400,
       "Une activité sélectionnée n’est pas autorisée pour cette édition.",
+    );
+}
+function validateConfiguredAddress(a: AddressParts | undefined, i: Instance) {
+  if (
+    !a ||
+    a.postalCode !== i.postal_code ||
+    communeName(a.city) !== communeName(i.territory)
+  )
+    throw new HttpError(
+      400,
+      "L’adresse doit correspondre à la commune et au code postal configurés.",
     );
 }
 export async function createParticipation(
@@ -710,6 +724,8 @@ export async function createParticipation(
         "Choisissez ou confirmez explicitement le point de votre maison.",
       );
     if (!management || h.address_parts) await validateFrenchAddress(h);
+    if (management && h.address_parts)
+      validateConfiguredAddress(h.address_parts, i);
     if (!management) validateParticipationSettings(h, i);
     const [starts, ends] = houseDates(h, i, ss);
     await c.query(
@@ -789,11 +805,16 @@ export async function updateHouse(
       old.address === data.address &&
       Number(old.latitude) === data.latitude &&
       Number(old.longitude) === data.longitude;
-    // Legacy houses may retain their existing location. Only authenticated owners
-    // of that exact row receive this compatibility path; new/moved houses never do.
+    // Existing houses may retain their stored location after an instance change.
+    // A changed structured address or point must pass all current checks.
     const legacyLocation =
-      !old.address_parts && !data.address_parts && unchangedLocation;
-    if (!admin && !legacyLocation) {
+      unchangedLocation &&
+      (!data.address_parts ||
+        (!!old.address_parts &&
+          (Object.keys(data.address_parts) as (keyof AddressParts)[]).every(
+            (key) => data.address_parts![key] === old.address_parts![key],
+          )));
+    if (!legacyLocation && (!admin || data.address_parts)) {
       if (!data.address_parts && unchangedLocation && old.address_parts)
         data.address_parts = old.address_parts;
       await validateFrenchAddress(data);
@@ -851,6 +872,8 @@ export async function updateHouse(
     }
     const [starts, ends] = houseDates(data, i, s);
     if (!admin) validateParticipationSettings(data, i, legacyLocation);
+    else if (!legacyLocation && data.address_parts)
+      validateConfiguredAddress(data.address_parts, i);
     const status = old.status;
     await c.query(
       "UPDATE participations SET name=$1,address=$2,latitude=$3,longitude=$4,activities=$5,starts_at=$6,ends_at=$7,fear=$8,adaptable=$9,rp=$10,practical=$11,status=$12 WHERE id=$13 AND instance_id=$14",
@@ -1027,7 +1050,7 @@ export async function route(
   } catch (e) {
     throw new HttpError(400, (e as Error).message);
   }
-  let result: Awaited<ReturnType<typeof planRoute>>;
+  let result: ReturnType<typeof prepareSelection>;
   try {
     const candidates = await routeCandidates(
       db(),
@@ -1036,8 +1059,13 @@ export async function route(
       input.start,
       input.end,
     );
-    result = await planRoute(
-      candidates.filter((h) =>
+    const chosen = input.selectedHouseIds
+      ? input.selectedHouseIds.flatMap((id) =>
+          candidates.filter((h) => h.id === id),
+        )
+      : candidates;
+    result = prepareSelection(
+      chosen.filter((h) =>
         input.selectedHouseIds
           ? input.selectedHouseIds.includes(h.id)
           : !input.excludedHouseIds.includes(h.id),
@@ -1045,7 +1073,6 @@ export async function route(
       s,
       input,
       context.now,
-      undefined,
     );
     if (
       input.selectedHouseIds?.some(
@@ -1057,13 +1084,11 @@ export async function route(
         "Toutes les maisons sélectionnées ne peuvent pas être incluses avec ces horaires. Élargissez le créneau ou ajustez votre sélection ; aucune maison n’a été retirée de votre préparation.",
       );
   } catch (e) {
-    if (e instanceof RoutingError)
-      throw new HttpError(e.reason === "no_route" ? 422 : 503, e.message);
     if (e instanceof Error && e.message.startsWith("Plus de 200"))
       throw new HttpError(400, e.message);
     throw e;
   }
-  // Network calls have completed before acquiring this short consistency lock.
+  // Recheck the database snapshot under a short consistency lock.
   await transaction(async (c) => {
     await validateAcceptance(c, i.id, input.acceptance);
     const currentInstance = (
@@ -1090,7 +1115,7 @@ export async function route(
       +new Date(current.closes_at) !== +new Date(rawSeason!.closes_at) ||
       !memberMapAccessible({ ...current, active: true }, user, context.now)
     )
-      throw new HttpError(409, "La saison a changé. Recalculez le parcours.");
+      throw new HttpError(409, "La saison a changé. Vérifiez la sélection.");
     const latest = await routeCandidates(c, i, current, input.start, input.end);
     if (
       result.stops.some(
@@ -1104,7 +1129,7 @@ export async function route(
     )
       throw new HttpError(
         409,
-        "Les maisons ont changé. Recalculez le parcours.",
+        "Les maisons ont changé. Vérifiez la sélection.",
       );
     if (result.stops.length)
       await c.query(
@@ -1167,11 +1192,10 @@ export async function routeAvailability(
         +new Date(step.arrival),
         +new Date(h.starts_at),
       );
-      const departure = Math.max(+new Date(step.departure), arrival + 300000);
       if (h.activity === "PAUSED") reason = "paused";
       else if (h.activity === "ENDED") reason = "ended";
       else if (
-        (input.mode !== "COLLECTION" && departure > +new Date(h.ends_at)) ||
+        (input.mode !== "COLLECTION" && arrival >= +new Date(h.ends_at)) ||
         (input.mode === "COLLECTION" &&
           input.end !== undefined &&
           +new Date(h.starts_at) >= +new Date(input.end)) ||

@@ -23,7 +23,7 @@ import HouseLocation from "./HouseLocation";
 import {
   initialHouseLocation,
   validateHouseForm,
-  houseScheduleBounds,
+  houseScheduleInput,
 } from "../lib/house-form";
 import {
   HouseNameField,
@@ -32,7 +32,7 @@ import {
   HouseFearFields,
   HouseTextField,
 } from "./HouseFields";
-import { localDate, Notice } from "./common";
+import { Notice } from "./common";
 import Editorial from "./Editorial";
 import { legalDefaults } from "../lib/legal-defaults";
 export default function ParticipationForm({
@@ -48,6 +48,9 @@ export default function ParticipationForm({
   onSave,
   submitLabel,
   isTest = false,
+  seasonYear,
+  territory,
+  postalCode,
 }: {
   house?: House;
   zone: string;
@@ -61,10 +64,18 @@ export default function ParticipationForm({
   onSave: (payload: unknown) => Promise<void>;
   submitLabel?: string;
   isTest?: boolean;
+  seasonYear?: number;
+  territory?: string;
+  postalCode?: string;
 }) {
   const settings = publicParticipationSettings(source);
   const initial = useRef(initialHouseLocation(house));
-  const schedule = houseScheduleBounds(opens, closes, zone);
+  if (!house && postalCode) initial.current.address.postalCode = postalCode;
+  const year =
+    seasonYear && seasonYear > 2000 && seasonYear < 2200
+      ? seasonYear
+      : new Date().getFullYear();
+  const defaultDate = `${year}-10-31`;
   const [location, setLocation] = useState(initial.current),
     [name, setName] = useState(house?.name ?? ""),
     [activities, setActivities] = useState<Activity[]>(
@@ -75,10 +86,10 @@ export default function ParticipationForm({
     [rp, setRp] = useState(house?.rp ?? ""),
     [practical, setPractical] = useState(house?.practical ?? ""),
     [starts, setStarts] = useState(
-      house ? localDate(house.starts_at, zone) : schedule.starts,
+      house ? houseScheduleInput(house.starts_at, zone, isTest, year) : "",
     ),
     [ends, setEnds] = useState(
-      house ? localDate(house.ends_at, zone) : schedule.ends,
+      house ? houseScheduleInput(house.ends_at, zone, isTest, year) : "",
     ),
     [guidelines, setGuidelines] = useState(false),
     [guidelinesOpen, setGuidelinesOpen] = useState(false),
@@ -184,6 +195,11 @@ export default function ParticipationForm({
             center={center}
             styleUrl={styleUrl}
             allowedCommuneCodes={settings.allowedCommuneCodes}
+            configuredPlace={
+              territory && postalCode
+                ? { city: territory, postalCode }
+                : undefined
+            }
             onChange={setLocation}
           />,
           "participation-location-section",
@@ -232,6 +248,7 @@ export default function ParticipationForm({
             opens={opens}
             closes={closes}
             isTest={isTest}
+            defaultDate={defaultDate}
             onStart={(v) => {
               setStarts(v);
               setSaved(false);

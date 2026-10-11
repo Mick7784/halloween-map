@@ -468,17 +468,18 @@ describe("map navigation surfaces", () => {
       document.querySelector(".route-map-layer .route-sheet"),
     ).not.toBeNull();
     expect(byLabel("Recentrer sur ma position")).not.toBeNull();
-    expect(byLabel("Commandes de collecte")).not.toBeNull();
+    expect(byLabel("Commandes de collecte")).toBeNull();
+    expect(document.querySelector("a.collection-account")).not.toBeNull();
     expect(document.querySelector(".route-account-link")).toBeNull();
     expect(
-      document.querySelector('.collection-context-menu a[href="/account"]'),
+      document.querySelector('a.collection-account[href="/account"]'),
     ).not.toBeNull();
     expect(
-      document.querySelector(".collection-context-menu")?.textContent,
-    ).toContain("Voir les étapes");
+      document.querySelector(".collection-top-panel")?.textContent,
+    ).toContain("Ma sélection");
     expect(
-      document.querySelector(".collection-context-menu")?.textContent,
-    ).toContain("Ajouter une maison");
+      document.querySelector(".collection-top-panel")?.textContent,
+    ).toContain("Ajouter des maisons");
   });
 });
 

@@ -12,12 +12,14 @@ export function selectableHouses(
   activities: Activity[],
   start: number,
   end: number,
+  ignoreCriteria = false,
 ) {
   return houses.filter(
     (h) =>
-      acceptsFear(h, maximum) &&
+      (ignoreCriteria || acceptsFear(h, maximum)) &&
       h.activities.length > 0 &&
-      (!activities.length ||
+      (ignoreCriteria ||
+        !activities.length ||
         activities.some((a) => h.activities.includes(a))) &&
       +new Date(h.starts_at) < end &&
       +new Date(h.ends_at) > start,

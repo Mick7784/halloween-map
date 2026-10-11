@@ -88,8 +88,8 @@ beforeEach(async () => {
     token: "release-fixture-only",
     instance: {
       public_name: "Halloween",
-      territory: "Commune fictive",
-      postal_code: "00000",
+      territory: "Rennes",
+      postal_code: "35000",
       country: "France",
       timezone: "Europe/Paris",
       latitude: 48.1,
@@ -152,6 +152,24 @@ async function submit() {
   });
   return (await ownHouse(owner))!;
 }
+it("rejects a valid French address outside the configured town/postcode and retains an unchanged historical location", async () => {
+  const h = await submit();
+  await db().query("UPDATE instances SET territory='Lyon',postal_code='69002'");
+  await expect(
+    updateHouse(owner, String(h.id), {
+      ...house,
+      address: h.address,
+      rp: "Texte corrigé",
+    }),
+  ).resolves.not.toThrow();
+  await expect(
+    updateHouse(owner, String(h.id), {
+      ...house,
+      latitude: house.latitude + 0.0001,
+    }),
+  ).rejects.toThrow("commune et au code postal configurés");
+  expect(Number((await ownHouse(owner))!.latitude)).toBe(house.latitude);
+});
 async function review(
   id: string,
   status: string,
@@ -615,7 +633,7 @@ it("requires a current location preview, applies only instance defaults and neve
   ).rows[0];
   const payload = {
     ...original,
-    territory: "Rennes",
+    territory: "Lyon",
     latitude: 48.11,
     defaultOpen: "10-30T18:00",
     defaultClose: "10-31T22:00",

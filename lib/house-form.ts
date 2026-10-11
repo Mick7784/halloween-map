@@ -13,6 +13,19 @@ export type HouseLocationValue = {
   point: [number, number] | null;
   confirmed: boolean;
 };
+export function houseScheduleInput(
+  value: string | Date,
+  zone: string,
+  isTest = false,
+  year = new Date().getFullYear(),
+) {
+  const date = (
+    value instanceof Date ? DateTime.fromJSDate(value) : DateTime.fromISO(value)
+  ).setZone(zone);
+  return isTest && (date.year <= 2000 || date.year >= 2200)
+    ? `${year}-10-31T${date.toFormat("HH:mm")}`
+    : date.toFormat("yyyy-MM-dd'T'HH:mm");
+}
 // Minute-only inputs must stay inside the exact season timestamps.
 export function houseScheduleBounds(
   opens: string,

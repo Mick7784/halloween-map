@@ -300,6 +300,14 @@ test("new house uses shared form, searchable owner and refreshed validated list;
     .getByLabel("Nom de la maison *", { exact: true })
     .fill("Maison Alice");
   await page.getByRole("checkbox").last().check();
+  await page
+    .getByLabel("Date de début")
+    .fill(new Date().toISOString().slice(0, 10));
+  await page
+    .getByLabel("Date de fin")
+    .fill(new Date().toISOString().slice(0, 10));
+  await page.getByLabel("Heure de début").fill("18:00");
+  await page.getByLabel("Heure de fin").fill("22:00");
   await page.getByRole("button", { name: "Créer la maison" }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(

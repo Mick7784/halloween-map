@@ -60,6 +60,7 @@ async function arrange(page: Page, edit = false, candyOnly = false) {
         instance: {
           public_name: "Halloween",
           territory: "Lyon",
+          postal_code: address.postalCode,
           timezone: "Europe/Paris",
           longitude: 4.8358,
           latitude: 45.7651,
@@ -188,11 +189,14 @@ for (const width of [390, 1440]) {
         exact: true,
       }),
     ).toBeDisabled();
-    await page
-      .getByLabel("Code postal", { exact: false })
-      .fill(address.postalCode);
+    await expect(page.getByLabel("Code postal", { exact: false })).toHaveValue(
+      address.postalCode,
+    );
+    await expect(
+      page.getByLabel("Code postal", { exact: false }),
+    ).toHaveAttribute("readonly", "");
     await expect(page.getByLabel("Ville", { exact: false })).toHaveValue(
-      address.cityCode,
+      "Lyon",
     );
     await page.getByLabel("Numéro", { exact: false }).fill("12 bis");
     await page.getByLabel("Rue", { exact: false }).fill(address.street);
@@ -211,8 +215,34 @@ for (const width of [390, 1440]) {
       })
       .click();
     await expect(
-      page.getByRole("button", { name: "Point confirmé", exact: true }),
+      page.getByText("Emplacement vérifié et confirmé", { exact: true }),
     ).toBeVisible();
+    await page.getByRole("button", { name: "Modifier", exact: true }).click();
+    await expect(
+      page.getByRole("heading", {
+        name: "Confirmez l’emplacement de votre maison",
+      }),
+    ).toBeVisible();
+    await page.screenshot({
+      path: `test-results/review-location-${width}.png`,
+    });
+    await page
+      .getByRole("button", {
+        name: "Confirmer le point de ma maison",
+        exact: true,
+      })
+      .click();
+    await page.getByLabel("Numéro", { exact: false }).fill("14");
+    await expect(
+      page.getByText("Emplacement vérifié et confirmé", { exact: true }),
+    ).toHaveCount(0);
+    await page.getByLabel("Numéro", { exact: false }).fill("12 bis");
+    await page
+      .getByRole("button", {
+        name: "Confirmer le point de ma maison",
+        exact: true,
+      })
+      .click();
     await page
       .getByLabel("Nom de la maison", { exact: false })
       .fill("Le jardin des petits fantômes");
@@ -257,6 +287,22 @@ for (const width of [390, 1440]) {
     await page
       .getByRole("checkbox", { name: /J’ai pris connaissance/ })
       .check();
+    await page.getByLabel("Heure de début").fill("18:00");
+    await page.getByLabel("Heure de fin").fill("22:00");
+    const consent = page.locator(".participation-consent");
+    const submit = page.locator(".participation-submit");
+    await submit.scrollIntoViewIfNeeded();
+    const consentBox = (await consent.boundingBox())!;
+    const submitBox = (await submit.boundingBox())!;
+    expect(consentBox.y + consentBox.height).toBeLessThanOrEqual(submitBox.y);
+    await expect(consent).toBeInViewport();
+    await expect(
+      page.getByRole("button", {
+        name: "Envoyer ma participation",
+        exact: true,
+      }),
+    ).toBeEnabled();
+    await page.screenshot({ path: `test-results/review-consent-${width}.png` });
     await page.screenshot({
       animations: "disabled",
       path: `${output}/creation-${width}.png`,
@@ -311,7 +357,7 @@ for (const width of [390, 1440]) {
         exact: true,
       })
       .click();
-    await expect(page.getByRole("status")).toContainText(
+    await expect(page.locator(".participation-success")).toContainText(
       "Modifications enregistrées",
     );
     await page
@@ -383,9 +429,7 @@ test("GPS resolves a French address and requires explicit point confirmation", a
   await expect(page.getByLabel("Code postal", { exact: false })).toHaveValue(
     address.postalCode,
   );
-  await expect(page.getByLabel("Ville", { exact: false })).toHaveValue(
-    address.cityCode,
-  );
+  await expect(page.getByLabel("Ville", { exact: false })).toHaveValue("Lyon");
   await expect(
     page.getByRole("button", { name: "Envoyer ma participation", exact: true }),
   ).toBeDisabled();
@@ -396,7 +440,7 @@ test("GPS resolves a French address and requires explicit point confirmation", a
     })
     .click();
   await expect(
-    page.getByRole("button", { name: "Point confirmé", exact: true }),
+    page.getByText("Emplacement vérifié et confirmé", { exact: true }),
   ).toBeVisible();
 });
 test("candy alone offers confirmed closing only", async ({ page }) => {
@@ -421,8 +465,12 @@ test("candy alone offers confirmed closing only", async ({ page }) => {
   await expect(page.locator(".participation-confirm")).toHaveCount(0);
   expect(calls.filter((c) => c.path === "participant")).toHaveLength(0);
   await expect(page.locator(".participation-dialog")).toHaveCount(0);
-  await page.getByRole("button", { name: "Menu utilisateur", exact: true }).click();
-  await page.getByRole("link", { name: "Ma participation", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Menu utilisateur", exact: true })
+    .click();
+  await page
+    .getByRole("link", { name: "Ma participation", exact: true })
+    .click();
   await expect(page.locator(".participation-dialog")).toBeVisible();
   await page
     .getByRole("button", { name: "Je n’ai plus de bonbons", exact: true })

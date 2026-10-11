@@ -20,8 +20,8 @@ test.beforeEach(async () => {
     token: process.env.SETUP_TOKEN,
     instance: {
       public_name: "Halloween",
-      territory: "Commune fictive",
-      postal_code: "00000",
+      territory: "Rennes",
+      postal_code: "35000",
       country: "France",
       timezone: "Europe/Paris",
       latitude: 48.1,
@@ -263,8 +263,9 @@ test("real API rejects forged addresses; house decisions dispatch one message an
   await page.goto("/participant");
   const form = page.locator("#participation-form");
   await form.getByLabel("Nom de la maison").fill(house.name);
-  await form.getByLabel("Code postal").fill("35000");
-  await form.getByLabel("Ville").selectOption("35238");
+  await expect(form.getByLabel("Code postal")).toHaveValue("35000");
+  await expect(form.getByLabel("Code postal")).toHaveAttribute("readonly", "");
+  await expect(form.getByLabel("Ville")).toHaveValue("Rennes");
   await form.getByLabel("Numéro").fill("12");
   await form.getByLabel("Rue", { exact: false }).fill("Rue des Lanternes");
   await form
@@ -280,21 +281,19 @@ test("real API rejects forged addresses; house decisions dispatch one message an
     })
     .click();
   await form.getByLabel("Bonbons", { exact: true }).check();
-  await form
-    .getByLabel("Début")
-    .fill(
-      DateTime.fromISO(house.starts_at)
-        .setZone("Europe/Paris")
-        .plus({ minutes: 2 })
-        .toFormat("yyyy-MM-dd'T'HH:mm"),
-    );
-  await form
-    .getByLabel("Fin", { exact: false })
-    .fill(
-      DateTime.fromISO(house.ends_at)
-        .setZone("Europe/Paris")
-        .toFormat("yyyy-MM-dd'T'HH:mm"),
-    );
+  await expect(form.getByLabel("Heure de début")).toHaveValue("");
+  await expect(form.getByLabel("Heure de fin")).toHaveValue("");
+  await expect(form.getByLabel("Date de début")).toHaveValue(
+    `${new Date().getFullYear()}-10-31`,
+  );
+  const startDate = DateTime.fromISO(house.starts_at)
+    .setZone("Europe/Paris")
+    .plus({ minutes: 2 });
+  const endDate = DateTime.fromISO(house.ends_at).setZone("Europe/Paris");
+  await form.getByLabel("Date de début").fill(startDate.toFormat("yyyy-MM-dd"));
+  await form.getByLabel("Heure de début").fill(startDate.toFormat("HH:mm"));
+  await form.getByLabel("Date de fin").fill(endDate.toFormat("yyyy-MM-dd"));
+  await form.getByLabel("Heure de fin").fill(endDate.toFormat("HH:mm"));
   await form.getByRole("checkbox", { name: /J’ai pris connaissance/ }).check();
   const submittedPromise = page.waitForResponse(
     (r) =>
@@ -483,6 +482,285 @@ async function login(page: Page, email = "release-admin@example.invalid") {
   expect(r.status()).toBe(200);
   return r;
 }
+for (const width of [390, 1440])
+  test(`free selection UI API DB never contacts directions ${width}`, async ({
+    page,
+    request,
+    context,
+  }) => {
+    const now = Date.now();
+    await pool.query(
+      "UPDATE seasons SET opens_at=now()-interval '1 hour',closes_at=now()+interval '6 hours',purge_at=now()+interval '3 days' WHERE id=$1",
+      [seasonId],
+    );
+    await pool.query("UPDATE instances SET longitude=-1.67,latitude=48.1");
+    await login(page, "release-member@example.invalid");
+    const acceptance = {
+      mode: "GUIDELINES_ONLY",
+      guidelines: true,
+      guidelines_version: "2026.1",
+    };
+    const created = await post(page, "participation", {
+      acceptance,
+      house: {
+        name: "Maison des lanternes",
+        address: "12 Rue des Lanternes 35000 Rennes",
+        position_confirmed: true,
+        address_parts: {
+          number: "12",
+          street: "Rue des Lanternes",
+          postalCode: "35000",
+          city: "Rennes",
+          cityCode: "35238",
+        },
+        latitude: 48.1,
+        longitude: -1.67,
+        activities: ["CANDY"],
+        fear: 2,
+        adaptable: true,
+        rp: "Une entrée illuminée",
+        practical: "Entrée par le portail",
+        starts_at: new Date(now + 60000).toISOString(),
+        ends_at: new Date(now + 3 * 3600000).toISOString(),
+      },
+    });
+    expect(created.status(), await created.text()).toBe(200);
+    await pool.query(
+      "UPDATE participations SET status='VISIBLE',review_status='VALIDATED',starts_at=now()-interval '5 minutes' WHERE user_id=$1",
+      [ownerId],
+    );
+    const houseId = (
+      await pool.query("SELECT id FROM participations WHERE user_id=$1", [
+        ownerId,
+      ])
+    ).rows[0].id;
+    await context.grantPermissions(["geolocation"]);
+    await context.setGeolocation({
+      latitude: 48.1,
+      longitude: -1.67,
+      accuracy: 10,
+    });
+    await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
+    const count = async () =>
+      (
+        await (
+          await request.get("http://127.0.0.1:3106/test-only/request-count")
+        ).json()
+      ).routingRequests;
+    const before = await count();
+    // Stable map style only; UI, selection API and database remain real.
+    await page.route("https://basemaps.cartocdn.com/**", (r) =>
+      r.fulfill({
+        json: {
+          version: 8,
+          sources: {},
+          layers: [
+            {
+              id: "review-background",
+              type: "background",
+              paint: { "background-color": "#20232b" },
+            },
+          ],
+        },
+      }),
+    );
+    await page.goto("/map");
+    await expect(page.locator(".maplibregl-canvas")).toBeVisible();
+    await expect(page.locator(".house-marker")).toBeVisible();
+    await page.screenshot({ path: `test-results/review-map-${width}.png` });
+    await page
+      .getByRole("button", { name: "Préparer ma collecte", exact: true })
+      .click();
+    await page
+      .getByRole("button", { name: "Me localiser", exact: true })
+      .click();
+    await page
+      .getByRole("checkbox", { name: /J’ai pris connaissance/ })
+      .check();
+    const response = page.waitForResponse(
+      (r) =>
+        new URL(r.url()).pathname === "/api/route" &&
+        r.request().method() === "POST",
+    );
+    await page
+      .getByRole("button", { name: "Préparer ma collecte", exact: true })
+      .click();
+    const prepared = await response;
+    expect(prepared.status(), await prepared.text()).toBe(200);
+    const result = await prepared.json();
+    expect(
+      result.stops.map((s: { house: { id: string } }) => s.house.id),
+    ).toEqual([houseId]);
+    expect(result).toMatchObject({
+      geometry: [],
+      distanceMeters: 0,
+      durationMinutes: 0,
+      walkingSeconds: 0,
+    });
+    await page
+      .getByRole("button", { name: "Commencer ma collecte", exact: true })
+      .click();
+    await page
+      .getByRole("button", {
+        name: "J’ai compris — commencer ma collecte",
+        exact: true,
+      })
+      .click();
+    await expect(page.locator(".collection-top-panel")).toBeVisible();
+    const metrics = page.locator(".collection-live-metrics");
+    await expect(metrics).toContainText("Temps écoulé");
+    await expect(metrics).toContainText("Distance parcourue");
+    const bar = (await page.locator(".collection-bottom-bar").boundingBox())!;
+    const metricBox = (await metrics.boundingBox())!;
+    const stopBox = (await page
+      .getByRole("button", { name: "Arrêter la collecte", exact: true })
+      .boundingBox())!;
+    expect(metricBox.x).toBeGreaterThanOrEqual(bar.x);
+    expect(metricBox.x + metricBox.width).toBeLessThanOrEqual(
+      bar.x + bar.width,
+    );
+    expect(metricBox.y).toBeGreaterThanOrEqual(stopBox.y + stopBox.height);
+    expect(
+      await metrics
+        .locator("strong")
+        .first()
+        .evaluate((el) => parseFloat(getComputedStyle(el).fontSize)),
+    ).toBeGreaterThanOrEqual(16);
+    await expect(page.locator(".house-marker")).toBeVisible();
+    await page.screenshot({
+      path: `test-results/review-collection-${width}.png`,
+    });
+    expect(await count()).toBe(before);
+    expect(
+      (
+        await pool.query("SELECT routes_count FROM seasons WHERE id=$1", [
+          seasonId,
+        ])
+      ).rows[0].routes_count,
+    ).toBe(1);
+  });
+for (const width of [390, 1440])
+  test(`Tiptap saves combined formatting through the real API and PostgreSQL, with matching email preview ${width}`, async ({
+    page,
+  }) => {
+    await login(page);
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto("/admin");
+    if (width === 390)
+      await page
+        .getByRole("button", { name: "Ouvrir la navigation", exact: true })
+        .click();
+    await page
+      .getByRole("navigation", { name: "Navigation administration" })
+      .getByRole("button", { name: "Communications", exact: true })
+      .click();
+    const surface = page.getByRole("textbox", { name: "Message", exact: true });
+    await expect(surface).toBeVisible();
+    await expect(surface).toHaveAttribute("contenteditable", "true");
+    await surface.fill("Accueil sûr et convivial");
+    await expect(surface).toHaveText("Accueil sûr et convivial");
+    await surface.press("ControlOrMeta+A");
+    const editor = page.locator(".visual-editor").first();
+    await editor.getByRole("button", { name: "Gras", exact: true }).click();
+    await editor.getByRole("button", { name: "Italique", exact: true }).click();
+    await expect(
+      page
+        .frameLocator('iframe[title="Aperçu du modèle"]')
+        .locator("strong em"),
+    ).toHaveText("Accueil sûr et convivial");
+    await page
+      .getByRole("button", { name: "Enregistrer le modèle", exact: true })
+      .click();
+    await expect(page.getByRole("status")).toContainText("Modèle enregistré");
+    expect(
+      (
+        await pool.query(
+          "SELECT body FROM message_templates WHERE kind='VERIFY'",
+        )
+      ).rows[0].body,
+    ).toBe("***Accueil sûr et convivial***");
+    await page.screenshot({
+      path: `test-results/ui-editor-${width}.png`,
+      fullPage: true,
+    });
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth),
+    ).toBeLessThanOrEqual(width);
+    await page.reload();
+    if (width === 390)
+      await page
+        .getByRole("button", { name: "Ouvrir la navigation", exact: true })
+        .click();
+    await page
+      .getByRole("navigation", { name: "Navigation administration" })
+      .getByRole("button", { name: "Communications", exact: true })
+      .click();
+    await expect(surface.locator("strong em")).toHaveText(
+      "Accueil sûr et convivial",
+    );
+    await surface.fill("Première maison");
+    await editor.getByRole("button", { name: "Liste", exact: true }).click();
+    await surface.press("End");
+    await surface.press("Enter");
+    await surface.pressSequentially("Deuxième maison");
+    await expect(surface.locator("li")).toHaveCount(2);
+    await page
+      .getByRole("button", { name: "Enregistrer le modèle", exact: true })
+      .click();
+    await expect(page.getByRole("status")).toContainText("Modèle enregistré");
+    expect(
+      (
+        await pool.query(
+          "SELECT body FROM message_templates WHERE kind='VERIFY'",
+        )
+      ).rows[0].body,
+    ).toBe("- ***Première maison***\n- ***Deuxième maison***");
+    await expect(
+      page.frameLocator('iframe[title="Aperçu du modèle"]').locator("li"),
+    ).toHaveCount(2);
+    await surface.press("ControlOrMeta+A");
+    await editor.getByLabel("Style de paragraphe").selectOption("paragraph");
+    await surface.fill("Bienvenue");
+    await editor.getByLabel("Style de paragraphe").selectOption("2");
+    await expect(surface.locator("h2")).toHaveText("Bienvenue");
+    await surface.press("ControlOrMeta+A");
+    await editor.getByRole("button", { name: "Lien", exact: true }).click();
+    await editor.getByLabel("Adresse du lien").fill("javascript:alert(1)");
+    await editor.getByRole("button", { name: "Appliquer le lien" }).click();
+    await expect(editor.getByRole("alert")).toContainText("HTTPS");
+    await editor
+      .getByLabel("Adresse du lien")
+      .fill("https://example.invalid/accueil");
+    await editor.getByRole("button", { name: "Appliquer le lien" }).click();
+    await expect(surface.locator("a")).toHaveAttribute(
+      "href",
+      "https://example.invalid/accueil",
+    );
+    await editor.getByRole("button", { name: "Aperçu", exact: true }).click();
+    await expect(
+      editor.getByLabel("Aperçu du contenu").locator("h2 a"),
+    ).toHaveText("Bienvenue");
+    await editor.getByRole("button", { name: "Rédiger", exact: true }).click();
+    await expect(surface.locator("h2 a")).toHaveText("Bienvenue");
+    await page
+      .getByRole("button", { name: "Enregistrer le modèle", exact: true })
+      .click();
+    await expect(page.getByRole("status")).toContainText("Modèle enregistré");
+    expect(
+      (
+        await pool.query(
+          "SELECT body FROM message_templates WHERE kind='VERIFY'",
+        )
+      ).rows[0].body,
+    ).toContain("# [");
+    await editor.scrollIntoViewIfNeeded();
+    await surface.locator("h2").click();
+    await expect(editor.getByLabel("Style de paragraphe")).toHaveValue("2");
+    await page.screenshot({
+      path: `test-results/review-editor-${width}.png`,
+      fullPage: true,
+    });
+  });
 test("guest mobile entry offers authentication and legal documents; APIs reject anonymous access", async ({
   page,
 }) => {
@@ -691,7 +969,8 @@ test("settings preview confirms consequences; new seasons use defaults and exist
   const before = (
     await pool.query("SELECT * FROM seasons WHERE id=$1", [seasonId])
   ).rows[0];
-  await page.getByLabel("Territoire / commune").fill("Rennes");
+  await page.getByLabel("Territoire / commune").fill("Lyon");
+  await page.getByLabel("Code postal", { exact: false }).fill("69002");
   await page
     .getByText("Valeurs proposées pour les futures saisons", { exact: true })
     .click();
@@ -717,7 +996,7 @@ test("settings preview confirms consequences; new seasons use defaults and exist
   await dialog.getByLabel("Mot de passe").fill("incorrect-password");
   await dialog.getByRole("button", { name: "Confirmer", exact: true }).click();
   await expect(page.getByRole("alert")).toBeVisible();
-  await expect(page.getByLabel("Territoire / commune")).toHaveValue("Rennes");
+  await expect(page.getByLabel("Territoire / commune")).toHaveValue("Lyon");
   page.once("dialog", (d) => d.dismiss());
   await nav.getByRole("button", { name: "Utilisateurs", exact: true }).click();
   await expect(page.getByLabel("Territoire / commune")).toBeVisible();

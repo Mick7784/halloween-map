@@ -6,12 +6,12 @@ import {
   Clock3,
   Ghost,
   Info,
-  Candy,
   Check,
   CircleAlert,
 } from "lucide-react";
 import { time, type PublicHouse, type RouteResult } from "./common";
 import { FearGauge, houseActivityOptions } from "./HouseFields";
+import ActivityIcon from "./ActivityIcon";
 import "./VisitorHouse.css";
 export default function VisitorHouse({
   house,
@@ -86,7 +86,7 @@ export default function VisitorHouse({
             </p>
           </header>
           <div className="visitor-activities" aria-label="Activités proposées">
-            {houseActivityOptions.map(({ id, label, Icon }) => (
+            {houseActivityOptions.map(({ id, label }) => (
               <span
                 key={id}
                 className={offered.includes(id) ? "is-offered" : "is-absent"}
@@ -95,7 +95,7 @@ export default function VisitorHouse({
                   (offered.includes(id) ? " : proposée" : " : non proposée")
                 }
               >
-                <Icon size={25} />
+                <ActivityIcon activity={id} size={25} />
                 {label}
               </span>
             ))}
@@ -161,7 +161,7 @@ export default function VisitorHouse({
                   (house.candy_available === false ? " is-depleted" : "")
                 }
               >
-                <Candy size={26} />
+                <ActivityIcon activity="CANDY" size={26} />
                 <span>
                   Bonbons
                   <strong>

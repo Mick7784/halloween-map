@@ -179,8 +179,8 @@ export default function ContentAdmin({
             label="Texte"
           />
           <p className="small muted">
-            Paragraphes, **gras**, *italique*, [lien](https://…), listes et
-            titres. Aucun HTML.
+            Utilisez la barre d’outils pour les titres, listes, liens et styles
+            de texte.
           </p>
           <div className="actions">
             <AsyncButton onClick={() => action({ action: "save", key, value })}>

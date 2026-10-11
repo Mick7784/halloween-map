@@ -38,6 +38,30 @@ const fix = {
   timestamp: now,
 };
 describe("mobile free collection selection", () => {
+  it("offers additions outside initial fear and activity criteria, without reviving expired houses", () => {
+    const other = {
+      ...house("other"),
+      fear: null,
+      activities: ["ACTING" as const],
+    };
+    const expired = {
+      ...house("expired"),
+      ends_at: new Date(now - 1).toISOString(),
+    };
+    expect(
+      selectableHouses([other, expired], 1, ["CANDY"], now, now + 3600000),
+    ).toEqual([]);
+    expect(
+      selectableHouses(
+        [other, expired],
+        1,
+        ["CANDY"],
+        now,
+        now + 3600000,
+        true,
+      ),
+    ).toEqual([other]);
+  });
   it("includes all lower fear levels and adaptable houses, respecting hours and effective activities", () => {
     for (let maximum = 1; maximum <= 5; maximum++) {
       for (let fear = 1; fear <= 5; fear++)

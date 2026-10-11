@@ -90,7 +90,7 @@ export default function MessageTemplates({ user }: { user: User }) {
         <span>Objet</span>
         <Input
           value={template.subject}
-          disabled={!manage}
+          disabled={!manage || !models}
           maxLength={150}
           onChange={(e) =>
             setTemplate({ ...template, subject: e.target.value })
@@ -98,7 +98,10 @@ export default function MessageTemplates({ user }: { user: User }) {
         />
       </label>
       <VisualEditor
-        disabled={!manage}
+        saveStatus={
+          dirty ? "Modifications non enregistrées" : "Modèle enregistré"
+        }
+        disabled={!manage || !models}
         value={template.body}
         onChange={(body) => setTemplate({ ...template, body })}
         variables={messageVariables}

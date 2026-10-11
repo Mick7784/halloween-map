@@ -9,21 +9,22 @@ import {
   AlertTriangle,
   MapPin,
   List,
+  Plus,
   Map as MapIcon,
 } from "lucide-react";
 import type { User, Activity } from "../lib/domain";
 import { locateOrigin } from "../lib/geolocation";
 import { nearestHouse, selectableHouses } from "../lib/collection-view";
-import { collectionStats } from "../lib/collection";
+import { gpsDistance, collectionStats } from "../lib/collection";
 import type { RouteParameters } from "../lib/active-route";
-import { Notice, labels, type PublicState } from "./common";
+import { Badges, Notice, labels, type PublicState } from "./common";
 import useActiveRoute from "./useActiveRoute";
 import MapView from "./Map";
 import RoutePreparation from "./RoutePreparation";
 import RouteSheet from "./RouteSheet";
 import VisitorHouse from "./VisitorHouse";
 import FloatingWindow from "./FloatingWindow";
-import { ActionMenu, Button } from "./ui";
+import ActivityIcon from "./ActivityIcon";
 import "./MapExperience.css";
 
 export default function MapExperience({
@@ -44,6 +45,9 @@ export default function MapExperience({
     closesAt: state.season?.closes_at ?? new Date(0).toISOString(),
   });
   const [preparing, setPreparing] = useState(false),
+    [preparationHouses, setPreparationHouses] = useState<
+      NonNullable<PublicState["houses"]>
+    >([]),
     [pick, setPick] = useState(false),
     [draftOrigin, setDraftOrigin] = useState<[number, number] | null>(null),
     [origin, setOrigin] = useState<[number, number] | null>(null),
@@ -66,6 +70,8 @@ export default function MapExperience({
   const [consultationFix, setConsultationFix] = useState<{
     point: [number, number];
     token: number;
+    accuracy: number;
+    timestamp: number;
   } | null>(null);
   const route = controller.result,
     routeShown = !!route,
@@ -144,10 +150,10 @@ export default function MapExperience({
   }
   const [clock, setClock] = useState(() => Date.now());
   useEffect(() => {
-    if (controller.phase !== "active") return;
+    if (controller.phase !== "active" && !consultationFix) return;
     const timer = setInterval(() => setClock(Date.now()), 1000);
     return () => clearInterval(timer);
-  }, [controller.phase]);
+  }, [controller.phase, consultationFix]);
   const stats = collectionStats(
     controller.collection,
     route?.stops.length ?? 0,
@@ -182,6 +188,8 @@ export default function MapExperience({
       const fix = await locateOrigin(navigator.geolocation);
       setConsultationFix((previous) => ({
         point: fix.point,
+        accuracy: fix.accuracy,
+        timestamp: Date.now(),
         token: (previous?.token ?? 0) + 1,
       }));
     } catch (e) {
@@ -191,13 +199,29 @@ export default function MapExperience({
     }
   }
   const selectedCandidates = route?.stops.map((s) => s.house.id) ?? [];
+  const proximityPoint =
+    controller.gpsState === "tracking" &&
+    controller.fixTimestamp &&
+    clock - controller.fixTimestamp <= 15000
+      ? controller.currentPosition
+      : null;
   const addCandidates = selectableHouses(
     state.routeCandidates ?? state.houses ?? [],
-    controller.parameters?.maxFear ?? 5,
-    controller.parameters?.activities ?? [],
+    5,
+    [],
     clock,
     +new Date(controller.parameters?.end ?? 0),
-  ).filter((h) => !selectedCandidates.includes(h.id));
+    true,
+  )
+    .filter((h) => !selectedCandidates.includes(h.id))
+    .sort((a, b) => {
+      const point = proximityPoint ?? retainedOrigin;
+      return point
+        ? gpsDistance(point, [a.longitude, a.latitude]) -
+            gpsDistance(point, [b.longitude, b.latitude]) ||
+            a.name.localeCompare(b.name, "fr")
+        : a.name.localeCompare(b.name, "fr");
+    });
   async function addHouse(house: NonNullable<PublicState["houses"]>[number]) {
     setSelectionBusy(true);
     setSelectionError("");
@@ -236,7 +260,22 @@ export default function MapExperience({
           controller.nearestHouseId,
           clock,
         )
-      : null;
+      : !focused && consultationFix
+        ? nearestHouse(
+            (routeShown ? steps : houses).map((house) => ({
+              house,
+              arrival: "",
+              departure: "",
+              walkingMinutes: 0,
+              walkingSeconds: 0,
+              distanceMeters: 0,
+            })),
+            controller.collection.visitedIds,
+            consultationFix,
+            null,
+            clock,
+          )
+        : null;
   const selectHouse = controller.selectHouse;
   const routeSheet = routeShown &&
     controller.phase !== "completed" &&
@@ -261,6 +300,7 @@ export default function MapExperience({
           setAdding(true);
         }}
         onRemove={controller.removeHouse}
+        proximityPoint={proximityPoint}
       />
     );
   return (
@@ -272,7 +312,13 @@ export default function MapExperience({
       <div className="route-map-layer" inert={blocked}>
         {controller.ready && (
           <MapView
-            houses={houses}
+            houses={
+              preparing || pick
+                ? preparationHouses
+                : routeShown && controller.phase !== "completed"
+                  ? steps
+                  : houses
+            }
             center={[state.instance!.longitude, state.instance!.latitude]}
             zoom={state.instance!.zoom}
             styleUrl={mapStyle}
@@ -280,7 +326,9 @@ export default function MapExperience({
             visitedIds={controller.collection.visitedIds}
             origin={(pick ? draftOrigin : retainedOrigin) ?? undefined}
             focusToken={pick ? 0 : focusToken}
-            routeSteps={steps}
+            routeSteps={
+              preparing || pick || controller.phase === "completed" ? [] : steps
+            }
             routePanelOpen={false}
             sheetPosition={controller.sheet}
             initialCamera={controller.camera}
@@ -302,37 +350,6 @@ export default function MapExperience({
             }
           />
         )}
-        {focused && (
-          <div className="collection-context-menu">
-            <ActionMenu label="Commandes de collecte">
-              <Link href="/account" className="collection-context-account">
-                Mon compte
-              </Link>
-              <Button onClick={() => controller.setSheet("expanded")}>
-                Voir les étapes
-              </Button>
-              <Button
-                onClick={() => {
-                  setSelectionError("");
-                  setAdding(true);
-                }}
-              >
-                Ajouter une maison
-              </Button>
-              <Button
-                disabled={
-                  !["tracking", "low-accuracy"].includes(controller.gpsState)
-                }
-                onClick={controller.recenterCurrentPosition}
-              >
-                Recentrer sur ma position
-              </Button>
-              <Button onClick={() => setConfirmation(true)}>
-                Arrêter la collecte
-              </Button>
-            </ActionMenu>
-          </div>
-        )}
         {!focused && !pick && (
           <>
             <button
@@ -350,14 +367,6 @@ export default function MapExperience({
                   {state.instance!.territory} · {houses.length} maisons
                 </small>
               </span>
-            </button>
-            <button
-              className="collection-options"
-              type="button"
-              aria-label="Options de la carte"
-              onClick={() => setOptionsOpen(true)}
-            >
-              <List size={22} />
             </button>
             <button
               className="collection-prepare primary"
@@ -413,7 +422,7 @@ export default function MapExperience({
                     )
                   }
                 >
-                  {labels[a]}
+                  <ActivityIcon activity={a} /> {labels[a]}
                 </button>
               ))}
             </div>
@@ -431,7 +440,19 @@ export default function MapExperience({
                     <MapPin size={18} />
                     <span>
                       <strong>{h.name}</strong>
-                      <small>{h.address}</small>
+                      <small>
+                        {proximityPoint
+                          ? `À environ ${Math.round(gpsDistance(proximityPoint, [h.longitude, h.latitude]))} m à vol d’oiseau`
+                          : "Distance actuelle indisponible"}
+                      </small>
+                      <Badges activities={h.activities} />
+                      <small>
+                        {h.fear === null
+                          ? "Frayeur non précisée"
+                          : `Frayeur : ${state.participation?.fearLabels[h.fear - 1] ?? h.fear}`}{" "}
+                        ·{" "}
+                        {h.adaptable ? "S’adapte aux visiteurs" : "Niveau fixe"}
+                      </small>
                     </span>
                   </button>
                 ))}
@@ -463,7 +484,7 @@ export default function MapExperience({
             <p className="route-gps-status" role="status">
               {!controller.verified
                 ? controller.checking
-                  ? "Vérification du parcours…"
+                  ? "Vérification de la sélection…"
                   : "Disponibilité non vérifiée"
                 : controller.gpsState === "low-accuracy"
                   ? `GPS approximatif · ±${Math.round(controller.accuracy ?? 0)} m`
@@ -549,12 +570,41 @@ export default function MapExperience({
         )}
         {focused && routeSheet}
         {focused && (
+          <Link href="/account" className="collection-account">
+            Mon compte
+          </Link>
+        )}
+        {focused && (
           <div className="collection-bottom-bar">
             <div>
               <strong>Ma collecte</strong>
               <small>
                 {stats.visited} / {stats.selected} maisons visitées
               </small>
+              <div className="collection-live-metrics">
+                <div aria-label="Chrono de collecte">
+                  <small>Temps écoulé</small>
+                  <strong>
+                    {Math.floor(stats.durationSeconds / 60)} min{" "}
+                    {stats.durationSeconds % 60} s
+                  </strong>
+                </div>
+                <div aria-label="Distance parcourue">
+                  <small>Distance parcourue</small>
+                  <strong>
+                    {distanceKnown
+                      ? `${(stats.distanceMeters / 1000).toLocaleString("fr-FR", { maximumFractionDigits: 2 })} km`
+                      : "—"}
+                  </strong>
+                  <small>
+                    {distanceKnown
+                      ? distanceComplete
+                        ? "GPS actif"
+                        : "GPS · mesure partielle"
+                      : "GPS indisponible"}
+                  </small>
+                </div>
+              </div>
               <progress
                 aria-label="Progression de la collecte"
                 max={Math.max(1, stats.selected)}
@@ -611,6 +661,7 @@ export default function MapExperience({
             onClose={() => setPreparing(false)}
             onCalculate={calculate}
             onInvalidate={controller.invalidate}
+            onSelection={setPreparationHouses}
             maxFear={maxFear}
             onFear={setMaxFear}
             resultMessage={
@@ -639,12 +690,26 @@ export default function MapExperience({
               <span>
                 <strong>{h.name}</strong>
                 <small>{h.address}</small>
+                <small>
+                  {proximityPoint
+                    ? `À environ ${Math.round(gpsDistance(proximityPoint, [h.longitude, h.latitude]))} m à vol d’oiseau`
+                    : "Distance actuelle indisponible"}
+                </small>
+                <Badges activities={h.activities} />
+                <small>
+                  {h.fear === null
+                    ? "Frayeur non précisée"
+                    : `Frayeur : ${state.participation?.fearLabels[h.fear - 1] ?? h.fear}`}
+                  {" · "}
+                  {h.adaptable ? "S’adapte aux visiteurs" : "Niveau fixe"}
+                </small>
               </span>
-              Ajouter
+              <Plus size={20} aria-hidden="true" />{" "}
+              <span className="visually-hidden">Ajouter {h.name}</span>
             </button>
           ))}
           {!addCandidates.length && (
-            <p>Aucune autre maison compatible avec vos horaires et filtres.</p>
+            <p>Aucune autre maison disponible pendant votre collecte.</p>
           )}
           {(route?.stops.length ?? 0) >= 30 && (
             <p>La sélection est limitée à 30 maisons.</p>
@@ -715,7 +780,9 @@ export default function MapExperience({
               arrêter votre collecte.
             </p>
             <p>
-              Les distances et durées affichées sont uniquement indicatives.
+              Le chrono mesure le temps écoulé. La distance parcourue est
+              mesurée avec le GPS ; elle peut être partielle si le signal est
+              interrompu.
             </p>
             <p>
               Les déplacements restent sous votre responsabilité. Les enfants

@@ -1,4 +1,12 @@
 import type { Activity } from "./domain";
+export function communeName(value: string) {
+  return value
+    .replace(/\s+\d+(?:er|e)?\s+arrondissement$/i, "")
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase()
+    .replace(/[-\s']/g, "");
+}
 export const participationDefaults = {
   activities: ["DECORATION", "CANDY", "ACTING"] as Activity[],
   fearLabels: ["Très doux", "Familial", "Modéré", "Frissonnant", "Intense"],

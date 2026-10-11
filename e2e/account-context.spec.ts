@@ -428,11 +428,7 @@ test("map canvas, filters and active route remain mounted across account", async
     .click();
   const resultBefore = await page.locator(".route-sheet").textContent();
   const routeBefore = await read();
-  await page.getByLabel("Commandes de collecte", { exact: true }).click();
-  await page
-    .locator(".collection-context-menu")
-    .getByRole("link", { name: "Mon compte", exact: true })
-    .click();
+  await page.getByRole("link", { name: "Mon compte", exact: true }).click();
   await expect(page.locator(".account-dialog")).toBeVisible();
   await page.getByRole("button", { name: "Fermer Mon compte" }).click();
   await expect(page.locator(".account-dialog")).toHaveCount(0);
@@ -609,7 +605,8 @@ for (const width of [390, 1440]) {
     await expect(dialog).toContainText(
       `${DateTime.fromISO(season.opens_at).setZone("Europe/Paris").toFormat("HH:mm")} – ${DateTime.fromISO(season.opens_at).setZone("Europe/Paris").plus({ hours: 3 }).toFormat("HH:mm")}`,
     );
-    await expect(dialog).toContainText("Bonbons, Décoration");
+    await expect(dialog).toContainText("Bonbons");
+    await expect(dialog).toContainText("Décoration");
     await expect(dialog).toContainText("Un jardin de citrouilles");
     await page.locator(".account-participation-details summary").click();
     await expect(

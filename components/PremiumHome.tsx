@@ -97,7 +97,7 @@ export default function PremiumHome({
             <ManorMark />
           </span>
           <span>
-            <strong>Halloween</strong>
+            <strong>Halloween Map</strong>
             <small>CARTE DES MAISONS</small>
           </span>
         </Link>
