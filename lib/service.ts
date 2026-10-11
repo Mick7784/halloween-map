@@ -28,8 +28,10 @@ import {
   localISO,
   publicHouse,
   seasonState,
+  mapAccessible,
   earlyMapAccess,
   memberMapAccessible,
+  collectionAccessible,
   visible,
   type Instance,
   type Season,
@@ -430,31 +432,35 @@ export async function publicState(
   const i = await instance();
   if (!i) return { setupRequired: true };
   const s = await applicationSeason(i, user),
-    state = memberMapAccessible(s, user, now)
-      ? "MAP_OPEN"
-      : seasonState(s, now);
+    state = seasonState(s, now);
   const earlyAccess = earlyMapAccess(s, user, now);
+  const canSeeMap = memberMapAccessible(s, user, now);
+  const canCollect = collectionAccessible(s, user, now);
   let count = 0,
     houses: ReturnType<typeof publicHouse>[] = [];
   let upcoming: ReturnType<typeof publicHouse>[] = [];
   let closedHouseIds: string[] = [];
-  if (s && state !== "CLOSED") {
+  if (s) {
     const { rows } = await db().query(
       "SELECT count(*)::int n FROM participations WHERE instance_id=$1 AND season_id=$2 AND status=$3 AND review_status='VALIDATED' AND EXISTS(SELECT 1 FROM users u WHERE u.id=participations.user_id AND u.account_status='ACTIVE' AND (u.email_status='VERIFIED' OR participations.legacy_imported)) AND NOT EXISTS(SELECT 1 FROM legal_documents d WHERE d.instance_id=participations.instance_id AND d.active AND d.requires_reaccept AND ((d.kind='TERMS' AND participations.terms_version IS DISTINCT FROM d.version) OR (d.kind='GUIDELINES' AND participations.guidelines_version IS DISTINCT FROM d.version)))",
       [i.id, s.id, "VISIBLE"],
     );
     count = Number(rows[0].n);
-    if (state === "MAP_OPEN" && user) {
+    if (canSeeMap && user) {
       const { rows } = await db().query(
         "SELECT * FROM participations WHERE instance_id=$1 AND season_id=$2 AND status='VISIBLE' AND review_status='VALIDATED' AND activity='ACTIVE' AND EXISTS(SELECT 1 FROM users u WHERE u.id=participations.user_id AND u.account_status='ACTIVE' AND (u.email_status='VERIFIED' OR participations.legacy_imported)) AND NOT EXISTS(SELECT 1 FROM legal_documents d WHERE d.instance_id=participations.instance_id AND d.active AND d.requires_reaccept AND ((d.kind='TERMS' AND participations.terms_version IS DISTINCT FROM d.version) OR (d.kind='GUIDELINES' AND participations.guidelines_version IS DISTINCT FROM d.version))) AND starts_at<=$3 AND ends_at>$3",
-        [i.id, s.id, earlyAccess ? s.opens_at : now],
+        [i.id, s.id, earlyAccess && !s.is_test ? s.opens_at : now],
       );
       houses = (rows as unknown as House[])
-        .filter((h) => visible(h, s, earlyAccess ? new Date(s.opens_at) : now))
+        .filter((h) =>
+          earlyAccess
+            ? effectiveActivities(h).length > 0
+            : visible(h, s, now),
+        )
         .map(publicHouse);
     }
   }
-  if (s && state === "MAP_OPEN" && user)
+  if (s && canCollect && user)
     upcoming = (await routeCandidates(db(), i, s, now, s.closes_at))
       .filter(
         (h) =>
@@ -464,7 +470,7 @@ export async function publicState(
           +new Date(h.ends_at) > +now,
       )
       .map(publicHouse);
-  if (s && state === "MAP_OPEN" && user) {
+  if (s && canCollect && user) {
     closedHouseIds = (
       await db().query(
         "SELECT id FROM participations WHERE instance_id=$1 AND season_id=$2 AND status='VISIBLE' AND review_status='VALIDATED' AND activity IN ('ENDED','PAUSED') AND ends_at>$3 AND EXISTS(SELECT 1 FROM users u WHERE u.id=participations.user_id AND u.account_status='ACTIVE' AND (u.email_status='VERIFIED' OR participations.legacy_imported)) AND NOT EXISTS(SELECT 1 FROM legal_documents d WHERE d.instance_id=participations.instance_id AND d.active AND d.requires_reaccept AND ((d.kind='TERMS' AND participations.terms_version IS DISTINCT FROM d.version) OR (d.kind='GUIDELINES' AND participations.guidelines_version IS DISTINCT FROM d.version)))",
@@ -491,7 +497,7 @@ export async function publicState(
           territory: i.territory,
           event_name: i.public_name,
           season_year: s?.year ?? "",
-          house_count: state === "MAP_OPEN" ? houses.length : count,
+          house_count: canSeeMap ? houses.length : count,
           registration_date: formatDate(s?.registrations_open_at, i.timezone),
           map_open_date: formatDate(s?.opens_at, i.timezone),
           map_close_date: formatDate(s?.closes_at, i.timezone),
@@ -503,7 +509,9 @@ export async function publicState(
     privacy: publicPrivacySettings(i.config.privacy),
     projectLinks: publicProjectLinks(i.config.projectLinks, i.config.privacy),
     participation: publicParticipationSettings(i.config.participation),
-    mapAccessible: memberMapAccessible(s, user, now),
+    mapAccessible: canSeeMap,
+    collectionAccessible: canCollect,
+    publicMapOpen: mapAccessible(s, now),
     earlyAccess,
     instance: {
       id: i.id,
@@ -1042,8 +1050,8 @@ export async function route(
   if (!i) throw new HttpError(404, "Instance manquante");
   const rawSeason = await applicationSeason(i, user);
   const s = rawSeason;
-  if (!s || !memberMapAccessible(s, user, context.now))
-    throw new HttpError(403, "La carte est fermée");
+  if (!s || !collectionAccessible(s, user, context.now))
+    throw new HttpError(403, "La collecte est fermée");
   await validateAcceptance(db(), i.id, input.acceptance);
   try {
     validateRouteWindow(s, input, context.now);
@@ -1113,7 +1121,7 @@ export async function route(
       currentInstance?.active_season_id !== s.id ||
       +new Date(current.opens_at) !== +new Date(rawSeason!.opens_at) ||
       +new Date(current.closes_at) !== +new Date(rawSeason!.closes_at) ||
-      !memberMapAccessible({ ...current, active: true }, user, context.now)
+      !collectionAccessible({ ...current, active: true }, user, context.now)
     )
       throw new HttpError(409, "La saison a changé. Vérifiez la sélection.");
     const latest = await routeCandidates(c, i, current, input.start, input.end);
@@ -1156,7 +1164,7 @@ export async function routeAvailability(
     input.instanceId !== i.id ||
     !s ||
     input.seasonId !== s.id ||
-    !memberMapAccessible(s, user, context.now)
+    !collectionAccessible(s, user, context.now)
   )
     return {
       valid: false,
