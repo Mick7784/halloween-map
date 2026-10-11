@@ -101,6 +101,17 @@ export default function Application({
     };
   }, [refresh]);
   useEffect(() => {
+    // Revalidate the actual opening moment; the server is authoritative.
+    if (state?.state !== "COUNTDOWN" || !state.season || state.season.is_test) return;
+    const remaining = +new Date(state.season.opens_at) - Date.now();
+    if (remaining <= 0) return;
+    const timer = window.setTimeout(
+      () => void refresh().catch((e) => setError(e.message)),
+      Math.min(remaining + 150, 2147483647),
+    );
+    return () => clearTimeout(timer);
+  }, [state?.state, state?.season?.opens_at, state?.season?.is_test, refresh]);
+  useEffect(() => {
     const viewport = window.visualViewport;
     const resize = () =>
       document.documentElement.style.setProperty(
@@ -197,6 +208,8 @@ export default function Application({
               ),
       }
     : null;
+  const automaticMap = state?.state === "MAP_OPEN" && !state.season?.is_test;
+  const canShowMap = !!user && !!state?.mapAccessible && (view === "map" || automaticMap);
   let content: React.ReactNode;
   if (!state)
     content = (
@@ -323,17 +336,12 @@ export default function Application({
           state={liveState!}
           mapStyle={mapStyle}
           now={effectiveNow}
-          showMap={
-            !!user &&
-            !!state.mapAccessible &&
-            (view === "map" || state.state === "MAP_OPEN")
-          }
+          showMap={canShowMap}
           user={user}
         />
       );
   if (
-    (((view === "home" || view === "map") &&
-      !(user && state?.mapAccessible && !closed)) ||
+    (((view === "home" || view === "map") && !canShowMap) ||
       (["account", "participant"].includes(view) && user)) &&
     state &&
     !state.setupRequired
@@ -344,7 +352,7 @@ export default function Application({
         user={user}
         now={effectiveNow}
         version={version}
-        login={<LoginForm destination="/map" />}
+        login={<LoginForm destination="/" />}
         error={error}
         onRetry={refresh}
       />,
@@ -414,7 +422,7 @@ export default function Application({
           state={state}
           version={version}
           onClose={() => setMenu(false)}
-          login={<LoginForm compact={false} destination="/map" />}
+          login={<LoginForm compact={false} destination="/" />}
         />
       )}
       <footer>
@@ -623,6 +631,7 @@ function PublicMap({
       user={user}
       mapStyle={mapStyle}
       refresh={refresh}
+      readOnly={!state.collectionAccessible}
     />
   );
 }
