@@ -853,7 +853,8 @@ describe("Seasons, privacy and participant activity", () => {
     const result = await service.publicState(new Date("2026-10-31T23:00:00Z"));
     expect(result.mapAccessible).toBe(false);
     expect(result.houses).toEqual([]);
-    expect(result.season).toBeNull();
+    expect(result.season?.id).toBe(season.id);
+    expect(result.state).toBe("CLOSED");
     expect(
       (await service.adminRead(admin, "houses", season.id)) as unknown[],
     ).toHaveLength(1);
