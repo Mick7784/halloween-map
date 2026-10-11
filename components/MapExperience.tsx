@@ -72,6 +72,7 @@ export default function MapExperience({
     [selectionBusy, setSelectionBusy] = useState(false),
     [selectionError, setSelectionError] = useState(""),
     [selectionNotice, setSelectionNotice] = useState(""),
+    [rankingPoint, setRankingPoint] = useState<[number, number] | null>(null),
     [locating, setLocating] = useState(false),
     [locationError, setLocationError] = useState("");
   const [consultationFix, setConsultationFix] = useState<{
@@ -212,6 +213,14 @@ export default function MapExperience({
     clock - controller.fixTimestamp <= 15000
       ? controller.currentPosition
       : null;
+  useEffect(() => {
+    if (!proximityPoint) return;
+    setRankingPoint((previous) =>
+      !previous || gpsDistance(previous, proximityPoint) >= 15
+        ? proximityPoint
+        : previous,
+    );
+  }, [proximityPoint]);
   const addCandidates = selectableHouses(
     state.routeCandidates ?? state.houses ?? [],
     5,
@@ -334,7 +343,7 @@ export default function MapExperience({
           setAdding(true);
         }}
         onRemove={controller.removeHouse}
-        proximityPoint={proximityPoint ?? retainedOrigin}
+        proximityPoint={rankingPoint ?? retainedOrigin}
       />
     );
   return (
