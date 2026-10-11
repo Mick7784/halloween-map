@@ -448,13 +448,13 @@ export async function publicState(
     count = Number(rows[0].n);
     if (canSeeMap && user) {
       const { rows } = await db().query(
-        "SELECT * FROM participations WHERE instance_id=$1 AND season_id=$2 AND status='VISIBLE' AND review_status='VALIDATED' AND activity='ACTIVE' AND EXISTS(SELECT 1 FROM users u WHERE u.id=participations.user_id AND u.account_status='ACTIVE' AND (u.email_status='VERIFIED' OR participations.legacy_imported)) AND NOT EXISTS(SELECT 1 FROM legal_documents d WHERE d.instance_id=participations.instance_id AND d.active AND d.requires_reaccept AND ((d.kind='TERMS' AND participations.terms_version IS DISTINCT FROM d.version) OR (d.kind='GUIDELINES' AND participations.guidelines_version IS DISTINCT FROM d.version))) AND starts_at<=$3 AND ends_at>$3",
-        [i.id, s.id, earlyAccess && !s.is_test ? s.opens_at : now],
+        "SELECT * FROM participations WHERE instance_id=$1 AND season_id=$2 AND status='VISIBLE' AND review_status='VALIDATED' AND activity='ACTIVE' AND EXISTS(SELECT 1 FROM users u WHERE u.id=participations.user_id AND u.account_status='ACTIVE' AND (u.email_status='VERIFIED' OR participations.legacy_imported)) AND NOT EXISTS(SELECT 1 FROM legal_documents d WHERE d.instance_id=participations.instance_id AND d.active AND d.requires_reaccept AND ((d.kind='TERMS' AND participations.terms_version IS DISTINCT FROM d.version) OR (d.kind='GUIDELINES' AND participations.guidelines_version IS DISTINCT FROM d.version))) AND (activity='ACTIVE' OR ($4::boolean AND activity IN ('ENDED','PAUSED'))) AND (($4::boolean AND starts_at<$5 AND ends_at>$6) OR (NOT $4::boolean AND starts_at<=$3 AND ends_at>$3))",
+        [i.id, s.id, now, earlyAccess, s.closes_at, s.opens_at],
       );
       houses = (rows as unknown as House[])
         .filter((h) =>
           earlyAccess
-            ? effectiveActivities(h).length > 0
+            ? h.activities.length > 0
             : visible(h, s, now),
         )
         .map(publicHouse);
