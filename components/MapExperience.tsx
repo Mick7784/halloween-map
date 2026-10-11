@@ -36,11 +36,13 @@ export default function MapExperience({
   user,
   mapStyle,
   refresh,
+  readOnly = false,
 }: {
   state: PublicState;
   user: User | null;
   mapStyle: string;
   refresh: () => Promise<void>;
+  readOnly?: boolean;
 }) {
   const controller = useActiveRoute({
     ownerId: user?.id ?? "",
@@ -78,7 +80,7 @@ export default function MapExperience({
     accuracy: number;
     timestamp: number;
   } | null>(null);
-  const route = controller.result,
+  const route = readOnly ? null : controller.result,
     routeShown = !!route,
     focused = routeShown && controller.phase === "active";
   const setSheet = controller.setSheet;
@@ -400,17 +402,17 @@ export default function MapExperience({
                 </small>
               </span>
             </button>
-            <button
+            {!readOnly && <button
               className="collection-prepare primary"
               type="button"
-              disabled={state.state !== "MAP_OPEN"}
+              disabled={!state.collectionAccessible}
               onClick={prepare}
             >
               <Route size={22} />
               {controller.phase === "calculated"
                 ? "Voir ma sélection"
                 : "Préparer ma collecte"}
-            </button>
+            </button>}
             <button
               className="route-recenter consultation-recenter"
               type="button"
@@ -493,10 +495,8 @@ export default function MapExperience({
             )}
           </FloatingWindow>
         )}
-        {state.state !== "MAP_OPEN" && (
-          <p className="route-closed-notice">
-            Les autres maisons seront visibles à l’ouverture de la carte.
-          </p>
+        {readOnly && (
+          <p className="route-closed-notice">Saison terminée — carte en lecture seule.</p>
         )}
         {focused && (
           <button
