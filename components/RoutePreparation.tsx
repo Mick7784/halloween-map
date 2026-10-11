@@ -18,6 +18,7 @@ import type { Activity } from "../lib/domain";
 import { Field, Notice, fears, values } from "./common";
 import Editorial from "./Editorial";
 import { selectableHouses } from "../lib/collection-view";
+import { gpsDistance } from "../lib/collection";
 import ManorMark from "./ManorMark";
 
 export default function RoutePreparation({
@@ -72,10 +73,16 @@ export default function RoutePreparation({
     [guidelinesOpen, setGuidelinesOpen] = useState(false);
   const zone = state.instance!.timezone,
     guideline = state.documents?.GUIDELINES;
-  const candidates = useMemo(
-    () => state.routeCandidates ?? state.houses ?? [],
-    [state.routeCandidates, state.houses],
-  );
+  const candidates = useMemo(() => {
+    const houses = [...(state.routeCandidates ?? state.houses ?? [])];
+    if (!origin) return houses;
+    return houses.sort(
+      (a, b) =>
+        gpsDistance(origin, [a.longitude, a.latitude]) -
+          gpsDistance(origin, [b.longitude, b.latitude]) ||
+        a.name.localeCompare(b.name, "fr"),
+    );
+  }, [state.routeCandidates, state.houses, origin]);
   const eligible = selectableHouses(
     candidates,
     maxFear,
