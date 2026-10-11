@@ -1054,7 +1054,7 @@ export async function route(
     throw new HttpError(403, "La collecte est fermée");
   await validateAcceptance(db(), i.id, input.acceptance);
   try {
-    validateRouteWindow(s, input, context.now);
+    validateRouteWindow(s, input, context.now, earlyMapAccess(s, user, context.now));
   } catch (e) {
     throw new HttpError(400, (e as Error).message);
   }
@@ -1081,6 +1081,7 @@ export async function route(
       s,
       input,
       context.now,
+      earlyMapAccess(s, user, context.now),
     );
     if (
       input.selectedHouseIds?.some(
@@ -1118,10 +1119,10 @@ export async function route(
       throw new HttpError(403, "Compte indisponible");
     if (
       !current ||
-      currentInstance?.active_season_id !== s.id ||
+      ((currentInstance?.active_season_id === s.id) !== !!rawSeason?.active) ||
       +new Date(current.opens_at) !== +new Date(rawSeason!.opens_at) ||
       +new Date(current.closes_at) !== +new Date(rawSeason!.closes_at) ||
-      !collectionAccessible({ ...current, active: true }, user, context.now)
+      !collectionAccessible({ ...current, active: !!rawSeason?.active }, user, context.now)
     )
       throw new HttpError(409, "La saison a changé. Vérifiez la sélection.");
     const latest = await routeCandidates(c, i, current, input.start, input.end);
