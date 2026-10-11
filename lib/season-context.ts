@@ -38,9 +38,10 @@ export async function applicationSeason(
        ))
      ORDER BY
        CASE WHEN s.id=i.active_season_id THEN 0
-            WHEN s.closes_at<=$3::timestamptz AND s.closes_at>$3::timestamptz-interval '14 days' THEN 1
-            WHEN NOT s.archived AND s.opens_at>$3::timestamptz THEN 2
-            WHEN NOT s.archived AND s.closes_at>$3::timestamptz THEN 3
+            WHEN $2 AND NOT s.archived AND s.opens_at>$3::timestamptz THEN 1
+            WHEN s.closes_at<=$3::timestamptz AND s.closes_at>$3::timestamptz-interval '14 days' THEN 2
+            WHEN NOT s.archived AND s.opens_at>$3::timestamptz THEN 3
+            WHEN NOT s.archived AND s.closes_at>$3::timestamptz THEN 4
             ELSE 4 END,
        CASE WHEN s.opens_at>$3::timestamptz THEN s.opens_at END ASC NULLS LAST,
        s.opens_at DESC
