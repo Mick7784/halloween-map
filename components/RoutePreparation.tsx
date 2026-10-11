@@ -166,7 +166,7 @@ export default function RoutePreparation({
                 origin: { latitude: origin[1], longitude: origin[0] },
                 activities,
                 maxFear,
-                excludedHouseIds: [],
+                excludedHouseIds: excluded,
                 selectedHouseIds: chosen.map((house) => house.id),
                 acceptance: {
                   mode: "GUIDELINES_ONLY",
