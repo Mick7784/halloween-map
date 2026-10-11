@@ -218,12 +218,12 @@ it("uses one pointer for REAL/TEST, serializes competing activations, and reject
   expect(waiting.state).toBe("PREPARATION");
   expect(waiting.mapAccessible).toBe(false);
   expect(waiting.houses).toEqual([]);
-  await expect(
-    service.createParticipation(ordinary, {
-      house: houseDefinition,
-      acceptance,
-    }),
-  ).rejects.toMatchObject({ status: 403 });
+  const registration = await service.createParticipation(ordinary, {
+    house: houseDefinition,
+    acceptance,
+  });
+  expect(registration).toMatchObject({ ok: true });
+  expect((await service.ownHouse(ordinary))?.season_id).toBe(real.id);
   expect(
     ((await service.adminRead(admin, "dashboard")) as { season: unknown })
       .season,
@@ -243,12 +243,14 @@ it("allows staff to prepare a real season with houses before public activation",
   const visitor = await service.publicState(undefined, ordinary);
   expect(visitor.mapAccessible).toBe(false);
   expect(visitor.houses).toEqual([]);
-  await expect(
-    service.createParticipation(ordinary, {
-      house: houseDefinition,
-      acceptance,
-    }),
-  ).rejects.toMatchObject({ status: 403 });
+  const lateParticipant = await directAccount("Inscription avant activation");
+  const registration = await service.createParticipation(lateParticipant, {
+    house: houseDefinition,
+    acceptance,
+  });
+  expect(registration).toMatchObject({ ok: true });
+  expect((await service.ownHouse(lateParticipant))?.season_id).toBe(real.id);
+  expect((await service.publicState(undefined, lateParticipant)).houses).toEqual([]);
 });
 it("keeps admin preview independent of public activation and closes public access by time", async () => {
   const staff = { ...admin, role_name: "ADMIN" };
