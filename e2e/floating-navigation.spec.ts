@@ -25,6 +25,8 @@ for (const width of [390, 1440])
                 setupRequired: false,
                 state: "MAP_OPEN",
                 mapAccessible: true,
+                collectionAccessible: true,
+                publicMapOpen: true,
                 instance: {
                   id: season.instance_id,
                   active_season_id: season.id,
