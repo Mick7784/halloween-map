@@ -39,6 +39,8 @@ const state = {
   setupRequired: false,
   state: seasonState(season),
   mapAccessible: mapAccessible(season),
+  collectionAccessible: true,
+  publicMapOpen: true,
   instance: {
     id: season.instance_id,
     active_season_id: season.id,
