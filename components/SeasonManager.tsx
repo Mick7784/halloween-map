@@ -1,6 +1,6 @@
 "use client";
 import { ActionCancelled } from "./AdminConfirmation";
-import { Dialog, Button, Select, DataTable, Input } from "./ui";
+import { Dialog, Button, DataTable, Input } from "./ui";
 import useDraftGuard, { confirmDraftNavigation } from "./useDraftGuard";
 import AdminStatistics from "./AdminStatistics";
 import { DateTime } from "luxon";
