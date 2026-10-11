@@ -110,7 +110,7 @@ export default function Application({
       Math.min(remaining + 150, 2147483647),
     );
     return () => clearTimeout(timer);
-  }, [state?.state, state?.season?.opens_at, state?.season?.is_test, refresh]);
+  }, [state?.state, state?.season, refresh]);
   useEffect(() => {
     const viewport = window.visualViewport;
     const resize = () =>
