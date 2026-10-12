@@ -1,5 +1,13 @@
 # Changelog
 
+## V0.8.8
+
+- Menu global regroupé en rubriques compactes « Carte et collecte », « Mes participations », « Profil et sécurité » et « Aide et application », avec une seule rubrique dépliée à la fois. Administration reste conditionnée à la permission effective `admin.access`, et déconnexion directement accessible à la racine.
+- Toutes les actions, liens configurés, années validées, vérification email, sécurité, données, suppression protégée et installation PWA sont conservés. Le menu anonyme conserve la connexion et l’inscription, avec une rubrique d’aide commune.
+- Les formulaires visités restent montés lors des retours internes ; leur fermeture ou une navigation externe avertit en présence de modifications non enregistrées. Carte, préférences et collecte conservent leur contexte.
+- Accueil avec header et footer distincts, sombres et opaques, autour de la scène illustrée originale mobile/desktop. Logo et footer partagés avec les autres pages ; liens légaux, soutien configuré, signature et version conservés. Horloge serveur, permissions TEST/REAL, CTA, inscriptions et remerciements inchangés.
+- Tests unitaires et navigateur des rubriques, permissions, conservation des formulaires, fermeture, accessibilité, écrans courts et phases de saison. Aucune migration, modification d’API ou refonte du back-office.
+
 ## V0.8.7
 
 - Menu global « Mon compte » identique depuis l’accueil, la carte, les pages publiques et le back-office. Bannière Halloween sombre orange/violet, en-tête réduit, une entrée par ligne sans description, zones tactiles de 44 px et décoration réduite pour limiter le défilement.

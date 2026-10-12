@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { expandAccountGroup } from "./fixtures/account-menu";
 import { realSeasonFixture } from "./fixtures/real-season";
 for (const width of [390, 1440])
   test(`shared floating navigation and unobstructed map ${width}px`, async ({
@@ -80,6 +81,7 @@ for (const width of [390, 1440])
           name: "Mon compte",
           exact: true,
         });
+        await expandAccountGroup(page, "Carte et collecte");
         await expect(
           menu.getByRole("link", { name: "La carte", exact: true }),
         ).toBeVisible();

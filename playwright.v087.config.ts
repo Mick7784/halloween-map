@@ -9,6 +9,7 @@ export default defineConfig({
     "floating-navigation.spec.ts",
     "admin-shell.spec.ts",
     "global-account-v087.spec.ts",
+    "compact-menu-v088.spec.ts",
   ],
   workers: 1,
   timeout: 30000,

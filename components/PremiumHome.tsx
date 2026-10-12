@@ -3,9 +3,8 @@ import Link from "next/link";
 import { useEffect, useState, type ReactNode } from "react";
 import { DateTime } from "luxon";
 import { Menu, House, ArrowRight } from "lucide-react";
-import ManorMark from "./ManorMark";
-import ProjectSupport from "./ProjectSupport";
-import { publicProjectLinks } from "../lib/project-links";
+import PublicBrand from "./PublicBrand";
+import PublicFooter from "./PublicFooter";
 import { api, AsyncButton, Notice, type PublicState } from "./common";
 import type { House as Participation, User } from "../lib/domain";
 import "./PremiumHome.css";
@@ -31,7 +30,6 @@ export default function PremiumHome({
   onOpenMenu: () => void;
   menuOpen: boolean;
 }) {
-  const projectLinks = publicProjectLinks(state.projectLinks, state.privacy);
   const [participation, setParticipation] = useState<Participation | null>(
     null,
   );
@@ -94,17 +92,8 @@ export default function PremiumHome({
             };
   return (
     <div className="home-reference">
-      <div className="home-art" aria-hidden="true" />
       <header className="home-header">
-        <Link href="/" className="home-brand" aria-label="Halloween — accueil">
-          <span className="home-brand-mark">
-            <ManorMark />
-          </span>
-          <span>
-            <strong>Halloween Map</strong>
-            <small>CARTE DES MAISONS</small>
-          </span>
-        </Link>
+        <PublicBrand compact />
         <button
           className="home-menu-toggle"
           aria-label="Menu utilisateur"
@@ -116,6 +105,7 @@ export default function PremiumHome({
         </button>
       </header>
       <main className="home-stage">
+        <div className="home-art" aria-hidden="true" />
         <div className="home-center">
           <h1>
             {closed ? (
@@ -207,19 +197,7 @@ export default function PremiumHome({
           )}
         </div>
       </main>
-      <footer className="home-signature">
-        <nav className="home-footer-links" aria-label="Informations légales">
-          <Link href="/terms">Conditions</Link>
-          <Link href="/privacy">Confidentialité</Link>
-          <Link href="/guidelines">Bonnes pratiques</Link>
-          <Link href="/legal">Mentions légales</Link>
-          <ProjectSupport settings={projectLinks} />
-        </nav>
-        <Link href="/about">
-          Une expérience <strong>DomotiK Studio</strong>
-        </Link>
-        <span className="home-version">{version}</span>
-      </footer>
+      <PublicFooter state={state} version={version} compact />
     </div>
   );
 }

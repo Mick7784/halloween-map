@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { DateTime } from "luxon";
 import {
   ChevronRight,
@@ -289,9 +290,9 @@ export default function AccountPrivacy({
             <p>
               Les coordonnées de contact de l’organisateur ne sont pas encore
               renseignées. Vous pouvez consulter les{" "}
-              <a href="/legal" target="_blank" rel="noopener noreferrer">
+              <Link href="/legal">
                 mentions légales
-              </a>{" "}
+              </Link>{" "}
               pour retrouver les informations disponibles.
             </p>
           </details>
