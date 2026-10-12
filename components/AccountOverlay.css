@@ -318,6 +318,32 @@
   color: #c2a0ed;
   flex-shrink: 0;
 }
+.account-years > summary {
+  cursor: pointer;
+  list-style: none;
+  align-items: center;
+  color: var(--text);
+}
+.account-years > summary::-webkit-details-marker {
+  display: none;
+}
+.account-years[open] > summary > svg {
+  transform: rotate(90deg);
+}
+.account-years > summary:focus-visible {
+  outline: 2px solid #bc90ee;
+  outline-offset: 3px;
+}
+.account-years-content {
+  padding: 12px 15px;
+  color: #b5afc9;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.account-years-content ul {
+  margin: 0 0 12px;
+  padding-left: 20px;
+}
 .account-install .install-cta {
   font-size: 13px;
 }

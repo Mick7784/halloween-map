@@ -182,7 +182,7 @@ export default function AccountPrivacy({
                       <dt>Frayeur</dt>
                       <dd>
                         {house.adaptable
-                          ? "Adaptable aux visiteurs"
+                          ? "Frissons adaptés"
                           : `Niveau ${house.fear} sur 5`}
                       </dd>
                     </div>

@@ -1,17 +1,10 @@
 "use client";
 import { useState, useEffect } from "react";
-import {
-  X,
-  MapPin,
-  Clock3,
-  Ghost,
-  Info,
-  Check,
-  CircleAlert,
-} from "lucide-react";
+import { X, MapPin, Clock3, Info, Check, CircleAlert } from "lucide-react";
 import { time, type PublicHouse, type RouteResult } from "./common";
 import { FearGauge, houseActivityOptions } from "./HouseFields";
 import ActivityIcon from "./ActivityIcon";
+import { AdaptedFearIcon, adaptedFearExplanation } from "./FearBadge";
 import "./VisitorHouse.css";
 export default function VisitorHouse({
   house,
@@ -123,12 +116,10 @@ export default function VisitorHouse({
             />
             {house.adaptable && (
               <p className="visitor-adapt">
-                <Ghost size={21} />
+                <AdaptedFearIcon size={21} />
                 <span>
-                  <strong>S’adapte à ses visiteurs</strong>
-                  <small>
-                    La mise en scène et la frayeur s’adaptent aux visiteurs.
-                  </small>
+                  <strong>Frissons adaptés</strong>
+                  <small>{adaptedFearExplanation}</small>
                 </span>
               </p>
             )}

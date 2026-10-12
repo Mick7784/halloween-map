@@ -3,7 +3,23 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { it, expect, vi } from "vitest";
 import { publicHouse, effectiveActivities, type House } from "../lib/domain";
 import VisitorHouse from "../components/VisitorHouse";
+import FearBadge, {
+  fearDescription,
+  adaptedFearExplanation,
+} from "../components/FearBadge";
 vi.stubGlobal("React", React);
+it("explains adapted fright with two masks and preserves fixed fear labels", () => {
+  const label = fearDescription(5, true);
+  expect(label).toBe(`Frissons adaptés — ${adaptedFearExplanation}`);
+  expect(label).toContain("à l’âge et à la sensibilité");
+  const html = renderToStaticMarkup(
+    React.createElement(FearBadge, { fear: 5, adaptable: true }),
+  );
+  expect(html).toContain('aria-label="Frissons adaptés');
+  expect(html).not.toContain("sliders");
+  expect(html).not.toContain("5/5");
+  expect(fearDescription(4, false)).toBe("Frayeur : Frissonnant (4/5)");
+});
 const base: House = {
   id: "house",
   instance_id: "instance",
@@ -47,7 +63,7 @@ it.each([
     expect(html).toContain("Bonbons : proposée");
     expect(html).toContain(candy_available ? "disponibles" : "épuisés");
     expect(html).toContain("Disponible</strong>");
-    expect(html.includes("S’adapte à ses visiteurs")).toBe(adaptable);
+    expect(html.includes("Frissons adaptés")).toBe(adaptable);
     expect(html.includes("Niveau de frayeur de référence")).toBe(adaptable);
     expect(html).toContain('role="meter"');
     expect(html).toContain('aria-valuenow="4"');

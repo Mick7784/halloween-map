@@ -575,7 +575,7 @@ describe("visitor collection preparation", () => {
     );
     expect(
       document.querySelector(".route-step")?.getAttribute("aria-label"),
-    ).toContain("Est · Indisponible · S’adapte aux visiteurs");
+    ).toContain("Est · Indisponible · Frissons adaptés");
     await act(async () =>
       root.render(h(RouteSheet, { ...props, visitedIds: ["west"] })),
     );

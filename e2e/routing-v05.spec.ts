@@ -606,7 +606,7 @@ test("mobile bottom panel toggles with touch and keyboard; map and list open a o
     .click();
   const card = page.getByRole("dialog", { name: houses[0].name, exact: true });
   await expect(card).toBeVisible();
-  await expect(card).toContainText("S’adapte à ses visiteurs");
+  await expect(card).toContainText("Frissons adaptés");
   await expect(card).not.toContainText("Étape");
   await page.locator(".route-experience").evaluate(async (el) => {
     await Promise.allSettled(
@@ -1244,7 +1244,7 @@ test("mobile free selection combines houses and a permanent stop in the bottom p
   });
   await expect(dialog).toContainText("Bonbons");
   await expect(
-    dialog.getByLabel("S’adapte aux visiteurs", { exact: true }),
+    dialog.getByLabel(/^Frissons adaptés —/),
   ).toBeVisible();
   await dialog.getByRole("button", { name: /Les lanternes 1/ }).click();
   await page.keyboard.press("Escape");
