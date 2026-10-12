@@ -1,7 +1,7 @@
 "use client";
 import MapExperience from "./MapExperience";
 import PasswordRecovery from "./PasswordRecovery";
-import Account, { Signup, Activation } from "./Account";
+import { Signup, Activation } from "./Account";
 import UserMenu from "./UserMenu";
 import "./FloatingWindow.css";
 import ProjectSupport from "./ProjectSupport";
@@ -25,7 +25,6 @@ import {
 import Setup from "./Setup";
 import Scene from "./Scene";
 import PremiumHome from "./PremiumHome";
-import ParticipationOverlay from "./ParticipationOverlay";
 import Admin from "./Admin";
 import useCollectionReports from "./useCollectionReports";
 export default function Application({
@@ -136,7 +135,7 @@ export default function Application({
 
   const background = useRef<HTMLDivElement>(null);
   const accountOrigin = useRef<HTMLElement | null>(null);
-  const accountVisible = (accountOpen || participationOpen) && !!user;
+  const accountVisible = (accountOpen || menu || participationOpen) && !!user;
   useEffect(() => {
     if (!accountVisible) return;
     const previousBackground = background.current;
@@ -153,7 +152,7 @@ export default function Application({
     <>
       <div
         ref={background}
-        inert={(accountOpen || participationOpen) && !!user}
+        inert={(accountOpen || menu || participationOpen) && !!user}
         onClickCapture={(e) => {
           const link = (e.target as HTMLElement).closest<HTMLAnchorElement>(
             "a[href]",
@@ -181,21 +180,20 @@ export default function Application({
       >
         {children}
       </div>
-      {participationOpen && user && state && (
-        <ParticipationOverlay
+      {(menu || (!!user && (accountOpen || participationOpen))) && state && (
+        <UserMenu
           user={user}
           state={state}
           refresh={refresh}
+          version={version}
+          login={<LoginForm destination="/" />}
           styleUrl={mapStyle}
-          onClose={() => setParticipationOpen(false)}
-        />
-      )}
-      {accountOpen && user && state && (
-        <Account
-          user={user}
-          state={state}
-          refresh={refresh}
-          onClose={() => setAccountOpen(false)}
+          initialView={participationOpen ? "participation" : "main"}
+          onClose={() => {
+            setAccountOpen(false);
+            setMenu(false);
+            setParticipationOpen(false);
+          }}
         />
       )}
     </>
@@ -367,6 +365,11 @@ export default function Application({
         login={<LoginForm destination="/" />}
         error={error}
         onRetry={refresh}
+        menuOpen={menu || accountVisible}
+        onOpenMenu={() => {
+          accountOrigin.current = document.activeElement as HTMLElement;
+          setMenu(true);
+        }}
       />,
     );
   return contextual(
@@ -409,7 +412,7 @@ export default function Application({
           <button
             className="user-menu-toggle"
             aria-label="Menu utilisateur"
-            aria-expanded={menu}
+            aria-expanded={menu || accountVisible}
             aria-controls="user-menu"
             onClick={() => setMenu(!menu)}
           >
@@ -428,15 +431,6 @@ export default function Application({
         </div>
       )}
       {content}
-      {menu && (
-        <UserMenu
-          user={user}
-          state={state}
-          version={version}
-          onClose={() => setMenu(false)}
-          login={<LoginForm compact={false} destination="/" />}
-        />
-      )}
       <footer>
         <span>Halloween Map · {version}</span>
         <span>

@@ -1,135 +1,136 @@
 "use client";
 import Link from "next/link";
-import {
-  Map,
-  House,
-  Route,
-  ShieldCheck,
-  Settings,
-  LogOut,
-  Bug,
-  ChevronRight,
-  UserRound,
-} from "lucide-react";
-import type { ReactNode } from "react";
+import { ArrowLeft, Bug, ChevronRight, House, Mail, X } from "lucide-react";
+import { useState, type ReactNode } from "react";
 import type { User } from "../lib/domain";
-import { api, AsyncButton, type PublicState } from "./common";
+import type { PublicState } from "./common";
 import { bugHref, publicProjectLinks } from "../lib/project-links";
-import FloatingWindow from "./FloatingWindow";
+import AccountOverlay from "./AccountOverlay";
 import InstallApp from "./InstallApp";
+
 export default function UserMenu({
   user,
   state,
   version,
   onClose,
   login,
-  participationLabel = "Inscrire ma maison",
-  participationSubtitle,
+  refresh = async () => {},
+  styleUrl,
+  initialView,
 }: {
   user: User | null;
   state: PublicState | null;
   version: string;
   onClose: () => void;
   login: ReactNode;
-  participationLabel?: string;
-  participationSubtitle?: string;
+  refresh?: () => Promise<void>;
+  styleUrl?: string;
+  initialView?: "main" | "participation";
 }) {
-  const entry = (
-    href: string,
-    label: string,
-    icon: ReactNode,
-    subtitle?: string,
-  ) => (
-    <Link href={href} onClick={onClose} aria-label={label}>
-      {icon}
-      <span>
-        {label}
-        {subtitle && <small>{subtitle}</small>}
-      </span>
-      <ChevronRight size={16} />
-    </Link>
-  );
+  const [help, setHelp] = useState("");
+  if (user && state)
+    return (
+      <AccountOverlay
+        user={user}
+        state={state}
+        version={version}
+        refresh={refresh}
+        onClose={onClose}
+        styleUrl={styleUrl}
+        initialView={initialView}
+      />
+    );
   const links = publicProjectLinks(state?.projectLinks, state?.privacy);
   return (
-    <FloatingWindow
-      title="Menu utilisateur"
-      id="user-menu"
-      className="user-navigation-window"
-      onClose={onClose}
+    <div
+      className="account-overlay"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
     >
-      {user ? (
-        <div className="home-user">
-          <span className="home-avatar">
-            <UserRound />
-          </span>
-          <div>
-            <strong>{user.display_name}</strong>
-            <span>{user.email}</span>
-            {user.permissions.includes("admin.access") && (
-              <small>Administrateur</small>
-            )}
-          </div>
-        </div>
-      ) : (
-        <div className="home-drawer-login">{login}</div>
-      )}
-      <nav className="home-drawer-links" aria-label="Navigation personnelle">
-        {user && state?.mapAccessible && entry("/map", "La carte", <Map />)}
-        {entry(
-          user ? "/participant" : "/login?next=/participant",
-          participationLabel,
-          <House />,
-          participationSubtitle,
-        )}
-        {user &&
-          state?.collectionAccessible &&
-          entry("/map#parcours", "Préparer ma collecte", <Route />)}
-        {user?.permissions.includes("admin.access") && (
-          <div className="home-menu-group">
-            {entry("/admin", "Administration", <ShieldCheck />)}
-          </div>
-        )}
-        <div className="home-menu-group">
-          {user && entry("/account", "Mon compte", <Settings />)}
-          <InstallApp />
-          {user && (
-            <AsyncButton
-              onClick={async () => {
-                await api("logout", {});
-                window.location.href = "/";
-              }}
+      <section
+        id="user-menu"
+        className="account-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="guest-menu-title"
+      >
+        <header className="account-header">
+          {help && (
+            <button
+              className="account-back"
+              aria-label="Revenir au menu"
+              onClick={() => setHelp("")}
             >
-              <LogOut />
-              <span>Se déconnecter</span>
-            </AsyncButton>
+              <ArrowLeft size={20} />
+            </button>
+          )}
+          <h1 id="guest-menu-title">
+            {help ? "Ajouter l’application" : "Menu utilisateur"}
+          </h1>
+          <button
+            className="close account-close"
+            aria-label="Fermer Menu utilisateur"
+            onClick={onClose}
+          >
+            <X size={23} />
+          </button>
+        </header>
+        <div className="account-scroll">
+          {help ? (
+            <p role="status">{help}</p>
+          ) : (
+            <>
+              <div className="home-drawer-login">{login}</div>
+              <nav
+                className="account-secondary"
+                aria-label="Navigation personnelle"
+              >
+                <Link
+                  className="account-row"
+                  href="/login?next=/participant"
+                  onClick={onClose}
+                >
+                  <span className="account-row-icon">
+                    <House />
+                  </span>
+                  <span className="account-row-copy">
+                    <strong>Inscrire ma maison</strong>
+                  </span>
+                  <ChevronRight size={19} />
+                </Link>
+                <InstallApp account onHelp={setHelp} />
+                {links.contactEnabled &&
+                  (links.contactUrl || links.contactEmail) && (
+                    <a
+                      className="account-row"
+                      href={links.contactUrl ?? `mailto:${links.contactEmail}`}
+                    >
+                      <span className="account-row-icon">
+                        <Mail />
+                      </span>
+                      <span className="account-row-copy">
+                        <strong>Contacter l’organisateur</strong>
+                      </span>
+                      <ChevronRight size={19} />
+                    </a>
+                  )}
+                {links.bugEnabled && (
+                  <a className="account-row" href={bugHref(links, version)}>
+                    <span className="account-row-icon">
+                      <Bug />
+                    </span>
+                    <span className="account-row-copy">
+                      <strong>Signaler un bug</strong>
+                    </span>
+                    <ChevronRight size={19} />
+                  </a>
+                )}
+              </nav>
+            </>
           )}
         </div>
-        {links.contactEnabled && (links.contactUrl || links.contactEmail) && (
-          <div className="home-menu-group">
-            <a
-              href={links.contactUrl ?? `mailto:${links.contactEmail}`}
-              onClick={onClose}
-            >
-              Contacter l’organisateur
-            </a>
-          </div>
-        )}
-        {links.bugEnabled && (
-          <div className="home-menu-group">
-            <a
-              href={bugHref(
-                publicProjectLinks(state?.projectLinks, state?.privacy),
-                version,
-              )}
-              onClick={onClose}
-            >
-              <Bug />
-              <span>Signaler un bug</span>
-              <ChevronRight size={16} />
-            </a>
-          </div>
-        )}
-      </nav>
-    </FloatingWindow>
+      </section>
+    </div>
   );
 }

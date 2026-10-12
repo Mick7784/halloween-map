@@ -8,7 +8,7 @@ import FearBadge, {
   adaptedFearExplanation,
 } from "../components/FearBadge";
 vi.stubGlobal("React", React);
-it("explains adapted fright with two masks and preserves fixed fear labels", () => {
+it("explains adapted fright with a distinct helping-hand icon and preserves fixed fear labels", () => {
   const label = fearDescription(5, true);
   expect(label).toBe(`Frissons adaptés — ${adaptedFearExplanation}`);
   expect(label).toContain("à l’âge et à la sensibilité");
@@ -16,7 +16,8 @@ it("explains adapted fright with two masks and preserves fixed fear labels", () 
     React.createElement(FearBadge, { fear: 5, adaptable: true }),
   );
   expect(html).toContain('aria-label="Frissons adaptés');
-  expect(html).not.toContain("sliders");
+  expect(html).toContain("lucide-heart-handshake");
+  expect(html).not.toContain("lucide-drama");
   expect(html).not.toContain("5/5");
   expect(fearDescription(4, false)).toBe("Frayeur : Frissonnant (4/5)");
 });
@@ -64,9 +65,9 @@ it.each([
     expect(html).toContain(candy_available ? "disponibles" : "épuisés");
     expect(html).toContain("Disponible</strong>");
     expect(html.includes("Frissons adaptés")).toBe(adaptable);
-    expect(html.includes("Niveau de frayeur de référence")).toBe(adaptable);
-    expect(html).toContain('role="meter"');
-    expect(html).toContain('aria-valuenow="4"');
+    expect(html).not.toContain("Niveau de frayeur de référence");
+    expect(html.includes('role="meter"')).toBe(!adaptable);
+    expect(html.includes('aria-valuenow="4"')).toBe(!adaptable);
     for (const label of [
       "Très doux",
       "Familial",
@@ -74,7 +75,7 @@ it.each([
       "Frissonnant",
       "Intense",
     ])
-      expect(html).toContain(label);
+      expect(html.includes(label)).toBe(!adaptable);
     expect(html).not.toContain("chevron");
     expect(html).toContain("Voir sur la carte");
   },
@@ -106,6 +107,7 @@ it("does not invent stock or a reference fear for legacy browser houses", () => 
     }),
   );
   expect(html).toContain("Stock non renseigné");
-  expect(html).toContain("Niveau de référence non renseigné");
+  expect(html).not.toContain("Niveau de référence non renseigné");
+  expect(html).not.toContain("house-fear-gauge");
   expect(html).not.toContain("aria-valuenow=");
 });

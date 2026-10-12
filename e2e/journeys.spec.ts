@@ -115,7 +115,9 @@ test("login → preopening map is unavailable and fits the mobile viewport", asy
       .getByRole("button", { name: "Se connecter", exact: true }),
   ).toBeVisible();
   await login(page, "visitor0@example.invalid");
-  await expect(page.getByLabel("Temps restant avant l’ouverture", { exact: true })).toBeVisible();
+  await expect(
+    page.getByLabel("Temps restant avant l’ouverture", { exact: true }),
+  ).toBeVisible();
   await page.goto("/map");
   await expect(page.locator(".route-experience")).toHaveCount(0);
   const state = await (await page.request.get("/api/public")).json();
@@ -130,7 +132,7 @@ test("login → preopening map is unavailable and fits the mobile viewport", asy
   await page.getByRole("button", { name: "Menu utilisateur" }).click();
   await expect(
     page
-      .getByRole("dialog", { name: "Menu utilisateur" })
+      .getByRole("dialog", { name: "Mon compte" })
       .getByRole("link", { name: "La carte", exact: true }),
   ).toHaveCount(0);
 });

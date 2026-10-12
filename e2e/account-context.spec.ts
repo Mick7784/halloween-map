@@ -101,7 +101,6 @@ async function open(page: Page) {
   await page
     .getByRole("button", { name: "Menu utilisateur", exact: true })
     .click();
-  await page.getByRole("link", { name: "Mon compte", exact: true }).click();
   await expect(page.locator(".account-dialog")).toBeVisible();
   await page.locator(".account-overlay").evaluate(async (el) => {
     await Promise.all(
@@ -111,7 +110,7 @@ async function open(page: Page) {
 }
 
 for (const width of [390, 1440]) {
-  test(`validated participation years expand in the account card at ${width}px`, async ({
+  test(`validated participation years replace the menu at ${width}px`, async ({
     page,
   }) => {
     await page.setViewportSize({ width, height: 900 });
@@ -123,46 +122,36 @@ for (const width of [390, 1440]) {
     await arrange(page);
     await open(page);
     const url = page.url();
-    const card = page.locator(".account-years");
-    const summary = card.locator("summary");
-    await expect(summary).toContainText("Mes années de participation");
-    await expect(card.locator("li")).toHaveCount(2);
-    await expect(card.locator("ul")).toBeHidden();
-    const styles = (el: Element) => {
-      const css = getComputedStyle(el);
-      return [
-        css.backgroundImage,
-        css.borderColor,
-        css.borderRadius,
-        css.minHeight,
-        css.padding,
-      ];
-    };
-    expect(await summary.evaluate(styles)).toEqual(
-      await page
-        .getByRole("button", { name: /Confidentialité et données/ })
-        .evaluate(styles),
-    );
-    await summary.focus();
-    await summary.press("Enter");
-    await expect(card.locator("ul")).toBeVisible();
-    await expect(card.locator("li")).toHaveText([
+    const dialog = page.locator(".account-dialog");
+    await dialog.evaluate((el) => el.setAttribute("data-preserved", "yes"));
+    await page
+      .getByRole("button", { name: "Mes années de participation", exact: true })
+      .click();
+    await expect(dialog).toHaveAttribute("data-preserved", "yes");
+    await expect(page.getByRole("dialog")).toHaveCount(1);
+    await expect(page.locator(".account-years-content li")).toHaveText([
       "Halloween 2026 — Participation validée",
       "Halloween 2025 — Participation validée",
     ]);
-    await expect(card).toContainText(
+    await expect(dialog).toContainText(
       "conservées cinq ans et effacées avec le compte",
     );
     expect(page.url()).toBe(url);
+    await expect(page.locator(".account-dialog details")).toHaveCount(0);
+    await page
+      .getByRole("button", { name: "Revenir à Mon compte", exact: true })
+      .click();
     await expect(page.locator(".account-view-main")).toBeVisible();
-    await summary.press("Space");
-    await expect(card.locator("ul")).toBeHidden();
+    await expect(page.locator(".account-back")).toHaveCount(0);
     await page.route("**/api/history", (r) => r.fulfill({ json: [] }));
     await page.reload();
     await open(page);
-    await summary.click();
-    await expect(card).toContainText("Aucune participation validée conservée.");
-    await expect(card.locator("li")).toHaveCount(0);
+    await page
+      .getByRole("button", { name: "Mes années de participation", exact: true })
+      .click();
+    await expect(dialog).toContainText(
+      "Aucune participation validée conservée.",
+    );
   });
 }
 for (const size of [
@@ -181,7 +170,7 @@ for (const size of [
     await expect(page.getByRole("dialog")).toHaveCount(1);
     await expect(page.getByRole("dialog")).toContainText("Administrateur");
     await expect(page.getByRole("dialog")).not.toContainText(
-      "Ma participation",
+      "Nom, email et profil",
     );
     await expect(
       page.getByRole("button", { name: "Fermer Mon compte" }),
@@ -203,10 +192,10 @@ for (const size of [
       ).toBeVisible();
     } else {
       expect(rect.height).toBeLessThanOrEqual(size.height * 0.85 + 1);
-      await expect(page.getByLabel("Nom d’affichage")).toBeVisible();
       await expect(
-        page.getByLabel("Nouveau mot de passe", { exact: true }),
+        page.getByRole("button", { name: "Mes informations", exact: true }),
       ).toBeVisible();
+      await expect(page.getByLabel("Nom d’affichage")).toHaveCount(0);
     }
     await page.mouse.wheel(0, 600);
     expect(await page.evaluate(() => scrollY)).toBe(0);
@@ -243,7 +232,7 @@ test("mobile information, security, verification, privacy and deletion confirmat
   await expect(page.locator(".account-identity")).toContainText(
     "Mickael Martin",
   );
-  await page.getByRole("button", { name: /Mot de passe Modifier/ }).click();
+  await page.getByRole("button", { name: /^Mot de passe$/ }).click();
   await page
     .getByLabel("Mot de passe actuel", { exact: true })
     .fill("current-password-123");
@@ -289,9 +278,7 @@ test("mobile information, security, verification, privacy and deletion confirmat
     "La participation est éphémère",
   );
   await page.getByRole("button", { name: "Revenir à Mon compte" }).click();
-  await page
-    .getByRole("button", { name: /Supprimer mon compte Action/ })
-    .click();
+  await page.getByRole("button", { name: /^Supprimer mon compte$/ }).click();
   expect(calls.filter((c) => c.action === "delete")).toHaveLength(0);
   await page
     .getByRole("button", { name: "Supprimer définitivement mon compte" })
@@ -319,9 +306,12 @@ test("desktop email change uses current password and keeps context", async ({
 }) => {
   const calls = await arrange(page);
   await open(page);
+  await page
+    .getByRole("button", { name: "Mes informations", exact: true })
+    .click();
   await page.getByLabel("Email", { exact: true }).fill("new@example.invalid");
   const current = page
-    .locator(".account-forms .account-card")
+    .locator(".account-card")
     .first()
     .getByLabel("Mot de passe actuel", { exact: true });
   await expect(current).toBeVisible();
@@ -329,7 +319,7 @@ test("desktop email change uses current password and keeps context", async ({
   await page
     .getByRole("button", { name: "Enregistrer les modifications" })
     .click();
-  await expect(page.locator(".account-identity")).toContainText(
+  await expect(page.getByLabel("Email", { exact: true })).toHaveValue(
     "new@example.invalid",
   );
   expect(calls[0]).toMatchObject({
@@ -533,24 +523,16 @@ for (const installed of [false, true]) {
     if (installed) await expect(install).toHaveCount(0);
     else {
       await install.click();
-      await expect(page.locator(".install-help-window")).toContainText(
+      await expect(page.locator(".account-view-install")).toContainText(
         "Touchez Partager",
       );
       await expect(
         page.getByRole("dialog", { includeHidden: true }),
-      ).toHaveCount(2);
-      await expect(page.getByRole("dialog")).toHaveCount(1);
-      await expect
-        .poll(() =>
-          page
-            .locator(".account-dialog")
-            .evaluate((el) => !!el.closest("[inert]")),
-        )
-        .toBe(true);
+      ).toHaveCount(1);
       await page
-        .getByRole("button", { name: "Fermer Ajouter à l’écran d’accueil" })
+        .getByRole("button", { name: "Revenir à Mon compte", exact: true })
         .click();
-      await expect(page.getByRole("dialog")).toHaveCount(1);
+      await expect(install).toBeVisible();
       await page.screenshot({
         path: `${output}/mon-compte-ios.png`,
         animations: "disabled",
@@ -641,9 +623,15 @@ for (const width of [390, 1440]) {
     const dialog = page.locator(".account-dialog");
     await dialog.evaluate((el) => el.setAttribute("data-preserved", "yes"));
     if (width === 1440) {
+      await page
+        .getByRole("button", { name: "Mes informations", exact: true })
+        .click();
       await expect(
         page.locator(".account-email-status.is-verified"),
       ).toHaveText("Email vérifié");
+      await page
+        .getByRole("button", { name: "Revenir à Mon compte", exact: true })
+        .click();
       expect(
         await page
           .locator(".account-session button")
@@ -718,7 +706,7 @@ for (const width of [390, 1440]) {
       path: `${output}/confidentialite-actions-${width}.png`,
     });
     await dialog
-      .getByRole("button", { name: /Supprimer mon compte Action/ })
+      .getByRole("button", { name: /^Supprimer mon compte$/ })
       .click();
     await expect(dialog).toContainText("Confirmation de suppression");
     expect(calls.filter((c) => c.action === "delete")).toHaveLength(0);
