@@ -104,15 +104,24 @@ export default function Application({
   }, [refresh]);
   useEffect(() => {
     // Revalidate the actual opening moment; the server is authoritative.
-    if (state?.state !== "COUNTDOWN" || !state.season || state.season.is_test) return;
-    const remaining = +new Date(state.season.opens_at) - (Date.now() + clockOffset);
-    if (remaining <= 0) return;
+    if (
+      !state ||
+      state.publicMapOpen ||
+      ["CLOSED", "ARCHIVED"].includes(state.state ?? "")
+    )
+      return;
+    const opening = state.season?.is_test
+      ? state.nextOpening
+      : (state.season?.opens_at ?? state.nextOpening);
+    if (!opening) return;
+    const remaining = Date.parse(opening) - (Date.now() + clockOffset);
+    if (!Number.isFinite(remaining) || remaining <= 0) return;
     const timer = window.setTimeout(
       () => void refresh().catch((e) => setError(e.message)),
       Math.min(remaining + 150, 2147483647),
     );
     return () => clearTimeout(timer);
-  }, [state?.state, state?.season, clockOffset, refresh]);
+  }, [state, clockOffset, refresh]);
   useEffect(() => {
     const viewport = window.visualViewport;
     const resize = () =>
@@ -211,7 +220,8 @@ export default function Application({
       }
     : null;
   const automaticMap = state?.state === "MAP_OPEN" && !state.season?.is_test;
-  const canShowMap = !!user && !!state?.mapAccessible && (view === "map" || automaticMap);
+  const canShowMap =
+    !!user && !!state?.mapAccessible && (view === "map" || automaticMap);
   let content: React.ReactNode;
   if (!state)
     content = (
@@ -509,7 +519,10 @@ function LoginForm({
           // account/participant deep links still work, but a map URL cannot
           // bypass the pre-opening countdown for staff.
           window.location.href =
-            next && /^\/(?!\/)/.test(next) && !next.includes("\\") && !next.startsWith("/map")
+            next &&
+            /^\/(?!\/)/.test(next) &&
+            !next.includes("\\") &&
+            !next.startsWith("/map")
               ? next
               : (destination ?? "/");
         } catch (e) {

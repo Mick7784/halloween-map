@@ -123,24 +123,34 @@
   margin-top: 16px;
 }
 .map-options-list {
-  margin-top: 16px;
+  margin-top: 12px;
 }
 .map-options-list > button {
   display: flex;
-  gap: 12px;
+  gap: 8px;
   width: 100%;
-  margin-bottom: 8px;
+  min-height: 44px;
+  padding: 8px 10px;
+  margin-bottom: 6px;
+  justify-content: flex-start;
   text-align: left;
 }
 .map-options-list > button > span {
   display: grid;
-  gap: 4px;
+  min-width: 0;
+  gap: 2px;
+}
+.map-options-list strong {
+  overflow-wrap: anywhere;
+}
+.map-options-list > button > svg {
+  flex-shrink: 0;
 }
 .map-options-list small {
   color: #b8b1cd;
 }
 .map-options-window .route-discovery-filters {
-  margin-top: 16px;
+  margin-top: 0;
   flex-wrap: wrap;
 }
 @media (max-width: 767px) {
@@ -249,4 +259,20 @@ body:has(.route-experience.is-focused) {
 }
 .participation-dialog .participation-scroll {
   padding: 16px 24px 24px;
+}
+
+.badges-compact .badge {
+  padding: 3px;
+  border: 0;
+  background: transparent;
+}
+.activity-label-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }

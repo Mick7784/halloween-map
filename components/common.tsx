@@ -307,12 +307,21 @@ export function Check({
     </label>
   );
 }
-export function Badges({ activities }: { activities: Activity[] }) {
+export function Badges({
+  activities,
+  compact = false,
+}: {
+  activities: Activity[];
+  compact?: boolean;
+}) {
   return (
-    <span className="badges">
+    <span className={compact ? "badges badges-compact" : "badges"}>
       {activities.map((a) => (
         <span key={a} className="badge">
-          <ActivityIcon activity={a} size={15} /> {labels[a]}
+          <ActivityIcon activity={a} size={compact ? 17 : 15} />
+          <span className={compact ? "activity-label-hidden" : undefined}>
+            {labels[a]}
+          </span>
         </span>
       ))}
     </span>

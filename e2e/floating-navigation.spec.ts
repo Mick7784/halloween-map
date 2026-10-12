@@ -38,7 +38,22 @@ for (const width of [390, 1440])
                   timezone: "Europe/Paris",
                 },
                 season,
-                houses: [],
+                houses: [
+                  {
+                    id: "compact-house",
+                    name: "Maison citrouille",
+                    address: "Adresse de test",
+                    longitude: 2.8,
+                    latitude: 48.8,
+                    activities: ["DECORATION", "CANDY", "ACTING"],
+                    starts_at: season.opens_at,
+                    ends_at: season.closes_at,
+                    fear: 2,
+                    adaptable: true,
+                    rp: "",
+                    practical: "",
+                  },
+                ],
                 routeCandidates: [],
                 documents: {
                   GUIDELINES: {
@@ -104,6 +119,28 @@ for (const width of [390, 1440])
     await expect(
       options.locator(".route-discovery-filters button"),
     ).toHaveCount(3);
+    await expect(
+      options.getByRole("button", { name: "Afficher la carte", exact: true }),
+    ).toHaveCount(0);
+    await expect(
+      options.getByRole("button", {
+        name: "Afficher la liste des maisons",
+        exact: true,
+      }),
+    ).toHaveCount(0);
+    const house = options.locator(".map-options-list > button");
+    await expect(house).toHaveCount(1);
+    await expect(house).toHaveAccessibleName(
+      /Décoration.*Bonbons.*Mise en scène/,
+    );
+    await expect(house.locator(".badges-compact .badge")).toHaveCount(3);
+    await expect(house.locator(".activity-label-hidden").first()).toHaveCSS(
+      "clip-path",
+      "inset(50%)",
+    );
+    await expect(
+      options.locator(".route-discovery-filters button").first(),
+    ).toHaveText("Décoration");
     await options.locator(".route-discovery-filters button").first().click();
     await expect(options).toBeVisible();
     await page.keyboard.press("Escape");
@@ -114,6 +151,12 @@ for (const width of [390, 1440])
         exact: false,
       }),
     ).toBeFocused();
+    await page.evaluate(() => window.dispatchEvent(new Event("map-options")));
+    await expect(options.locator(".map-options-list > button")).toHaveCount(1);
+    await options
+      .getByRole("button", { name: "Fermer Maisons et filtres", exact: true })
+      .click();
+    await expect(options).toHaveCount(0);
     await page
       .getByRole("button", { name: "Préparer ma collecte", exact: true })
       .click();
