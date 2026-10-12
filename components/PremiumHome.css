@@ -461,8 +461,8 @@
     letter-spacing: 3px;
   }
   .home-art {
-    background-image: url("/art/home-reference-v2.webp");
-    background-size: contain;
+    background-image: url("/art/home-reference-desktop-v1.webp");
+    background-size: cover;
     background-position: center center;
   }
   .home-stage {

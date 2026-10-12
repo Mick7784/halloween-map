@@ -559,7 +559,7 @@ test("manual departure keeps preferences and permission errors do not choose the
     page.locator(".route-preparation").getByRole("alert"),
   ).toContainText("refusée");
 });
-test("mobile panel snaps through three states; map and list open a one-screen house and restore the camera", async ({
+test("mobile bottom panel toggles with touch and keyboard; map and list open a one-screen house and restore the camera", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
@@ -581,13 +581,9 @@ test("mobile panel snaps through three states; map and list open a one-screen ho
       el.getAnimations({ subtree: true }).map((a) => a.finished),
     );
   });
-  const grip = await handle.boundingBox();
-  await page.mouse.move(grip!.x + 100, grip!.y + 20);
-  await page.mouse.down();
-  await page.mouse.move(grip!.x + 100, grip!.y + 180, { steps: 12 });
-  await page.mouse.up();
-  await expect(sheet).toHaveAttribute("data-sheet-position", "intermediate");
-  await handle.press("ArrowDown");
+  await handle.click();
+  await expect(sheet).toHaveAttribute("data-sheet-position", "expanded");
+  await handle.press("ArrowUp");
   await expect(sheet).toHaveAttribute("data-sheet-position", "expanded");
   await page.locator(".route-experience").evaluate(async (el) => {
     await Promise.allSettled(
@@ -626,8 +622,7 @@ test("mobile panel snaps through three states; map and list open a one-screen ho
     .click();
   expect((await read()).camera).toEqual(original.camera);
   expect((await read()).sheet).toBe("expanded");
-  await handle.press("ArrowUp");
-  await handle.press("ArrowUp");
+  await handle.press("ArrowDown");
   await expect(sheet).toHaveAttribute("data-sheet-position", "collapsed");
   await page
     .getByRole("button", { name: "Les lanternes 2", exact: true })
@@ -679,7 +674,7 @@ test("compact visitor house fits small mobile screens with maximum text", async 
   });
   await page.screenshot({ path: "test-results/route-house-small-mobile.png" });
 });
-test("desktop keeps the map central with a compact top panel and the same house dialog", async ({
+test("desktop keeps the map central with a compact bottom panel and the same house dialog", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
@@ -690,8 +685,8 @@ test("desktop keeps the map central with a compact top panel and the same house 
     name: "Déplier ou replier ma sélection",
     exact: true,
   });
-  await handle.press("ArrowDown");
-  await handle.press("ArrowDown");
+  await handle.press("ArrowUp");
+  await handle.press("ArrowUp");
   const sheet = await page.locator(".route-sheet").boundingBox();
   expect(sheet!.width).toBe(440);
   await expect
@@ -1022,7 +1017,11 @@ test("visiting every selected house suggests finishing and preserves the last ca
     "data-route-phase",
     "active",
   );
-  await expect(page.locator(".collection-bottom-bar").getByLabel("2 maisons visitées sur 2", { exact: true })).toHaveText("2/2");
+  await expect(
+    page
+      .locator(".collection-bottom-bar")
+      .getByLabel("2 maisons visitées sur 2", { exact: true }),
+  ).toHaveText("2/2");
   await page
     .getByRole("button", { name: "Arrêter la collecte", exact: true })
     .click();
@@ -1175,7 +1174,7 @@ for (const width of [390, 1440]) {
   }
 }
 
-test("mobile free selection stays at the top with a permanent bottom stop and supports removal and addition", async ({
+test("mobile free selection combines houses and a permanent stop in the bottom panel and supports removal and addition", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
@@ -1188,17 +1187,23 @@ test("mobile free selection stays at the top with a permanent bottom stop and su
   await expect(
     page.getByLabel("Commandes de collecte", { exact: true }),
   ).toHaveCount(0);
-  const top = page.locator(".collection-top-panel"),
-    bottom = page.locator(".collection-bottom-bar");
-  const topBox = await top.boundingBox(),
-    bottomBox = await bottom.boundingBox();
-  expect(topBox!.y).toBeLessThan(40);
+  const bottom = page.locator(".collection-bottom-bar");
+  const bottomBox = await bottom.boundingBox();
+  await expect(page.locator(".collection-top-panel")).toHaveCount(0);
   // Readable metrics increase panel height; verify its bottom anchor and
   // usable map space rather than the former compact panel's fixed top.
   const bottomEdge = bottomBox!.y + bottomBox!.height;
   expect(bottomEdge).toBeLessThanOrEqual(viewport!.height);
   expect(viewport!.height - bottomEdge).toBeLessThanOrEqual(20);
-  expect(bottomBox!.y - (topBox!.y + topBox!.height)).toBeGreaterThan(200);
+  expect(bottomBox!.y).toBeGreaterThan(200);
+  expect(
+    (await bottom.getByRole("link", { name: "Mon compte" }).boundingBox())!
+      .height,
+  ).toBe(
+    (await bottom
+      .getByRole("button", { name: "Arrêter la collecte" })
+      .boundingBox())!.height,
+  );
   for (const control of [
     page.getByRole("button", {
       name: "Recentrer sur ma position",
@@ -1215,22 +1220,20 @@ test("mobile free selection stays at the top with a permanent bottom stop and su
   const accountBox = (await account.boundingBox())!;
   expect(accountBox.y).toBeGreaterThanOrEqual(bottomBox!.y);
   expect(accountBox.y + accountBox.height).toBeLessThanOrEqual(bottomEdge);
-  await expect(
-    top.getByRole("button", { name: "Arrêter la collecte" }),
-  ).toHaveCount(0);
+
   await expect(
     bottom.getByRole("button", { name: "Arrêter la collecte" }),
   ).toBeVisible();
   await page
     .getByRole("button", { name: "Déplier ou replier ma sélection" })
-    .press("ArrowDown");
+    .press("ArrowUp");
   await page
     .getByRole("button", {
       name: "Retirer Les lanternes 1 de ma sélection",
       exact: true,
     })
     .click();
-  await expect(top).toContainText("1 maison sélectionnée");
+  await expect(bottom.locator(".route-step")).toHaveCount(1);
   await expect(page.locator(".house-marker")).toHaveCount(1);
   await page
     .getByRole("button", { name: "Ajouter des maisons", exact: true })
@@ -1240,11 +1243,12 @@ test("mobile free selection stays at the top with a permanent bottom stop and su
     exact: true,
   });
   await expect(dialog).toContainText("Bonbons");
-  await expect(dialog).toContainText("Frayeur non précisée");
-  await expect(dialog).toContainText("S’adapte aux visiteurs");
+  await expect(
+    dialog.getByLabel("S’adapte aux visiteurs", { exact: true }),
+  ).toBeVisible();
   await dialog.getByRole("button", { name: /Les lanternes 1/ }).click();
   await page.keyboard.press("Escape");
-  await expect(top).toContainText("2 maisons sélectionnées");
+  await expect(bottom.locator(".route-step")).toHaveCount(2);
   await expect(page.locator(".house-marker")).toHaveCount(2);
   await expect(page.locator(".route-experience")).toHaveAttribute(
     "data-route-phase",

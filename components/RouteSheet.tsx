@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   ChevronUp,
   Plus,
@@ -12,20 +12,13 @@ import {
   Bookmark,
 } from "lucide-react";
 import type { PublicHouse, RouteResult } from "./common";
-import { fears } from "./common";
 import type { SheetPosition } from "../lib/active-route";
 import ManorMark from "./ManorMark";
 import { gpsDistance } from "../lib/collection";
-import ActivityIcon from "./ActivityIcon";
+import ActivityIcon, { activityLabels } from "./ActivityIcon";
+import FearBadge, { fearDescription } from "./FearBadge";
 export function routeSummary(result: RouteResult) {
   return `${result.stops.length} ${result.stops.length === 1 ? "maison" : "maisons"} · Visites dans l’ordre de votre choix`;
-}
-export function fearLabel(house: PublicHouse) {
-  return house.adaptable
-    ? "S’adapte à ses visiteurs"
-    : house.fear === null
-      ? "Frayeur non précisée"
-      : fears[house.fear - 1];
 }
 const positions: SheetPosition[] = ["collapsed", "intermediate", "expanded"];
 export default function RouteSheet({
@@ -43,6 +36,9 @@ export default function RouteSheet({
   onAdd,
   onRemove,
   proximityPoint,
+  activeSummary,
+  fearLabels,
+  distanceSource = "votre position GPS",
 }: {
   result: RouteResult;
   phase: "calculated" | "active";
@@ -60,6 +56,9 @@ export default function RouteSheet({
   onAdd?: () => void;
   onRemove?: (id: string) => void;
   proximityPoint?: [number, number] | null;
+  activeSummary?: ReactNode;
+  fearLabels?: string[];
+  distanceSource?: string;
 }) {
   const panel = useRef<HTMLElement>(null),
     drag = useRef<{
@@ -72,7 +71,8 @@ export default function RouteSheet({
   const [dragHeight, setDragHeight] = useState<number | null>(null);
   function heights() {
     const h = window.visualViewport?.height ?? window.innerHeight;
-    const openHeight = phase === "active" ? Math.max(240, h - 160) : Math.min(520, h * 0.7);
+    const openHeight =
+      phase === "active" ? Math.max(240, h - 160) : Math.min(520, h * 0.7);
     return [78, Math.min(300, h * 0.42), openHeight];
   }
   useEffect(() => {
@@ -102,116 +102,122 @@ export default function RouteSheet({
       ref={panel}
       className={
         "route-sheet" +
-        (phase === "active" ? " collection-top-panel" : "") +
+        (phase === "active" ? " collection-bottom-bar" : "") +
         (dragHeight !== null ? " is-dragging" : "")
       }
       data-sheet-position={position}
       aria-label={phase === "active" ? "Collecte en cours" : "Ma collecte"}
       style={dragHeight === null ? undefined : { height: dragHeight }}
     >
-      <button
-        type="button"
-        className="route-sheet-handle"
-        aria-label="Déplier ou replier ma sélection"
-        aria-expanded={position !== "collapsed"}
-        onPointerDown={(e) => {
-          if (e.button !== 0 || window.innerWidth >= 768) return;
-          drag.current = {
-            y: e.clientY,
-            height: panel.current!.getBoundingClientRect().height,
-            time: performance.now(),
-            moved: false,
-          };
-          e.currentTarget.setPointerCapture(e.pointerId);
-        }}
-        onPointerMove={(e) => {
-          const d = drag.current;
-          if (!d) return;
-          const dy = phase === "active" ? e.clientY - d.y : d.y - e.clientY;
-          if (Math.abs(dy) > 4) d.moved = true;
-          if (d.moved) {
-            const limits = heights();
-            setDragHeight(
-              Math.max(limits[0], Math.min(limits[2], d.height + dy)),
-            );
-          }
-        }}
-        onPointerUp={(e) => {
-          const d = drag.current;
-          if (!d) return;
-          drag.current = null;
-          if (!d.moved) return;
-          ignoreClick.current = true;
-          const sizes = heights(),
-            dy = phase === "active" ? e.clientY - d.y : d.y - e.clientY;
-          let index = sizes.reduce(
-            (best, height, n) =>
-              Math.abs(height - (d.height + dy)) <
-              Math.abs(sizes[best] - (d.height + dy))
-                ? n
-                : best,
-            0,
-          );
-          if (Math.abs(dy) > 45 && performance.now() - d.time < 260)
-            index = Math.max(
+      {activeSummary ?? (
+        <button
+          type="button"
+          className="route-sheet-handle"
+          aria-label="Déplier ou replier ma sélection"
+          aria-expanded={position !== "collapsed"}
+          onPointerDown={(e) => {
+            if (e.button !== 0 || window.innerWidth >= 768) return;
+            drag.current = {
+              y: e.clientY,
+              height: panel.current!.getBoundingClientRect().height,
+              time: performance.now(),
+              moved: false,
+            };
+            e.currentTarget.setPointerCapture(e.pointerId);
+          }}
+          onPointerMove={(e) => {
+            const d = drag.current;
+            if (!d) return;
+            const dy = d.y - e.clientY;
+            if (Math.abs(dy) > 4) d.moved = true;
+            if (d.moved) {
+              const limits = heights();
+              setDragHeight(
+                Math.max(limits[0], Math.min(limits[2], d.height + dy)),
+              );
+            }
+          }}
+          onPointerUp={(e) => {
+            const d = drag.current;
+            if (!d) return;
+            drag.current = null;
+            if (!d.moved) return;
+            ignoreClick.current = true;
+            const sizes = heights(),
+              dy = d.y - e.clientY;
+            let index = sizes.reduce(
+              (best, height, n) =>
+                Math.abs(height - (d.height + dy)) <
+                Math.abs(sizes[best] - (d.height + dy))
+                  ? n
+                  : best,
               0,
-              Math.min(2, positions.indexOf(position) + (dy > 0 ? 1 : -1)),
             );
-          setDragHeight(null);
-          onPosition(positions[index]);
-        }}
-        onPointerCancel={() => {
-          drag.current = null;
-          setDragHeight(null);
-        }}
-        onKeyDown={(e) => {
-          if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
-          e.preventDefault();
-          onPosition(
-            positions[
-              Math.max(
+            if (Math.abs(dy) > 45 && performance.now() - d.time < 260)
+              index = Math.max(
                 0,
-                Math.min(
-                  2,
-                  positions.indexOf(position) +
-                    ((
-                      phase === "active"
-                        ? e.key === "ArrowDown"
-                        : e.key === "ArrowUp"
-                    )
-                      ? 1
-                      : -1),
-                ),
-              )
-            ],
-          );
-        }}
-        onClick={() => {
-          if (ignoreClick.current) {
-            ignoreClick.current = false;
-            return;
-          }
-          onPosition(positions[(positions.indexOf(position) + 1) % 3]);
-        }}
+                Math.min(2, positions.indexOf(position) + (dy > 0 ? 1 : -1)),
+              );
+            setDragHeight(null);
+            onPosition(positions[index]);
+          }}
+          onPointerCancel={() => {
+            drag.current = null;
+            setDragHeight(null);
+          }}
+          onKeyDown={(e) => {
+            if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
+            e.preventDefault();
+            onPosition(
+              positions[
+                Math.max(
+                  0,
+                  Math.min(
+                    2,
+                    positions.indexOf(position) +
+                      (e.key === "ArrowUp" ? 1 : -1),
+                  ),
+                )
+              ],
+            );
+          }}
+          onClick={() => {
+            if (ignoreClick.current) {
+              ignoreClick.current = false;
+              return;
+            }
+            onPosition(positions[(positions.indexOf(position) + 1) % 3]);
+          }}
+        >
+          <span className="route-sheet-grip" />
+          <span className="route-brand">
+            <ManorMark />
+          </span>
+          <span>
+            <strong>
+              {phase === "active" ? "Collecte en cours" : "Ma collecte"}
+            </strong>
+            <small>
+              {phase === "active"
+                ? `${result.stops.length} ${result.stops.length === 1 ? "maison sélectionnée" : "maisons sélectionnées"} · ${visitedIds.length} ${visitedIds.length === 1 ? "visitée" : "visitées"}`
+                : routeSummary(result)}
+            </small>
+          </span>
+          <ChevronUp className="route-sheet-chevron" size={19} />
+        </button>
+      )}
+      <div
+        id="collection-houses"
+        className="route-sheet-content"
+        inert={position === "collapsed"}
       >
-        <span className="route-sheet-grip" />
-        <span className="route-brand">
-          <ManorMark />
-        </span>
-        <span>
-          <strong>
-            {phase === "active" ? "Collecte en cours" : "Ma collecte"}
-          </strong>
-          <small>
-            {phase === "active"
-              ? `${result.stops.length} ${result.stops.length === 1 ? "maison sélectionnée" : "maisons sélectionnées"} · ${visitedIds.length} ${visitedIds.length === 1 ? "visitée" : "visitées"}`
-              : routeSummary(result)}
-          </small>
-        </span>
-        <ChevronUp className="route-sheet-chevron" size={19} />
-      </button>
-      <div className="route-sheet-content" inert={position === "collapsed"}>
-        <h2 className="collection-order-label">Maisons — de la plus proche à la plus éloignée</h2>
+        <h2 className="collection-order-label">
+          Maisons — de la plus proche à la plus éloignée
+        </h2>
+        <p className="route-status">
+          Le classement suit votre position GPS. Vous restez libre de visiter
+          les maisons dans l’ordre de votre choix.
+        </p>
         {phase === "active" && onAdd && (
           <button className="collection-add" type="button" onClick={onAdd}>
             <Plus size={18} /> Ajouter des maisons
@@ -244,29 +250,60 @@ export default function RouteSheet({
                         : "") +
                     (selectedStepId === stop.house.id ? " is-selected" : "")
                   }
-                  aria-label={`Voir la maison : ${stop.house.name}`}
+                  aria-label={`Voir la maison : ${stop.house.name} · ${visited ? "Visitée" : stop.unavailable ? "Indisponible" : "À visiter"} · ${fearDescription(stop.house.fear, stop.house.adaptable, fearLabels)} · ${stop.house.activities.map((a) => activityLabels[a]).join(", ")}`}
                   onClick={() => onHouse(stop.house)}
                 >
                   {visited ? (
-                    <Check size={17} className="collection-row-marker" aria-label="Visitée" />
+                    <Check
+                      size={17}
+                      className="collection-row-marker"
+                      aria-label="Visitée"
+                    />
                   ) : (
-                    <MapPin size={17} className="collection-row-marker" aria-hidden="true" />
+                    <MapPin
+                      size={17}
+                      className="collection-row-marker"
+                      aria-hidden="true"
+                    />
                   )}
-                  <strong className="collection-row-name" title={stop.house.name}>
+                  <strong
+                    className="collection-row-name"
+                    title={stop.house.name}
+                  >
                     {stop.house.name}
                   </strong>
-                  <span className="collection-row-activities" aria-label="Activités">
+                  <span
+                    className="collection-row-activities"
+                    aria-label="Activités"
+                  >
                     {stop.house.activities.map((activity) => (
-                      <ActivityIcon key={activity} activity={activity} />
+                      <span
+                        key={activity}
+                        title={activityLabels[activity]}
+                        aria-label={activityLabels[activity]}
+                      >
+                        <ActivityIcon activity={activity} />
+                      </span>
                     ))}
                   </span>
-                  <small className="collection-row-fear" title={fearLabel(stop.house)}>
-                    {stop.house.adaptable ? "Adapt." : stop.house.fear === null ? "?" : `F${stop.house.fear}`}
+                  <FearBadge
+                    fear={stop.house.fear}
+                    adaptable={stop.house.adaptable}
+                    labels={fearLabels}
+                  />
+                  <small
+                    className="collection-row-distance"
+                    title={`Distance à vol d’oiseau depuis ${distanceSource}`}
+                  >
+                    {distance === null
+                      ? "—"
+                      : distance < 1000
+                        ? `${distance} m`
+                        : `${(distance / 1000).toFixed(1)} km`}
                   </small>
-                  <small className="collection-row-distance" title="Distance à vol d'oiseau">
-                    {distance === null ? "—" : distance < 1000 ? `${distance} m` : `${(distance / 1000).toFixed(1)} km`}
-                  </small>
-                  {stop.unavailable && <Info size={14} aria-label="Indisponible" />}
+                  {stop.unavailable && (
+                    <Info size={14} aria-label="Indisponible" />
+                  )}
                 </button>
                 {phase === "active" && onRemove && !visited && (
                   <button
