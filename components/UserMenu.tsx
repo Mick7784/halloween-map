@@ -7,6 +7,7 @@ import type { PublicState } from "./common";
 import { bugHref, publicProjectLinks } from "../lib/project-links";
 import AccountOverlay from "./AccountOverlay";
 import InstallApp from "./InstallApp";
+import AccountGroup from "./AccountGroup";
 
 export default function UserMenu({
   user,
@@ -28,6 +29,7 @@ export default function UserMenu({
   initialView?: "main" | "participation";
 }) {
   const [help, setHelp] = useState("");
+  const [helpOpen, setHelpOpen] = useState(false);
   if (user && state)
     return (
       <AccountOverlay
@@ -77,28 +79,32 @@ export default function UserMenu({
           </button>
         </header>
         <div className="account-scroll">
-          {help ? (
-            <p role="status">{help}</p>
-          ) : (
-            <>
-              <div className="home-drawer-login">{login}</div>
-              <nav
-                className="account-secondary"
-                aria-label="Navigation personnelle"
+          <div hidden={!help}>{help && <p role="status">{help}</p>}</div>
+          <div hidden={!!help}>
+            <div className="home-drawer-login">{login}</div>
+            <nav
+              className="account-secondary"
+              aria-label="Navigation personnelle"
+            >
+              <Link
+                className="account-row"
+                href="/login?next=/participant"
+                onClick={onClose}
               >
-                <Link
-                  className="account-row"
-                  href="/login?next=/participant"
-                  onClick={onClose}
-                >
-                  <span className="account-row-icon">
-                    <House />
-                  </span>
-                  <span className="account-row-copy">
-                    <strong>Inscrire ma maison</strong>
-                  </span>
-                  <ChevronRight size={19} />
-                </Link>
+                <span className="account-row-icon">
+                  <House />
+                </span>
+                <span className="account-row-copy">
+                  <strong>Inscrire ma maison</strong>
+                </span>
+                <ChevronRight size={19} />
+              </Link>
+              <AccountGroup
+                title="Aide et application"
+                icon={<Mail />}
+                open={helpOpen}
+                onToggle={() => setHelpOpen(!helpOpen)}
+              >
                 <InstallApp account onHelp={setHelp} />
                 {links.contactEnabled &&
                   (links.contactUrl || links.contactEmail) && (
@@ -126,9 +132,14 @@ export default function UserMenu({
                     <ChevronRight size={19} />
                   </a>
                 )}
-              </nav>
-            </>
-          )}
+                {version && (
+                  <p className="account-app-version">
+                    Halloween Map · {version}
+                  </p>
+                )}
+              </AccountGroup>
+            </nav>
+          </div>
         </div>
       </section>
     </div>

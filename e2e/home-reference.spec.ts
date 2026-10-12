@@ -1,4 +1,6 @@
+import { clickAccountAction } from "./fixtures/account-menu";
 import { test, expect, type Page } from "@playwright/test";
+import { expandAccountGroup } from "./fixtures/account-menu";
 const output = process.env.HOME_PREVIEW_OUTPUT ?? "test-results/home-reference";
 const opening = "2026-10-31T11:00:00Z";
 const state = {
@@ -154,6 +156,7 @@ test("desktop compact menu uses the same grid for account, install and logout", 
     .getByRole("button", { name: "Menu utilisateur", exact: true })
     .click();
   const dialog = page.getByRole("dialog");
+  await expandAccountGroup(page, "Aide et application");
   await expect(
     dialog.getByRole("link", { name: "Signaler un bug", exact: true }),
   ).toHaveAttribute("href", /^mailto:domotikpro77@gmail\.com\?subject=/);
@@ -164,7 +167,9 @@ test("desktop compact menu uses the same grid for account, install and logout", 
   ).toHaveCount(0);
   await dialog.evaluate(async (el) => {
     await Promise.all(
-      el.getAnimations({ subtree: true }).map((a) => a.finished),
+      el
+        .getAnimations({ subtree: true })
+        .map((a) => a.finished.catch(() => {})),
     );
   });
   const actions = [
@@ -173,7 +178,9 @@ test("desktop compact menu uses the same grid for account, install and logout", 
     dialog.getByRole("button", { name: "Se déconnecter", exact: true }),
   ];
   const positions = [];
-  for (const action of actions) {
+  for (const [index, action] of actions.entries()) {
+    const group = index === 0 ? "Profil et sécurité" : "Aide et application";
+    await expandAccountGroup(page, group);
     await expect(action).toBeVisible();
     positions.push(
       await action
@@ -212,6 +219,7 @@ for (const mode of ["guest", "member", "house", "admin"]) {
       .getByRole("button", { name: "Menu utilisateur", exact: true })
       .click();
     const dialog = page.getByRole("dialog");
+    await expandAccountGroup(page, "Aide et application");
     await expect(dialog).toBeVisible();
     await expect(
       dialog.getByRole("link", { name: "Signaler un bug", exact: true }),
@@ -256,6 +264,7 @@ for (const mode of ["guest", "member", "house", "admin"]) {
         "Identifiants incorrects",
       );
     } else {
+      await expandAccountGroup(page, "Mes participations");
       await expect(
         dialog.getByRole("link", { name: "La carte", exact: true }),
       ).toHaveCount(0);
@@ -321,6 +330,7 @@ for (const width of [390, 1440]) {
       name: "Mon compte",
       exact: true,
     });
+    await expandAccountGroup(page, "Aide et application");
     await expect(
       menu.getByRole("link", { name: "Signaler un bug", exact: true }),
     ).toHaveAttribute("href", /^mailto:domotikpro77@gmail\.com/);
@@ -388,9 +398,7 @@ for (const mode of ["guest", "member", "house", "admin"]) {
     await page
       .getByRole("button", { name: "Menu utilisateur", exact: true })
       .click();
-    await page
-      .getByRole("button", { name: "Ajouter l’application", exact: true })
-      .click();
+    await clickAccountAction(page, "Ajouter l’application");
     await expect(page.locator("body")).toHaveAttribute(
       "data-native-install-calls",
       "1",
@@ -417,6 +425,7 @@ test("unsupported browser and completed installation have no inactive action", a
     name: "Ajouter l’application",
     exact: true,
   });
+  await expandAccountGroup(page, "Aide et application");
   await expect(action).toHaveCount(0);
   await page.evaluate(() => {
     const event = new Event("beforeinstallprompt", { cancelable: true });
@@ -462,9 +471,14 @@ for (const standalone of [false, true]) {
       name: "Ajouter l’application",
       exact: true,
     });
+    await expandAccountGroup(page, "Aide et application");
     if (standalone) {
       await expect(action).toHaveCount(0);
     } else {
+      const email = page
+        .getByRole("dialog")
+        .getByLabel("Email", { exact: false });
+      await email.fill("draft@example.invalid");
       await action.click();
       await expect(page.getByRole("status")).toContainText(
         "Touchez Partager puis « Sur l’écran d’accueil ».",
@@ -478,6 +492,7 @@ for (const standalone of [false, true]) {
       ).toBe(true);
       await expect(page.getByRole("dialog")).toHaveCount(1);
       await page.getByRole("button", { name: "Revenir au menu" }).click();
+      await expect(email).toHaveValue("draft@example.invalid");
       await expect(page.getByRole("status")).toHaveCount(0);
     }
   });
@@ -543,7 +558,7 @@ for (const width of [360, 390, 1440]) {
       if (width >= 760)
         await expect(page.locator(".home-art")).toHaveCSS(
           "background-size",
-          "cover",
+          "contain",
         );
       const bounds = await page.locator("h1 span").boundingBox();
       expect(bounds!.x).toBeGreaterThanOrEqual(0);

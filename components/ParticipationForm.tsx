@@ -1,6 +1,6 @@
 "use client";
 import { Input, Button, Dialog } from "./ui";
-import { useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   Ghost,
   House as HouseIcon,
@@ -35,6 +35,7 @@ import {
 import { Notice } from "./common";
 import Editorial from "./Editorial";
 import { legalDefaults } from "../lib/legal-defaults";
+import useDraftGuard from "./useDraftGuard";
 export default function ParticipationForm({
   house,
   zone,
@@ -96,6 +97,24 @@ export default function ParticipationForm({
     [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
     [saved, setSaved] = useState(false);
+  const snapshot = JSON.stringify({
+    location,
+    name,
+    activities,
+    adapt,
+    fear,
+    rp,
+    practical,
+    starts,
+    ends,
+    guidelines,
+  });
+  const [savedSnapshot, setSavedSnapshot] = useState(snapshot);
+  const [touched, setTouched] = useState(false);
+  useEffect(() => {
+    if (!touched) setSavedSnapshot(snapshot);
+  }, [snapshot, touched]);
+  useDraftGuard(touched && snapshot !== savedSnapshot);
   const acceptanceNeeded =
     !house ||
     (documents?.TERMS.requires_reaccept &&
@@ -130,6 +149,8 @@ export default function ParticipationForm({
     <form
       id="participation-form"
       className="participation-form"
+      onChangeCapture={() => setTouched(true)}
+      onClickCapture={() => setTouched(true)}
       onSubmit={async (e) => {
         e.preventDefault();
         setError("");
@@ -171,6 +192,8 @@ export default function ParticipationForm({
               : { house: h, acceptance },
           );
           setSaved(true);
+          setSavedSnapshot(snapshot);
+          setTouched(false);
         } catch (e) {
           setError((e as Error).message);
         } finally {

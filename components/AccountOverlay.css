@@ -135,15 +135,6 @@
   color: #d0b0f4;
   font-size: 11px;
 }
-.account-mobile-settings {
-  display: grid;
-}
-.account-forms {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
-  margin-bottom: 14px;
-}
 .account-card {
   min-width: 0;
   padding: 16px;
@@ -160,9 +151,6 @@
   width: 20px;
   height: 20px;
   color: #b58be8;
-}
-.account-forms .account-card:first-child h2 svg {
-  color: #ff944b;
 }
 .account-card form {
   display: flex;
@@ -292,10 +280,6 @@
   width: 19px;
   height: 19px;
 }
-.account-mobile-settings .account-row:first-child .account-row-icon {
-  color: #ff9b52;
-  background: #422a23;
-}
 .account-row-copy,
 .account-install .install-cta > span {
   min-width: 0;
@@ -317,22 +301,6 @@
 .account-row > svg {
   color: #c2a0ed;
   flex-shrink: 0;
-}
-.account-years > summary {
-  cursor: pointer;
-  list-style: none;
-  align-items: center;
-  color: var(--text);
-}
-.account-years > summary::-webkit-details-marker {
-  display: none;
-}
-.account-years[open] > summary > svg {
-  transform: rotate(90deg);
-}
-.account-years > summary:focus-visible {
-  outline: 2px solid #bc90ee;
-  outline-offset: 3px;
 }
 .account-years-content {
   padding: 12px 15px;
@@ -767,14 +735,6 @@
   .account-identity span:not(.account-avatar) {
     font-size: 12px;
   }
-  .account-forms {
-    display: none;
-  }
-  .account-mobile-settings {
-    display: grid;
-    gap: 10px;
-    margin-bottom: 10px;
-  }
   .account-card {
     padding: 18px;
   }
@@ -815,17 +775,10 @@
       linear-gradient(#10131c, #10131c11),
       url("/art/home-reference-v2.webp") center bottom / cover;
   }
-  .account-view-main .account-mobile-settings .account-row,
   .account-view-main .account-secondary > *,
   .account-view-main .account-session,
   .account-view-main .account-danger {
     animation: account-block 240ms ease-out both;
-  }
-  .account-mobile-settings .account-row:nth-child(1) {
-    animation-delay: 35ms;
-  }
-  .account-mobile-settings .account-row:nth-child(2) {
-    animation-delay: 70ms;
   }
   .account-secondary > *:first-child {
     animation-delay: 105ms;
@@ -860,7 +813,6 @@
   .account-install small {
     font-size: 10px;
   }
-  .account-mobile-settings,
   .account-secondary {
     gap: 8px;
   }
@@ -882,6 +834,45 @@
     animation: none !important;
     transition: none !important;
   }
+}
+
+/* V0.8.8 groups retain their contents without exposing hidden form pages. */
+div.account-overlay[class] {
+  height: var(--app-height, 100dvh);
+  bottom: auto;
+}
+[role="dialog"].account-dialog.account-dialog {
+  max-height: calc(
+    var(--app-height, 100dvh) - 48px - env(safe-area-inset-top) -
+      env(safe-area-inset-bottom)
+  );
+}
+.account-dialog [hidden] {
+  display: none !important;
+}
+.account-groups {
+  display: grid;
+  gap: 4px;
+}
+.account-group-toggle[aria-expanded="true"] > svg {
+  transform: rotate(90deg);
+}
+.account-group-content {
+  display: grid;
+  gap: 2px;
+  padding: 4px 0;
+}
+.account-group-content .account-row {
+  background: #171823;
+  border-color: #302b40;
+}
+.account-app-version {
+  margin: 8px;
+  color: #bfb0cf;
+  font-size: 12px;
+}
+.account-group-toggle .account-row-copy strong {
+  white-space: nowrap;
 }
 
 /* One compact account window on every page and at every viewport size. */
@@ -975,7 +966,6 @@
   font-size: 10px;
   padding: 0 6px;
 }
-.account-mobile-settings,
 .account-secondary {
   display: grid;
   gap: 2px;

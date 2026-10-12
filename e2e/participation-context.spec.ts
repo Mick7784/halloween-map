@@ -1,3 +1,4 @@
+import { clickAccountAction } from "./fixtures/account-menu";
 import { test, expect, type Page } from "@playwright/test";
 const output =
   process.env.PARTICIPATION_PREVIEW_OUTPUT ?? "test-results/participation";
@@ -149,12 +150,7 @@ async function arrange(page: Page, edit = false, candyOnly = false) {
   await page
     .getByRole("button", { name: "Menu utilisateur", exact: true })
     .click();
-  await page
-    .getByRole("button", {
-      name: "Ma participation",
-      exact: true,
-    })
-    .click();
+  await clickAccountAction(page, "Ma participation");
   await expect(page.locator(".participation-dialog")).toBeVisible();
   await expect(page.locator("#participation-form")).toBeVisible();
   await page.locator(".account-overlay").evaluate(async (el) => {
@@ -469,9 +465,7 @@ test("candy alone offers confirmed closing only", async ({ page }) => {
   await page
     .getByRole("button", { name: "Menu utilisateur", exact: true })
     .click();
-  await page
-    .getByRole("button", { name: "Ma participation", exact: true })
-    .click();
+  await clickAccountAction(page, "Ma participation");
   await expect(page.locator(".participation-dialog")).toBeVisible();
   await page
     .getByRole("button", { name: "Je n’ai plus de bonbons", exact: true })

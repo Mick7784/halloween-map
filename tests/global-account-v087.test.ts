@@ -14,12 +14,10 @@ beforeEach(() => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   vi.stubGlobal(
     "fetch",
-    vi
-      .fn()
-      .mockResolvedValue({
-        ok: true,
-        json: async () => [{ year: 2025 }, { year: 2026 }, { year: 2025 }],
-      }),
+    vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [{ year: 2025 }, { year: 2026 }, { year: 2025 }],
+    }),
   );
   host = document.createElement("div");
   document.body.append(host);
@@ -43,6 +41,41 @@ const state = {
   collectionAccessible: false,
   projectLinks: { contactEnabled: false, bugEnabled: false },
 } as PublicState;
+it("keeps one group expanded and retains the identity form through back navigation", async () => {
+  await act(async () =>
+    root.render(
+      h(UserMenu, {
+        user,
+        state,
+        version: "V0.8.8",
+        login: null,
+        onClose: vi.fn(),
+      }),
+    ),
+  );
+  const find = (label: string) =>
+    [...host.querySelectorAll("button")].find((b) => b.textContent === label)!;
+  expect(
+    host.querySelectorAll('.account-group-toggle[aria-expanded="true"]'),
+  ).toHaveLength(0);
+  await act(async () => find("Mes participations").click());
+  expect(
+    host.querySelectorAll('.account-group-toggle[aria-expanded="true"]'),
+  ).toHaveLength(1);
+  await act(async () => find("Profil et sécurité").click());
+  expect(find("Mes participations").getAttribute("aria-expanded")).toBe(
+    "false",
+  );
+  await act(async () => find("Mes informations").click());
+  const input = host.querySelector('input[name="display_name"]');
+  await act(async () =>
+    (host.querySelector(".account-back") as HTMLButtonElement).click(),
+  );
+  expect(input?.closest("[hidden]")).not.toBeNull();
+  await act(async () => find("Mes informations").click());
+  expect(host.querySelector('input[name="display_name"]')).toBe(input);
+  expect(input?.closest("[hidden]")).toBeNull();
+});
 it.each([
   ["USER", [], false],
   ["ADMIN", [], false],

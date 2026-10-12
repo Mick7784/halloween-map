@@ -1,3 +1,4 @@
+import { clickAccountAction } from "./fixtures/account-menu";
 import { test, expect } from "@playwright/test";
 import { realSeasonFixture } from "./fixtures/real-season";
 for (const role of ["USER", "ADMIN", "SUPER_ADMIN", "CUSTOM"]) {
@@ -94,7 +95,7 @@ for (const role of ["USER", "ADMIN", "SUPER_ADMIN", "CUSTOM"]) {
       await expect(dialog).toBeVisible();
       await expect(page.getByRole("dialog")).toHaveCount(1);
       await expect(
-        dialog.locator(".account-row-copy small,details,form"),
+        dialog.locator(".account-row-copy small:visible,details:visible,form:visible"),
       ).toHaveCount(0);
       await expect(
         dialog.getByRole("link", { name: "Administration", exact: true }),
@@ -108,9 +109,7 @@ for (const role of ["USER", "ADMIN", "SUPER_ADMIN", "CUSTOM"]) {
       if (baseline) expect(entries).toEqual(baseline);
       else baseline = entries;
       await dialog.evaluate((el) => el.setAttribute("data-preserved", "yes"));
-      await dialog
-        .getByRole("button", { name: "Ma participation", exact: true })
-        .click();
+      await clickAccountAction(page, "Ma participation");
       await expect(page.locator(".account-dialog")).toHaveAttribute(
         "data-preserved",
         "yes",

@@ -4,11 +4,11 @@ import PasswordRecovery from "./PasswordRecovery";
 import { Signup, Activation } from "./Account";
 import UserMenu from "./UserMenu";
 import "./FloatingWindow.css";
-import ProjectSupport from "./ProjectSupport";
+import PublicFooter from "./PublicFooter";
 
 import Editorial from "./Editorial";
 import { useDialogFocus } from "./useDialogFocus";
-import ManorMark from "./ManorMark";
+import PublicBrand from "./PublicBrand";
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { DateTime } from "luxon";
@@ -362,7 +362,7 @@ export default function Application({
         user={user}
         now={effectiveNow}
         version={version}
-        login={<LoginForm destination="/" />}
+        login={<LoginForm destination="/" registrationLink={false} />}
         error={error}
         onRetry={refresh}
         menuOpen={menu || accountVisible}
@@ -389,16 +389,7 @@ export default function Application({
           view === "admin" ? "site-header admin-header" : "site-header"
         }
       >
-        <Link href="/" className="brand">
-          <span className="brand-mark">
-            <ManorMark />
-          </span>
-          <span>
-            <strong>Halloween Map</strong>
-            <small>CARTE DES MAISONS</small>
-            <em>{state?.instance?.territory ?? "Une commune plus vivante"}</em>
-          </span>
-        </Link>
+        <PublicBrand territory={state?.instance?.territory} />
         <div className="header-account">
           {!user ? (
             <div className="desktop-login">
@@ -431,21 +422,7 @@ export default function Application({
         </div>
       )}
       {content}
-      <footer>
-        <span>Halloween Map · {version}</span>
-        <span>
-          {state?.contents?.["footer.signature"] ??
-            "Une expérience DomotiK Studio"}
-        </span>
-        <Link href="/terms">Conditions d’utilisation</Link>
-        <Link href="/privacy">Politique de confidentialité</Link>
-        <Link href="/guidelines">Bonnes pratiques</Link>
-        <Link href="/legal">Mentions légales</Link>
-        <ProjectSupport settings={state?.projectLinks} />
-        <span>
-          © {DateTime.now().setZone("Europe/Paris").year} DomotiK Studio
-        </span>
-      </footer>
+      <PublicFooter state={state} version={version} />
     </div>,
   );
 }
@@ -493,9 +470,11 @@ function Login({ destination }: { destination?: string }) {
 function LoginForm({
   compact = false,
   destination,
+  registrationLink = true,
 }: {
   compact?: boolean;
   destination?: string;
+  registrationLink?: boolean;
 }) {
   const [error, setError] = useState(""),
     [busy, setBusy] = useState(false);
@@ -540,7 +519,7 @@ function LoginForm({
       </div>
       <div className="login-links">
         <Link href="/forgot-password">Mot de passe oublié ?</Link>
-        <Link href="/register">Créer un compte</Link>
+        {registrationLink && <Link href="/register">Créer un compte</Link>}
       </div>
       <Notice error={error} />
     </form>

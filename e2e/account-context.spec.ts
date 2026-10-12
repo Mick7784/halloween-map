@@ -1,3 +1,4 @@
+import { clickAccountAction, expandAccountGroup } from "./fixtures/account-menu";
 import { test, expect, type Page } from "@playwright/test";
 import { DateTime } from "luxon";
 import { mapAccessible, seasonState, type Activity } from "../lib/domain";
@@ -124,9 +125,7 @@ for (const width of [390, 1440]) {
     const url = page.url();
     const dialog = page.locator(".account-dialog");
     await dialog.evaluate((el) => el.setAttribute("data-preserved", "yes"));
-    await page
-      .getByRole("button", { name: "Mes années de participation", exact: true })
-      .click();
+    await clickAccountAction(page, "Mes années de participation");
     await expect(dialog).toHaveAttribute("data-preserved", "yes");
     await expect(page.getByRole("dialog")).toHaveCount(1);
     await expect(page.locator(".account-years-content li")).toHaveText([
@@ -146,9 +145,7 @@ for (const width of [390, 1440]) {
     await page.route("**/api/history", (r) => r.fulfill({ json: [] }));
     await page.reload();
     await open(page);
-    await page
-      .getByRole("button", { name: "Mes années de participation", exact: true })
-      .click();
+    await clickAccountAction(page, "Mes années de participation");
     await expect(dialog).toContainText(
       "Aucune participation validée conservée.",
     );
@@ -183,6 +180,7 @@ for (const size of [
       );
     });
     const rect = (await page.locator(".account-dialog").boundingBox())!;
+    await expandAccountGroup(page, "Profil et sécurité");
     if (size.width < 768) {
       expect(rect.height).toBeLessThanOrEqual(size.height - 48);
       expect(rect.y).toBeGreaterThanOrEqual(16);
@@ -216,7 +214,7 @@ test("mobile information, security, verification, privacy and deletion confirmat
   await page.setViewportSize({ width: 390, height: 844 });
   const calls = await arrange(page, "/", true);
   await open(page);
-  await page.getByRole("button", { name: /Mes informations/ }).click();
+  await clickAccountAction(page, /Mes informations/);
   await page.getByLabel("Nom d’affichage").fill("Mickael Martin");
   await page
     .getByRole("button", { name: "Enregistrer les modifications" })
@@ -232,9 +230,10 @@ test("mobile information, security, verification, privacy and deletion confirmat
   await expect(page.locator(".account-identity")).toContainText(
     "Mickael Martin",
   );
-  await page.getByRole("button", { name: /^Mot de passe$/ }).click();
+  await clickAccountAction(page, /^Mot de passe$/);
   await page
     .getByLabel("Mot de passe actuel", { exact: true })
+    .filter({ visible: true })
     .fill("current-password-123");
   await page
     .getByLabel("Nouveau mot de passe", { exact: true })
@@ -265,9 +264,7 @@ test("mobile information, security, verification, privacy and deletion confirmat
     "Mot de passe modifié",
   );
   await page.getByRole("button", { name: "Revenir à Mon compte" }).click();
-  await page
-    .getByRole("button", { name: /Confidentialité et données/ })
-    .click();
+  await clickAccountAction(page, /Confidentialité et données/);
   await expect(page.getByRole("dialog")).toContainText(
     purgeLabel.toFormat("d MMMM yyyy"),
   );
@@ -278,7 +275,7 @@ test("mobile information, security, verification, privacy and deletion confirmat
     "La participation est éphémère",
   );
   await page.getByRole("button", { name: "Revenir à Mon compte" }).click();
-  await page.getByRole("button", { name: /^Supprimer mon compte$/ }).click();
+  await clickAccountAction(page, /^Supprimer mon compte$/);
   expect(calls.filter((c) => c.action === "delete")).toHaveLength(0);
   await page
     .getByRole("button", { name: "Supprimer définitivement mon compte" })
@@ -286,6 +283,7 @@ test("mobile information, security, verification, privacy and deletion confirmat
   expect(calls.filter((c) => c.action === "delete")).toHaveLength(0);
   await page
     .getByLabel("Mot de passe actuel", { exact: true })
+    .filter({ visible: true })
     .fill("current-password-123");
   await page
     .getByLabel("Saisissez SUPPRIMER MON COMPTE")
@@ -306,9 +304,7 @@ test("desktop email change uses current password and keeps context", async ({
 }) => {
   const calls = await arrange(page);
   await open(page);
-  await page
-    .getByRole("button", { name: "Mes informations", exact: true })
-    .click();
+  await clickAccountAction(page, "Mes informations");
   await page.getByLabel("Email", { exact: true }).fill("new@example.invalid");
   const current = page
     .locator(".account-card")
@@ -501,6 +497,7 @@ test("account native PWA offer and installed hiding", async ({ page }) => {
   });
   await open(page);
   const install = page.locator(".account-install .install-cta");
+  await expandAccountGroup(page, "Aide et application");
   await install.click();
   await expect(page.locator("body")).toHaveAttribute("data-install-calls", "1");
   await expect(install).toHaveCount(0);
@@ -520,6 +517,7 @@ for (const installed of [false, true]) {
     await arrange(page);
     await open(page);
     const install = page.locator(".account-install .install-cta");
+    await expandAccountGroup(page, "Aide et application");
     if (installed) await expect(install).toHaveCount(0);
     else {
       await install.click();
@@ -623,9 +621,7 @@ for (const width of [390, 1440]) {
     const dialog = page.locator(".account-dialog");
     await dialog.evaluate((el) => el.setAttribute("data-preserved", "yes"));
     if (width === 1440) {
-      await page
-        .getByRole("button", { name: "Mes informations", exact: true })
-        .click();
+      await clickAccountAction(page, "Mes informations");
       await expect(
         page.locator(".account-email-status.is-verified"),
       ).toHaveText("Email vérifié");
@@ -642,9 +638,7 @@ for (const width of [390, 1440]) {
           .evaluate((el) => getComputedStyle(el).borderColor),
       );
     }
-    await page
-      .getByRole("button", { name: /Confidentialité et données/ })
-      .click();
+    await clickAccountAction(page, /Confidentialité et données/);
     await expect(dialog).toHaveAttribute("data-preserved", "yes");
     await expect(page.getByRole("dialog")).toHaveCount(1);
     await expect(dialog).toContainText("Les lanternes");
@@ -693,7 +687,7 @@ for (const width of [390, 1440]) {
       .getByRole("button", { name: "Revenir à Confidentialité et données" })
       .click();
     await expect(dialog).toContainText("Vos données personnelles");
-    await page.locator(".account-subview").evaluate(async (el) => {
+    await page.locator(".account-subview:not([hidden])").evaluate(async (el) => {
       await Promise.all(
         el.getAnimations({ subtree: true }).map((a) => a.finished),
       );
@@ -705,15 +699,11 @@ for (const width of [390, 1440]) {
     await page.screenshot({
       path: `${output}/confidentialite-actions-${width}.png`,
     });
-    await dialog
-      .getByRole("button", { name: /^Supprimer mon compte$/ })
-      .click();
+    await clickAccountAction(page, /^Supprimer mon compte$/);
     await expect(dialog).toContainText("Confirmation de suppression");
     expect(calls.filter((c) => c.action === "delete")).toHaveLength(0);
     await dialog.getByRole("button", { name: "Annuler" }).click();
-    await dialog
-      .getByRole("button", { name: /Confidentialité et données/ })
-      .click();
+    await clickAccountAction(page, /Confidentialité et données/);
     await dialog.getByRole("button", { name: "Revenir à Mon compte" }).click();
     await expect(dialog).toHaveAttribute("data-preserved", "yes");
     await expect(
@@ -739,9 +729,7 @@ test("privacy honest fallbacks without house, contact or valid purge date", asyn
   );
   await page.reload();
   await open(page);
-  await page
-    .getByRole("button", { name: /Confidentialité et données/ })
-    .click();
+  await clickAccountAction(page, /Confidentialité et données/);
   const dialog = page.getByRole("dialog");
   await expect(dialog).toContainText("Aucune participation enregistrée");
   await expect(dialog).toContainText("Date non encore disponible");
