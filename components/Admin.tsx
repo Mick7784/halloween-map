@@ -1143,7 +1143,7 @@ export default function Admin({
               </p>
               <p>
                 {current.adaptable
-                  ? "Adapté aux visiteurs"
+                  ? "Frissons adaptés"
                   : "Niveau de frayeur : " + current.fear}{" "}
                 ·{" "}
                 {current.candy_available

@@ -109,6 +109,62 @@ async function open(page: Page) {
     );
   });
 }
+
+for (const width of [390, 1440]) {
+  test(`validated participation years expand in the account card at ${width}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.route("**/api/history", (r) =>
+      r.fulfill({
+        json: [{ year: 2026 }, { year: 2025 }, { year: 2025 }],
+      }),
+    );
+    await arrange(page);
+    await open(page);
+    const url = page.url();
+    const card = page.locator(".account-years");
+    const summary = card.locator("summary");
+    await expect(summary).toContainText("Mes années de participation");
+    await expect(card.locator("li")).toHaveCount(2);
+    await expect(card.locator("ul")).toBeHidden();
+    const styles = (el: Element) => {
+      const css = getComputedStyle(el);
+      return [
+        css.backgroundImage,
+        css.borderColor,
+        css.borderRadius,
+        css.minHeight,
+        css.padding,
+      ];
+    };
+    expect(await summary.evaluate(styles)).toEqual(
+      await page
+        .getByRole("button", { name: /Confidentialité et données/ })
+        .evaluate(styles),
+    );
+    await summary.focus();
+    await summary.press("Enter");
+    await expect(card.locator("ul")).toBeVisible();
+    await expect(card.locator("li")).toHaveText([
+      "Halloween 2026 — Participation validée",
+      "Halloween 2025 — Participation validée",
+    ]);
+    await expect(card).toContainText(
+      "conservées cinq ans et effacées avec le compte",
+    );
+    expect(page.url()).toBe(url);
+    await expect(page.locator(".account-view-main")).toBeVisible();
+    await summary.press("Space");
+    await expect(card.locator("ul")).toBeHidden();
+    await page.route("**/api/history", (r) => r.fulfill({ json: [] }));
+    await page.reload();
+    await open(page);
+    await summary.click();
+    await expect(card).toContainText("Aucune participation validée conservée.");
+    await expect(card.locator("li")).toHaveCount(0);
+  });
+}
 for (const size of [
   { width: 360, height: 640 },
   { width: 390, height: 844 },

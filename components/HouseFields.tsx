@@ -3,6 +3,7 @@ import { Input, TextArea } from "./ui";
 import { useState } from "react";
 import { Ghost } from "lucide-react";
 import ActivityIcon, { activityLabels } from "./ActivityIcon";
+import { AdaptedFearIcon, adaptedFearExplanation } from "./FearBadge";
 import type { Activity } from "../lib/domain";
 import { participationDefaults } from "../lib/participation-settings";
 import { houseScheduleBounds } from "../lib/house-form";
@@ -288,8 +289,8 @@ export function HouseFearFields({
         onChange={onFear}
       />
       <label className="participation-adapt">
-        <Ghost size={22} />
-        <span>Je m’adapte à mes visiteurs</span>
+        <AdaptedFearIcon size={22} />
+        <span>Frissons adaptés</span>
         <Input
           type="checkbox"
           role="switch"
@@ -299,9 +300,8 @@ export function HouseFearFields({
         <span className="participation-toggle" aria-hidden="true" />
       </label>
       <small className="participation-help">
-        {adapt
-          ? "L’expérience s’adapte à vos visiteurs ; le niveau fixe est désactivé."
-          : "Activez ce mode pour adapter la frayeur à vos visiteurs."}
+        {adaptedFearExplanation}
+        {adapt ? " Le niveau fixe est désactivé." : ""}
       </small>
     </>
   );

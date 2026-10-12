@@ -252,7 +252,7 @@ for (const width of [390, 1440]) {
     const fear = page.getByRole("slider", { name: "Niveau de frayeur" });
     await fear.fill("4");
     await page
-      .getByRole("switch", { name: "Je m’adapte à mes visiteurs", exact: true })
+      .getByRole("switch", { name: "Frissons adaptés", exact: true })
       .check();
     await expect(fear).toBeDisabled();
     await page.getByRole("switch").uncheck();

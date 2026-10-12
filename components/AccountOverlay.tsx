@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   ArrowLeft,
+  CalendarDays,
   Check,
   ChevronRight,
   Eye,
@@ -290,23 +291,37 @@ export default function AccountOverlay({
               </div>
               <div className="account-secondary">
                 {participationYears && (
-                  <details>
-                    <summary>Mes années de participation</summary>
-                    {participationYears.length ? (
-                      <ul>
-                        {participationYears.map((p, n) => (
-                          <li key={n}>
-                            Halloween {p.year} — Participation enregistrée
-                          </li>
-                        ))}
-                      </ul>
-                    ) : (
-                      <p>Aucune participation validée conservée.</p>
-                    )}
-                    <p className="small">
-                      Inscription validée comme propriétaire. Années uniquement,
-                      conservées cinq ans et effacées avec le compte.
-                    </p>
+                  <details className="account-years">
+                    <summary className="account-row">
+                      <span className="account-row-icon" aria-hidden="true">
+                        <CalendarDays />
+                      </span>
+                      <span className="account-row-copy">
+                        <strong>Mes années de participation</strong>
+                        <small>Consulter mes participations validées</small>
+                      </span>
+                      <ChevronRight size={19} aria-hidden="true" />
+                    </summary>
+                    <div className="account-years-content">
+                      {participationYears.length ? (
+                        <ul>
+                          {[
+                            ...new Set(participationYears.map((p) => p.year)),
+                          ].map((year) => (
+                            <li key={year}>
+                              Halloween {year} — Participation validée
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p>Aucune participation validée conservée.</p>
+                      )}
+                      <p className="small">
+                        Inscription validée comme propriétaire. Années
+                        uniquement, conservées cinq ans et effacées avec le
+                        compte.
+                      </p>
+                    </div>
                   </details>
                 )}
                 <InstallApp account />
