@@ -534,6 +534,11 @@ for (const width of [360, 390, 1440]) {
           page.getByRole("link", { name: "Accéder à la carte" }),
         ).toHaveAttribute("href", "/map");
       }
+      if (width >= 760)
+        await expect(page.locator(".home-art")).toHaveCSS(
+          "background-size",
+          "contain",
+        );
       const bounds = await page.locator("h1 span").boundingBox();
       expect(bounds!.x).toBeGreaterThanOrEqual(0);
       expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(width);

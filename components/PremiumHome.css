@@ -462,7 +462,7 @@
   }
   .home-art {
     background-image: url("/art/home-reference-v2.webp");
-    background-size: cover;
+    background-size: contain;
     background-position: center center;
   }
   .home-stage {
