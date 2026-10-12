@@ -1,5 +1,12 @@
 # Changelog
 
+## V0.8.6
+
+- Mon compte : carte « Mes années de participation » harmonisée avec les autres rubriques, dépliable sur place au clic ou au clavier ; seules les années de participation validée conservées sont affichées, sans doublons.
+- Frissons adaptés : libellé commun dans les listes, fiches, formulaires et consultations du compte/back-office ; deux masques dans le style des icônes existantes et explication de l’adaptation des frayeurs à l’âge et à la sensibilité des visiteurs.
+- Confidentialité, rétention de cinq ans, effacement avec le compte, filtrage et comportement des niveaux de frayeur inchangés ; aucune migration.
+- Régressions couvertes sur mobile et desktop : carte dépliable, clavier, absence de navigation, état vide, niveau fixe, parcours du compte et confidentialité.
+
 ## V0.8.5
 
 - Desktop : restauration du décor panoramique existant en pleine largeur ; mobile et accès à la connexion conservés.
