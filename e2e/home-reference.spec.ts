@@ -476,9 +476,8 @@ for (const standalone of [false, true]) {
             scrollY === 0,
         ),
       ).toBe(true);
-      await page
-        .getByRole("button", { name: "Fermer Ajouter à l’écran d’accueil" })
-        .click();
+      await expect(page.getByRole("dialog")).toHaveCount(1);
+      await page.getByRole("button", { name: "Revenir au menu" }).click();
       await expect(page.getByRole("status")).toHaveCount(0);
     }
   });

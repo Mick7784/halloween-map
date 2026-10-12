@@ -312,7 +312,7 @@ for (const width of [390, 1440]) {
       .getByRole("button", { name: "Envoyer ma participation", exact: true })
       .click();
     await expect(
-      dialog.getByRole("heading", { name: "Ma participation", exact: true }),
+      page.getByRole("heading", { name: "Ma participation", exact: true }),
     ).toBeVisible();
     expect(calls[0].path).toBe("participation");
     expect(calls[0].body.acceptance).toEqual({

@@ -1027,6 +1027,7 @@ test("visiting every selected house suggests finishing and preserves the last ca
   await generate(page);
   const potion = page.getByRole("progressbar", {
     name: "Progression de la collecte",
+    includeHidden: true,
   });
   await expect(potion).toHaveAttribute("aria-valuenow", "0");
   let visits = 0;
