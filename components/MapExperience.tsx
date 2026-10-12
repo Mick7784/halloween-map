@@ -18,7 +18,8 @@ import {
 import type { User, Activity } from "../lib/domain";
 import { locateOrigin } from "../lib/geolocation";
 import { nearestHouse, selectableHouses } from "../lib/collection-view";
-import { gpsDistance, collectionStats } from "../lib/collection";
+import { gpsDistance, selectedCollectionStats } from "../lib/collection";
+import CollectionProgress from "./CollectionProgress";
 import { ACTIVE_ROUTE_KEY, type RouteParameters } from "../lib/active-route";
 import { Badges, Notice, labels, type PublicState } from "./common";
 import useActiveRoute from "./useActiveRoute";
@@ -159,9 +160,9 @@ export default function MapExperience({
     const timer = setInterval(() => setClock(Date.now()), 1000);
     return () => clearInterval(timer);
   }, [controller.phase, consultationFix]);
-  const stats = collectionStats(
+  const stats = selectedCollectionStats(
     controller.collection,
-    route?.stops.length ?? 0,
+    route?.stops ?? [],
     clock,
   );
   function chooseOrigin(point: [number, number], accuracy?: number) {
@@ -410,11 +411,7 @@ export default function MapExperience({
           )}
         </span>
       </div>
-      <progress
-        aria-label="Progression de la collecte"
-        max={Math.max(1, stats.selected)}
-        value={stats.visited}
-      />
+      <CollectionProgress visited={stats.visited} selected={stats.selected} />
     </>
   );
   const routeSheet = routeShown &&

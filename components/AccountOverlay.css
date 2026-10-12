@@ -136,7 +136,7 @@
   font-size: 11px;
 }
 .account-mobile-settings {
-  display: none;
+  display: grid;
 }
 .account-forms {
   display: grid;
@@ -881,5 +881,157 @@
   .is-closing .account-dialog {
     animation: none !important;
     transition: none !important;
+  }
+}
+
+/* One compact account window on every page and at every viewport size. */
+.adapt-explanation {
+  display: block;
+  margin-top: 4px;
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1.5;
+  color: #c8bbd4;
+}
+.participation-embedded .participation-dialog {
+  height: auto;
+  max-height: none;
+  width: 100%;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  overflow: visible;
+}
+.participation-embedded .participation-scroll {
+  overflow: visible;
+  padding: 0;
+}
+.account-view-participation .participation-form-grid {
+  grid-template-columns: 1fr;
+}
+.account-view-participation .participation-form-grid > * {
+  grid-column: 1;
+  grid-row: auto;
+}
+.account-view-participation .participation-management {
+  display: block;
+}
+.account-view-participation .participation-quick-actions {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.account-view-participation .participation-confirm-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 160;
+}
+.account-overlay {
+  padding: 16px;
+}
+.account-dialog {
+  width: min(480px, 100%);
+  height: auto;
+  max-height: calc(var(--app-height, 100dvh) - 32px);
+  border: 1px solid #6b607d;
+  border-radius: 16px;
+}
+.account-dialog::before {
+  height: 100px;
+}
+.account-header {
+  padding: 8px 12px 4px;
+}
+.account-header h1,
+.account-view-privacy .account-header h1,
+.account-view-policy .account-header h1 {
+  font-size: 25px;
+}
+.account-header .account-close,
+.account-back {
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+}
+.account-scroll {
+  padding: 4px 12px 12px;
+}
+.account-identity {
+  gap: 10px;
+  margin-bottom: 8px;
+  animation: none;
+}
+.account-avatar {
+  width: 40px;
+  height: 40px;
+  font-size: 17px;
+  border-width: 1px;
+}
+.account-identity strong {
+  font-size: 20px;
+}
+.account-identity span:not(.account-avatar) {
+  font-size: 11px;
+}
+.account-role {
+  font-size: 10px;
+  padding: 0 6px;
+}
+.account-mobile-settings,
+.account-secondary {
+  display: grid;
+  gap: 2px;
+  margin-bottom: 2px;
+}
+.account-row,
+.account-session button,
+.account-install .install-cta {
+  min-height: 44px;
+  padding: 4px 9px;
+  gap: 9px;
+  align-items: center;
+  border-radius: 7px;
+  animation: none !important;
+  text-decoration: none;
+  color: var(--text);
+}
+.account-row-icon,
+.account-install .install-cta > svg {
+  width: 28px;
+  height: 28px;
+}
+.account-install .install-cta > svg {
+  padding: 5px;
+}
+.account-row-copy {
+  display: block;
+}
+.account-row-copy strong,
+.account-install .install-cta {
+  font-size: 13px;
+}
+.account-row-copy small,
+.account-install small {
+  display: none;
+}
+.account-session,
+.account-danger {
+  margin-top: 4px;
+  padding-top: 4px;
+  animation: none !important;
+}
+.account-scene {
+  display: none;
+}
+.account-subview .account-card {
+  padding: 12px;
+}
+.account-privacy-blocks {
+  grid-template-columns: 1fr;
+}
+@media (max-height: 650px) {
+  .account-identity {
+    display: none;
+  }
+  .account-dialog::before {
+    height: 60px;
   }
 }

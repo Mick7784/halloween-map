@@ -24,12 +24,14 @@ export default function ParticipationOverlay({
   refresh,
   onClose,
   styleUrl,
+  embedded = false,
 }: {
   user: User;
   state: PublicState;
   refresh: () => Promise<void>;
   onClose: () => void;
   styleUrl: string;
+  embedded?: boolean;
 }) {
   const [house, setHouse] = useState<House | null>(null),
     [loaded, setLoaded] = useState(false),
@@ -96,36 +98,43 @@ export default function ParticipationOverlay({
     !["CLOSED", "ARCHIVED"].includes(state.state ?? "") &&
     user.email_status === "VERIFIED";
   return (
-    <div className={"participation-overlay" + (closing ? " is-closing" : "")}>
+    <div
+      className={
+        (embedded ? "participation-embedded" : "participation-overlay") +
+        (closing ? " is-closing" : "")
+      }
+    >
       <section
         className="participation-dialog"
-        role="dialog"
+        role={embedded ? undefined : "dialog"}
         onClick={(event) => event.stopPropagation()}
-        aria-modal="true"
-        aria-labelledby="participation-title"
+        aria-modal={embedded ? undefined : true}
+        aria-labelledby={embedded ? "account-title" : "participation-title"}
       >
-        <header className="participation-header" inert={!!confirmation}>
-          <span className="participation-brand">
-            <ManorMark />
-          </span>
-          <div>
-            <h1 id="participation-title">
-              {house ? "Ma participation" : "Inscrire ma maison"}
-            </h1>
-            <p>
-              {house
-                ? "Modifiez les informations de votre maison"
-                : "Ajoutez votre maison et partagez la magie d’Halloween."}
-            </p>
-          </div>
-          <button
-            className="close participation-close"
-            aria-label="Fermer ma participation"
-            onClick={close}
-          >
-            <X />
-          </button>
-        </header>
+        {!embedded && (
+          <header className="participation-header" inert={!!confirmation}>
+            <span className="participation-brand">
+              <ManorMark />
+            </span>
+            <div>
+              <h1 id="participation-title">
+                {house ? "Ma participation" : "Inscrire ma maison"}
+              </h1>
+              <p>
+                {house
+                  ? "Modifiez les informations de votre maison"
+                  : "Ajoutez votre maison et partagez la magie d’Halloween."}
+              </p>
+            </div>
+            <button
+              className="close participation-close"
+              aria-label="Fermer ma participation"
+              onClick={close}
+            >
+              <X />
+            </button>
+          </header>
+        )}
         <div className="participation-scroll" inert={!!confirmation}>
           <Notice error={error} />
           {!loaded ? (

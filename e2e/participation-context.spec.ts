@@ -150,14 +150,14 @@ async function arrange(page: Page, edit = false, candyOnly = false) {
     .getByRole("button", { name: "Menu utilisateur", exact: true })
     .click();
   await page
-    .getByRole("link", {
-      name: edit ? "Ma participation" : "Inscrire ma maison",
+    .getByRole("button", {
+      name: "Ma participation",
       exact: true,
     })
     .click();
   await expect(page.locator(".participation-dialog")).toBeVisible();
   await expect(page.locator("#participation-form")).toBeVisible();
-  await page.locator(".participation-overlay").evaluate(async (el) => {
+  await page.locator(".account-overlay").evaluate(async (el) => {
     await Promise.allSettled(
       el.getAnimations({ subtree: true }).map((a) => a.finished),
     );
@@ -254,7 +254,8 @@ for (const width of [390, 1440]) {
     await page
       .getByRole("switch", { name: "Frissons adaptés", exact: true })
       .check();
-    await expect(fear).toBeDisabled();
+    await expect(fear).toHaveCount(0);
+    await expect(page.locator(".house-fear-labels")).toHaveCount(0);
     await page.getByRole("switch").uncheck();
     await expect(fear).toHaveValue("4");
     const description = "Une ambiance douce et mystérieuse.";
@@ -469,7 +470,7 @@ test("candy alone offers confirmed closing only", async ({ page }) => {
     .getByRole("button", { name: "Menu utilisateur", exact: true })
     .click();
   await page
-    .getByRole("link", { name: "Ma participation", exact: true })
+    .getByRole("button", { name: "Ma participation", exact: true })
     .click();
   await expect(page.locator(".participation-dialog")).toBeVisible();
   await page

@@ -479,7 +479,10 @@ test("preparation gates creation, opens administrable guidelines and accepts eve
   await page.getByRole("checkbox", { name: "J’ai pris connaissance" }).check();
   await page.locator(".route-experience").evaluate(async (el) => {
     await Promise.allSettled(
-      el.getAnimations({ subtree: true }).map((a) => a.finished),
+      el
+        .getAnimations({ subtree: true })
+        .filter((a) => a.effect?.getTiming().iterations !== Infinity)
+        .map((a) => a.finished),
     );
   });
   await page.screenshot({ path: "test-results/route-preparation-mobile.png" });
@@ -578,7 +581,10 @@ test("mobile bottom panel toggles with touch and keyboard; map and list open a o
   await expect(sheet).toHaveAttribute("data-sheet-position", "collapsed");
   await sheet.evaluate(async (el) => {
     await Promise.allSettled(
-      el.getAnimations({ subtree: true }).map((a) => a.finished),
+      el
+        .getAnimations({ subtree: true })
+        .filter((a) => a.effect?.getTiming().iterations !== Infinity)
+        .map((a) => a.finished),
     );
   });
   await handle.click();
@@ -587,7 +593,10 @@ test("mobile bottom panel toggles with touch and keyboard; map and list open a o
   await expect(sheet).toHaveAttribute("data-sheet-position", "expanded");
   await page.locator(".route-experience").evaluate(async (el) => {
     await Promise.allSettled(
-      el.getAnimations({ subtree: true }).map((a) => a.finished),
+      el
+        .getAnimations({ subtree: true })
+        .filter((a) => a.effect?.getTiming().iterations !== Infinity)
+        .map((a) => a.finished),
     );
   });
   const zoomControls = await page
@@ -613,7 +622,10 @@ test("mobile bottom panel toggles with touch and keyboard; map and list open a o
   await expect(card).not.toContainText("Étape");
   await page.locator(".route-experience").evaluate(async (el) => {
     await Promise.allSettled(
-      el.getAnimations({ subtree: true }).map((a) => a.finished),
+      el
+        .getAnimations({ subtree: true })
+        .filter((a) => a.effect?.getTiming().iterations !== Infinity)
+        .map((a) => a.finished),
     );
   });
   await page.screenshot({ path: "test-results/route-house-mobile.png" });
@@ -672,7 +684,10 @@ test("compact visitor house fits small mobile screens with maximum text", async 
   expect(button!.y + button!.height).toBeLessThanOrEqual(c!.y + c!.height);
   await page.locator(".route-experience").evaluate(async (el) => {
     await Promise.allSettled(
-      el.getAnimations({ subtree: true }).map((a) => a.finished),
+      el
+        .getAnimations({ subtree: true })
+        .filter((a) => a.effect?.getTiming().iterations !== Infinity)
+        .map((a) => a.finished),
     );
   });
   await page.screenshot({ path: "test-results/route-house-small-mobile.png" });
@@ -699,7 +714,10 @@ test("desktop keeps the map central with a compact bottom panel and the same hou
     .toBeGreaterThan(400);
   await page.locator(".route-experience").evaluate(async (el) => {
     await Promise.allSettled(
-      el.getAnimations({ subtree: true }).map((a) => a.finished),
+      el
+        .getAnimations({ subtree: true })
+        .filter((a) => a.effect?.getTiming().iterations !== Infinity)
+        .map((a) => a.finished),
     );
   });
   await page.screenshot({ path: "test-results/route-desktop.png" });
@@ -1007,15 +1025,34 @@ test("visiting every selected house suggests finishing and preserves the last ca
   await controlledGPS(page);
   await arrange(page);
   await generate(page);
+  const potion = page.getByRole("progressbar", {
+    name: "Progression de la collecte",
+  });
+  await expect(potion).toHaveAttribute("aria-valuenow", "0");
+  let visits = 0;
   for (const name of ["Les lanternes 2", "Les lanternes 1"]) {
     await page.getByRole("button", { name, exact: true }).click();
     await page
       .getByRole("button", { name: "Marquer comme visitée", exact: true })
       .click();
+    visits++;
+    await expect(potion).toHaveAttribute(
+      "aria-valuenow",
+      visits === 1 ? "50" : "100",
+    );
     await page
       .getByRole("button", { name: "Fermer la fiche", exact: true })
       .click();
   }
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await expect(potion.locator(".potion-wave")).toHaveCSS(
+    "animation-name",
+    "none",
+  );
+  await expect(potion.locator(".collection-potion-fill")).toHaveCSS(
+    "transition-duration",
+    "0s",
+  );
   await expect(page.locator(".route-experience")).toHaveAttribute(
     "data-route-phase",
     "active",
@@ -1142,10 +1179,14 @@ for (const width of [390, 1440]) {
         await expect(card.locator(".visitor-adapt")).toHaveCount(
           adaptable ? 1 : 0,
         );
-        await expect(card.getByRole("meter")).toHaveAttribute(
-          "aria-valuenow",
-          "4",
-        );
+        if (adaptable) {
+          await expect(card.getByRole("meter")).toHaveCount(0);
+          await expect(card.locator(".house-fear-labels")).toHaveCount(0);
+        } else
+          await expect(card.getByRole("meter")).toHaveAttribute(
+            "aria-valuenow",
+            "4",
+          );
         await expect(
           card.locator(".visitor-hours svg.lucide-chevron-right"),
         ).toHaveCount(0);
@@ -1161,6 +1202,7 @@ for (const width of [390, 1440]) {
           await Promise.allSettled(
             element
               .getAnimations({ subtree: true })
+              .filter((a) => a.effect?.getTiming().iterations !== Infinity)
               .map((animation) => animation.finished),
           );
         });
@@ -1246,9 +1288,7 @@ test("mobile free selection combines houses and a permanent stop in the bottom p
     exact: true,
   });
   await expect(dialog).toContainText("Bonbons");
-  await expect(
-    dialog.getByLabel(/^Frissons adaptés —/),
-  ).toBeVisible();
+  await expect(dialog.getByLabel(/^Frissons adaptés —/)).toBeVisible();
   await dialog.getByRole("button", { name: /Les lanternes 1/ }).click();
   await page.keyboard.press("Escape");
   await expect(bottom.locator(".route-step")).toHaveCount(2);

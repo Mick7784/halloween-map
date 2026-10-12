@@ -77,13 +77,13 @@ for (const width of [390, 1440])
       for (const close of ["X", "backdrop", "Escape"]) {
         await trigger.click();
         const menu = page.getByRole("dialog", {
-          name: "Menu utilisateur",
+          name: "Mon compte",
           exact: true,
         });
         await expect(
           menu.getByRole("link", { name: "La carte", exact: true }),
         ).toBeVisible();
-        await menu.getByRole("heading", { name: "Menu utilisateur" }).click();
+        await menu.getByRole("heading", { name: "Mon compte" }).click();
         await expect(menu).toBeVisible();
         await expect(
           menu.locator('a[href="/legal"],a[href="/privacy"],a[href="/terms"]'),
@@ -91,13 +91,13 @@ for (const width of [390, 1440])
         if (close === "X")
           await menu
             .getByRole("button", {
-              name: "Fermer Menu utilisateur",
+              name: "Fermer Mon compte",
               exact: true,
             })
             .click();
         else if (close === "backdrop")
           await page
-            .locator(".floating-overlay")
+            .locator(".account-overlay")
             .click({ position: { x: 4, y: 4 } });
         else await page.keyboard.press("Escape");
         await expect(menu).toHaveCount(0);

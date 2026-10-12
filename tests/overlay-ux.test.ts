@@ -358,22 +358,24 @@ describe("shared floating windows", () => {
         }),
       );
       const dialog = document.querySelector('[role="dialog"]')!;
-      for (const href of [
-        "/map",
-        "/participant",
-        "/map#parcours",
-        "/admin",
-        "/account",
-      ])
+      for (const href of ["/map", "/map#parcours", "/admin"])
         expect(dialog.querySelector(`a[href="${href}"]`)).not.toBeNull();
       expect(
         dialog.querySelector(
           'a[href="/legal"],a[href="/privacy"],a[href="/terms"]',
         ),
       ).toBeNull();
+      expect(dialog.textContent).toContain("Ma participation");
       expect(dialog.textContent).toContain("Se déconnecter");
       expect(dialog.textContent).toContain("Signaler un bug");
+      expect(dialog.querySelectorAll(".account-row-copy small")).toHaveLength(
+        0,
+      );
+      expect(dialog.textContent).toContain("Mes informations");
       await key("Escape");
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 5));
+      });
       expect(document.querySelector('[role="dialog"]')).toBeNull();
     });
 });

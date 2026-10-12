@@ -168,7 +168,7 @@ test("desktop compact menu uses the same grid for account, install and logout", 
     );
   });
   const actions = [
-    dialog.getByRole("link", { name: "Mon compte", exact: true }),
+    dialog.getByRole("button", { name: "Mes informations", exact: true }),
     dialog.getByRole("button", { name: "Ajouter l’application", exact: true }),
     dialog.getByRole("button", { name: "Se déconnecter", exact: true }),
   ];
@@ -177,7 +177,8 @@ test("desktop compact menu uses the same grid for account, install and logout", 
     await expect(action).toBeVisible();
     positions.push(
       await action
-        .locator("span")
+        .locator("span.account-row-copy, span:not([class])")
+        .first()
         .evaluate((el) => el.getBoundingClientRect().x),
     );
   }
@@ -192,7 +193,7 @@ test("desktop compact menu uses the same grid for account, install and logout", 
   await page.evaluate(() => window.dispatchEvent(new Event("appinstalled")));
   await expect(actions[1]).toHaveCount(0);
   await page
-    .getByRole("button", { name: "Fermer Menu utilisateur", exact: true })
+    .getByRole("button", { name: "Fermer Mon compte", exact: true })
     .click();
   await expect(
     page.getByRole("button", { name: "Soutenir le projet", exact: true }),
@@ -259,8 +260,8 @@ for (const mode of ["guest", "member", "house", "admin"]) {
         dialog.getByRole("link", { name: "La carte", exact: true }),
       ).toHaveCount(0);
       await expect(
-        dialog.getByRole("link", {
-          name: mode === "member" ? "Inscrire ma maison" : "Ma participation",
+        dialog.getByRole("button", {
+          name: "Ma participation",
           exact: true,
         }),
       ).toBeVisible();
@@ -291,7 +292,7 @@ for (const mode of ["guest", "member", "house", "admin"]) {
       .getByRole("button", { name: "Menu utilisateur", exact: true })
       .click();
     await page
-      .locator(".floating-overlay")
+      .locator(".account-overlay")
       .click({ position: { x: 10, y: 200 } });
     await expect(dialog).toHaveCount(0);
   });
@@ -317,7 +318,7 @@ for (const width of [390, 1440]) {
       .getByRole("button", { name: "Menu utilisateur", exact: true })
       .click();
     const menu = page.getByRole("dialog", {
-      name: "Menu utilisateur",
+      name: "Mon compte",
       exact: true,
     });
     await expect(
@@ -334,7 +335,7 @@ for (const width of [390, 1440]) {
         el.getAnimations({ subtree: true }).map((a) => a.finished),
       );
     });
-    expect((await menu.boundingBox())!.width).toBeLessThanOrEqual(400);
+    expect((await menu.boundingBox())!.width).toBeLessThanOrEqual(480);
     await page.screenshot({
       animations: "disabled",
       path: `${output}/menu-shared-${width}.png`,

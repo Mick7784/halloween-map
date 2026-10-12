@@ -104,16 +104,15 @@ export default function VisitorHouse({
             className="visitor-fear-section"
             aria-label="Niveau de frayeur"
           >
-            <h2>
-              {house.adaptable
-                ? "Niveau de frayeur de référence"
-                : "Niveau de frayeur"}
-            </h2>
-            <FearGauge
-              value={house.referenceFear ?? house.fear}
-              labels={fearLabels}
-              disabled={house.adaptable}
-            />
+            {!house.adaptable && (
+              <>
+                <h2>Niveau de frayeur</h2>
+                <FearGauge
+                  value={house.referenceFear ?? house.fear}
+                  labels={fearLabels}
+                />
+              </>
+            )}
             {house.adaptable && (
               <p className="visitor-adapt">
                 <AdaptedFearIcon size={21} />

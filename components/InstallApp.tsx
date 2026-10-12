@@ -93,16 +93,29 @@ export function InstallAppProvider({ children }: { children: ReactNode }) {
   );
 }
 
-export default function InstallApp({ account = false }: { account?: boolean }) {
+export default function InstallApp({
+  account = false,
+  onHelp,
+}: {
+  account?: boolean;
+  onHelp?: (help: string) => void;
+}) {
   const state = useContext(InstallContext);
   const [help, setHelp] = useState("");
   const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    if (help && onHelp) {
+      onHelp(help);
+      setHelp("");
+    }
+  }, [help, onHelp]);
   if (!state || (!state.available && !help)) return null;
   return (
     <div className={"install-action" + (account ? " account-install" : "")}>
       {state.available && (
         <button
           className="install-cta"
+          aria-label="Ajouter l’application"
           disabled={busy}
           onClick={async () => {
             setBusy(true);
@@ -124,12 +137,7 @@ export default function InstallApp({ account = false }: { account?: boolean }) {
           }}
         >
           <Download size={18} />
-          <span>
-            Ajouter l’application
-            {account && (
-              <small>Halloween Map sur votre appareil, à portée de main.</small>
-            )}
-          </span>
+          <span>Ajouter l’application</span>
         </button>
       )}
       {help && (

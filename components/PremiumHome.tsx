@@ -4,7 +4,6 @@ import { useEffect, useState, type ReactNode } from "react";
 import { DateTime } from "luxon";
 import { Menu, House, ArrowRight } from "lucide-react";
 import ManorMark from "./ManorMark";
-import UserMenu from "./UserMenu";
 import ProjectSupport from "./ProjectSupport";
 import { publicProjectLinks } from "../lib/project-links";
 import { api, AsyncButton, Notice, type PublicState } from "./common";
@@ -19,6 +18,8 @@ export default function PremiumHome({
   login,
   error,
   onRetry,
+  onOpenMenu,
+  menuOpen,
 }: {
   state: PublicState;
   user: User | null;
@@ -27,13 +28,13 @@ export default function PremiumHome({
   login: ReactNode;
   error: string;
   onRetry: () => Promise<void>;
+  onOpenMenu: () => void;
+  menuOpen: boolean;
 }) {
-  const [menu, setMenu] = useState(false);
   const projectLinks = publicProjectLinks(state.projectLinks, state.privacy);
   const [participation, setParticipation] = useState<Participation | null>(
     null,
   );
-  const [participationKnown, setParticipationKnown] = useState(false);
   useEffect(() => {
     let active = true;
     if (user)
@@ -41,11 +42,10 @@ export default function PremiumHome({
         .then((h) => {
           if (active) {
             setParticipation(h);
-            setParticipationKnown(true);
           }
         })
         .catch(() => {
-          if (active) setParticipationKnown(false);
+          // The participation shortcut remains available if loading fails.
         });
     return () => {
       active = false;
@@ -108,14 +108,14 @@ export default function PremiumHome({
         <button
           className="home-menu-toggle"
           aria-label="Menu utilisateur"
-          aria-expanded={menu}
+          aria-expanded={menuOpen}
           aria-controls="user-menu"
-          onClick={() => setMenu(true)}
+          onClick={onOpenMenu}
         >
           <Menu size={26} />
         </button>
       </header>
-      <main className="home-stage" inert={menu} aria-hidden={menu || undefined}>
+      <main className="home-stage">
         <div className="home-center">
           <h1>
             {closed ? (
@@ -220,27 +220,6 @@ export default function PremiumHome({
         </Link>
         <span className="home-version">{version}</span>
       </footer>
-      {menu && (
-        <UserMenu
-          user={user}
-          state={state}
-          version={version}
-          onClose={() => setMenu(false)}
-          login={login}
-          participationLabel={
-            participation ? "Ma participation" : "Inscrire ma maison"
-          }
-          participationSubtitle={
-            participation
-              ? participation.status === "VISIBLE"
-                ? "Maison visible"
-                : "Maison masquée"
-              : !participationKnown
-                ? "Consulter ma participation"
-                : undefined
-          }
-        />
-      )}
     </div>
   );
 }

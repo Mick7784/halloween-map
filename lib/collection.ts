@@ -152,3 +152,22 @@ export function collectionStats(
       : 0,
   };
 }
+
+// Only unique validated visits belonging to the current selection count.
+export function selectedCollectionStats(
+  collection: Collection,
+  stops: RouteResult["stops"],
+  now = Date.now(),
+) {
+  const selected = new Set(stops.map((stop) => stop.house.id));
+  return collectionStats(
+    {
+      ...collection,
+      visitedIds: [...new Set(collection.visitedIds)].filter((id) =>
+        selected.has(id),
+      ),
+    },
+    selected.size,
+    now,
+  );
+}

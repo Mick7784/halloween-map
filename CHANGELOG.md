@@ -1,5 +1,14 @@
 # Changelog
 
+## V0.8.7
+
+- Menu global « Mon compte » identique depuis l’accueil, la carte, les pages publiques et le back-office. Bannière Halloween sombre orange/violet, en-tête réduit, une entrée par ligne sans description, zones tactiles de 44 px et décoration réduite pour limiter le défilement.
+- Informations, mot de passe, participation, années validées, confidentialité, politique et aide d’installation remplacent le contenu dans la même fenêtre ; retour uniquement en haut et fermeture toujours disponible. Années triées et dédupliquées, états vide/chargement/erreur avec nouvelle tentative.
+- Toutes les fonctions existantes sont conservées, y compris installation PWA, vérification et changement d’email, changement de mot de passe, gestion de maison, suppression confirmée, connexion/déconnexion, contact, signalement de bug et accès conditionnels carte/collecte/administration. Permissions serveur et règles de saison inchangées.
+- Progression de collecte orange visible avec pourcentage, vagues et trois bulles discrètes ; calcul sur les maisons sélectionnées et les visites validées uniques, mise à jour immédiate, impulsion brève à 100 %, réduction des animations respectée.
+- Frissons adaptés : disparition complète du curseur et de l’échelle dans les formulaires et fiches ; encadré explicatif conservé, icône d’entraide distincte des masques de « Mise en scène », valeur fixe restaurée lorsque le mode standard est réactivé.
+- Tests de permissions, cohérence multi-pages, navigation dans la même fenêtre, 0/50/100 %, réduction des animations et absence de jauge adaptative ; vérification après publication du contenu, de la version, de la révision et du digest des images GHCR versionnée et latest. Aucune migration.
+
 ## V0.8.6
 
 - Mon compte : carte « Mes années de participation » harmonisée avec les autres rubriques, dépliable sur place au clic ou au clavier ; seules les années de participation validée conservées sont affichées, sans doublons.

@@ -282,27 +282,36 @@ export function HouseFearFields({
 }) {
   return (
     <>
-      <FearGauge
-        value={fear}
-        labels={labels}
-        disabled={adapt}
-        onChange={onFear}
-      />
+      {!adapt && (
+        <FearGauge
+          value={fear}
+          labels={labels}
+          disabled={adapt}
+          onChange={onFear}
+        />
+      )}
       <label className="participation-adapt">
         <AdaptedFearIcon size={22} />
-        <span>Frissons adaptés</span>
+        <span>
+          Frissons adaptés
+          {adapt && (
+            <small className="adapt-explanation">
+              {adaptedFearExplanation}
+            </small>
+          )}
+        </span>
         <Input
           type="checkbox"
           role="switch"
+          aria-label="Frissons adaptés"
           checked={adapt}
           onChange={(e) => onAdapt(e.target.checked)}
         />
         <span className="participation-toggle" aria-hidden="true" />
       </label>
-      <small className="participation-help">
-        {adaptedFearExplanation}
-        {adapt ? " Le niveau fixe est désactivé." : ""}
-      </small>
+      {!adapt && (
+        <small className="participation-help">{adaptedFearExplanation}</small>
+      )}
     </>
   );
 }

@@ -1,5 +1,8 @@
 "use client";
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import Link from "next/link";
+import { Map, House, Route, Bug, Mail, Settings } from "lucide-react";
+import { bugHref, publicProjectLinks } from "../lib/project-links";
 import {
   ArrowLeft,
   CalendarDays,
@@ -30,9 +33,19 @@ import AccountPrivacy from "./AccountPrivacy";
 import AccountPolicy from "./AccountPolicy";
 import Editorial from "./Editorial";
 import "./AccountOverlay.css";
+import ParticipationOverlay from "./ParticipationOverlay";
 
 type View =
-  "main" | "information" | "security" | "privacy" | "policy" | "delete";
+  | "main"
+  | "information"
+  | "security"
+  | "privacy"
+  | "policy"
+  | "delete"
+  | "years"
+  | "install"
+  | "participation";
+type InitialView = "main" | "participation";
 const titles: Record<View, string> = {
   main: "Mon compte",
   information: "Mes informations",
@@ -40,6 +53,9 @@ const titles: Record<View, string> = {
   privacy: "Confidentialité et données",
   policy: "Politique de confidentialité",
   delete: "Supprimer mon compte",
+  years: "Mes années de participation",
+  install: "Ajouter l’application",
+  participation: "Ma participation",
 };
 
 export default function AccountOverlay({
@@ -47,13 +63,21 @@ export default function AccountOverlay({
   state,
   refresh,
   onClose,
+  version = "",
+  styleUrl = "",
+  initialView = "main",
 }: {
   user: User;
   state: PublicState;
   refresh: () => Promise<void>;
   onClose: () => void;
+  version?: string;
+  styleUrl?: string;
+  initialView?: InitialView;
 }) {
-  const [view, setView] = useState<View>("main");
+  const links = publicProjectLinks(state.projectLinks, state.privacy);
+  const [installHelp, setInstallHelp] = useState("");
+  const [view, setView] = useState<View>(initialView);
   const [returning, setReturning] = useState(false);
   const [closing, setClosing] = useState(false);
   const [message, setMessage] = useState("");
@@ -61,13 +85,24 @@ export default function AccountOverlay({
   const [participationYears, setParticipationYears] = useState<
     { year: number }[] | null
   >(null);
+  const [yearsError, setYearsError] = useState("");
+  async function loadYears() {
+    setYearsError("");
+    try {
+      setParticipationYears(await api<{ year: number }[]>("history"));
+    } catch (e) {
+      setYearsError((e as Error).message);
+    }
+  }
   useEffect(() => {
     let alive = true;
     void api<{ year: number }[]>("history")
       .then((rows) => {
         if (alive) setParticipationYears(rows);
       })
-      .catch(() => {});
+      .catch((e) => {
+        if (alive) setYearsError(e.message);
+      });
     return () => {
       alive = false;
     };
@@ -96,7 +131,13 @@ export default function AccountOverlay({
   );
   useEffect(() => {
     if (previousView.current !== view) {
-      panel.current?.querySelector<HTMLElement>(".account-subview h2")?.focus();
+      const scroll =
+        panel.current?.querySelector<HTMLElement>(".account-scroll");
+      if (scroll) scroll.scrollTop = 0;
+      (
+        panel.current?.querySelector<HTMLElement>(".account-subview h2") ??
+        panel.current?.querySelector<HTMLElement>(".account-back")
+      )?.focus();
       if (view === "main") {
         if (back.current?.getClientRects().length) back.current.focus();
         else
@@ -105,8 +146,12 @@ export default function AccountOverlay({
       previousView.current = view;
     }
   }, [view]);
-  const [history, setHistory] = useState<View[]>([]);
+  const [history, setHistory] = useState<View[]>(
+    initialView === "main" ? [] : ["main"],
+  );
   function navigate(next: View) {
+    setMessage("");
+    setError("");
     if (next !== "main") setHistory((previous) => [...previous, view]);
     else setHistory([]);
     setReturning(next === "main");
@@ -210,6 +255,7 @@ export default function AccountOverlay({
       }}
     >
       <section
+        id="user-menu"
         ref={panel}
         className={"account-dialog account-view-" + view}
         role="dialog"
@@ -235,7 +281,11 @@ export default function AccountOverlay({
           <h1 id="account-title">{titles[view]}</h1>
           <button
             className="close account-close"
-            aria-label="Fermer Mon compte"
+            aria-label={
+              view === "participation"
+                ? "Fermer ma participation"
+                : "Fermer Mon compte"
+            }
             onClick={close}
           >
             <X size={23} />
@@ -271,66 +321,104 @@ export default function AccountOverlay({
                 </div>
               </div>
               <div className="account-mobile-settings">
+                {state.mapAccessible && (
+                  <Link className="account-row" href="/map" onClick={onClose}>
+                    <span className="account-row-icon">
+                      <Map />
+                    </span>
+                    <span className="account-row-copy">
+                      <strong>La carte</strong>
+                    </span>
+                    <ChevronRight size={19} />
+                  </Link>
+                )}
+                <AccountRow
+                  icon={<House />}
+                  title="Ma participation"
+                  onClick={() => navigate("participation")}
+                />
+                {state.collectionAccessible && (
+                  <Link
+                    className="account-row"
+                    href="/map#parcours"
+                    onClick={onClose}
+                  >
+                    <span className="account-row-icon">
+                      <Route />
+                    </span>
+                    <span className="account-row-copy">
+                      <strong>Préparer ma collecte</strong>
+                    </span>
+                    <ChevronRight size={19} />
+                  </Link>
+                )}
+                {user.permissions.includes("admin.access") && (
+                  <Link className="account-row" href="/admin" onClick={onClose}>
+                    <span className="account-row-icon">
+                      <Settings />
+                    </span>
+                    <span className="account-row-copy">
+                      <strong>Administration</strong>
+                    </span>
+                    <ChevronRight size={19} />
+                  </Link>
+                )}
                 <AccountRow
                   refButton={back}
                   icon={<UserRound />}
                   title="Mes informations"
-                  subtitle="Nom, email et profil"
                   onClick={() => navigate("information")}
                 />
                 <AccountRow
                   icon={<LockKeyhole />}
                   title="Mot de passe"
-                  subtitle="Modifier votre mot de passe"
                   onClick={() => navigate("security")}
                 />
               </div>
-              <div className="account-forms">
-                {information}
-                {security}
-              </div>
               <div className="account-secondary">
-                {participationYears && (
-                  <details className="account-years">
-                    <summary className="account-row">
-                      <span className="account-row-icon" aria-hidden="true">
-                        <CalendarDays />
-                      </span>
-                      <span className="account-row-copy">
-                        <strong>Mes années de participation</strong>
-                        <small>Consulter mes participations validées</small>
-                      </span>
-                      <ChevronRight size={19} aria-hidden="true" />
-                    </summary>
-                    <div className="account-years-content">
-                      {participationYears.length ? (
-                        <ul>
-                          {[
-                            ...new Set(participationYears.map((p) => p.year)),
-                          ].map((year) => (
-                            <li key={year}>
-                              Halloween {year} — Participation validée
-                            </li>
-                          ))}
-                        </ul>
-                      ) : (
-                        <p>Aucune participation validée conservée.</p>
-                      )}
-                      <p className="small">
-                        Inscription validée comme propriétaire. Années
-                        uniquement, conservées cinq ans et effacées avec le
-                        compte.
-                      </p>
-                    </div>
-                  </details>
-                )}
-                <InstallApp account />
+                <AccountRow
+                  icon={<CalendarDays />}
+                  title="Mes années de participation"
+                  onClick={() => navigate("years")}
+                />
+                <InstallApp
+                  account
+                  onHelp={(help) => {
+                    setInstallHelp(help);
+                    navigate("install");
+                  }}
+                />
                 <AccountRow
                   icon={<ShieldCheck />}
                   title="Confidentialité et données"
-                  subtitle="Voir et gérer vos données personnelles"
                   onClick={() => navigate("privacy")}
                 />
+                {links.contactEnabled &&
+                  (links.contactUrl || links.contactEmail) && (
+                    <a
+                      className="account-row"
+                      href={links.contactUrl ?? `mailto:${links.contactEmail}`}
+                    >
+                      <span className="account-row-icon">
+                        <Mail />
+                      </span>
+                      <span className="account-row-copy">
+                        <strong>Contacter l’organisateur</strong>
+                      </span>
+                      <ChevronRight size={19} />
+                    </a>
+                  )}
+                {links.bugEnabled && (
+                  <a className="account-row" href={bugHref(links, version)}>
+                    <span className="account-row-icon">
+                      <Bug />
+                    </span>
+                    <span className="account-row-copy">
+                      <strong>Signaler un bug</strong>
+                    </span>
+                    <ChevronRight size={19} />
+                  </a>
+                )}
               </div>
               <div className="account-session">
                 <AsyncButton
@@ -344,7 +432,6 @@ export default function AccountOverlay({
                   </span>
                   <span className="account-row-copy">
                     <strong>Se déconnecter</strong>
-                    <small>Vous reviendrez à l’accueil.</small>
                   </span>
                   <ChevronRight size={19} />
                 </AsyncButton>
@@ -354,15 +441,62 @@ export default function AccountOverlay({
                   danger
                   icon={<Trash2 />}
                   title="Supprimer mon compte"
-                  subtitle="Action irréversible · confirmation requise"
                   onClick={() => navigate("delete")}
                 />
               </div>
             </>
           ) : (
             <div key={view} className="account-subview">
+              {view === "participation" && (
+                <ParticipationOverlay
+                  embedded
+                  user={user}
+                  state={state}
+                  refresh={refresh}
+                  styleUrl={styleUrl}
+                  onClose={close}
+                />
+              )}
               {view === "information" && information}
               {view === "security" && security}
+              {view === "install" && (
+                <section className="account-card">
+                  <h2 tabIndex={-1}>Ajouter à l’écran d’accueil</h2>
+                  <p role="status">{installHelp}</p>
+                </section>
+              )}
+              {view === "years" && (
+                <section className="account-card account-years-content">
+                  <h2 tabIndex={-1}>Mes années de participation</h2>
+                  {participationYears ? (
+                    participationYears.length ? (
+                      <ul>
+                        {[...new Set(participationYears.map((p) => p.year))]
+                          .sort((a, b) => b - a)
+                          .map((year) => (
+                            <li key={year}>
+                              Halloween {year} — Participation validée
+                            </li>
+                          ))}
+                      </ul>
+                    ) : (
+                      <p>Aucune participation validée conservée.</p>
+                    )
+                  ) : (
+                    !yearsError && (
+                      <p role="status">Chargement des participations…</p>
+                    )
+                  )}
+                  <Notice error={yearsError} />
+                  {yearsError && (
+                    <AsyncButton onClick={loadYears}>Réessayer</AsyncButton>
+                  )}
+                  <p>
+                    Inscription validée comme propriétaire. Années uniquement,
+                    conservées cinq ans et effacées avec le compte.
+                  </p>
+                </section>
+              )}
               {view === "privacy" && (
                 <AccountPrivacy
                   user={user}
@@ -425,14 +559,12 @@ export default function AccountOverlay({
 function AccountRow({
   icon,
   title,
-  subtitle,
   onClick,
   danger = false,
   refButton,
 }: {
   icon: ReactNode;
   title: string;
-  subtitle: string;
   onClick: () => void;
   danger?: boolean;
   refButton?: React.Ref<HTMLButtonElement>;
@@ -446,7 +578,6 @@ function AccountRow({
       <span className="account-row-icon">{icon}</span>
       <span className="account-row-copy">
         <strong>{title}</strong>
-        <small>{subtitle}</small>
       </span>
       <ChevronRight size={19} />
     </button>
