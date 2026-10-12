@@ -426,44 +426,6 @@ button:disabled {
 .settings-map.is-expanded {
   height: min(65dvh, 650px);
 }
-body .home-reference {
-  height: auto;
-  min-height: 100dvh;
-  overflow: visible;
-  grid-template-rows: minmax(0, 1fr) auto;
-  background: #12151b;
-  font-family: Inter, Arial, sans-serif;
-}
-.home-reference .home-art {
-  display: none;
-}
-.home-reference .home-stage {
-  min-height: calc(100dvh - 100px);
-  padding: 100px 20px 50px;
-}
-.home-reference .home-center {
-  transform: none;
-}
-.home-reference .home-center h1 {
-  font-family: Inter, Arial, sans-serif;
-  font-size: clamp(28px, 4vw, 44px);
-  font-weight: 600;
-  line-height: 1.3;
-  text-shadow: none;
-}
-.home-reference .home-center h1 span {
-  color: #abb2bd;
-}
-.home-reference .home-header {
-  position: fixed;
-  inset: 0 0 auto;
-  background: #12151bf5;
-  z-index: 70;
-}
-.home-reference .home-signature {
-  position: static;
-  padding: 24px 18px;
-}
 .home-login {
   max-width: 440px;
   width: 100%;
@@ -484,17 +446,6 @@ body .home-reference {
   display: block;
   margin-top: 14px;
   text-align: center;
-}
-.home-reference .home-clock {
-  background: transparent;
-  border: 1px solid #303743;
-  box-shadow: none;
-  border-radius: 12px;
-}
-.home-reference .home-cta {
-  background: #f39a51;
-  color: #12151b;
-  box-shadow: none;
 }
 @media (max-width: 680px) {
   .mobile-row-action {
@@ -523,14 +474,8 @@ body .home-reference {
   .admin-beta .table-wrap {
     overflow-x: auto;
   }
-  .home-reference .home-stage {
-    padding: 98px 16px 30px;
-  }
   .home-login {
     padding: 18px;
-  }
-  .home-reference .home-houses {
-    margin: 24px auto;
   }
   .attendance-metrics {
     gap: 18px;

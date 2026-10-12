@@ -99,11 +99,14 @@
   padding: 0 22px;
   min-height: 0;
   display: grid;
-  place-items: center;
+  place-items: safe center;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 .home-center {
   width: 100%;
   max-width: 410px;
+  min-width: 0;
   text-align: center;
   display: flex;
   flex-direction: column;
@@ -119,7 +122,8 @@
   letter-spacing: -0.5px;
 }
 .home-center h1 span {
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 .home-clock {
   width: 100%;
@@ -457,12 +461,12 @@
     letter-spacing: 3px;
   }
   .home-art {
-    background-image: url("/art/home-reference-desktop-v1.webp");
+    background-image: url("/art/home-reference-v2.webp");
     background-size: cover;
     background-position: center center;
   }
   .home-stage {
-    place-items: center;
+    place-items: safe center;
     padding: 0 24px;
   }
   .home-center {
@@ -680,4 +684,24 @@
   .home-install-guest {
     margin-top: 20px;
   }
+}
+
+/* Keep guest authentication reachable inside the cinematic viewport. */
+.home-center:has(.home-login) {
+  gap: 12px;
+  padding-block: 12px;
+}
+.home-reference .home-login {
+  margin: 0;
+  padding: 16px;
+  background: #11151de6;
+}
+.home-reference .home-login .login-links {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px;
+}
+.home-reference .home-login a {
+  min-height: 44px;
 }

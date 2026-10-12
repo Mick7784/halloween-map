@@ -52,17 +52,18 @@ export default function PremiumHome({
     };
   }, [user]);
   const zone = state.instance?.timezone ?? "Europe/Paris";
-  const configured =
-    (state.season?.opens_at ?? state.nextOpening)
-      ? DateTime.fromISO(
-          (state.season?.opens_at ?? state.nextOpening)!,
-        ).setZone(zone)
-      : null;
-  const opening = configured?.isValid && !state.season?.is_test ? configured : null;
+  // A legacy TEST preview must not supply a fictitious public opening date.
+  const openingISO = state.season?.is_test
+    ? state.nextOpening
+    : (state.season?.opens_at ?? state.nextOpening);
+  const configured = openingISO
+    ? DateTime.fromISO(openingISO).setZone(zone)
+    : null;
+  const opening = configured?.isValid ? configured : null;
   const closed = ["CLOSED", "ARCHIVED"].includes(state.state ?? "");
   const open = !!state.publicMapOpen;
-  const countdownVisible = !!state.season && !!opening &&
-    opening.toMillis() > now && !closed && !open;
+  const countdownVisible =
+    !!opening && opening.toMillis() > now && !closed && !open;
   const canPreview = !!user && !!state.mapAccessible && !open;
   const remaining = Math.max(0, (opening?.toMillis() ?? now) - now);
   const clock = [
@@ -167,7 +168,11 @@ export default function PremiumHome({
                 <strong>
                   {count} {count > 1 ? "maisons" : "maison"}
                 </strong>
-                <span>déjà {count > 1 ? "inscrites" : "inscrite"}</span>
+                <span>
+                  {state.season?.is_test
+                    ? "de test · aperçu administrateur"
+                    : `déjà ${count > 1 ? "inscrites" : "inscrite"}`}
+                </span>
               </div>
             </div>
           )}

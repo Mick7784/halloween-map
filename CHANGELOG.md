@@ -1,5 +1,13 @@
 # Changelog
 
+## V0.8.4
+
+- Restauration de l’accueil cinématique avec exactement l’illustration originale home-reference-v2.webp sur mobile et desktop ; textes adaptatifs et connexion accessible sur les petits écrans.
+- Décompte de la prochaine saison réelle également disponible lorsqu’une TEST historique reste active, sans changer la saison de prévisualisation ni ouvrir la carte au public ; maisons TEST explicitement identifiées.
+- Revalidation de l’ouverture pour les saisons préparées et au retour dans l’application, avec horloge serveur conservée.
+- Maisons et filtres : liste toujours affichée, suppression du bouton carte redondant, filtres supérieurs avec icônes et libellés conservés, fiches plus compactes avec icônes et libellés accessibles non visuels.
+- Contrôles de non-régression de l’illustration, des titres mobiles, des états TEST/REAL et des accès au panneau ; aucune migration ni modification des données persistantes.
+
 ## V0.8.3
 
 - Carte accessible aux administrateurs dès qu'une saison réelle est créée ; activation explicite réservée à l'ouverture publique, transition automatique au début de l'événement et accueil de remerciement après clôture.
@@ -11,7 +19,6 @@
 - Compte à rebours et remerciements également visibles sans connexion ; horloge de l'accueil recalée sur le serveur. Libellé accessible complet du bouton compact d'arrêt.
 - Back-office : création d'une maison autorisée dans une saison préparée avant activation ; création toujours bloquée sans saison ou après fermeture/purge.
 - Couverture navigateur conservée et adaptée aux nouveaux flux ; image GHCR isolée `pr-18-<SHA>` vérifiée après les tests et Docker, sans publication `latest` ni déploiement.
-
 
 ## V0.8.2
 

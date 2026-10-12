@@ -5,6 +5,9 @@ const state = {
   setupRequired: false,
   state: "COUNTDOWN",
   count: 37,
+  publicMapOpen: false,
+  mapAccessible: false,
+  serverTime: "2026-10-18T20:32:24Z",
   instance: {
     public_name: "Halloween",
     territory: "Villiers-sur-Morin",
@@ -68,6 +71,11 @@ async function arrange(
   );
   await page.goto("/");
   await expect(page.locator(".home-reference")).toBeVisible();
+  await expect(page.locator(".home-art")).toBeVisible();
+  await expect(page.locator(".home-art")).toHaveCSS(
+    "background-image",
+    /home-reference-v2\.webp/,
+  );
   await page.locator(".home-art").evaluate(async () => {
     await document.fonts.ready;
     const img = new Image();
@@ -468,3 +476,103 @@ for (const standalone of [false, true]) {
     }
   });
 }
+
+for (const width of [360, 390, 1440]) {
+  for (const mode of [
+    "preparation",
+    "closed",
+    "legacy-preview",
+    "draft",
+    "next-real",
+  ]) {
+    test(`cinematic home and safe title ${mode} ${width}px`, async ({
+      page,
+    }) => {
+      await page.setViewportSize({ width, height: width === 360 ? 640 : 900 });
+      const alternate =
+        mode === "preparation"
+          ? { season: null, state: "PREPARATION", count: 0 }
+          : mode === "closed"
+            ? {
+                season: {
+                  ...state.season,
+                  opens_at: "2026-10-16T11:00:00Z",
+                  closes_at: "2026-10-17T11:00:00Z",
+                },
+                state: "CLOSED",
+              }
+            : mode === "legacy-preview"
+              ? {
+                  season: {
+                    ...state.season,
+                    is_test: true,
+                    opens_at: "2000-01-01T00:00:00Z",
+                    closes_at: "2201-01-01T00:00:00Z",
+                  },
+                  state: "MAP_OPEN",
+                  mapAccessible: true,
+                  nextOpening: opening,
+                  count: 2,
+                }
+              : mode === "next-real"
+                ? { season: null, state: "PREPARATION", nextOpening: opening }
+                : { state: "PREPARATION" };
+      await arrange(
+        page,
+        mode === "legacy-preview" ? "admin" : "member",
+        alternate,
+      );
+      const clock = page.getByLabel("Temps restant avant l’ouverture", {
+        exact: true,
+      });
+      await expect(clock).toHaveCount(
+        ["legacy-preview", "draft", "next-real"].includes(mode) ? 1 : 0,
+      );
+      if (mode === "legacy-preview") {
+        await expect(page.locator(".home-houses")).toContainText("de test");
+        await expect(
+          page.getByRole("link", { name: "Accéder à la carte" }),
+        ).toHaveAttribute("href", "/map");
+      }
+      const bounds = await page.locator("h1 span").boundingBox();
+      expect(bounds!.x).toBeGreaterThanOrEqual(0);
+      expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(width);
+      expect(
+        await page.evaluate(() => document.documentElement.scrollWidth),
+      ).toBeLessThanOrEqual(width);
+      // Prove the asset contributes painted pixels, not merely a successful download.
+      await page.clock.pauseAt(new Date("2026-10-18T20:32:34Z"));
+      const shown = await page.screenshot({ animations: "disabled" });
+      await page.locator(".home-art").evaluate((el) => {
+        el.style.visibility = "hidden";
+      });
+      const hidden = await page.screenshot({ animations: "disabled" });
+      expect(shown.equals(hidden)).toBe(false);
+      await page.locator(".home-art").evaluate((el) => {
+        el.style.visibility = "";
+      });
+      await page.screenshot({
+        animations: "disabled",
+        path: `${output}/v084-${mode}-${width}.png`,
+      });
+    });
+  }
+}
+
+test("TEST alone never fabricates a public countdown", async ({ page }) => {
+  await arrange(page, "admin", {
+    state: "MAP_OPEN",
+    mapAccessible: true,
+    season: {
+      ...state.season,
+      is_test: true,
+      opens_at: "2000-01-01T00:00:00Z",
+      closes_at: "2201-01-01T00:00:00Z",
+    },
+    nextOpening: null,
+  });
+  await expect(page.locator(".home-clock")).toHaveCount(0);
+  await expect(
+    page.getByRole("link", { name: "Accéder à la carte" }),
+  ).toBeVisible();
+});

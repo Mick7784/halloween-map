@@ -8,9 +8,7 @@ import {
   LocateFixed,
   AlertTriangle,
   MapPin,
-  List,
   Plus,
-  Map as MapIcon,
   House as HouseIcon,
   Clock3,
   Footprints,
@@ -61,7 +59,6 @@ export default function MapExperience({
     [focusToken, setFocusToken] = useState(0),
     [maxFear, setMaxFear] = useState(2),
     [filters, setFilters] = useState<Activity[]>([]),
-    [list, setList] = useState(false),
     [optionsOpen, setOptionsOpen] = useState(false),
     [previewOpen, setPreviewOpen] = useState(true),
     [confirmation, setConfirmation] = useState(false),
@@ -154,7 +151,6 @@ export default function MapExperience({
     await controller.calculateRoute(parameters);
     setPreviewOpen(true);
     setPreparing(false);
-    setList(false);
   }
   const [clock, setClock] = useState(() => Date.now());
   useEffect(() => {
@@ -244,17 +240,23 @@ export default function MapExperience({
     const reasons: string[] = [];
     if (
       preferences.activities.length &&
-      !preferences.activities.some((activity) => house.activities.includes(activity))
+      !preferences.activities.some((activity) =>
+        house.activities.includes(activity),
+      )
     ) {
-      reasons.push(`Activités différentes : ${preferences.activities.map((activity) => labels[activity]).join(", ")} recherchées`);
+      reasons.push(
+        `Activités différentes : ${preferences.activities.map((activity) => labels[activity]).join(", ")} recherchées`,
+      );
     }
     if (
       !house.adaptable &&
       (house.fear === null || house.fear > (preferences.maxFear ?? 5))
     ) {
-      reasons.push(house.fear === null
-        ? "Niveau de frayeur non précisé"
-        : `Frayeur ${house.fear} · limite choisie ${preferences.maxFear ?? 5}`);
+      reasons.push(
+        house.fear === null
+          ? "Niveau de frayeur non précisé"
+          : `Frayeur ${house.fear} · limite choisie ${preferences.maxFear ?? 5}`,
+      );
     }
     if (preferences.excludedHouseIds.includes(house.id)) {
       reasons.push("Maison retirée de votre sélection initiale");
@@ -331,22 +333,33 @@ export default function MapExperience({
         onSave={() => {
           setSelectionError("");
           try {
-            if (controller.storageError) throw new Error(controller.storageError);
+            if (controller.storageError)
+              throw new Error(controller.storageError);
             const raw = localStorage.getItem(ACTIVE_ROUTE_KEY);
-            const saved = raw ? JSON.parse(raw) as {
-              ownerId: string; seasonId: string; phase: string;
-              result: { stops: { house: { id: string } }[] }
-            } : null;
+            const saved = raw
+              ? (JSON.parse(raw) as {
+                  ownerId: string;
+                  seasonId: string;
+                  phase: string;
+                  result: { stops: { house: { id: string } }[] };
+                })
+              : null;
             if (
               !saved ||
               saved.ownerId !== user?.id ||
               saved.seasonId !== state.season?.id ||
               saved.phase !== "calculated" ||
               saved.result.stops.length !== (route?.stops.length ?? -1) ||
-              route?.stops.some((stop) =>
-                !saved.result.stops.some((entry) => entry.house.id === stop.house.id)
+              route?.stops.some(
+                (stop) =>
+                  !saved.result.stops.some(
+                    (entry) => entry.house.id === stop.house.id,
+                  ),
               )
-            ) throw new Error("La sélection n'a pas pu être sauvegardée sur cet appareil.");
+            )
+              throw new Error(
+                "La sélection n'a pas pu être sauvegardée sur cet appareil.",
+              );
             controller.savePreparedRoute();
             setPreviewOpen(false);
             setSelectionNotice("Votre sélection a été enregistrée");
@@ -420,7 +433,6 @@ export default function MapExperience({
               className="collection-discovery"
               type="button"
               onClick={() => {
-                setList(true);
                 setOptionsOpen(true);
               }}
             >
@@ -432,17 +444,19 @@ export default function MapExperience({
                 </small>
               </span>
             </button>
-            {!readOnly && <button
-              className="collection-prepare primary"
-              type="button"
-              disabled={!state.collectionAccessible}
-              onClick={prepare}
-            >
-              <Route size={22} />
-              {controller.phase === "calculated"
-                ? "Voir ma sélection"
-                : "Préparer ma collecte"}
-            </button>}
+            {!readOnly && (
+              <button
+                className="collection-prepare primary"
+                type="button"
+                disabled={!state.collectionAccessible}
+                onClick={prepare}
+              >
+                <Route size={22} />
+                {controller.phase === "calculated"
+                  ? "Voir ma sélection"
+                  : "Préparer ma collecte"}
+              </button>
+            )}
             <button
               className="route-recenter consultation-recenter"
               type="button"
@@ -465,15 +479,6 @@ export default function MapExperience({
             onClose={() => setOptionsOpen(false)}
             className="map-options-window"
           >
-            <button
-              type="button"
-              aria-label={
-                list ? "Afficher la carte" : "Afficher la liste des maisons"
-              }
-              onClick={() => setList(!list)}
-            >
-              {list ? <MapIcon size={19} /> : <List size={19} />}
-            </button>
             <div className="route-discovery-filters">
               {(["DECORATION", "CANDY", "ACTING"] as Activity[]).map((a) => (
                 <button
@@ -490,43 +495,42 @@ export default function MapExperience({
                 </button>
               ))}
             </div>
-            {list && (
-              <div className="map-options-list">
-                {houses.map((h) => (
-                  <button
-                    type="button"
-                    key={h.id}
-                    onClick={() => {
-                      setOptionsOpen(false);
-                      selectHouse(h);
-                    }}
-                  >
-                    <MapPin size={18} />
-                    <span>
-                      <strong>{h.name}</strong>
-                      <small>
-                        {proximityPoint
-                          ? `À environ ${Math.round(gpsDistance(proximityPoint, [h.longitude, h.latitude]))} m à vol d’oiseau`
-                          : "Distance actuelle indisponible"}
-                      </small>
-                      <Badges activities={h.activities} />
-                      <small>
-                        {h.fear === null
-                          ? "Frayeur non précisée"
-                          : `Frayeur : ${state.participation?.fearLabels[h.fear - 1] ?? h.fear}`}{" "}
-                        ·{" "}
-                        {h.adaptable ? "S’adapte aux visiteurs" : "Niveau fixe"}
-                      </small>
-                    </span>
-                  </button>
-                ))}
-                {!houses.length && <p>Aucune maison disponible.</p>}
-              </div>
-            )}
+            <div className="map-options-list">
+              {houses.map((h) => (
+                <button
+                  type="button"
+                  key={h.id}
+                  onClick={() => {
+                    setOptionsOpen(false);
+                    selectHouse(h);
+                  }}
+                >
+                  <MapPin size={18} />
+                  <span>
+                    <strong>{h.name}</strong>
+                    <small>
+                      {proximityPoint
+                        ? `À environ ${Math.round(gpsDistance(proximityPoint, [h.longitude, h.latitude]))} m à vol d’oiseau`
+                        : "Distance actuelle indisponible"}
+                    </small>
+                    <Badges activities={h.activities} compact />
+                    <small>
+                      {h.fear === null
+                        ? "Frayeur non précisée"
+                        : `Frayeur : ${state.participation?.fearLabels[h.fear - 1] ?? h.fear}`}{" "}
+                      · {h.adaptable ? "S’adapte aux visiteurs" : "Niveau fixe"}
+                    </small>
+                  </span>
+                </button>
+              ))}
+              {!houses.length && <p>Aucune maison disponible.</p>}
+            </div>
           </FloatingWindow>
         )}
         {readOnly && (
-          <p className="route-closed-notice">Saison terminée — carte en lecture seule.</p>
+          <p className="route-closed-notice">
+            Saison terminée — carte en lecture seule.
+          </p>
         )}
         {focused && (
           <button
@@ -635,7 +639,12 @@ export default function MapExperience({
           <div className="collection-bottom-bar">
             <div className="collection-bottom-heading">
               <strong>Ma collecte</strong>
-              <Link href="/account" className="collection-account" aria-label="Mon compte" title="Mon compte">
+              <Link
+                href="/account"
+                className="collection-account"
+                aria-label="Mon compte"
+                title="Mon compte"
+              >
                 <UserRound size={20} aria-hidden="true" />
               </Link>
               <button
@@ -648,22 +657,54 @@ export default function MapExperience({
                 Arrêter
               </button>
             </div>
-            <div className="collection-bottom-metrics" aria-label="Statistiques de collecte">
-              <span aria-label={`${stats.visited} maisons visitées sur ${stats.selected}`} title="Maisons visitées">
+            <div
+              className="collection-bottom-metrics"
+              aria-label="Statistiques de collecte"
+            >
+              <span
+                aria-label={`${stats.visited} maisons visitées sur ${stats.selected}`}
+                title="Maisons visitées"
+              >
                 <HouseIcon size={18} aria-hidden="true" />
-                <strong>{stats.visited}/{stats.selected}</strong>
+                <strong>
+                  {stats.visited}/{stats.selected}
+                </strong>
               </span>
               <span aria-label="Temps écoulé" title="Temps écoulé">
                 <Clock3 size={18} aria-hidden="true" />
-                <strong>{String(Math.floor(stats.durationSeconds / 60)).padStart(2, "0")}:{String(stats.durationSeconds % 60).padStart(2, "0")}</strong>
+                <strong>
+                  {String(Math.floor(stats.durationSeconds / 60)).padStart(
+                    2,
+                    "0",
+                  )}
+                  :{String(stats.durationSeconds % 60).padStart(2, "0")}
+                </strong>
               </span>
               <span
-                aria-label={distanceKnown ? (distanceComplete ? "Distance GPS observée" : "Distance GPS partielle") : "Distance GPS indisponible"}
-                title={distanceKnown ? distanceComplete ? "Distance GPS observée" : "Distance GPS partielle" : "Distance GPS indisponible"}
+                aria-label={
+                  distanceKnown
+                    ? distanceComplete
+                      ? "Distance GPS observée"
+                      : "Distance GPS partielle"
+                    : "Distance GPS indisponible"
+                }
+                title={
+                  distanceKnown
+                    ? distanceComplete
+                      ? "Distance GPS observée"
+                      : "Distance GPS partielle"
+                    : "Distance GPS indisponible"
+                }
               >
                 <Footprints size={18} aria-hidden="true" />
-                <strong>{distanceKnown ? `${(stats.distanceMeters / 1000).toLocaleString("fr-FR", { maximumFractionDigits: 2 })} km` : "—"}</strong>
-                {distanceKnown && !distanceComplete && <small aria-label="Mesure partielle">*</small>}
+                <strong>
+                  {distanceKnown
+                    ? `${(stats.distanceMeters / 1000).toLocaleString("fr-FR", { maximumFractionDigits: 2 })} km`
+                    : "—"}
+                </strong>
+                {distanceKnown && !distanceComplete && (
+                  <small aria-label="Mesure partielle">*</small>
+                )}
               </span>
             </div>
             <progress
@@ -724,7 +765,9 @@ export default function MapExperience({
         </div>
       )}
       {selectionNotice && !focused && (
-        <p className="collection-save-notice" role="status">{selectionNotice}</p>
+        <p className="collection-save-notice" role="status">
+          {selectionNotice}
+        </p>
       )}
       {adding && (
         <FloatingWindow
@@ -753,7 +796,10 @@ export default function MapExperience({
                 </small>
                 <Badges activities={h.activities} />
                 {outsideCriteria(h).length > 0 && (
-                  <small className="collection-add-reasons" aria-label="Pourquoi cette maison n'était pas proposée">
+                  <small
+                    className="collection-add-reasons"
+                    aria-label="Pourquoi cette maison n'était pas proposée"
+                  >
                     Hors critères : {outsideCriteria(h).join(" · ")}
                   </small>
                 )}

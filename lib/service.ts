@@ -128,7 +128,10 @@ export async function settingsImpact(user: User | null, input: unknown) {
 export async function setup(input: unknown, setupSession?: string) {
   const data = setupSchema.parse(input);
   if (data.season.is_test)
-    throw new HttpError(400, "Créez une saison réelle ; les saisons TEST historiques restent conservées.");
+    throw new HttpError(
+      400,
+      "Créez une saison réelle ; les saisons TEST historiques restent conservées.",
+    );
   if (data.token) verifySetupToken(data.token);
   else if (!(await setupAuthorized(setupSession)))
     throw new HttpError(
@@ -455,9 +458,7 @@ export async function publicState(
       );
       houses = (rows as unknown as House[])
         .filter((h) =>
-          earlyAccess
-            ? h.activities.length > 0
-            : visible(h, s, now),
+          earlyAccess ? h.activities.length > 0 : visible(h, s, now),
         )
         .map(publicHouse);
     }
@@ -484,14 +485,15 @@ export async function publicState(
     routeCandidates: upcoming,
     closedHouseIds,
     setupRequired: false,
-    nextOpening: s
-      ? null
-      : ((
-          await db().query(
-            "SELECT opens_at FROM seasons WHERE instance_id=$1 AND NOT is_test AND NOT archived AND purged_at IS NULL AND opens_at>$2 ORDER BY opens_at LIMIT 1",
-            [i.id, now],
-          )
-        ).rows[0]?.opens_at ?? null),
+    nextOpening:
+      s && !s.is_test
+        ? null
+        : ((
+            await db().query(
+              "SELECT opens_at FROM seasons WHERE instance_id=$1 AND NOT is_test AND NOT archived AND purged_at IS NULL AND opens_at>$2 ORDER BY opens_at LIMIT 1",
+              [i.id, now],
+            )
+          ).rows[0]?.opens_at ?? null),
     contents: Object.fromEntries(
       Object.entries(await contentState(i.id)).map(([k, v]) => [
         k,
@@ -701,7 +703,9 @@ export async function createParticipation(
         user.instance_id,
       ])
     ).rows[0] as unknown as Instance;
-    const registrationSeason = management ? null : await applicationSeason(i, user, c);
+    const registrationSeason = management
+      ? null
+      : await applicationSeason(i, user, c);
     const ss = (
       await c.query(
         "SELECT * FROM seasons WHERE id=$1 AND instance_id=$2 FOR UPDATE",
@@ -712,7 +716,8 @@ export async function createParticipation(
       throw new HttpError(403, "Créez une saison avant d’inscrire une maison.");
     if (
       ss.purged_at ||
-      (!management && !ss.is_test &&
+      (!management &&
+        !ss.is_test &&
         (!ss.registrations_open ||
           +new Date() < +new Date(ss.registrations_open_at) ||
           +new Date() >= +new Date(ss.closes_at)))
@@ -959,14 +964,14 @@ export async function participantAction(
     throw new HttpError(400, "Utilisez la suppression admin confirmée");
   return transaction(async (c) => {
     const currentInstance = managedId ? null : await instance(c);
-    const currentSeason = currentInstance ? await applicationSeason(currentInstance, user, c) : null;
+    const currentSeason = currentInstance
+      ? await applicationSeason(currentInstance, user, c)
+      : null;
     const { rows } = await c.query(
       "SELECT h.*,s.purged_at,s.closes_at,s.is_test season_is_test,s.archived FROM participations h JOIN seasons s ON s.id=h.season_id WHERE " +
         (managedId ? "h.id" : "user_id") +
         "=$1 AND h.instance_id=$2" +
-        (!managedId
-          ? " AND h.season_id=$3 AND NOT s.is_test"
-          : "") +
+        (!managedId ? " AND h.season_id=$3 AND NOT s.is_test" : "") +
         " FOR UPDATE OF h,s",
       managedId
         ? [managedId, user.instance_id]
@@ -1062,7 +1067,12 @@ export async function route(
     throw new HttpError(403, "La collecte est fermée");
   await validateAcceptance(db(), i.id, input.acceptance);
   try {
-    validateRouteWindow(s, input, context.now, earlyMapAccess(s, user, context.now));
+    validateRouteWindow(
+      s,
+      input,
+      context.now,
+      earlyMapAccess(s, user, context.now),
+    );
   } catch (e) {
     throw new HttpError(400, (e as Error).message);
   }
@@ -1127,10 +1137,14 @@ export async function route(
       throw new HttpError(403, "Compte indisponible");
     if (
       !current ||
-      ((currentInstance?.active_season_id === s.id) !== !!rawSeason?.active) ||
+      (currentInstance?.active_season_id === s.id) !== !!rawSeason?.active ||
       +new Date(current.opens_at) !== +new Date(rawSeason!.opens_at) ||
       +new Date(current.closes_at) !== +new Date(rawSeason!.closes_at) ||
-      !collectionAccessible({ ...current, active: !!rawSeason?.active }, user, context.now)
+      !collectionAccessible(
+        { ...current, active: !!rawSeason?.active },
+        user,
+        context.now,
+      )
     )
       throw new HttpError(409, "La saison a changé. Vérifiez la sélection.");
     const latest = await routeCandidates(c, i, current, input.start, input.end);
@@ -1662,7 +1676,10 @@ export async function adminAction(user: User | null, input: unknown) {
     if (p.is_test && u.role_name !== "SUPER_ADMIN")
       throw new HttpError(403, "Super Admin requis pour le mode TEST");
     if (p.is_test && !data.id)
-      throw new HttpError(400, "Créez une saison réelle ; les saisons TEST historiques restent conservées.");
+      throw new HttpError(
+        400,
+        "Créez une saison réelle ; les saisons TEST historiques restent conservées.",
+      );
     const i = (await instance())!;
     return transaction(async (c) => {
       await c.query("SELECT id FROM instances WHERE id=$1 FOR UPDATE", [i.id]);
@@ -1680,7 +1697,10 @@ export async function adminAction(user: User | null, input: unknown) {
           );
         if (Boolean(s.is_test) !== p.is_test) {
           if (p.is_test)
-            throw new HttpError(400, "Une saison réelle ne peut pas devenir une saison TEST.");
+            throw new HttpError(
+              400,
+              "Une saison réelle ne peut pas devenir une saison TEST.",
+            );
           if (u.role_name !== "SUPER_ADMIN")
             throw new HttpError(403, "Super Admin requis");
           const used = (
