@@ -607,6 +607,9 @@ test("mobile bottom panel toggles with touch and keyboard; map and list open a o
   const card = page.getByRole("dialog", { name: houses[0].name, exact: true });
   await expect(card).toBeVisible();
   await expect(card).toContainText("Frissons adaptés");
+  const masks = await card.locator(".visitor-adapt > svg").boundingBox();
+  expect(masks?.width).toBe(21);
+  expect(masks?.height).toBe(21);
   await expect(card).not.toContainText("Étape");
   await page.locator(".route-experience").evaluate(async (el) => {
     await Promise.allSettled(
