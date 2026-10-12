@@ -581,3 +581,27 @@ test("TEST alone never fabricates a public countdown", async ({ page }) => {
     page.getByRole("link", { name: "Accéder à la carte" }),
   ).toBeVisible();
 });
+
+for (const width of [360, 390]) {
+  test(`guest authentication stays below the header ${width}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 640 });
+    await arrange(page, "guest");
+    const header = (await page.locator(".home-header").boundingBox())!;
+    const heading = (await page.locator(".home-center h1").boundingBox())!;
+    expect(heading.y).toBeGreaterThanOrEqual(header.y + header.height);
+    const login = page
+      .locator(".home-login")
+      .getByRole("button", { name: "Se connecter", exact: true });
+    await login.scrollIntoViewIfNeeded();
+    await expect(login).toBeInViewport();
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth),
+    ).toBeLessThanOrEqual(width);
+    expect(
+      await page.evaluate(() => document.documentElement.scrollHeight),
+    ).toBeLessThanOrEqual(640);
+    await page.screenshot({ path: `${output}/v084-guest-${width}.png` });
+  });
+}

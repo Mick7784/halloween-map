@@ -688,6 +688,7 @@
 
 /* Keep guest authentication reachable inside the cinematic viewport. */
 .home-center:has(.home-login) {
+  transform: none;
   gap: 12px;
   padding-block: 12px;
 }
