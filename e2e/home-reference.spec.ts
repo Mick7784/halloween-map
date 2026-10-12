@@ -74,12 +74,17 @@ async function arrange(
   await expect(page.locator(".home-art")).toBeVisible();
   await expect(page.locator(".home-art")).toHaveCSS(
     "background-image",
-    /home-reference-v2\.webp/,
+    page.viewportSize()!.width >= 760
+      ? /home-reference-desktop-v1\.webp/
+      : /home-reference-v2\.webp/,
   );
   await page.locator(".home-art").evaluate(async () => {
     await document.fonts.ready;
     const img = new Image();
-    img.src = "/art/home-reference-v2.webp";
+    img.src =
+      innerWidth >= 760
+        ? "/art/home-reference-desktop-v1.webp"
+        : "/art/home-reference-v2.webp";
     await img.decode();
   });
 }
@@ -89,6 +94,7 @@ for (const size of [
   { width: 430, height: 932 },
   { width: 820, height: 1180 },
   { width: 1440, height: 900 },
+  { width: 2048, height: 1042 },
 ]) {
   test(`waiting composition and reachable controls ${size.width}px`, async ({
     page,
@@ -537,7 +543,7 @@ for (const width of [360, 390, 1440]) {
       if (width >= 760)
         await expect(page.locator(".home-art")).toHaveCSS(
           "background-size",
-          "contain",
+          "cover",
         );
       const bounds = await page.locator("h1 span").boundingBox();
       expect(bounds!.x).toBeGreaterThanOrEqual(0);

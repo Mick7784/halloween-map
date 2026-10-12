@@ -1,6 +1,6 @@
-# Accueil premium — V0.8.4
+# Accueil premium — V0.8.5
 
-Le décor original public/art/home-reference-v2.webp est affiché sur mobile et desktop. Les styles globaux ne masquent plus la couche .home-art ; le contenu utilise la composition PremiumHome et les titres peuvent revenir à la ligne. Sur un petit écran, le contenu central défile si nécessaire pour conserver la connexion accessible, sans faire défiler tout le document.
+Le décor original public/art/home-reference-v2.webp est affiché sur mobile. À partir de 760 px, le panorama existant public/art/home-reference-desktop-v1.webp remplit le viewport en cover, comme avant V0.8.4, sans bandes latérales vides. Les styles globaux ne masquent plus la couche .home-art ; le contenu utilise la composition PremiumHome et les titres peuvent revenir à la ligne. Sur un petit écran, le contenu central défile si nécessaire pour conserver la connexion accessible, sans faire défiler tout le document.
 
 Le décompte utilise uniquement une ouverture réelle configurée : season.opens_at pour une REAL, nextOpening lorsqu’une TEST historique reste sélectionnée ou qu’aucune saison applicative n’est disponible. Sans date réelle future valide, aucun décompte artificiel n’est affiché. Les maisons d’une TEST sont explicitement identifiées comme aperçu administrateur.
 

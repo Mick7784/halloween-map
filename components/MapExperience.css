@@ -1239,50 +1239,6 @@
 .route-experience.is-focused .route-recenter {
   bottom: calc(280px + env(safe-area-inset-bottom));
 }
-.route-sheet.collection-top-panel {
-  top: max(12px, env(safe-area-inset-top));
-  left: max(12px, env(safe-area-inset-left));
-  right: max(12px, env(safe-area-inset-right));
-  bottom: auto;
-  width: auto;
-  height: 78px;
-  max-height: 52dvh;
-  border: 1px solid #796588;
-  border-radius: 18px;
-  padding: 0 10px 8px;
-  box-shadow: 0 8px 32px #0007;
-}
-.route-sheet.collection-top-panel[data-sheet-position="intermediate"] {
-  height: min(300px, 42dvh);
-}
-.route-sheet.collection-top-panel[data-sheet-position="expanded"] {
-  height: min(520px, 52dvh);
-}
-.collection-top-panel .route-sheet-handle {
-  min-height: 68px;
-  padding: 10px 5px;
-  touch-action: none;
-}
-.collection-top-panel .route-sheet-content {
-  padding-top: 8px;
-}
-.collection-top-panel .route-sheet-grip {
-  display: none;
-}
-.collection-top-panel .route-sheet-chevron {
-  transform: rotate(180deg);
-}
-.collection-top-panel[data-sheet-position="expanded"] .route-sheet-chevron {
-  transform: none;
-}
-.collection-top-panel .route-steps li {
-  display: flex;
-  gap: 6px;
-}
-.collection-top-panel .route-step {
-  flex: 1;
-  min-width: 0;
-}
 .collection-remove {
   flex: none;
   width: 44px;
@@ -1316,7 +1272,8 @@
   backdrop-filter: blur(10px);
   box-shadow: 0 -6px 30px #0005;
 }
-.collection-bottom-heading, .collection-bottom-metrics {
+.collection-bottom-heading,
+.collection-bottom-metrics {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1366,10 +1323,21 @@
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
-.collection-bottom-metrics svg { flex-shrink: 0; color: #b99cda; }
-.collection-bottom-metrics span:first-child svg { color: #ff963a; }
-.collection-bottom-metrics strong { font-size: 14px; font-weight: 650; }
-.collection-bottom-metrics small { color: #ffc17d; font-size: 11px; }
+.collection-bottom-metrics svg {
+  flex-shrink: 0;
+  color: #b99cda;
+}
+.collection-bottom-metrics span:first-child svg {
+  color: #ff963a;
+}
+.collection-bottom-metrics strong {
+  font-size: 14px;
+  font-weight: 650;
+}
+.collection-bottom-metrics small {
+  color: #ffc17d;
+  font-size: 11px;
+}
 .collection-bottom-bar progress {
   width: 100%;
   height: 3px;
@@ -1561,10 +1529,6 @@
   margin-bottom: 8px;
 }
 @media (min-width: 768px) {
-  .route-sheet.collection-top-panel {
-    width: 440px;
-    right: auto;
-  }
   .collection-bottom-bar {
     width: 440px;
     right: auto;
@@ -1601,15 +1565,13 @@
     font-size: 11px;
     padding: 7px;
   }
-  .collection-top-panel .route-sheet-handle small {
-    font-size: 9px;
-  }
+
   .collection-discovery {
     font-size: 11px;
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .collection-top-panel {
+  .collection-bottom-bar {
     transition: none;
   }
 }
@@ -1663,7 +1625,9 @@
 }
 
 /* V0.8.3: dense, single-line house list and a full-height active panel. */
-.collection-order-label { line-height: 1.3; }
+.collection-order-label {
+  line-height: 1.3;
+}
 .collection-dense-steps li {
   display: flex;
   align-items: center;
@@ -1682,8 +1646,13 @@
   padding: 5px 7px;
   gap: 6px;
 }
-.collection-row-marker { flex: none; color: #e99a56; }
-.collection-dense-steps li.is-visited .collection-row-marker { color: #a691b7; }
+.collection-row-marker {
+  flex: none;
+  color: #e99a56;
+}
+.collection-dense-steps li.is-visited .collection-row-marker {
+  color: #a691b7;
+}
 .collection-row-name {
   flex: 1;
   min-width: 0;
@@ -1699,13 +1668,20 @@
   flex-shrink: 0;
   color: #e1ae80;
 }
-.collection-row-activities svg { width: 14px; height: 14px; }
-.collection-row-fear, .collection-row-distance {
+.collection-row-activities svg {
+  width: 14px;
+  height: 14px;
+}
+.collection-row-fear,
+.collection-row-distance {
   flex-shrink: 0;
   font-size: 10px;
   color: #d7c6e3;
 }
-.collection-row-distance { min-width: 43px; text-align: right; }
+.collection-row-distance {
+  min-width: 43px;
+  text-align: right;
+}
 .collection-dense-steps .collection-remove {
   flex: none;
   width: 44px;
@@ -1726,15 +1702,115 @@
 .route-experience.is-focused .route-storage-status {
   bottom: calc(140px + env(safe-area-inset-bottom));
 }
+
+/* Active collection: one bottom-anchored panel. Summary stays visible while houses scroll. */
+.route-sheet.collection-bottom-bar {
+  top: auto;
+  display: flex;
+  height: auto;
+  max-height: calc(
+    var(--app-height, 100dvh) - 180px - env(safe-area-inset-top) -
+      env(safe-area-inset-bottom)
+  );
+  border-bottom: 1px solid #73608d;
+}
+.route-sheet.collection-bottom-bar[data-sheet-position="intermediate"] {
+  height: min(360px, 55dvh);
+}
+.route-sheet.collection-bottom-bar[data-sheet-position="expanded"] {
+  height: min(560px, 72dvh);
+}
+.collection-bottom-heading,
+.collection-bottom-metrics,
+.collection-bottom-bar progress {
+  flex-shrink: 0;
+}
+.collection-bottom-heading .collection-toggle {
+  flex: 1;
+  justify-content: flex-start;
+  min-width: 0;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  color: #fff2e8;
+  font-size: 14px;
+}
+.collection-bottom-heading button,
+.collection-bottom-heading .collection-account {
+  height: 44px;
+  min-height: 44px;
+  box-sizing: border-box;
+}
+.collection-bottom-bar:not([data-sheet-position="collapsed"])
+  .collection-toggle
+  svg {
+  transform: rotate(180deg);
+}
+.collection-bottom-bar .route-sheet-content {
+  padding-top: 8px;
+}
+.route-experience.is-focused .route-recenter,
+.route-experience.is-focused .maplibregl-ctrl-top-right {
+  bottom: calc(
+    var(--route-sheet-height, 120px) + 24px + env(safe-area-inset-bottom)
+  );
+}
+.fear-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  flex-shrink: 0;
+  font-size: 10px;
+  color: #d7c6e3;
+}
+.route-sheet-footer {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+.route-sheet-footer .primary {
+  grid-column: 1 / -1;
+  grid-row: 1;
+  min-height: 48px;
+  font-size: 14px;
+}
 @media (max-width: 767px) {
-  .route-sheet.collection-top-panel[data-sheet-position="expanded"] {
-    height: calc(100dvh - 154px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
-    max-height: calc(100dvh - 154px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  .route-sheet.collection-bottom-bar[data-sheet-position="expanded"] {
+    height: calc(
+      var(--app-height, 100dvh) - 180px - env(safe-area-inset-top) -
+        env(safe-area-inset-bottom)
+    );
   }
-  .route-sheet.collection-top-panel[data-sheet-position="intermediate"] {
-    max-height: calc(100dvh - 154px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  .collection-bottom-bar {
+    gap: 5px;
   }
-  .collection-top-panel .route-sheet-handle { min-height: 56px; padding: 7px 4px; }
-  .collection-bottom-bar { gap: 5px; }
-  .collection-bottom-metrics strong { font-size: 13px; }
+  .collection-bottom-metrics strong {
+    font-size: 13px;
+  }
+}
+
+.route-experience.is-focused .route-gps-status {
+  top: max(12px, env(safe-area-inset-top));
+}
+.route-experience.is-focused .route-availability-notice,
+.route-experience.is-focused .route-map-error {
+  top: calc(52px + env(safe-area-inset-top));
+}
+.route-experience.is-focused .route-storage-status {
+  bottom: calc(
+    var(--route-sheet-height, 120px) + 24px + env(safe-area-inset-bottom)
+  );
+}
+@media (max-width: 767px) {
+  .route-experience.is-focused .route-gps-status,
+  .route-experience.is-focused .route-availability-notice,
+  .route-experience.is-focused .route-map-error {
+    z-index: 14;
+  }
+}
+
+.map-house-features {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
 }

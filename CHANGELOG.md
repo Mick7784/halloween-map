@@ -1,5 +1,14 @@
 # Changelog
 
+## V0.8.5
+
+- Desktop : restauration du décor panoramique existant en pleine largeur ; mobile et accès à la connexion conservés.
+- Collecte : un seul bandeau inférieur dépliable vers le haut, avec maisons, états, ajout/retrait, profil et Arrêter de même hauteur. Chrono, distance réellement observée, compteur et jauge conservés.
+- Proximité : classement réactualisé à chaque position GPS exploitable, choix des visites libre ; distances des listes alignées sur la position de consultation ou explicitement sur le départ.
+- Frayeur : icône et niveau sur cinq, adaptabilité identifiée par une icône dédiée, libellés accessibles et configurés ; suppression des codes Adapt./F4 dans les listes.
+- Préparation : bouton de démarrage dominant, sauvegarde et suppression secondaires ; caractéristiques compactes avec noms accessibles.
+- Aucun changement des règles métier, du tracé piéton, de la mesure GPS, des données ou des migrations.
+
 ## V0.8.4
 
 - Restauration de l’accueil cinématique avec exactement l’illustration originale home-reference-v2.webp sur mobile et desktop ; textes adaptatifs et connexion accessible sur les petits écrans.

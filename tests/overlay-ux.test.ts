@@ -379,6 +379,41 @@ describe("shared floating windows", () => {
 });
 
 describe("map navigation surfaces", () => {
+  it("uses consultation GPS for house distances without changing the prepared selection", async () => {
+    const house = {
+      id: "near",
+      name: "Maison proche",
+      latitude: 48.81,
+      longitude: 2.81,
+      activities: ["CANDY"],
+      fear: 4,
+      adaptable: false,
+    };
+    Object.defineProperty(navigator, "geolocation", {
+      configurable: true,
+      value: {
+        getCurrentPosition: (success: PositionCallback) =>
+          success({
+            coords: { longitude: 2.81, latitude: 48.81, accuracy: 10 },
+          } as GeolocationPosition),
+      },
+    });
+    await render(() =>
+      h(MapExperience, {
+        state: { ...state, houses: [house] } as PublicState,
+        user,
+        mapStyle: "",
+        refresh: async () => {},
+      }),
+    );
+    await click(byLabel("Me localiser"));
+    await act(async () => window.dispatchEvent(new Event("map-options")));
+    expect(document.querySelector(".map-options-list")?.textContent).toContain(
+      "0 m à vol d’oiseau depuis votre position GPS",
+    );
+    expect(byLabel("Frayeur : Frissonnant (4/5)")).not.toBeNull();
+    expect(fixture.controller.invalidate).not.toHaveBeenCalled();
+  });
   it("inactive map has no internal user toolbar or permanent discovery panel; filters remain reachable", async () => {
     await render(() =>
       h(MapExperience, { state, user, mapStyle: "", refresh: async () => {} }),
@@ -397,7 +432,7 @@ describe("map navigation surfaces", () => {
     await click(byLabel("Fermer Maisons et filtres"));
     expect(byLabel("Maisons et filtres")).toBeNull();
   });
-  it("calculated route is a closable window; active collection retains top panel, bottom stop and recenter", async () => {
+  it("calculated route is a closable window; active collection combines houses, metrics and actions in one bottom panel", async () => {
     fixture.controller.phase = "calculated";
     fixture.controller.result = {
       stops: [
@@ -457,10 +492,9 @@ describe("map navigation surfaces", () => {
     expect(
       document.querySelector(".route-experience.is-focused .route-map-toolbar"),
     ).toBeNull();
-    expect(document.querySelector(".collection-top-panel")).not.toBeNull();
-    expect(
-      document.querySelector(".collection-top-panel")?.textContent,
-    ).not.toContain("Arrêter");
+    expect(document.querySelector(".collection-top-panel")).toBeNull();
+    expect(document.querySelectorAll(".collection-bottom-bar")).toHaveLength(1);
+
     expect(
       document.querySelector(".collection-bottom-bar")?.textContent,
     ).toContain("Arrêter");
@@ -475,15 +509,83 @@ describe("map navigation surfaces", () => {
       document.querySelector('a.collection-account[href="/account"]'),
     ).not.toBeNull();
     expect(
-      document.querySelector(".collection-top-panel")?.textContent,
+      document.querySelector(".collection-bottom-bar")?.textContent,
     ).toContain("Maisons — de la plus proche à la plus éloignée");
     expect(
-      document.querySelector(".collection-top-panel")?.textContent,
+      document.querySelector(".collection-bottom-bar")?.textContent,
     ).toContain("Ajouter des maisons");
   });
 });
 
 describe("visitor collection preparation", () => {
+  it("updates proximity order, retains visited and unavailable houses, and names their fear and state", async () => {
+    const result = {
+      stops: [
+        {
+          house: {
+            id: "west",
+            name: "Ouest",
+            longitude: 2.8,
+            latitude: 48.8,
+            fear: 4,
+            adaptable: false,
+            activities: ["CANDY"],
+          },
+        },
+        {
+          house: {
+            id: "east",
+            name: "Est",
+            longitude: 2.81,
+            latitude: 48.8,
+            fear: null,
+            adaptable: true,
+            activities: ["DECORATION"],
+          },
+          unavailable: true,
+        },
+      ],
+    } as unknown as import("../lib/routing").RouteResult;
+    const props = {
+      result,
+      phase: "active" as const,
+      position: "expanded" as const,
+      onPosition: vi.fn(),
+      onHouse: vi.fn(),
+      onEnd: vi.fn(),
+      onStart: vi.fn(),
+      onSave: vi.fn(),
+      visitedIds: [] as string[],
+      remaining: 2,
+      elapsedSeconds: 0,
+      onHeight: vi.fn(),
+      selectedStepId: null,
+      onRemove: vi.fn(),
+      proximityPoint: [2.8, 48.8] as [number, number],
+    };
+    await act(async () => root.render(h(RouteSheet, props)));
+    expect(document.querySelector(".route-step")?.textContent).toContain(
+      "Ouest",
+    );
+    expect(
+      document.querySelector(".route-step")?.getAttribute("aria-label"),
+    ).toContain("Frissonnant (4/5)");
+    await act(async () =>
+      root.render(h(RouteSheet, { ...props, proximityPoint: [2.81, 48.8] })),
+    );
+    expect(
+      document.querySelector(".route-step")?.getAttribute("aria-label"),
+    ).toContain("Est · Indisponible · S’adapte aux visiteurs");
+    await act(async () =>
+      root.render(h(RouteSheet, { ...props, visitedIds: ["west"] })),
+    );
+    expect(
+      document.querySelectorAll(".route-step")[1]?.getAttribute("aria-label"),
+    ).toContain("Ouest · Visitée");
+    expect(document.querySelectorAll(".collection-remove")).toHaveLength(1);
+    await click(document.querySelectorAll(".route-step")[1]);
+    expect(props.onHouse).toHaveBeenCalledWith(result.stops[0].house);
+  });
   it("uses cumulative fear, keeps adaptable houses and submits only the freely selected houses", async () => {
     const now = Date.now();
     const houses = [1, 2, 3].map((fear) => ({
@@ -558,7 +660,7 @@ describe("visitor collection preparation", () => {
   });
 });
 
-it("expands the top panel by dragging down and by keyboard, without moving the stop action into it", async () => {
+it("expands the bottom selection by dragging up and keyboard", async () => {
   Object.defineProperty(window, "innerWidth", {
     value: 390,
     configurable: true,
@@ -593,19 +695,19 @@ it("expands the top panel by dragging down and by keyboard, without moving the s
   };
   await act(async () => root.render(h(RouteSheet, props)));
   const handle = byLabel("Déplier ou replier ma sélection");
-  const panel = document.querySelector(".collection-top-panel")!;
+  const panel = document.querySelector(".collection-bottom-bar")!;
   vi.spyOn(panel, "getBoundingClientRect").mockReturnValue({
     height: 78,
   } as DOMRect);
   await act(async () => {
     handle.dispatchEvent(
-      new MouseEvent("pointerdown", { clientY: 40, button: 0, bubbles: true }),
+      new MouseEvent("pointerdown", { clientY: 300, button: 0, bubbles: true }),
     );
     handle.dispatchEvent(
-      new MouseEvent("pointermove", { clientY: 220, button: 0, bubbles: true }),
+      new MouseEvent("pointermove", { clientY: 120, button: 0, bubbles: true }),
     );
     handle.dispatchEvent(
-      new MouseEvent("pointerup", { clientY: 220, button: 0, bubbles: true }),
+      new MouseEvent("pointerup", { clientY: 120, button: 0, bubbles: true }),
     );
   });
   expect(onPosition).toHaveBeenLastCalledWith("intermediate");
@@ -614,7 +716,7 @@ it("expands the top panel by dragging down and by keyboard, without moving the s
   );
   await act(async () =>
     handle.dispatchEvent(
-      new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }),
+      new KeyboardEvent("keydown", { key: "ArrowUp", bubbles: true }),
     ),
   );
   expect(onPosition).toHaveBeenLastCalledWith("expanded");
