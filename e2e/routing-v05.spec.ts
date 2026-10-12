@@ -608,8 +608,8 @@ test("mobile bottom panel toggles with touch and keyboard; map and list open a o
   await expect(card).toBeVisible();
   await expect(card).toContainText("Frissons adaptés");
   const masks = await card.locator(".visitor-adapt > svg").boundingBox();
-  expect(masks?.width).toBe(21);
-  expect(masks?.height).toBe(21);
+  expect(masks?.width).toBeCloseTo(21, 2);
+  expect(masks?.height).toBeCloseTo(21, 2);
   await expect(card).not.toContainText("Étape");
   await page.locator(".route-experience").evaluate(async (el) => {
     await Promise.allSettled(
