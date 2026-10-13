@@ -225,6 +225,7 @@ test("short viewport keeps authentication, footer and menu close reachable witho
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await arrange(page, true);
+  await page.getByRole("button", { name: "Se connecter", exact: true }).click();
   const email = page
     .locator(".home-login")
     .getByLabel("Email", { exact: false });
@@ -243,14 +244,14 @@ test("short viewport keeps authentication, footer and menu close reachable witho
       () => document.documentElement.scrollHeight - innerHeight,
     ),
   ).toBeLessThanOrEqual(1);
-  await page
-    .getByRole("button", { name: "Menu utilisateur", exact: true })
-    .click();
+  // Opening and closing the modal, unlike resizing, intentionally ends its form.
+  await page.keyboard.press("Escape");
+  await expect(page.locator(".home-login")).toHaveCount(0);
+  await page.getByRole("button", { name: "Menu utilisateur", exact: true }).click();
   await expect(
     page.getByRole("button", { name: "Fermer Menu utilisateur" }),
   ).toBeInViewport();
   await page.keyboard.press("Escape");
-  await expect(email).toHaveValue("keyboard@example.invalid");
   await page.setViewportSize({ width: 390, height: 844 });
   await page
     .getByRole("button", { name: "Menu utilisateur", exact: true })
