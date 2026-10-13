@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { DateTime } from "luxon";
 import {
   ArrowRight,
@@ -46,8 +46,6 @@ export default function PremiumHome({
 }) {
   const [participation, setParticipation] = useState<Participation | null>(null);
   const [loginOpen, setLoginOpen] = useState(false);
-  const loginTrigger = useRef<HTMLButtonElement>(null);
-  const loginClose = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     let active = true;
@@ -62,20 +60,6 @@ export default function PremiumHome({
     }
     return () => { active = false; };
   }, [user]);
-
-  useEffect(() => {
-    if (!loginOpen) return;
-    const trigger = loginTrigger.current;
-    loginClose.current?.focus();
-    function onEscape(event: KeyboardEvent) {
-      if (event.key === "Escape") setLoginOpen(false);
-    }
-    document.addEventListener("keydown", onEscape);
-    return () => {
-      document.removeEventListener("keydown", onEscape);
-      trigger?.focus({ preventScroll: true });
-    };
-  }, [loginOpen]);
 
   const zone = state.instance?.timezone ?? "Europe/Paris";
   // Historic TEST seasons cannot invent a public opening date.
@@ -219,7 +203,6 @@ export default function PremiumHome({
             {!user ? (
               <div className="home-actions" aria-label="Accéder à votre compte">
                 <button
-                  ref={loginTrigger}
                   type="button"
                   className="home-cta"
                   onClick={() => setLoginOpen(true)}
@@ -278,7 +261,6 @@ export default function PremiumHome({
             <header>
               <h2 id="home-auth-title">Se connecter</h2>
               <button
-                ref={loginClose}
                 type="button"
                 aria-label="Fermer la connexion"
                 onClick={() => setLoginOpen(false)}
