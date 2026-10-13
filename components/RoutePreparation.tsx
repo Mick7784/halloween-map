@@ -122,8 +122,8 @@ export default function RoutePreparation({
   function updateHours() {
     if (!form.current) return;
     const fields = values(form.current);
-    if (!/^\\d{2}:\\d{2}$/.test(fields.start) ||
-        !/^\\d{2}:\\d{2}$/.test(fields.end)) return;
+    if (!/^\d{2}:\d{2}$/.test(fields.start) ||
+        !/^\d{2}:\d{2}$/.test(fields.end)) return;
     const day = windowStart.slice(0, 10);
     const start = DateTime.fromISO(`${day}T${fields.start}`, { zone });
     let end = DateTime.fromISO(`${day}T${fields.end}`, { zone });
