@@ -1,10 +1,26 @@
-# Halloween Map — V0.9.1 : décor fidèle, profondeur et parallaxe mobile
+# Halloween Map — V0.9.1 : décor commun mobile/desktop et parallaxe mobile
 
 > **Statut : chantier en cours / PR en brouillon. Ne pas fusionner ni publier sans revue des captures et CI complète.**
 >
 > Base : `main` / release V0.9 validée. Mission strictement visuelle, **uniquement sur la page d’accueil**.
 
 ## Reprise locale du 13 octobre 2026
+
+### Décision utilisateur et adaptation commune
+
+L’utilisateur a accepté la restauration comme nouvelle base et demandé **la même version mobile sur desktop, avec adaptation du visuel au format large si nécessaire**. Cette décision remplace le blocage précédent sur le master original. Elle ne vaut pas autorisation de fusion, release ou publication.
+
+- Master propre commun : `artwork/v091/scene-mobile-desktop-master.png` (1536×1024), restauré et étendu à partir de la version mobile de la maquette via imagegen. Desktop et mobile utilisent **le même fichier** `public/art/home-v091-shared.webp` (253 612 octets) ; seuls les cadrages responsive changent. Le header partage désormais le décor avec la scène et le compteur reprend la typographie sans serif du mobile.
+- Trois plans natifs alpha : `home-v091-far.webp`, `home-v091-mid.webp`, `home-v091-near.webp`, tous issus des pixels du même master. Le résultat recoloré de l’extraction imagegen n’est utilisé que comme **masque alpha** ; ses pixels RGB sont exclus. Le masque intermédiaire est un tracé enregistré sur le même canvas. À chaque pixel, un seul plan possède l’opacité : reconstruction complète du master source, zéro pixel recoloré, sans recadrage des plans.
+- Fabrication reproductible : `node scripts/v091-extract-planes.mjs`, puis `node scripts/v091-build-layers.mjs`. Budget total du master compressé et des trois plans : **2 109 228 octets**. Les plans WebP sont encodés sans perte.
+- Plans activés uniquement après réception d’une mesure valide sur mobile portrait autorisé et décodage réussi des trois images. Chargement différé : desktop, paysage, reduced-motion et capteur absent/permission requise ne chargent pas les plans. Une image indisponible conserve le rendu statique. Un sous-fond flouté avec marge remplit les petites zones découvertes par la translation sans doubler les contours nets.
+- Test d’assets : vérification de **tous les pixels** des exports WebP, dimensions communes, un propriétaire alpha par pixel, RGB identique au master et budget respecté. Ce test complète les vérifications par échantillonnage du pipeline.
+- Comparaison de la nouvelle adaptation : `artwork/v091/review/comparison.html`. Les anciennes captures du château sont conservées ; les nouvelles captures portent le préfixe `shared-`.
+- Vérifications de cette adaptation : lint/TypeScript et build réussis ; **231 tests unitaires** réussis ; **66 tests Playwright accueil/menu** réussis, y compris décodage des plans, capteurs absents/permission requise, image indisponible, titre immobile, masquage/reprise, reduced-motion, desktop et paysage sans chargement des plans. Captures visuellement vérifiées aux cinq tailles demandées et en inclinaison simulée. Suite E2E complète et Docker vérifiés dans la CI du dernier commit de la PR.
+
+**Fidélité : adaptation de la base restaurée acceptée, pas identité pixel à pixel avec la maquette.** Les zones cachées par l’interface et l’extension desktop ont été reconstruites. La validation visuelle finale et la publication restent du ressort de l’utilisateur. Vérifier la CI du dernier commit de la PR 30.
+
+### État antérieur conservé pour contexte (remplacé par la décision ci-dessus)
 
 - Branche/PR existantes reprises sans réinitialisation. Aucun changement métier, aucune fusion, release ou publication de `latest`.
 - [Comparaison desktop/mobile](../artwork/v091/review/comparison.html), maquette originale et captures conservées dans `artwork/v091/review/`. Captures supplémentaires 360×640, 430×932 et 2048×1042 produites par les tests existants (artefact CI `browser-report`).
@@ -16,9 +32,9 @@
 
 **Recette visuelle : non acquise.** Le château/vallee du fallback, le header séparé, l’opacité du compteur et la compacité des descriptions mobiles diffèrent encore de la maquette. Les tests de structure et les captures ne prouvent pas une fidélité graphique. La livraison reste bloquée par le master original sans interface ou une décision explicite de l’utilisateur acceptant une nouvelle base.
 
-## Référence esthétique OBLIGATOIRE
+## Référence esthétique
 
-La maquette approuvée du 13 octobre 2026 (desktop à gauche, mobile à droite, nom du fichier source dans la conversation : `interface_halloween_cinématique_desktop_et_mobile.png`) **fait foi**.
+La maquette approuvée du 13 octobre 2026 (desktop à gauche, mobile à droite, nom du fichier source dans la conversation : `interface_halloween_cinématique_desktop_et_mobile.png`) définit la composition et la DA. L’accord ultérieur sur la restauration et l’adaptation desktop de la version mobile définit désormais la base des assets.
 
 Cette maquette montre :
 - village intimiste de nuit et non un grand château dominant une vallée ;
@@ -43,20 +59,20 @@ Cette maquette montre :
 
 Toutes les couches partagent la **même géométrie et le même point de référence** (dimensions, `background-size: cover`, cadrage harmonisé desktop/mobile). Prévoir une légère marge d’overscan pour éviter les bords visibles aux inclinaisons extrêmes. Compression adaptée aux téléphones ; ne pas expédier 4 images 2–3 Mo chacune.
 
-## Pipeline technique des images (préparé, livraison graphique en attente)
+## Pipeline technique des images
 
 Le script `node scripts/v091-build-layers.mjs` attend **quatre fichiers PNG** à placer dans `artwork/v091/` :
 
-- `scene-master.png` : **décor uniquement**, sans éléments d'interface ; export haute résolution de la scène approuvée ;
+- `scene-mobile-desktop-master.png` : **décor uniquement**, sans éléments d'interface ; master restauré commun aux deux formats ;
 - `plane-far.png` : découpe alpha du décor lointain exportée depuis ce **même fichier source** ;
 - `plane-mid.png` : découpe alpha des bâtiments intermédiaires du même fichier ;
 - `plane-near.png` : éléments de premier plan (citrouille/branches/lanternes) du même fichier.
 
-Le script vérifie les dimensions, le caractère réellement transparent des trois plans, ainsi qu'un échantillon de leurs pixels colorés face au master. Il refuse un plan régénéré indépendamment, un plan opaque plein cadre ou une image trop petite. Il génère `public/art/home-v091-master.webp` et les trois `home-v091-{far,mid,near}.webp` compressés.
+Le script vérifie les dimensions, le caractère réellement transparent des trois plans, ainsi qu'un échantillon de leurs pixels colorés face au master. Il refuse un plan régénéré indépendamment, un plan opaque plein cadre ou une image trop petite. Il génère `public/art/home-v091-shared.webp` et les trois `home-v091-{far,mid,near}.webp` sans perte. Le test d’assets vérifie ensuite exhaustivement leur reconstruction.
 
-**Garde-fou provisoire** : `components/HomeAtmosphere.tsx` garde `APPROVED_DEPTH_ASSETS_READY = false`. Les événements capteurs et leurs tests peuvent être éprouvés, **mais les trois couches provisoires ne sont pas rendues**. Une fois les quatre nouveaux fichiers produits et validés visuellement, modifier les URL CSS pour utiliser ces assets, remplacer les masques CSS temporaires par la transparence native, puis activer cet indicateur. En attendant, l'ancien décor V0.9 demeure le fallback et aucune release n'est autorisée.
+`components/HomeAtmosphere.tsx` active les véritables plans transparents seulement après décodage réussi. Les copies d’image et les masques CSS temporaires sont supprimés. Le master commun reste le fallback ; aucune release n’est autorisée par cette intégration.
 
-Le master propre approuvé **n'existe pas encore dans le dépôt**. La capture de la maquette est composée de l'image et de textes/boutons intégrés, de sorte qu'une extraction brute laisse des traces ; une restauration visuellement vérifiée ou un véritable master d'origine est indispensable. Le brouillon de PR n'est pas une promesse de fidélité acquise.
+Le master restauré est présent dans le dépôt. L’utilisateur l’a accepté comme base avec adaptation de la version mobile au desktop. Le brouillon de PR reste soumis à la revue finale des captures.
 
 ## Parallaxe : règles non négociables
 
@@ -91,9 +107,9 @@ Le master propre approuvé **n'existe pas encore dans le dépôt**. La capture d
 
 ## État technique
 
-- [ ] master décor propre **identique** à la maquette obtenu / intégré
-- [ ] couches alpha générées à partir du même master, dimensions vérifiées
-- [ ] parallaxe mobile progressive (sans pop-up), fallback stable
+- [x] master décor propre restauré accepté comme base / intégré, commun aux deux formats
+- [x] couches alpha générées à partir du même master, dimensions et pixels vérifiés
+- [x] parallaxe mobile progressive (sans pop-up), fallback stable
 - [ ] capture desktop / mobile rapprochée des références
 - [ ] tests, CI et revue visuelle
 - [ ] approbation utilisateur puis publication séparée

@@ -30,13 +30,21 @@
   min-height: 0;
   max-width: 1510px;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto auto;
+  grid-template-rows: minmax(0, 1fr) auto auto;
   isolation: isolate;
   overflow: hidden;
   border: 1px solid #5b4a67;
   border-radius: 18px;
   background: #080b15;
   box-shadow: 0 24px 80px #02030ac2, inset 0 0 0 1px #9874ac16;
+}
+.home-v09 .home-scene {
+  position: relative;
+  isolation: isolate;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
 }
 .home-v09 .home-header {
   height: 70px;
@@ -46,8 +54,8 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  background: linear-gradient(180deg, #0b0f1bee, #0c0f1de8);
-  border-bottom: 1px solid #453854;
+  background: linear-gradient(180deg, #080b1866, transparent);
+  border-bottom: 0;
   z-index: 2;
 }
 .home-v09 .home-brand {
@@ -112,42 +120,40 @@
   overflow-y: auto;
   overscroll-behavior: contain;
   padding: 15px 24px;
-  background: #101221;
+  background: transparent;
 }
 .home-v09 .home-art {
   position: absolute;
   pointer-events: none;
   z-index: -1;
   inset: 0;
-  background-image: url("/art/halloween-village-v2.png");
+  background-image: url("/art/home-v091-shared.webp");
   background-size: cover;
   background-repeat: no-repeat;
-  background-position: center 55%;
-  filter: saturate(1.13) contrast(1.035) brightness(1.2);
+  background-position: center 38%;
 }
-/* V0.9.1 staged depth planes.
-   During implementation, all three masks reuse the same existing image.
-   Before release, replace them with transparent planes cut from the CLEAN,
-   APPROVED scene. The composite mockup and unrelated castle image are not
-   acceptable substitutes for the final approved artwork. */
+/* Native alpha cutouts share one canvas and the restored master's RGB.
+   Optional layers paint only after all three images have decoded. */
 .home-v09 .home-art-plane {
   display: none;
   position: absolute;
   inset: 0;
   pointer-events: none;
-  background-image: url("/art/halloween-village-v2.png");
   background-size: cover;
   background-repeat: no-repeat;
 }
+.home-v09 .home-art-plane--far { background-image: url("/art/home-v091-far.webp"); z-index: 1; }
+.home-v09 .home-art-plane--mid { background-image: url("/art/home-v091-mid.webp"); z-index: 2; }
+.home-v09 .home-art-plane--near { background-image: url("/art/home-v091-near.webp"); z-index: 3; }
 
 .home-v09 .home-art::after {
   content: "";
   position: absolute;
   inset: 0;
+  z-index: 4;
   background:
-    linear-gradient(90deg, #080c1845 0%, #090e1a0d 40%, #0d10201e 100%),
-    linear-gradient(180deg, #090d193e 0%, #1010220a 24%, #090c1942 75%, #090b1788 100%),
-    radial-gradient(ellipse 58% 82% at 50% 42%, #0a0a195c 0%, #0b0e192c 45%, transparent 100%);
+    linear-gradient(180deg, #090d1910, transparent 24%, #090b1738 100%),
+    radial-gradient(ellipse 42% 70% at 50% 44%, #0a0a1933, transparent 100%);
 }
 .home-v09 .home-center {
   position: relative;
@@ -224,7 +230,7 @@
   border: 1px solid transparent;
   border-radius: 19px;
   background:
-    linear-gradient(#0c0c1ce9, #0d0d1fe9) padding-box,
+    linear-gradient(#0c0c1cd9, #0d0d1fdb) padding-box,
     linear-gradient(112deg, #a755d1 0%, #c65d9e 37%, #f1a047 100%) border-box;
   box-shadow: 0 0 25px #bc69d432, 0 12px 32px #05061575;
   backdrop-filter: blur(12px);
@@ -259,7 +265,7 @@
   box-shadow: inset 0 1px #ffffff0c;
 }
 .home-v09 .home-clock strong {
-  font: 600 clamp(27px, 2.9vw, 40px)/1 var(--font-editorial), Georgia, serif;
+  font: 600 clamp(27px, 2.5vw, 36px)/1 var(--font-body), sans-serif;
   font-variant-numeric: tabular-nums lining-nums;
   color: #fff8f5;
   letter-spacing: -.04em;
@@ -604,35 +610,36 @@
     padding: 12px 15px 15px;
   }
   .home-v09 .home-art {
-    background-position: 88% center;
+    background-position: 70% center;
   }
   .home-v09 .home-art::after {
     background:
-      linear-gradient(180deg, #080b1c4f 0%, #0b0c1b56 29%, #0b0b1d60 70%, #090b1c99 100%),
-      radial-gradient(ellipse at 50% 38%, #05091662, transparent 75%);
+      linear-gradient(180deg, #080b1c18 0%, #0b0c1b28 29%, #0b0b1d38 70%, #090b1c80 100%),
+      radial-gradient(ellipse at 50% 38%, #05091628, transparent 75%);
   }
-  /* Only portrait mobile with a real sensor signal gets depth.
-     Desktop and unsupported/reduced-motion devices remain pure static art.
-     Using temporary soft image masks is a scaffold, NOT final asset fidelity. */
+  /* Portrait mobile with sensor readings only. The blurred underpaint fills
+     tiny disocclusions and overscan edges without duplicating sharp objects. */
   @media (orientation: portrait) and (prefers-reduced-motion: no-preference) {
+    .home-v09 .home-art[data-home-motion="active"]::before {
+      content: "";
+      position: absolute;
+      inset: -12px;
+      z-index: 0;
+      background: url("/art/home-v091-shared.webp") 70% center / cover no-repeat;
+      filter: blur(10px);
+    }
     .home-v09 .home-art[data-depth-assets="ready"][data-home-motion="active"] .home-art-plane {
       display: block;
-      background-position: 88% center;
+      background-position: 70% center;
       will-change: transform;
     }
     .home-v09 .home-art-plane--far {
-      -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 31%, transparent 58%);
-      mask-image: linear-gradient(to bottom, #000 0%, #000 31%, transparent 58%);
       transform: translate3d(var(--depth-far-x, 0px), var(--depth-far-y, 0px), 0);
     }
     .home-v09 .home-art-plane--mid {
-      -webkit-mask-image: linear-gradient(to bottom, transparent 22%, #000 47%, #000 69%, transparent 88%);
-      mask-image: linear-gradient(to bottom, transparent 22%, #000 47%, #000 69%, transparent 88%);
       transform: translate3d(var(--depth-mid-x, 0px), var(--depth-mid-y, 0px), 0);
     }
     .home-v09 .home-art-plane--near {
-      -webkit-mask-image: linear-gradient(to bottom, transparent 64%, #000 90%);
-      mask-image: linear-gradient(to bottom, transparent 64%, #000 90%);
       transform: translate3d(var(--depth-near-x, 0px), var(--depth-near-y, 0px), 0);
     }
   }

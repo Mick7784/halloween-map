@@ -5,7 +5,7 @@
  *   node scripts/v091-build-layers.mjs
  *
  * Required input files (not committed until the scene is approved):
- *   artwork/v091/scene-master.png     — scene only, no title/buttons/countdown
+ *   artwork/v091/scene-mobile-desktop-master.png — scene only, shared canvas
  *   artwork/v091/plane-far.png        — full-size PNG with transparent alpha
  *   artwork/v091/plane-mid.png        — full-size PNG with transparent alpha
  *   artwork/v091/plane-near.png       — full-size PNG with transparent alpha
@@ -23,7 +23,7 @@ import sharp from "sharp";
 
 const source = "artwork/v091";
 const output = "public/art";
-const masterPath = join(source, "scene-master.png");
+const masterPath = join(source, "scene-mobile-desktop-master.png");
 const layers = ["far", "mid", "near"];
 const minimum = { width: 900, height: 650 };
 
@@ -106,10 +106,10 @@ const inputs = await Promise.all(layers.map(async (name) => {
 
 await mkdir(output, { recursive: true });
 
-const masterTarget = join(output, "home-v091-master.webp");
+const masterTarget = join(output, "home-v091-shared.webp");
 await sharp(masterPath)
   .flatten({ background: "#0a0d1b" })
-  .webp({ quality: 85, effort: 6 })
+  .webp({ quality: 86, effort: 6 })
   .toFile(masterTarget);
 
 for (const { name, path } of inputs) {
@@ -117,7 +117,7 @@ for (const { name, path } of inputs) {
   // The supplied alpha PNG already represents exactly one plane extracted
   // from the master. Keep all planes on their native full-size canvas.
   await sharp(path)
-    .webp({ quality: 86, effort: 6, alphaQuality: 95 })
+    .webp({ lossless: true, effort: 6 })
     .toFile(target);
 }
 

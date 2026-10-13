@@ -8,16 +8,16 @@ body{margin:0;padding:24px;background:#0a0d18;color:#f4eff7;font:16px/1.5 system
 </style>
 <main>
 <h1>Halloween Map · revue V0.9.1</h1>
-<p class="status"><strong>Fidélité non acquise — PR en brouillon.</strong> Le décor actuel reste non conforme. La restauration proposée est une approximation non intégrée. Aucune release ni modification de latest.</p>
+<p class="status"><strong>Base restaurée acceptée — PR en brouillon.</strong> Le mobile et le desktop partagent le même master adapté depuis la version mobile. Le rendu reste une restauration, sans identité pixel à pixel avec la maquette. Publication soumise à validation finale.</p>
 <h2>Maquette approuvée et rendu actuel</h2>
 <div class="grid">
 <figure><figcaption>Référence impérative — fichier original fourni</figcaption><img src="approved-mockup.png" alt="Maquette approuvée, desktop et mobile"></figure>
-<figure><figcaption>Capture réelle desktop — 1440 × 900</figcaption><img src="current-desktop.png" alt="Accueil actuel avec l'ancien château, non conforme"></figure>
-<figure><figcaption>Capture réelle mobile — 390 × 844</figcaption><img class="mobile" src="current-mobile.png" alt="Accueil mobile actuel, actions et footer visibles"></figure>
-<figure><figcaption>Restauration proposée — non approuvée, non intégrée</figcaption><img src="restoration-candidate.png" alt="Proposition de village nettoyé sans interface"><p>Maisons, fenêtres, clocher, lune et perspective présentent des différences. Cette image ne remplace pas le master original demandé.</p></figure>
+<figure><figcaption>Capture réelle desktop — 1440 × 900</figcaption><img src="shared-desktop.png" alt="Adaptation desktop de la même scène mobile"></figure>
+<figure><figcaption>Capture réelle mobile — 390 × 844</figcaption><img class="mobile" src="shared-mobile.png" alt="Accueil mobile avec le master commun"></figure>
+<figure><figcaption>Mobile incliné — plans transparents du même master</figcaption><img class="mobile" src="shared-tilt-mobile.png" alt="Faible inclinaison simulée, interface immobile"></figure>
 </div>
 <h2>Constats de revue</h2>
-<p>Le village intimiste, la grande citrouille gauche et les lanternes de la maquette manquent dans le décor actuel. Le header reste une bande séparée, le compteur plus opaque et la bande informative mobile plus compacte que la référence. La mise en page n’est donc pas déclarée identique.</p>
+<p>Le village, la lune, les lanternes, les branches et la citrouille appartiennent au même master sur les deux formats. Le header est intégré au décor, le compteur utilise les chiffres sans serif du mobile. Les zones cachées par l’interface et l’extension latérale ont été reconstruites ; les détails ne sont pas identiques à la maquette. La bande informative reste plus compacte pour préserver un écran sur mobile.</p>
 <p>Le vrai fichier DK est repris sans redessin. Le menu reste unique, les descriptions non interactives, les actions d’authentification et les mentions restent visibles. Les captures sont réalisées avec une horloge serveur simulée ; elles ne constituent pas un relevé de données de production.</p>
 <p><a href="https://github.com/Mick7784/halloween-map/pull/30">Reprendre la PR 30</a> · <a href="README.md">Provenance et prompt de restauration</a></p>
 </main>

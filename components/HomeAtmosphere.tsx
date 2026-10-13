@@ -6,8 +6,8 @@ import { useEffect, useRef } from "react";
  * V0.9.1 — decorative atmosphere. Only the homepage mounts this component.
  *
  * The base image remains the exact static fallback when sensor access is absent.
- * Mobile plane masks are TEMPORARY while the approved clean scene is prepared;
- * never release them as a claimed pixel-faithful recreation of the reference.
+ * Alpha planes retain the pixels and canvas of the shared restored master.
+ * They load only after a valid reading on an eligible portrait mobile.
  *
  * DeviceOrientationEvent.requestPermission() is deliberately never called:
  * the illustration must never request access or block navigation.
@@ -15,9 +15,9 @@ import { useEffect, useRef } from "react";
 const MOBILE_PORTRAIT = "(max-width: 759px) and (orientation: portrait)";
 const REDUCED_MOTION = "(prefers-reduced-motion: reduce)";
 
-// Do NOT make the temporary three-copy masks visible. Change to true only
-// when approved same-master alpha PNGs have been reviewed and committed.
-const APPROVED_DEPTH_ASSETS_READY = false;
+const DEPTH_ASSETS = ["far", "mid", "near"].map(
+  (plane) => `/art/home-v091-${plane}.webp`,
+);
 
 const clamp = (value: number, min: number, max: number) =>
   Math.max(min, Math.min(max, value));
@@ -44,6 +44,9 @@ export default function HomeAtmosphere() {
     let baseline: Tilt | null = null;
     let subscribed = false;
     let frame = 0;
+    let disposed = false;
+    let depthReady = false;
+    let loadStarted = false;
 
     const enabled = () =>
       sensorAvailable &&
@@ -87,6 +90,29 @@ export default function HomeAtmosphere() {
       }
     };
 
+    const activate = () => {
+      if (disposed || !enabled() || !baseline || !depthReady) return;
+      art.setAttribute("data-home-motion", "active");
+      if (!frame) frame = window.requestAnimationFrame(animate);
+    };
+
+    const loadDepth = () => {
+      if (depthReady) { activate(); return; }
+      if (loadStarted) return;
+      loadStarted = true;
+      void Promise.all(DEPTH_ASSETS.map(async (src) => {
+        const plane = new Image();
+        plane.src = src;
+        await plane.decode();
+      })).then(() => {
+        depthReady = true;
+        activate();
+      }).catch(() => {
+        // Failed or unavailable optional assets leave the static master.
+        // No repeated requests, permission prompts, or broken moving layers.
+      });
+    };
+
     const onOrientation = (event: DeviceOrientationEvent) => {
       if (
         !enabled() ||
@@ -100,7 +126,7 @@ export default function HomeAtmosphere() {
       // than jumping when a sensor becomes available after a permission grant.
       if (!baseline) {
         baseline = { x: event.gamma, y: event.beta };
-        art.setAttribute("data-home-motion", "active");
+        loadDepth();
         return;
       }
 
@@ -108,7 +134,7 @@ export default function HomeAtmosphere() {
       // the central title, clock and authentication controls without motion.
       target.x = clamp((event.gamma - baseline.x) / 18, -1, 1);
       target.y = clamp((event.beta - baseline.y) / 18, -1, 1);
-      if (!frame) frame = window.requestAnimationFrame(animate);
+      if (depthReady && !frame) frame = window.requestAnimationFrame(animate);
     };
 
     const reconcile = () => {
@@ -130,6 +156,7 @@ export default function HomeAtmosphere() {
     reconcile();
 
     return () => {
+      disposed = true;
       mobile.removeEventListener("change", reconcile);
       reducedMotion.removeEventListener("change", reconcile);
       document.removeEventListener("visibilitychange", reconcile);
@@ -139,7 +166,7 @@ export default function HomeAtmosphere() {
   }, []);
 
   return (
-    <div className="home-art" aria-hidden="true" ref={container} data-depth-assets={APPROVED_DEPTH_ASSETS_READY ? "ready" : "pending"}>
+    <div className="home-art" aria-hidden="true" ref={container} data-depth-assets="ready">
       <div className="home-art-plane home-art-plane--far" />
       <div className="home-art-plane home-art-plane--mid" />
       <div className="home-art-plane home-art-plane--near" />

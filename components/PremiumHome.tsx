@@ -128,6 +128,8 @@ export default function PremiumHome({
       closed ? "closed" : open ? "open" : countdownVisible ? "countdown" : "preparation"
     }>
       <div className="home-shell">
+        <div className="home-scene">
+        <HomeAtmosphere />
         <header className="home-header">
           <PublicBrand compact />
           <button
@@ -143,7 +145,6 @@ export default function PremiumHome({
         </header>
 
         <main className="home-stage">
-          <HomeAtmosphere />
           <section className="home-center" aria-labelledby="home-main-title">
             <h1 id="home-main-title">
               Halloween <span>Map</span>
@@ -230,6 +231,7 @@ export default function PremiumHome({
             )}
           </section>
         </main>
+        </div>
 
         <aside className="home-features" aria-label="Fonctionnalités de l’application">
           <div className="home-feature">

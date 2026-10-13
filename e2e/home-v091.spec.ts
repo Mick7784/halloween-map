@@ -66,7 +66,7 @@ test("V0.9.1 static fallback never depends on sensor permissions or overlays", a
   const art = page.locator(".home-art");
   await expect(art).not.toHaveAttribute("data-home-motion", "active");
   await expect(art).toHaveCSS("background-size", "cover");
-  await expect(art).toHaveCSS("background-image", /halloween-village-v2\.png/);
+  await expect(art).toHaveCSS("background-image", /home-v091-shared\.webp/);
   await expect(page.locator(".home-art-plane")).toHaveCount(3);
   await expect(page.locator(".home-art-plane--near")).toBeHidden();
   await expect(page.locator(".home-header button")).toHaveCount(1);
@@ -90,6 +90,8 @@ test("V0.9.1 portrait mobile tilts only artwork, smoothly and within bounds", as
   // First valid sample anchors handheld posture; second one moves scenery.
   await emit(page, 35, 10);
   await expect(art).toHaveAttribute("data-home-motion", "active");
+  await expect(page.locator(".home-art-plane--near")).toBeVisible();
+  await expect(page.locator(".home-art-plane--near")).toHaveCSS("background-image", /home-v091-near\.webp/);
   await emit(page, 55, 40);
   await page.clock.runFor(420);
 
@@ -112,6 +114,8 @@ test("V0.9.1 portrait mobile tilts only artwork, smoothly and within bounds", as
     parseFloat(node.style.getPropertyValue("--depth-near-x")),
   );
   expect(max).toBeLessThanOrEqual(8);
+  await expect(page.locator(".home-art-plane--near")).not.toHaveCSS("transform", "none");
+  await page.screenshot({ animations: "disabled", path: "test-results/home-v091-tilt-390.png" });
 
   // Resizing a formerly moving mobile to desktop removes every offset
   // and unregisters the sensor listener. Returning to portrait can re-arm.
@@ -136,6 +140,11 @@ test("V0.9.1 portrait mobile tilts only artwork, smoothly and within bounds", as
 });
 
 test("V0.9.1 desktop and mobile landscape always remain still", async ({ page }) => {
+  await passiveSensor(page);
+  const depthRequests: string[] = [];
+  page.on("request", (request) => {
+    if (/home-v091-(far|mid|near)\.webp/.test(request.url())) depthRequests.push(request.url());
+  });
   await page.setViewportSize({ width: 1440, height: 900 });
   await enter(page);
   await emit(page, 30, 20);
@@ -150,6 +159,20 @@ test("V0.9.1 desktop and mobile landscape always remain still", async ({ page })
   await page.clock.runFor(150);
   await expect(page.locator(".home-art")).not.toHaveAttribute("data-home-motion", "active");
   await expect(page.locator(".home-art-plane--mid")).toBeHidden();
+  expect(depthRequests).toEqual([]);
+});
+
+test("V0.9.1 unavailable optional plane keeps the master static", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await passiveSensor(page);
+  await page.route("**/art/home-v091-mid.webp", (route) => route.abort());
+  await enter(page);
+  await emit(page, 35, 10);
+  await emit(page, 55, 40);
+  await page.clock.runFor(420);
+  await expect(page.locator(".home-art")).not.toHaveAttribute("data-home-motion", "active");
+  await expect(page.locator(".home-art-plane--near")).toBeHidden();
+  await expect(page.getByRole("button", { name: "Se connecter", exact: true })).toBeVisible();
 });
 
 for (const mode of ["missing", "permission-required"] as const) {
