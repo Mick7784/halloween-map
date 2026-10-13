@@ -49,6 +49,7 @@ import {
   routeAvailabilitySchema,
 } from "./validation";
 import { validateRouteWindow } from "./selection-window";
+import { createWalkingRouter } from "./walking-router";
 import { prepareSelection } from "./house-selection";
 import { houseRouteKey, houseTravelKey } from "./route-state";
 import type { RouteAvailability } from "./active-route";
@@ -1051,6 +1052,40 @@ export async function participantAction(
     await audit(c, user.instance_id, user, "participant." + data.action, h.id);
     return { ok: true };
   });
+}
+/**
+ * Distance-only consultation. Uses exactly the already visible public houses
+ * for the caller; GPS coordinates are not persisted or returned.
+ */
+export async function discoveryDistances(
+  user: User | null,
+  input: unknown,
+  context: TimeContext = realTime(),
+) {
+  if (!user) throw new HttpError(401, "Connexion requise");
+  const { origin } = z.object({
+    origin: z.object({
+      longitude: z.number().finite().min(-180).max(180),
+      latitude: z.number().finite().min(-90).max(90),
+    }),
+  }).parse(input);
+  const state = await publicState(context, user);
+  if (!("mapAccessible" in state) || !state.mapAccessible ||
+      !("houses" in state) || !Array.isArray(state.houses))
+    throw new HttpError(403, "La carte n'est pas accessible");
+  const houses = state.houses;
+  if (houses.length > 200)
+    throw new HttpError(422, "Trop de maisons : affinez les filtres pour consulter les distances.");
+  if (!houses.length) return { distances: {} };
+  const distances = await createWalkingRouter().distancesFrom(
+    origin,
+    houses.map((h) => ({ latitude: h.latitude, longitude: h.longitude })),
+  );
+  return {
+    distances: Object.fromEntries(
+      houses.map((h, index) => [h.id, distances[index]]),
+    ),
+  };
 }
 export async function route(
   userInput: unknown,
