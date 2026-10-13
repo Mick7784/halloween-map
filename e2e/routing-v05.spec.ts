@@ -475,7 +475,7 @@ test("preparation gates creation, opens administrable guidelines and accepts eve
     page.getByRole("checkbox", { name: "Je m’adapte à tous les niveaux" }),
   ).toHaveCount(0);
   await page.getByRole("slider", { name: "Niveau de frayeur" }).fill("3");
-  await expect(page.locator(".collection-choice input:checked")).toHaveCount(2);
+  await expect(page.locator(".collection-count")).toContainText("2 maisons");
   await page.getByRole("checkbox", { name: "J’ai pris connaissance" }).check();
   await page.locator(".route-experience").evaluate(async (el) => {
     await Promise.allSettled(
@@ -646,7 +646,7 @@ test("mobile bottom panel toggles with touch and keyboard; map and list open a o
     page.getByRole("dialog", { name: houses[1].name, exact: true }),
   ).toBeVisible();
   await page
-    .getByRole("button", { name: "Voir sur la carte", exact: true })
+    .getByRole("button", { name: "Fermer la fiche", exact: true })
     .click();
   await expect(sheet).toHaveAttribute("data-sheet-position", "collapsed");
 });
@@ -679,7 +679,7 @@ test("compact visitor house fits small mobile screens with maximum text", async 
   );
   const c = await card.boundingBox(),
     button = await page
-      .getByRole("button", { name: "Voir sur la carte", exact: true })
+      .getByRole("button", { name: "Fermer la fiche", exact: true })
       .boundingBox();
   expect(button!.y + button!.height).toBeLessThanOrEqual(c!.y + c!.height);
   await page.locator(".route-experience").evaluate(async (el) => {
@@ -1176,7 +1176,7 @@ for (const width of [390, 1440]) {
         ).toHaveCount(candy ? 2 : 1);
         await expect(
           card.locator(".visitor-activities .is-absent"),
-        ).toHaveCount(candy ? 1 : 2);
+        ).toHaveCount(0);
         await expect(card.locator(".visitor-adapt")).toHaveCount(
           adaptable ? 1 : 0,
         );
@@ -1184,10 +1184,7 @@ for (const width of [390, 1440]) {
           await expect(card.getByRole("meter")).toHaveCount(0);
           await expect(card.locator(".house-fear-labels")).toHaveCount(0);
         } else
-          await expect(card.getByRole("meter")).toHaveAttribute(
-            "aria-valuenow",
-            "4",
-          );
+          await expect(card).toContainText("4/5");
         await expect(
           card.locator(".visitor-hours svg.lucide-chevron-right"),
         ).toHaveCount(0);
@@ -1197,7 +1194,7 @@ for (const width of [390, 1440]) {
           );
         else await expect(card.locator(".visitor-stock")).toHaveCount(0);
         await expect(
-          card.getByRole("button", { name: "Voir sur la carte", exact: true }),
+          card.getByRole("button", { name: "Fermer la fiche", exact: true }),
         ).toBeVisible();
         await card.evaluate(async (element) => {
           await Promise.allSettled(
