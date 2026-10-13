@@ -225,10 +225,15 @@ export default function MapExperience({
           clock - consultationFix.timestamp <= 15000
         ? consultationFix.point
         : null;
-  const distancePoint = proximityPoint ?? retainedOrigin;
+  // A recorded location remains usable for the distance estimate after
+  // the short freshness window needed by live nearest-house highlighting.
+  const distancePoint = proximityPoint ??
+    (!focused && consultationFix ? consultationFix.point : retainedOrigin);
   const distanceLabel = proximityPoint
     ? "votre position GPS"
-    : "le point de départ";
+    : !focused && consultationFix
+      ? "votre dernière position GPS"
+      : "le point de départ";
   const distanceKey = distancePoint
     ? distancePoint.map((n) => n.toFixed(4)).join(",")
     : "";
