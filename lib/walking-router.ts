@@ -5,6 +5,7 @@ export type WalkingMatrix = (WalkingCost | null)[][];
 export interface WalkingRouter {
   snap?(points: Point[], radius?: number): Promise<(Point | null)[]>;
   matrix(points: Point[]): Promise<WalkingMatrix>;
+  distancesFrom(origin: Point, destinations: Point[]): Promise<(number | null)[]>;
   directions(
     points: Point[],
   ): Promise<{ geometry: number[][]; legs: WalkingCost[] }>;
@@ -151,6 +152,39 @@ export function createWalkingRouter(): WalkingRouter {
       return (await snapLocations(points, radius)).map((p) =>
         p ? { longitude: p.location[0], latitude: p.location[1] } : null,
       );
+    },
+    async distancesFrom(origin, destinations) {
+      // Consultation only: one source to many targets, never full pairwise routes.
+      // Keep each provider request small and return no geometry or visit order.
+      if (destinations.length > 200)
+        throw new Error("Trop de maisons pour calculer les distances.");
+      const result: (number | null)[] = Array(destinations.length).fill(null);
+      for (let offset = 0; offset < destinations.length; offset += 40) {
+        const chunk = destinations.slice(offset, offset + 40);
+        const snapped = await snapLocations([origin, ...chunk]);
+        if (!snapped[0])
+          throw new RoutingError("no_route", "Votre position ne peut pas être reliée au réseau piéton.");
+        const valid = snapped.flatMap((point, index) =>
+          point ? [index] : [],
+        );
+        if (valid.length < 2) continue;
+        const matrix = parse(
+          "matrix/foot-walking",
+          z.object({
+            distances: z.array(z.array(metric.nullable()).length(valid.length)).length(1),
+          }),
+          await request("matrix/foot-walking", {
+            locations: valid.map((index) => snapped[index]!.location),
+            sources: ["0"],
+            destinations: valid.map((_, index) => String(index)),
+            metrics: ["distance"],
+            units: "m",
+          }),
+        );
+        for (let n = 1; n < valid.length; n++)
+          result[offset + valid[n] - 1] = matrix.distances[0][n];
+      }
+      return result;
     },
     async matrix(points) {
       // Explicit resource bound, never silently truncate eligible houses.
