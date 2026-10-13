@@ -310,6 +310,11 @@ for (const width of [390, 1440]) {
     await expect(
       page.getByRole("heading", { name: "Ma participation", exact: true }),
     ).toBeVisible();
+    // The heading is already visible during submission. Wait for the form
+    // reloaded from the saved house, so closing cannot race the draft guard.
+    await expect(
+      dialog.getByRole("button", { name: "Enregistrer les modifications", exact: true }),
+    ).toBeEnabled();
     expect(calls[0].path).toBe("participation");
     expect(calls[0].body.acceptance).toEqual({
       mode: "GUIDELINES_ONLY",
