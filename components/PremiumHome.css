@@ -615,7 +615,7 @@
      Desktop and unsupported/reduced-motion devices remain pure static art.
      Using temporary soft image masks is a scaffold, NOT final asset fidelity. */
   @media (orientation: portrait) and (prefers-reduced-motion: no-preference) {
-    .home-v09 .home-art[data-home-motion="active"] .home-art-plane {
+    .home-v09 .home-art[data-depth-assets="ready"][data-home-motion="active"] .home-art-plane {
       display: block;
       background-position: 88% center;
       will-change: transform;
