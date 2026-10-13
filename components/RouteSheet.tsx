@@ -206,6 +206,16 @@ export default function RouteSheet({
           <ChevronUp className="route-sheet-chevron" size={19} />
         </button>
       )}
+      {phase === "calculated" ? (
+        <section className="collection-preview-summary" role="status">
+          <strong>
+            Votre collecte inclut {result.stops.length} {result.stops.length === 1 ? "maison" : "maisons"}
+          </strong>
+          <small>Explorez librement, sans itinéraire ni ordre imposé.</small>
+          {result.message && <p className="route-status">{result.message}</p>}
+          {result.disclaimer && <p className="route-disclaimer">{result.disclaimer}</p>}
+        </section>
+      ) : (
       <div
         id="collection-houses"
         className="route-sheet-content"
@@ -326,6 +336,7 @@ export default function RouteSheet({
           <p className="route-disclaimer">{result.disclaimer}</p>
         )}
       </div>
+      )}
       {phase === "calculated" && position !== "collapsed" && (
         <footer className="route-sheet-footer">
           {phase === "calculated" && (
