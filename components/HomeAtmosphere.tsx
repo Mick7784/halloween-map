@@ -33,6 +33,12 @@ export default function HomeAtmosphere() {
 
     const mobile = window.matchMedia(MOBILE_PORTRAIT);
     const reducedMotion = window.matchMedia(REDUCED_MOTION);
+    // Permission-gated browsers keep the decorative scene static. Never
+    // prompt, probe a permission, or rely on synthetic readings there.
+    const sensor = window.DeviceOrientationEvent as
+      | (typeof DeviceOrientationEvent & { requestPermission?: unknown })
+      | undefined;
+    const sensorAvailable = !!sensor && typeof sensor.requestPermission !== "function";
     const target: Tilt = { x: 0, y: 0 };
     const drawn: Tilt = { x: 0, y: 0 };
     let baseline: Tilt | null = null;
@@ -40,6 +46,7 @@ export default function HomeAtmosphere() {
     let frame = 0;
 
     const enabled = () =>
+      sensorAvailable &&
       mobile.matches &&
       !reducedMotion.matches &&
       document.visibilityState === "visible";

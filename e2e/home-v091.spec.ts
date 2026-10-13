@@ -138,3 +138,58 @@ test("V0.9.1 desktop and mobile landscape always remain still", async ({ page })
   await expect(page.locator(".home-art")).not.toHaveAttribute("data-home-motion", "active");
   await expect(page.locator(".home-art-plane--mid")).toBeHidden();
 });
+
+for (const mode of ["missing", "permission-required"] as const) {
+  test(`V0.9.1 ${mode} sensor stays static without asking permission`, async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.addInitScript((mode) => {
+      Object.defineProperty(window, "DeviceOrientationEvent", {
+        configurable: true,
+        value: mode === "missing" ? undefined : Object.assign(class {}, {
+          requestPermission() { throw new Error("Decorative sensor permission requested"); },
+        }),
+      });
+    }, mode);
+    const errors: string[] = [];
+    page.on("pageerror", (error) => errors.push(error.message));
+    await enter(page);
+    await emit(page, 35, 10);
+    await emit(page, 55, 40);
+    await page.clock.runFor(420);
+    await expect(page.locator(".home-art")).not.toHaveAttribute("data-home-motion", "active");
+    await expect(page.locator(".home-art-plane--near")).toBeHidden();
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    expect(errors).toEqual([]);
+  });
+}
+
+test("V0.9.1 hidden page resets tilt and resumes from a fresh baseline", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  await enter(page);
+  const art = page.locator(".home-art");
+  const title = page.locator(".home-center h1");
+  const originalTitle = await title.boundingBox();
+  await emit(page, 35, 10);
+  await emit(page, 55, 40);
+  await page.clock.runFor(420);
+  await expect(art).toHaveAttribute("data-home-motion", "active");
+  expect(await title.boundingBox()).toEqual(originalTitle);
+  await page.evaluate(() => {
+    Object.defineProperty(document, "visibilityState", { configurable: true, value: "hidden" });
+    document.dispatchEvent(new Event("visibilitychange"));
+  });
+  await expect(art).not.toHaveAttribute("data-home-motion", "active");
+  await expect(art).toHaveCSS("--depth-near-x", "0.00px");
+  await emit(page, 80, 80);
+  await page.clock.runFor(420);
+  await expect(art).not.toHaveAttribute("data-home-motion", "active");
+  await page.evaluate(() => {
+    Object.defineProperty(document, "visibilityState", { configurable: true, value: "visible" });
+    document.dispatchEvent(new Event("visibilitychange"));
+  });
+  await emit(page, 80, 80);
+  await expect(art).toHaveAttribute("data-home-motion", "active");
+  await expect(art).toHaveCSS("--depth-near-x", "0.00px");
+  expect(await title.boundingBox()).toEqual(originalTitle);
+});

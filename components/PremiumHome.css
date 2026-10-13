@@ -451,10 +451,10 @@
 .home-v09 .home-credit img {
   width: 35px;
   height: auto;
-  opacity: .67;
+  opacity: 1;
   border: 0;
   flex: none;
-  filter: saturate(.86);
+  filter: none;
 }
 .home-v09 .home-credit span { display: grid; gap: 1px; }
 .home-v09 .home-credit small { color: #a69caf; font-size: 9px; font-weight: 400; }
@@ -711,7 +711,7 @@
     border: 0;
     padding: 0;
   }
-  .home-v09 .home-credit img { width: 26px; opacity: .6; }
+  .home-v09 .home-credit img { width: 32px; }
   .home-v09 .home-credit small { font-size: 8px; }
   .home-v09 .home-credit strong { font-size: 10px; }
   .home-v09 .home-footer-right { justify-self: end; font-size: 9px; gap: 6px; }

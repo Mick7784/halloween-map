@@ -72,7 +72,7 @@ for (const size of [
     await expect(page.getByRole("button", { name: "Se connecter", exact: true })).toBeVisible();
     await expect(page.getByRole("link", { name: "Créer un compte", exact: true })).toBeVisible();
     await expect(page.getByRole("link", { name: /Une création de DomotiK Studio/ })).toBeVisible();
-    await expect(page.locator(".home-credit img")).toHaveAttribute("src", "/art/dk-footer-v09.webp");
+    await expect(page.locator(".home-credit img")).toHaveAttribute("src", "/art/dk-original.png");
     await expect(page.getByRole("contentinfo").getByRole("link", { name: "Mentions légales" })).toBeVisible();
     await expect(page.locator(".home-v09")).not.toContainText(/rassemblement organisé|itinéraire imposé|soirée organisée/i);
     const pageSize = await page.evaluate(() => ({
