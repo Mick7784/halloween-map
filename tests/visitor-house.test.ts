@@ -77,7 +77,7 @@ it.each([
     ])
       expect(html.includes(label)).toBe(!adaptable);
     expect(html).not.toContain("chevron");
-    expect(html).toContain("Fermer la fiche");
+    expect(html).toContain("Revenir à ma collecte");
   },
 );
 it("shows absent candy in gray without a stock block", () => {
