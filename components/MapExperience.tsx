@@ -252,6 +252,8 @@ export default function MapExperience({
     })
       .then((answer) => {
         if (!live) return;
+        if (!answer?.distances || typeof answer.distances !== "object")
+          throw new Error("Réponse de distances invalide");
         discoveryCache.current.set(distanceKey, answer.distances);
         setDiscoveryDistances(answer.distances);
         setDistanceStatus("ready");
