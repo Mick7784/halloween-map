@@ -123,16 +123,16 @@
   background-size: cover;
   background-repeat: no-repeat;
   background-position: center 55%;
-  filter: saturate(1.07) contrast(1.035) brightness(1.1);
+  filter: saturate(1.13) contrast(1.035) brightness(1.2);
 }
 .home-v09 .home-art::after {
   content: "";
   position: absolute;
   inset: 0;
   background:
-    linear-gradient(90deg, #080c1868 0%, #090e1a26 40%, #0d102032 100%),
-    linear-gradient(180deg, #090d195b 0%, #10102226 24%, #090c1987 75%, #090b17d8 100%),
-    radial-gradient(ellipse 58% 82% at 50% 42%, #0a0a1991 0%, #0b0e1958 45%, transparent 100%);
+    linear-gradient(90deg, #080c1845 0%, #090e1a0d 40%, #0d10201e 100%),
+    linear-gradient(180deg, #090d193e 0%, #1010220a 24%, #090c1942 75%, #090b1788 100%),
+    radial-gradient(ellipse 58% 82% at 50% 42%, #0a0a195c 0%, #0b0e192c 45%, transparent 100%);
 }
 .home-v09 .home-center {
   position: relative;
@@ -173,9 +173,13 @@
 }
 .home-v09 .home-title-divider i:last-child { transform: rotate(180deg); }
 .home-v09 .home-title-divider span {
-  font-size: 15px;
-  line-height: 1;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
 }
+.home-v09 .home-title-divider span svg { width: 100%; height: 100%; }
 .home-v09 .home-explanation {
   font-size: clamp(12px, 1.19vw, 16px);
   line-height: 1.55;
@@ -589,8 +593,8 @@
   }
   .home-v09 .home-art::after {
     background:
-      linear-gradient(180deg, #080b1c62 0%, #0b0c1b7b 29%, #0b0b1d93 70%, #090b1cc6 100%),
-      radial-gradient(ellipse at 50% 38%, #05091691, transparent 75%);
+      linear-gradient(180deg, #080b1c4f 0%, #0b0c1b56 29%, #0b0b1d60 70%, #090b1c99 100%),
+      radial-gradient(ellipse at 50% 38%, #05091662, transparent 75%);
   }
   .home-v09 .home-center {
     max-width: 410px;
