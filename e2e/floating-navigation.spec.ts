@@ -135,11 +135,9 @@ for (const width of [390, 1440])
     await expect(house).toHaveAccessibleName(
       /Décoration.*Bonbons.*Mise en scène/,
     );
-    await expect(house.locator(".badges-compact .badge")).toHaveCount(3);
-    await expect(house.locator(".activity-label-hidden").first()).toHaveCSS(
-      "clip-path",
-      "inset(50%)",
-    );
+    await expect(house.locator(".discovery-house-activities svg")).toHaveCount(3);
+    await expect(house).toHaveCSS("height", "52px");
+    await expect(options).toHaveAttribute("aria-modal", "false");
     await expect(
       options.locator(".route-discovery-filters button").first(),
     ).toHaveText("Décoration");
