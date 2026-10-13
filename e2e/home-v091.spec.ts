@@ -100,6 +100,21 @@ test("V0.9.1 portrait mobile tilts only artwork, smoothly and within bounds", as
   );
   expect(max).toBeLessThanOrEqual(8);
 
+  // Resizing a formerly moving mobile to desktop removes every offset
+  // and unregisters the sensor listener. Returning to portrait can re-arm.
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await expect(art).not.toHaveAttribute("data-home-motion", "active");
+  await expect(art).toHaveCSS("--depth-near-x", "0.00px");
+  await emit(page, 50, 60);
+  await emit(page, 80, 90);
+  await page.clock.runFor(100);
+  await expect(art).not.toHaveAttribute("data-home-motion", "active");
+  await page.setViewportSize({ width: 390, height: 844 });
+  await emit(page, 35, 10);
+  await expect(art).toHaveAttribute("data-home-motion", "active");
+  await emit(page, 40, 20);
+  await page.clock.runFor(200);
+
   // Changing to reduced motion immediately removes the effect.
   await page.emulateMedia({ reducedMotion: "reduce" });
   await expect(art).not.toHaveAttribute("data-home-motion", "active");
