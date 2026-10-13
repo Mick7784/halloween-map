@@ -5,7 +5,7 @@ export type WalkingMatrix = (WalkingCost | null)[][];
 export interface WalkingRouter {
   snap?(points: Point[], radius?: number): Promise<(Point | null)[]>;
   matrix(points: Point[]): Promise<WalkingMatrix>;
-  distancesFrom(origin: Point, destinations: Point[]): Promise<(number | null)[]>;
+  distancesFrom?(origin: Point, destinations: Point[]): Promise<(number | null)[]>;
   directions(
     points: Point[],
   ): Promise<{ geometry: number[][]; legs: WalkingCost[] }>;
