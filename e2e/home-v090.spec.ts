@@ -55,7 +55,7 @@ for (const size of [
     await expect(header.locator("button")).toHaveCount(1);
     await expect(header.locator("a")).toHaveCount(1);
     await expect(page.locator(".home-art")).toHaveCSS("background-size", "cover");
-    await expect(page.locator(".home-art")).toHaveCSS("background-image", /halloween-village-v2\\.png/);
+    await expect(page.locator(".home-art")).toHaveCSS("background-image", /halloween-village-v2\.png/);
     await expect(page.locator(".home-center h1")).toHaveText("Halloween Map");
     await expect(page.locator(".home-clock > div")).toHaveCount(4);
     const clockTops = await page.locator(".home-clock > div").evaluateAll((els) =>
