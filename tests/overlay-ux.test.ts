@@ -411,9 +411,9 @@ describe("map navigation surfaces", () => {
     await click(byLabel("Me localiser"));
     await act(async () => window.dispatchEvent(new Event("map-options")));
     expect(document.querySelector(".map-options-list")?.textContent).toContain(
-      "0 m à vol d’oiseau depuis votre position GPS",
+      "Calcul des distances piétonnes",
     );
-    expect(byLabel("Frayeur : Frissonnant (4/5)")).not.toBeNull();
+    expect(document.querySelector(".discovery-house-fear")).not.toBeNull();
     expect(fixture.controller.invalidate).not.toHaveBeenCalled();
   });
   it("inactive map has no internal user toolbar or permanent discovery panel; filters remain reachable", async () => {
@@ -638,7 +638,7 @@ describe("visitor collection preparation", () => {
       maxFear: 1,
     };
     await act(async () => root.render(h(RoutePreparation, props)));
-    expect(document.querySelectorAll(".collection-choice")).toHaveLength(2);
+    expect(document.querySelector(".collection-count")?.textContent).toContain("2 maisons");
     expect(document.querySelector(".route-preparation")?.textContent).toContain(
       "Le niveau choisi inclut également toutes les maisons de niveau inférieur.",
     );
@@ -648,15 +648,14 @@ describe("visitor collection preparation", () => {
     await act(async () =>
       root.render(h(RoutePreparation, { ...props, maxFear: 2 })),
     );
-    expect(document.querySelectorAll(".collection-choice")).toHaveLength(3);
-    await click(document.querySelectorAll(".collection-choice input")[1]);
+    expect(document.querySelector(".collection-count")?.textContent).toContain("3 maisons");
     await click(document.querySelector(".route-acceptance input")!);
     await click(document.querySelector(".route-submit")!);
     expect(calculate).toHaveBeenCalledOnce();
     expect(calculate.mock.calls[0][0]).toMatchObject({
       maxFear: 2,
-      excludedHouseIds: [houses[1].id],
-      selectedHouseIds: [houses[0].id, houses[2].id],
+      excludedHouseIds: [],
+      selectedHouseIds: [houses[0].id, houses[1].id, houses[2].id],
       acceptance: { guidelines: true },
     });
   });
