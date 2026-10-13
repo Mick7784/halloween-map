@@ -2035,3 +2035,74 @@
 @media (prefers-reduced-motion: reduce) {
   .discovery-panel { animation: none; }
 }
+
+/* V0.8.9 — short collection setup and its verified summary. */
+.route-preparation { height: auto; max-height: calc(100dvh - 48px); }
+.route-preparation-scroll { padding: 12px 16px 10px; }
+.route-preparation h1 { font-size: 24px; }
+.route-preparation .route-subtitle { margin: 5px 0 12px; }
+.route-preparation fieldset { margin-bottom: 11px; }
+.route-preparation legend { margin-bottom: 6px; }
+.route-preparation .route-origin-label { padding: 8px 10px; }
+.route-preparation .route-coordinates { display: none; }
+.route-preparation .route-origin-actions button { min-height: 42px; }
+.route-preparation .route-times { margin-bottom: 12px; gap: 6px; }
+.route-times-day {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  font-weight: 650;
+}
+.route-times-day > svg { color: #ff9f57; }
+.route-times-day span { margin-left: auto; color: #c9b6d8; font-size: 11px; }
+.route-times-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
+.route-times-fields .field { min-width: 0; }
+.route-times-fields .field > span { padding: 0; font-size: 11px; }
+.route-times-fields input[type="time"] {
+  min-width: 0;
+  width: 100%;
+  padding: 9px 7px;
+  background: #1e202d;
+  border-radius: 8px;
+  border: 1px solid #6b5680;
+  font-size: 15px;
+}
+.route-preparation .route-fear input[type="range"] { margin: 10px 0 8px; }
+.route-preparation .route-fear .route-status { margin: 6px 0 0; }
+.collection-count {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid #775b8b;
+  border-radius: 10px;
+  background: #292239;
+  padding: 9px;
+  margin: 0 0 10px;
+}
+.collection-count-icon {
+  display: grid;
+  place-items: center;
+  color: #ef9f66;
+  width: 34px;
+  flex: 0 0 34px;
+}
+.collection-count strong { display: block; font-size: 13px; }
+.collection-count small { display: block; margin-top: 3px; color: #c6b2d3; font-size: 11px; }
+.route-experience .route-preparation-footer { padding: 10px 16px max(12px, env(safe-area-inset-bottom)); }
+.route-experience .route-acceptance { margin-bottom: 8px; }
+.collection-preview-summary {
+  margin: 4px 0 10px;
+  padding: 12px;
+  border: 1px solid #755386;
+  border-radius: 10px;
+  background: #2a2237;
+}
+.collection-preview-summary strong { display: block; font-size: 15px; }
+.collection-preview-summary small { display: block; margin-top: 4px; color: #c6b1d7; }
+.collection-preview-summary .route-disclaimer { margin: 9px 0 0; }
+@media (max-width: 380px) {
+  .route-preparation .route-fear-labels { font-size: 8px; }
+  .route-times-fields { gap: 7px; }
+}
