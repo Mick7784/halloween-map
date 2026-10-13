@@ -306,13 +306,14 @@ export default function Application({
   else if (view === "about")
     content = (
       <main className="narrow">
-        <div className="eyebrow">UNE COMMUNE PLUS VIVANTE</div>
+        <div className="eyebrow">CARTOGRAPHIE ET COLLECTE INDIVIDUELLE</div>
         <h1>Halloween, à partager.</h1>
         <section className="panel">
           <h2>À propos</h2>
           <p>
-            Halloween Map permet aux communes et associations de réunir les
-            maisons accueillantes pour une soirée conviviale.
+            Halloween Map met à disposition une cartographie des maisons
+            participantes et un outil individuel de suivi de collecte.
+            Le service n’organise aucun rassemblement ni aucun trajet.
           </p>
           <p>
             Les adresses sont publiées pendant les horaires d’accueil. À la
@@ -324,8 +325,8 @@ export default function Application({
           <p>
             Les enfants restent accompagnés. Respectez les horaires, les
             propriétés privées, les indications d’accès et le niveau de frayeur.
-            Choisissez librement vos maisons et leur ordre de visite. Empruntez
-            les voies publiques.
+            Choisissez librement vos visites et déplacements, sans parcours imposé.
+            Empruntez les voies publiques.
           </p>
           <p>
             Fond cartographique : © OpenStreetMap contributors · © CARTO. Les
