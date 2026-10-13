@@ -461,6 +461,10 @@ test("map canvas, filters and active route remain mounted across account", async
     );
   // Wait for this fixture’s fitBounds result, not a snapshot midway through its animation.
   await expect.poll(async () => (await read())?.camera?.zoom).toBe(16);
+  // GPS centering also uses zoom 16. The fixture's midpoint distinguishes
+  // the completed house framing from that earlier camera snapshot.
+  await expect.poll(async () => (await read())?.camera?.center?.[0])
+    .toBeCloseTo((2.8 + house.longitude) / 2, 5);
   await page
     .getByRole("button", { name: "Commencer ma collecte", exact: true })
     .click();

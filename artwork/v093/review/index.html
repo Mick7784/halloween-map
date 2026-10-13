@@ -1,0 +1,14 @@
+<!doctype html><html lang="fr"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Halloween Map — étude d’orientation V0.9.3</title>
+<style>body{margin:0;padding:24px;background:#080b18;color:#fbf3f2;font:16px/1.6 system-ui,sans-serif}main{max-width:1500px;margin:auto}h1,h2{font-family:Georgia,serif}p{max-width:90ch;color:#cbc7d7}a{color:#ffb85e}.grid{display:grid;grid-template-columns:repeat(3,minmax(0,390px));gap:24px;align-items:start}figure{margin:0}img{display:block;width:100%;height:auto;border:1px solid #574561;border-radius:12px}figcaption{padding:10px 0}.desktop{max-width:1440px}@media(max-width:850px){.grid{grid-template-columns:1fr 1fr}}@media(max-width:550px){.grid{grid-template-columns:1fr}}</style>
+<main><h1>V0.9.3 — étude et prototype d’orientation</h1>
+<p>Cap magnétique approximatif, carte fixe, aucun guidage. Les captures proviennent de mesures simulées ; une validation sur iPhone et Android réels reste nécessaire. La forme orange est une fixture asymétrique servant à vérifier que la caméra ne tourne pas : ce n’est pas un itinéraire.</p>
+<div class="grid">
+<figure><img src="offer-mobile.png" alt="Proposition facultative sous la carte"><figcaption>Proposition volontaire, sans masquer les actions essentielles.</figcaption></figure>
+<figure><img src="permission-mobile.png" alt="Explication et refus possible"><figcaption>Explication une seule fois, refus possible ; aucune demande automatique.</figcaption></figure>
+<figure><img src="calibrated-mobile.png" alt="Flèche et cône magnétique approximatif"><figcaption>Trois mesures calibrées et cohérentes. L’orientation s’ajoute au point GPS.</figcaption></figure>
+</div>
+<h2>Fallback conservé</h2><div class="grid"><figure><img src="static-mobile.png" alt="Marqueur GPS mobile sans orientation"><figcaption>Capteur absent ou mesure inutilisable : point GPS classique.</figcaption></figure></div>
+<h2>Desktop fixe</h2><img class="desktop" src="static-desktop.png" alt="Carte desktop sans capteur d’orientation">
+<p>Étude, seuils et limites : <a href="../../../docs/v093-map-orientation-study.md">document V0.9.3</a>. Les événements Android standards sans information de précision sont refusés par ce prototype.</p>
+</main></html>

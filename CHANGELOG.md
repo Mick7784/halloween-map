@@ -1,5 +1,26 @@
 # Changelog
 
+## V0.9.3
+
+- Livraison des travaux V0.9.1 et V0.9.2 : même décor restauré accepté sur mobile et desktop, véritable logo DK, parallaxe très subtile limitée à l’accueil mobile portrait, desktop fixe et fallback statique sans demande d’autorisation.
+- Identité bleu nuit/violet/ambre harmonisée pour menus, authentification, compte, participation, maisons, collecte, panneaux de carte et pages secondaires ; favicon, icônes PWA/Android/iOS, manifest et page hors connexion renouvelés.
+- Prototype facultatif de flèche et cône autour du point GPS, sans rotation automatique de carte ni guidage. Cap magnétique approximatif uniquement lorsque sa précision est disponible et utilisable ; gyroscope relatif, cap inconnu, lectures périmées et appareils non pris en charge conservent le marqueur GPS classique.
+- Autorisation de capteurs uniquement depuis une action volontaire, après explication avec refus possible et mémorisé. Les mesures d’orientation ne sont ni enregistrées ni transmises ; suspension en arrière-plan, paysage et sous les fenêtres.
+- Limite connue : le prototype prend principalement en charge les mesures WebKit calibrées en portrait ; les flux Android standards sans indication de précision restent sans flèche. Validation sur iPhone/Android réels à effectuer par le propriétaire après cette publication expressément autorisée.
+- Authentification, saisons TEST/REAL, horloge serveur, accès, permissions, collecte, administration et données conservés ; aucune nouvelle migration ni fonction d’organisation d’événement ou d’itinéraire.
+- Validation avant publication : compilation, lint/TypeScript, 249 tests unitaires, 195 scénarios Playwright et Docker ; captures comparatives disponibles dans artwork/v091, artwork/v092 et artwork/v093.
+
+## V0.9.2
+
+- Palette, typographies, surfaces, boutons, champs, bordures et focus harmonisés dans l’application. Thèmes clair/sombre/système d’administration et états métier conservés.
+- Identité d’installation Halloween Map cohérente : favicon SVG et PNG, PWA 192/512, variantes maskable, Apple opaque et manifest. Aucun effet de parallaxe hors accueil actif.
+
+## V0.9.1
+
+- Village restauré accepté comme nouvelle base commune mobile/desktop, sans interface incrustée. Trois plans transparents dérivés des pixels du même master ; adaptation responsive du cadrage.
+- Desktop fixe ; parallaxe mobile portrait discrète avec capteurs déjà accessibles, réduction des animations respectée et décor statique sinon. Aucun bouton ni demande de permission sur l’accueil.
+- Composition, compteur serveur, connexion/inscription, menu unique, trois descriptions non cliquables et footer avec véritable logo DK conservés. La restauration n’est pas une reproduction pixel à pixel de la maquette originale.
+
 ## V0.9
 
 - Refonte visuelle complète de l’accueil, inspirée de la maquette desktop/mobile validée : composition immersive cinématique, village nocturne en plein cadre, typographie éditoriale et palette bleu nuit, ambre et violet ; comptage central en verre fumé et fond désormais en `cover`, sans bandes vides.
