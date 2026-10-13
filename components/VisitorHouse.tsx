@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
-import { X, MapPin, Clock3, Info, Check, CircleAlert } from "lucide-react";
+import { X, MapPin, Clock3, Info, Check, CircleAlert, Ghost } from "lucide-react";
 import { time, type PublicHouse, type RouteResult } from "./common";
 import { FearGauge, houseActivityOptions } from "./HouseFields";
 import ActivityIcon from "./ActivityIcon";
@@ -18,6 +18,7 @@ export default function VisitorHouse({
   selected,
   selectionDisabled,
   selectionError,
+  consultation = false,
 }: {
   house: PublicHouse;
   stop?: RouteResult["stops"][number];
@@ -30,6 +31,7 @@ export default function VisitorHouse({
   selected?: boolean;
   selectionDisabled?: boolean;
   selectionError?: string;
+  consultation?: boolean;
 }) {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -53,9 +55,9 @@ export default function VisitorHouse({
           : "Disponible";
   const StatusIcon = visited || available ? Check : CircleAlert;
   return (
-    <div className="route-overlay visitor-overlay">
+    <div className={"route-overlay visitor-overlay" + (consultation ? " visitor-consultation-overlay" : "")}>
       <section
-        className="visitor-house route-dialog"
+        className={"visitor-house route-dialog" + (consultation ? " is-consultation" : "")}
         role="dialog"
         onClick={(event) => event.stopPropagation()}
         aria-modal="true"
@@ -79,7 +81,7 @@ export default function VisitorHouse({
             </p>
           </header>
           <div className="visitor-activities" aria-label="Activités proposées">
-            {houseActivityOptions.map(({ id, label }) => (
+            {houseActivityOptions.filter(({ id }) => !consultation || offered.includes(id)).map(({ id, label }) => (
               <span
                 key={id}
                 className={offered.includes(id) ? "is-offered" : "is-absent"}
@@ -88,7 +90,7 @@ export default function VisitorHouse({
                   (offered.includes(id) ? " : proposée" : " : non proposée")
                 }
               >
-                <ActivityIcon activity={id} size={25} />
+                <ActivityIcon activity={id} size={consultation ? 17 : 25} />
                 {label}
               </span>
             ))}
@@ -106,11 +108,20 @@ export default function VisitorHouse({
           >
             {!house.adaptable && (
               <>
-                <h2>Niveau de frayeur</h2>
-                <FearGauge
-                  value={house.referenceFear ?? house.fear}
-                  labels={fearLabels}
-                />
+                {consultation ? (
+                  <p className="visitor-fear-compact">
+                    <Ghost size={17} aria-hidden="true" />
+                    <span>Niveau de frayeur : <strong>{house.referenceFear ?? house.fear}/5</strong></span>
+                  </p>
+                ) : (
+                  <>
+                    <h2>Niveau de frayeur</h2>
+                    <FearGauge
+                      value={house.referenceFear ?? house.fear}
+                      labels={fearLabels}
+                    />
+                  </>
+                )}
               </>
             )}
             {house.adaptable && (
@@ -123,10 +134,12 @@ export default function VisitorHouse({
               </p>
             )}
           </section>
-          <section className="visitor-description">
-            <h2>À propos de la maison</h2>
-            <p>{house.rp || "Pas de description particulière."}</p>
-          </section>
+          {(!consultation || house.rp) && (
+            <section className="visitor-description">
+              <h2>À propos de la maison</h2>
+              <p>{house.rp || "Pas de description particulière."}</p>
+            </section>
+          )}
           <div
             className={
               "visitor-availability" +
@@ -183,24 +196,28 @@ export default function VisitorHouse({
                 Marquer comme visitée
               </button>
             )}
-          <section className="visitor-practical">
-            <h2>
-              <Info size={19} />
-              Infos pratiques
-            </h2>
-            <p>{house.practical || "Aucune indication particulière."}</p>
-          </section>
+          {(!consultation || house.practical) && (
+            <section className="visitor-practical">
+              <h2>
+                <Info size={19} />
+                Infos pratiques
+              </h2>
+              <p>{house.practical || "Aucune indication particulière."}</p>
+            </section>
+          )}
         </div>
-        <footer className="visitor-footer">
-          <button
-            type="button"
-            className="primary visitor-return"
-            onClick={onClose}
-          >
-            <MapPin size={23} />
-            Voir sur la carte
-          </button>
-        </footer>
+        {!consultation && (
+          <footer className="visitor-footer">
+            <button
+              type="button"
+              className="primary visitor-return"
+              onClick={onClose}
+            >
+              <X size={20} />
+              Fermer la fiche
+            </button>
+          </footer>
+        )}
       </section>
     </div>
   );
