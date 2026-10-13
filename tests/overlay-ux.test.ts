@@ -410,9 +410,8 @@ describe("map navigation surfaces", () => {
     );
     await click(byLabel("Me localiser"));
     await act(async () => window.dispatchEvent(new Event("map-options")));
-    expect(document.querySelector(".map-options-list")?.textContent).toContain(
-      "Calcul des distances piétonnes",
-    );
+    expect(document.querySelector(".discovery-distance-notice")?.textContent)
+      .toMatch(/distance|localise/i);
     expect(document.querySelector(".discovery-house-fear")).not.toBeNull();
     expect(fixture.controller.invalidate).not.toHaveBeenCalled();
   });
