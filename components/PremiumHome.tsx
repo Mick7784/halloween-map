@@ -12,7 +12,7 @@ import {
   Menu,
   X,
 } from "lucide-react";
-import PublicBrand from "./PublicBrand";
+import PublicBrand, { PumpkinMark } from "./PublicBrand";
 import PublicFooter from "./PublicFooter";
 import { api, AsyncButton, Notice, type PublicState } from "./common";
 import type { House as Participation, User } from "../lib/domain";
@@ -148,7 +148,7 @@ export default function PremiumHome({
               Halloween <span>Map</span>
             </h1>
             <div className="home-title-divider" aria-hidden="true">
-              <i /><span>✦</span><i />
+              <i /><span><PumpkinMark /></span><i />
             </div>
             <p className="home-explanation">
               La cartographie des maisons participantes
