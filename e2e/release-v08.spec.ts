@@ -830,7 +830,7 @@ test("anonymous countdown uses server time and becomes a thank-you after closure
   );
   await page.reload();
   await expect(
-    page.getByRole("heading", { name: /Merci d’avoir partagé/ }),
+    page.getByRole("heading", { name: /La saison est terminée/ }),
   ).toBeVisible();
   await expect(clock).toHaveCount(0);
   await expect(page.locator(".route-experience")).toHaveCount(0);
