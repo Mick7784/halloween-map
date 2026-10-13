@@ -1025,3 +1025,88 @@ div.account-overlay[class] {
     height: 60px;
   }
 }
+
+/* V0.8.9 — primary navigation cards versus indented, connected actions. */
+.account-group-toggle.account-row {
+  min-height: 46px;
+  background: #292235;
+  border: 1px solid #57475f;
+  border-radius: 10px;
+  font-weight: 650;
+  transition: background 200ms ease, border-color 200ms ease, box-shadow 200ms ease;
+}
+.account-group-toggle .account-row-icon { color: #eaa267; }
+.account-group-toggle:hover,
+.account-group-toggle[aria-expanded="true"] {
+  background: #32263f;
+  border-color: #a27ab9;
+}
+.account-group-toggle[aria-expanded="true"] { box-shadow: inset 3px 0 #e9a069; }
+.account-group-toggle > svg {
+  transition: transform 200ms ease;
+  transform-origin: center;
+}
+.account-group-content {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  padding: 0 0 0 14px;
+  margin-left: 18px;
+  border-left: 2px solid transparent;
+  overflow: hidden;
+  transition: grid-template-rows 250ms ease, opacity 180ms ease, border-color 230ms ease, padding 250ms ease;
+}
+.account-group-content.is-open {
+  grid-template-rows: 1fr;
+  opacity: 1;
+  padding-top: 5px;
+  padding-bottom: 5px;
+  border-color: #805f95;
+}
+.account-group-inner {
+  min-height: 0;
+  display: grid;
+  gap: 0;
+  overflow: hidden;
+}
+.account-group-content .account-row,
+.account-group-content .account-install .install-cta {
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid #302b3c;
+  border-radius: 0;
+  min-height: 44px;
+  padding: 7px 6px;
+  font-weight: 400;
+  transform: translateY(-7px);
+  transition: transform 230ms ease, background 150ms ease, color 150ms ease;
+}
+.account-group-content.is-open .account-row,
+.account-group-content.is-open .account-install .install-cta { transform: translateY(0); }
+.account-group-content .account-row:hover,
+.account-group-content .account-install .install-cta:hover {
+  background: #272335;
+  color: #f8eaf5;
+}
+.account-group-content .account-row-icon {
+  width: 23px;
+  height: 23px;
+  padding: 3px;
+  color: #bbaccb;
+  background: none;
+  border: 0;
+}
+.account-group-content .account-row-copy strong {
+  font-size: 12px;
+  font-weight: 500;
+  white-space: normal;
+}
+.account-group-content .account-danger { margin: 0; padding: 0; border: 0; }
+.account-group-content .account-danger .account-row { color: #ff94a0; }
+.account-group-content .account-row.danger .account-row-icon { color: #ff94a0; }
+@media (prefers-reduced-motion: reduce) {
+  .account-group-content,
+  .account-group-toggle,
+  .account-group-toggle > svg,
+  .account-group-content .account-row { transition: none !important; }
+}
