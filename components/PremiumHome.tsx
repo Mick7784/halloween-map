@@ -17,6 +17,7 @@ import PublicFooter from "./PublicFooter";
 import { api, AsyncButton, Notice, type PublicState } from "./common";
 import type { House as Participation, User } from "../lib/domain";
 import "./PremiumHome.css";
+import HomeAtmosphere from "./HomeAtmosphere";
 
 /**
  * V0.9: visual-only landing. Authorization, server clock, TEST/REAL opening,
@@ -142,7 +143,7 @@ export default function PremiumHome({
         </header>
 
         <main className="home-stage">
-          <div className="home-art" aria-hidden="true" />
+          <HomeAtmosphere />
           <section className="home-center" aria-labelledby="home-main-title">
             <h1 id="home-main-title">
               Halloween <span>Map</span>
