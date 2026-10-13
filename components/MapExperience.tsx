@@ -755,8 +755,8 @@ export default function MapExperience({
               <p className="discovery-help-text">
                 Décoration, bonbons et mise en scène sont les activités proposées.
                 Le fantôme indique le niveau de frayeur de 1 à 5 ; le symbole
-                d'entraide signifie que les habitants adaptent les frissons.
-                Le choix et l'ordre des visites restent libres.
+                d’entraide signifie que les habitants adaptent les frissons.
+                Le choix et l’ordre des visites restent libres.
               </p>
             )}
           </section>
