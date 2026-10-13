@@ -125,6 +125,21 @@
   background-position: center 55%;
   filter: saturate(1.13) contrast(1.035) brightness(1.2);
 }
+/* V0.9.1 staged depth planes.
+   During implementation, all three masks reuse the same existing image.
+   Before release, replace them with transparent planes cut from the CLEAN,
+   APPROVED scene. The composite mockup and unrelated castle image are not
+   acceptable substitutes for the final approved artwork. */
+.home-v09 .home-art-plane {
+  display: none;
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: url("/art/halloween-village-v2.png");
+  background-size: cover;
+  background-repeat: no-repeat;
+}
+
 .home-v09 .home-art::after {
   content: "";
   position: absolute;
@@ -595,6 +610,31 @@
     background:
       linear-gradient(180deg, #080b1c4f 0%, #0b0c1b56 29%, #0b0b1d60 70%, #090b1c99 100%),
       radial-gradient(ellipse at 50% 38%, #05091662, transparent 75%);
+  }
+  /* Only portrait mobile with a real sensor signal gets depth.
+     Desktop and unsupported/reduced-motion devices remain pure static art.
+     Using temporary soft image masks is a scaffold, NOT final asset fidelity. */
+  @media (orientation: portrait) and (prefers-reduced-motion: no-preference) {
+    .home-v09 .home-art[data-home-motion="active"] .home-art-plane {
+      display: block;
+      background-position: 88% center;
+      will-change: transform;
+    }
+    .home-v09 .home-art-plane--far {
+      -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 31%, transparent 58%);
+      mask-image: linear-gradient(to bottom, #000 0%, #000 31%, transparent 58%);
+      transform: translate3d(var(--depth-far-x, 0px), var(--depth-far-y, 0px), 0);
+    }
+    .home-v09 .home-art-plane--mid {
+      -webkit-mask-image: linear-gradient(to bottom, transparent 22%, #000 47%, #000 69%, transparent 88%);
+      mask-image: linear-gradient(to bottom, transparent 22%, #000 47%, #000 69%, transparent 88%);
+      transform: translate3d(var(--depth-mid-x, 0px), var(--depth-mid-y, 0px), 0);
+    }
+    .home-v09 .home-art-plane--near {
+      -webkit-mask-image: linear-gradient(to bottom, transparent 64%, #000 90%);
+      mask-image: linear-gradient(to bottom, transparent 64%, #000 90%);
+      transform: translate3d(var(--depth-near-x, 0px), var(--depth-near-y, 0px), 0);
+    }
   }
   .home-v09 .home-center {
     max-width: 410px;
