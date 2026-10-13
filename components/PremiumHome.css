@@ -123,16 +123,16 @@
   background-size: cover;
   background-repeat: no-repeat;
   background-position: center 55%;
-  filter: saturate(.84) contrast(1.035);
+  filter: saturate(1.07) contrast(1.035) brightness(1.1);
 }
 .home-v09 .home-art::after {
   content: "";
   position: absolute;
   inset: 0;
   background:
-    linear-gradient(90deg, #080c18a0 0%, #090e1a48 40%, #0d102051 100%),
-    linear-gradient(180deg, #090d19a5 0%, #10102248 24%, #090c19b8 75%, #090b17ed 100%),
-    radial-gradient(ellipse 58% 82% at 50% 42%, #0a0a19c9 0%, #0b0e1985 45%, transparent 100%);
+    linear-gradient(90deg, #080c1868 0%, #090e1a26 40%, #0d102032 100%),
+    linear-gradient(180deg, #090d195b 0%, #10102226 24%, #090c1987 75%, #090b17d8 100%),
+    radial-gradient(ellipse 58% 82% at 50% 42%, #0a0a1991 0%, #0b0e1958 45%, transparent 100%);
 }
 .home-v09 .home-center {
   position: relative;
@@ -585,12 +585,12 @@
     padding: 12px 15px 15px;
   }
   .home-v09 .home-art {
-    background-position: 59% center;
+    background-position: 88% center;
   }
   .home-v09 .home-art::after {
     background:
-      linear-gradient(180deg, #090a1c87 0%, #0b0c1ca1 29%, #0b0b1dca 70%, #0b0d1cdb 100%),
-      radial-gradient(ellipse at 50% 38%, #05091692, transparent 75%);
+      linear-gradient(180deg, #080b1c62 0%, #0b0c1b7b 29%, #0b0b1d93 70%, #090b1cc6 100%),
+      radial-gradient(ellipse at 50% 38%, #05091691, transparent 75%);
   }
   .home-v09 .home-center {
     max-width: 410px;
