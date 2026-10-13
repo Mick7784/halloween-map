@@ -76,17 +76,12 @@ async function arrange(
   await expect(page.locator(".home-art")).toBeVisible();
   await expect(page.locator(".home-art")).toHaveCSS(
     "background-image",
-    page.viewportSize()!.width >= 760
-      ? /home-reference-desktop-v1\.webp/
-      : /home-reference-v2\.webp/,
+    /halloween-village-v2\\.png/,
   );
   await page.locator(".home-art").evaluate(async () => {
     await document.fonts.ready;
     const img = new Image();
-    img.src =
-      innerWidth >= 760
-        ? "/art/home-reference-desktop-v1.webp"
-        : "/art/home-reference-v2.webp";
+    img.src = "/art/halloween-village-v2.png";
     await img.decode();
   });
 }
@@ -103,9 +98,9 @@ for (const size of [
   }) => {
     await page.setViewportSize(size);
     await arrange(page, "member");
-    await expect(page.locator("h1")).toContainText("La carte ouvre");
+    await expect(page.locator("h1")).toContainText("Halloween Map");
     await expect(page.locator(".home-explanation")).toHaveText(
-      "Découvrez les maisons participantes et préparez votre collecte d’Halloween.",
+      "La cartographie des maisons participantes et votre outil personnel pour la collecte des bonbons.",
     );
     await expect(page.locator(".home-houses")).toContainText("37 maisons");
     await expect(
@@ -370,10 +365,10 @@ test("configured date, ticking seconds, zero count and safe unconfigured state",
   );
   await page.reload();
   await expect(page.locator(".home-houses")).toContainText("0 maison");
-  await expect(page.locator("h1")).toContainText("Halloween se prépare");
+  await expect(page.locator(".home-state-card")).toContainText("La prochaine carte se prépare");
   await expect(page.locator(".home-clock")).toHaveCount(0);
   await page.goto("/map");
-  await expect(page.locator("h1")).toContainText("Halloween se prépare");
+  await expect(page.locator(".home-state-card")).toContainText("La prochaine carte se prépare");
   await expect(page.locator(".home-clock")).toHaveCount(0);
   await expect(
     page.getByRole("link", { name: "Mon compte", exact: true }).first(),
@@ -559,7 +554,7 @@ for (const width of [360, 390, 1440]) {
       if (width >= 760)
         await expect(page.locator(".home-art")).toHaveCSS(
           "background-size",
-          "contain",
+          "cover",
         );
       const bounds = await page.locator("h1 span").boundingBox();
       expect(bounds!.x).toBeGreaterThanOrEqual(0);
@@ -613,10 +608,12 @@ for (const width of [360, 390]) {
     const header = (await page.locator(".home-header").boundingBox())!;
     const heading = (await page.locator(".home-center h1").boundingBox())!;
     expect(heading.y).toBeGreaterThanOrEqual(header.y + header.height);
-    const login = page
-      .locator(".home-login")
+    await expect(page.locator(".home-login")).toHaveCount(0);
+    await expect(page.getByRole("link", { name: "Créer un compte", exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Se connecter", exact: true }).click();
+    await expect(page.getByRole("dialog", { name: "Se connecter" })).toBeVisible();
+    const login = page.locator(".home-login")
       .getByRole("button", { name: "Se connecter", exact: true });
-    await login.scrollIntoViewIfNeeded();
     await expect(login).toBeInViewport();
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth),
