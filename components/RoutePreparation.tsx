@@ -53,21 +53,23 @@ export default function RoutePreparation({
   const [locating, setLocating] = useState(false),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
-    [excluded, setExcluded] = useState<string[]>([]),
-    [windowStart, setWindowStart] = useState(() =>
-      DateTime.now()
-        .setZone(state.instance!.timezone)
-        .plus({ minutes: 2 })
-        .toFormat("yyyy-MM-dd'T'HH:mm"),
-    ),
+    [windowStart, setWindowStart] = useState(() => {
+      const zone = state.instance!.timezone;
+      const now = DateTime.now().setZone(zone).plus({ minutes: 2 });
+      const opens = DateTime.fromISO(state.season!.opens_at).setZone(zone);
+      return (!state.season!.is_test && now < opens ? opens : now)
+        .toFormat("yyyy-MM-dd'T'HH:mm");
+    }),
     [windowEnd, setWindowEnd] = useState(() => {
-      const now = DateTime.now().setZone(state.instance!.timezone);
+      const zone = state.instance!.timezone;
+      const now = DateTime.now().setZone(zone).plus({ minutes: 2 });
+      const opens = DateTime.fromISO(state.season!.opens_at).setZone(zone);
+      const start = !state.season!.is_test && now < opens ? opens : now;
       const limit = DateTime.fromISO(
         state.season!.route_end_at ?? state.season!.closes_at,
-      ).setZone(state.instance!.timezone);
-      return (
-        now.plus({ hours: 2 }) < limit ? now.plus({ hours: 2 }) : limit
-      ).toFormat("yyyy-MM-dd'T'HH:mm");
+      ).setZone(zone);
+      return (start.plus({ hours: 2 }) < limit ? start.plus({ hours: 2 }) : limit)
+        .toFormat("yyyy-MM-dd'T'HH:mm");
     }),
     [acceptedVersion, setAcceptedVersion] = useState<string | null>(null),
     [guidelinesOpen, setGuidelinesOpen] = useState(false);
@@ -83,24 +85,15 @@ export default function RoutePreparation({
         a.name.localeCompare(b.name, "fr"),
     );
   }, [state.routeCandidates, state.houses, origin]);
-  const eligible = selectableHouses(
-    candidates,
-    maxFear,
-    activities,
-    +DateTime.fromISO(windowStart, { zone }),
-    +DateTime.fromISO(windowEnd, { zone }),
+  const eligible = useMemo(
+    () => selectableHouses(
+      candidates, maxFear, activities,
+      +DateTime.fromISO(windowStart, { zone }),
+      +DateTime.fromISO(windowEnd, { zone }),
+    ),
+    [candidates, maxFear, activities, windowStart, windowEnd, zone],
   );
-  const chosen = useMemo(
-    () =>
-      selectableHouses(
-        candidates,
-        maxFear,
-        activities,
-        +DateTime.fromISO(windowStart, { zone }),
-        +DateTime.fromISO(windowEnd, { zone }),
-      ).filter((h) => !excluded.includes(h.id)),
-    [candidates, maxFear, activities, windowStart, windowEnd, zone, excluded],
-  );
+  const chosen = useMemo(() => eligible.slice(0, 30), [eligible]);
   useEffect(() => {
     onSelection?.(chosen);
   }, [chosen, onSelection]);
@@ -125,6 +118,20 @@ export default function RoutePreparation({
     } finally {
       setLocating(false);
     }
+  }
+  function updateHours() {
+    if (!form.current) return;
+    const fields = values(form.current);
+    if (!/^\\d{2}:\\d{2}$/.test(fields.start) ||
+        !/^\\d{2}:\\d{2}$/.test(fields.end)) return;
+    const day = windowStart.slice(0, 10);
+    const start = DateTime.fromISO(`${day}T${fields.start}`, { zone });
+    let end = DateTime.fromISO(`${day}T${fields.end}`, { zone });
+    if (!start.isValid || !end.isValid) return;
+    if (end <= start) end = end.plus({ days: 1 });
+    setWindowStart(start.toFormat("yyyy-MM-dd'T'HH:mm"));
+    setWindowEnd(end.toFormat("yyyy-MM-dd'T'HH:mm"));
+    onInvalidate();
   }
   return (
     <div className="route-overlay route-preparation-overlay">
@@ -165,15 +172,14 @@ export default function RoutePreparation({
               return;
             setBusy(true);
             setError("");
-            const v = values(e.currentTarget);
             try {
               await onCalculate({
-                start: DateTime.fromISO(v.start, { zone }).toUTC().toISO()!,
-                end: DateTime.fromISO(v.end, { zone }).toUTC().toISO()!,
+                start: DateTime.fromISO(windowStart, { zone }).toUTC().toISO()!,
+                end: DateTime.fromISO(windowEnd, { zone }).toUTC().toISO()!,
                 origin: { latitude: origin[1], longitude: origin[0] },
                 activities,
                 maxFear,
-                excludedHouseIds: excluded,
+                excludedHouseIds: [],
                 selectedHouseIds: chosen.map((house) => house.id),
                 acceptance: {
                   mode: "GUIDELINES_ONLY",
@@ -191,8 +197,7 @@ export default function RoutePreparation({
           <div className="route-preparation-scroll">
             <h1 id="route-preparation-title">Préparer ma collecte</h1>
             <p className="route-subtitle">
-              Choisissez vos maisons et explorez-les dans l’ordre qui vous
-              plaît.
+              Fixez votre créneau puis explorez les maisons librement, sans itinéraire.
             </p>
             <fieldset disabled={busy || locating}>
               <legend>
@@ -223,34 +228,35 @@ export default function RoutePreparation({
               </p>
             )}
             <div className="route-times">
-              <div>
-                <Clock3 size={17} />
+              <p className="route-times-day">
+                <Clock3 size={16} /> Horaires de collecte
+                <span>
+                  {state.season!.is_test
+                    ? "Saison TEST"
+                    : "31 octobre " + state.season!.year}
+                </span>
+              </p>
+              <div className="route-times-fields">
                 <Field
                   label="Heure de début"
                   name="start"
-                  type="datetime-local"
-                  value={windowStart}
+                  type="time"
+                  value={DateTime.fromISO(windowStart, { zone }).toFormat("HH:mm")}
                   readOnly={busy || locating}
-                  onValueChange={() => {
-                    setWindowStart(values(form.current!).start);
-                    onInvalidate();
-                  }}
+                  onValueChange={updateHours}
                 />
-              </div>
-              <div>
-                <Clock3 size={17} />
                 <Field
                   label="Heure de fin"
                   name="end"
-                  type="datetime-local"
-                  value={windowEnd}
+                  type="time"
+                  value={DateTime.fromISO(windowEnd, { zone }).toFormat("HH:mm")}
                   readOnly={busy || locating}
-                  onValueChange={() => {
-                    setWindowEnd(values(form.current!).end);
-                    onInvalidate();
-                  }}
+                  onValueChange={updateHours}
                 />
               </div>
+              {windowEnd.slice(0, 10) !== windowStart.slice(0, 10) && (
+                <small className="route-status">Fin le lendemain.</small>
+              )}
             </div>
             <fieldset className="route-fear" disabled={busy || locating}>
               <legend>
@@ -288,44 +294,24 @@ export default function RoutePreparation({
                 inférieur.
               </p>
             </fieldset>
-            <fieldset
-              className="collection-selection"
-              disabled={busy || locating}
-            >
-              <legend>Ma sélection · {chosen.length} maisons</legend>
-              <p className="route-status">
-                Sélection libre, sans ordre de visite. Les maisons qui
-                s’adaptent aux visiteurs sont incluses.
+            <section className="collection-count" aria-live="polite">
+              <span className="collection-count-icon"><MapPin size={21} /></span>
+              <span>
+                <strong>
+                  Votre collecte inclut {chosen.length} {chosen.length === 1 ? "maison" : "maisons"}
+                </strong>
+                <small>
+                  {eligible.length > 30
+                    ? `30 maisons retenues sur ${eligible.length} compatibles · visites libres`
+                    : "Visites libres, sans ordre imposé"}
+                </small>
+              </span>
+            </section>
+            {!eligible.length && (
+              <p className="route-status" role="status">
+                Aucune maison compatible avec ces horaires et ce niveau de frayeur.
               </p>
-              {eligible.map((h) => (
-                <label className="collection-choice" key={h.id}>
-                  <input
-                    type="checkbox"
-                    checked={!excluded.includes(h.id)}
-                    onChange={(e) => {
-                      setExcluded((ids) =>
-                        e.target.checked
-                          ? ids.filter((id) => id !== h.id)
-                          : [...ids, h.id],
-                      );
-                      onInvalidate();
-                    }}
-                  />
-                  <span>
-                    <strong>{h.name}</strong>
-                    <small>{h.address}</small>
-                  </span>
-                </label>
-              ))}
-              {chosen.length > 30 && (
-                <p role="alert">
-                  Choisissez au maximum 30 maisons pour cette collecte.
-                </p>
-              )}
-              {!eligible.length && (
-                <p>Aucune maison compatible avec ces horaires et filtres.</p>
-              )}
-            </fieldset>
+            )}
             <Notice
               error={
                 error ||
