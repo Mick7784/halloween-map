@@ -329,12 +329,6 @@ export default function RouteSheet({
             );
           })}
         </ul>
-        {phase === "calculated" && result.message && (
-          <p className="route-status">{result.message}</p>
-        )}
-        {phase === "calculated" && (
-          <p className="route-disclaimer">{result.disclaimer}</p>
-        )}
       </div>
       )}
       {phase === "calculated" && position !== "collapsed" && (
