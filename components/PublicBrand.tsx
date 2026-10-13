@@ -1,7 +1,7 @@
 import Link from "next/link";
 import ManorMark from "./ManorMark";
 
-function PumpkinMark() {
+export function PumpkinMark() {
   return (
     <svg viewBox="0 0 48 48" aria-hidden="true" focusable="false">
       <path d="M25 11C23 7 25 5 29 4" fill="none" stroke="#f3b06e" strokeWidth="3" strokeLinecap="round" />
