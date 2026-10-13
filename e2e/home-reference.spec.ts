@@ -76,12 +76,12 @@ async function arrange(
   await expect(page.locator(".home-art")).toBeVisible();
   await expect(page.locator(".home-art")).toHaveCSS(
     "background-image",
-    /halloween-village-v2\.png/,
+    /home-v091-shared\.webp/,
   );
   await page.locator(".home-art").evaluate(async () => {
     await document.fonts.ready;
     const img = new Image();
-    img.src = "/art/halloween-village-v2.png";
+    img.src = "/art/home-v091-shared.webp";
     await img.decode();
   });
 }

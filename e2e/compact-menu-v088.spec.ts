@@ -80,7 +80,11 @@ for (const size of [
       const footer = (await page.locator(".home-signature").boundingBox())!;
       expect(stage.y).toBeGreaterThanOrEqual(header.y + header.height);
       expect(footer.y).toBeGreaterThanOrEqual(stage.y + stage.height - 1);
-      expect(art).toEqual(stage);
+      // One scene spans the header and stage, as in the mobile reference;
+      // their content stays in separate rows and the footer stays outside.
+      expect(art).toEqual((await page.locator(".home-scene").boundingBox())!);
+      expect(art.y).toEqual(header.y);
+      expect(art.y + art.height).toEqual(stage.y + stage.height);
       expect(footer.y + footer.height).toBeLessThanOrEqual(size.height + 1);
       await expect(
         page
@@ -89,7 +93,7 @@ for (const size of [
       ).toBeVisible();
       await expect(page.locator(".home-art")).toHaveCSS(
         "background-image",
-        /halloween-village-v2/,
+        /home-v091-shared/,
       );
       await expect(page.locator(".home-art")).toHaveCSS(
         "background-size",

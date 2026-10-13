@@ -1,7 +1,7 @@
 import { defineConfig } from "@playwright/test";
 export default defineConfig({
   testDir: "./e2e",
-  testMatch: "home-reference.spec.ts",
+  testMatch: ["home-reference.spec.ts", "home-v090.spec.ts", "home-v091.spec.ts", "compact-menu-v088.spec.ts"],
   workers: 1,
   timeout: 30000,
   reporter: "list",

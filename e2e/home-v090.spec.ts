@@ -55,7 +55,7 @@ for (const size of [
     await expect(header.locator("button")).toHaveCount(1);
     await expect(header.locator("a")).toHaveCount(1);
     await expect(page.locator(".home-art")).toHaveCSS("background-size", "cover");
-    await expect(page.locator(".home-art")).toHaveCSS("background-image", /halloween-village-v2\.png/);
+    await expect(page.locator(".home-art")).toHaveCSS("background-image", /home-v091-shared\.webp/);
     await expect(page.locator(".home-center h1")).toHaveText("Halloween Map");
     await expect(page.locator(".home-clock > div")).toHaveCount(4);
     const clockTops = await page.locator(".home-clock > div").evaluateAll((els) =>
@@ -72,7 +72,7 @@ for (const size of [
     await expect(page.getByRole("button", { name: "Se connecter", exact: true })).toBeVisible();
     await expect(page.getByRole("link", { name: "Créer un compte", exact: true })).toBeVisible();
     await expect(page.getByRole("link", { name: /Une création de DomotiK Studio/ })).toBeVisible();
-    await expect(page.locator(".home-credit img")).toHaveAttribute("src", "/art/dk-footer-v09.webp");
+    await expect(page.locator(".home-credit img")).toHaveAttribute("src", "/art/dk-original.png");
     await expect(page.getByRole("contentinfo").getByRole("link", { name: "Mentions légales" })).toBeVisible();
     await expect(page.locator(".home-v09")).not.toContainText(/rassemblement organisé|itinéraire imposé|soirée organisée/i);
     const pageSize = await page.evaluate(() => ({

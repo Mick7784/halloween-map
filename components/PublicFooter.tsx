@@ -29,9 +29,9 @@ export default function PublicFooter({
           aria-label="Une création de DomotiK Studio — à propos"
         >
           <Image
-            src="/art/dk-footer-v09.webp"
-            width={123}
-            height={90}
+            src="/art/dk-original.png"
+            width={800}
+            height={800}
             alt=""
             aria-hidden="true"
             unoptimized
