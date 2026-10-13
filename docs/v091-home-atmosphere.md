@@ -31,6 +31,21 @@ Cette maquette montre :
 
 Toutes les couches partagent la **même géométrie et le même point de référence** (dimensions, `background-size: cover`, cadrage harmonisé desktop/mobile). Prévoir une légère marge d’overscan pour éviter les bords visibles aux inclinaisons extrêmes. Compression adaptée aux téléphones ; ne pas expédier 4 images 2–3 Mo chacune.
 
+## Pipeline technique des images (préparé, livraison graphique en attente)
+
+Le script `node scripts/v091-build-layers.mjs` attend **quatre fichiers PNG** à placer dans `artwork/v091/` :
+
+- `scene-master.png` : **décor uniquement**, sans éléments d'interface ; export haute résolution de la scène approuvée ;
+- `plane-far.png` : découpe alpha du décor lointain exportée depuis ce **même fichier source** ;
+- `plane-mid.png` : découpe alpha des bâtiments intermédiaires du même fichier ;
+- `plane-near.png` : éléments de premier plan (citrouille/branches/lanternes) du même fichier.
+
+Le script vérifie les dimensions, le caractère réellement transparent des trois plans, ainsi qu'un échantillon de leurs pixels colorés face au master. Il refuse un plan régénéré indépendamment, un plan opaque plein cadre ou une image trop petite. Il génère `public/art/home-v091-master.webp` et les trois `home-v091-{far,mid,near}.webp` compressés.
+
+**Garde-fou provisoire** : `components/HomeAtmosphere.tsx` garde `APPROVED_DEPTH_ASSETS_READY = false`. Les événements capteurs et leurs tests peuvent être éprouvés, **mais les trois couches provisoires ne sont pas rendues**. Une fois les quatre nouveaux fichiers produits et validés visuellement, modifier les URL CSS pour utiliser ces assets, remplacer les masques CSS temporaires par la transparence native, puis activer cet indicateur. En attendant, l'ancien décor V0.9 demeure le fallback et aucune release n'est autorisée.
+
+Le master propre approuvé **n'existe pas encore dans le dépôt**. La capture de la maquette est composée de l'image et de textes/boutons intégrés, de sorte qu'une extraction brute laisse des traces ; une restauration visuellement vérifiée ou un véritable master d'origine est indispensable. Le brouillon de PR n'est pas une promesse de fidélité acquise.
+
 ## Parallaxe : règles non négociables
 
 - **Desktop : 100 % statique** ; ni suivi souris, ni animation automatique du décor, ni abonnement aux capteurs.
