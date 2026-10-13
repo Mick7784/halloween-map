@@ -1077,7 +1077,7 @@ export async function discoveryDistances(
   if (houses.length > 200)
     throw new HttpError(422, "Trop de maisons : affinez les filtres pour consulter les distances.");
   if (!houses.length) return { distances: {} };
-  const distances = await createWalkingRouter().distancesFrom(
+  const distances = await createWalkingRouter().distancesFrom!(
     origin,
     houses.map((h) => ({ latitude: h.latitude, longitude: h.longitude })),
   );
