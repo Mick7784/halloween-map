@@ -42,7 +42,7 @@ import AdminExistingPage from "./AdminExistingPage";
 import { seasonFinished } from "../lib/domain";
 import { houseAvailability } from "../lib/house-availability";
 import "./AdminBeta.css";
-import ManorMark from "./ManorMark";
+import { PumpkinMark } from "./PublicBrand";
 import MessageTemplates from "./MessageTemplates";
 import RefusalPreview from "./RefusalPreview";
 import {
@@ -574,7 +574,7 @@ export default function Admin({
           rel="noreferrer"
         >
           <span className="admin-brand-mark">
-            <ManorMark />
+            <PumpkinMark />
           </span>
           <span>
             Halloween Map<small>Administration</small>

@@ -34,6 +34,7 @@ export default function PremiumHome({
   onRetry,
   onOpenMenu,
   menuOpen,
+  motionAllowed = true,
 }: {
   state: PublicState;
   user: User | null;
@@ -44,6 +45,7 @@ export default function PremiumHome({
   onRetry: () => Promise<void>;
   onOpenMenu: () => void;
   menuOpen: boolean;
+  motionAllowed?: boolean;
 }) {
   const [participation, setParticipation] = useState<Participation | null>(null);
   const [loginOpen, setLoginOpen] = useState(false);
@@ -129,7 +131,7 @@ export default function PremiumHome({
     }>
       <div className="home-shell">
         <div className="home-scene">
-        <HomeAtmosphere />
+        <HomeAtmosphere motionAllowed={motionAllowed && !loginOpen} />
         <header className="home-header">
           <PublicBrand compact />
           <button

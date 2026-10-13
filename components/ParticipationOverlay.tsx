@@ -14,7 +14,7 @@ import type { PublicState } from "./common";
 import { api, Notice } from "./common";
 import { participationStatus } from "../lib/participation-settings";
 import ParticipationForm from "./ParticipationForm";
-import ManorMark from "./ManorMark";
+import { PumpkinMark } from "./PublicBrand";
 import ActivityIcon from "./ActivityIcon";
 import "./ParticipationOverlay.css";
 type Confirmation = "candy" | "end" | "delete" | null;
@@ -114,7 +114,7 @@ export default function ParticipationOverlay({
         {!embedded && (
           <header className="participation-header" inert={!!confirmation}>
             <span className="participation-brand">
-              <ManorMark />
+              <PumpkinMark />
             </span>
             <div>
               <h1 id="participation-title">

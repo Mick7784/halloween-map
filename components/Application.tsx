@@ -367,6 +367,7 @@ export default function Application({
         error={error}
         onRetry={refresh}
         menuOpen={menu || accountVisible}
+        motionAllowed={view === "home" && !menu && !accountVisible}
         onOpenMenu={() => {
           accountOrigin.current = document.activeElement as HTMLElement;
           setMenu(true);

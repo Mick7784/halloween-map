@@ -24,7 +24,7 @@ const clamp = (value: number, min: number, max: number) =>
 
 type Tilt = { x: number; y: number };
 
-export default function HomeAtmosphere() {
+export default function HomeAtmosphere({ motionAllowed = true }: { motionAllowed?: boolean }) {
   const container = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -48,6 +48,7 @@ export default function HomeAtmosphere() {
     let loadStarted = false;
 
     const enabled = () =>
+      motionAllowed &&
       sensorAvailable &&
       mobile.matches &&
       !reducedMotion.matches &&
@@ -165,7 +166,7 @@ export default function HomeAtmosphere() {
       art.removeAttribute("data-home-sensor");
       reset();
     };
-  }, []);
+  }, [motionAllowed]);
 
   return (
     <div className="home-art" aria-hidden="true" ref={container} data-depth-assets="ready">

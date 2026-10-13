@@ -1,5 +1,5 @@
 /* Only immutable static resources. Never persist HTML pages, API, tiles or user data. */
-const CACHE = "halloween-static-V0.8.8";
+const CACHE = "halloween-static-V0.9";
 const FALLBACK = "/offline.html";
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -9,6 +9,8 @@ self.addEventListener("install", (event) => {
         cache.addAll([
           FALLBACK,
           "/favicon.svg",
+          "/favicon-16.png",
+          "/favicon-32.png",
           "/pwa/icon-192.png",
           "/pwa/icon-512.png",
         ]),
@@ -42,6 +44,8 @@ self.addEventListener("fetch", (event) => {
     url.pathname.startsWith("/_next/static/") ||
     /^\/pwa\/[a-z0-9-]+\.png$/.test(url.pathname) ||
     url.pathname === "/favicon.svg" ||
+    url.pathname === "/favicon-16.png" ||
+    url.pathname === "/favicon-32.png" ||
     url.pathname === FALLBACK;
   if (!staticAsset) return;
   event.respondWith(

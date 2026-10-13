@@ -1,5 +1,4 @@
 import Link from "next/link";
-import ManorMark from "./ManorMark";
 
 export function PumpkinMark() {
   return (
@@ -30,10 +29,10 @@ export default function PublicBrand({
       aria-label="Halloween — accueil"
     >
       <span className={compact ? "home-brand-mark" : "brand-mark"}>
-        {compact ? <PumpkinMark /> : <ManorMark />}
+        <PumpkinMark />
       </span>
       <span>
-        <strong>{compact ? <>Halloween <span>Map</span></> : "Halloween Map"}</strong>
+        <strong>Halloween <span>Map</span></strong>
         <small>CARTE DES MAISONS</small>
         {!compact && <em>{territory ?? "Une commune plus vivante"}</em>}
       </span>

@@ -337,7 +337,9 @@ for (const width of [390, 1440]) {
     ).toHaveCount(0);
     await expect(menu).toBeVisible();
     await menu.evaluate(async (el) => {
-      await Promise.all(
+      // Expanding a group may cancel a hover/focus transition. Wait for both
+      // completed and cancelled animations before measuring the visible menu.
+      await Promise.allSettled(
         el.getAnimations({ subtree: true }).map((a) => a.finished),
       );
     });
