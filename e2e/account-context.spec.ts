@@ -470,19 +470,22 @@ test("map canvas, filters and active route remain mounted across account", async
       exact: true,
     })
     .click();
-  const resultBefore = await page.locator(".route-sheet").textContent();
+  const stableSheetText = () =>
+    page.locator(".route-sheet").evaluate((element) => {
+      const snapshot = element.cloneNode(true) as HTMLElement;
+      snapshot.querySelector('[aria-label="Temps écoulé"] strong')
+        ?.replaceChildren("[chronomètre]");
+      return snapshot.textContent;
+    });
+  const resultBefore = await stableSheetText();
   const routeBefore = await read();
   await page.getByRole("link", { name: "Mon compte", exact: true }).click();
   await expect(page.locator(".account-dialog")).toBeVisible();
   await page.getByRole("button", { name: "Fermer Mon compte" }).click();
   await expect(page.locator(".account-dialog")).toHaveCount(0);
   await expect(canvas).toHaveAttribute("data-preserved", "yes");
-  // The live chronometer legitimately advances while the account overlay is open.
-  // Compare all other visible collection details without freezing real time.
-  const stableSheetText = (value: string | null) =>
-    (value ?? "").replace(/\b\d{1,2}:\d{2}\b/g, "<chronometer>");
-  expect(stableSheetText(await page.locator(".route-sheet").textContent()))
-    .toBe(stableSheetText(resultBefore));
+  // Verify every other field while the real elapsed-time value keeps updating.
+  expect(await stableSheetText()).toBe(resultBefore);
   expect((await read()).camera).toEqual(routeBefore.camera);
   expect((await read()).parameters).toEqual(routeBefore.parameters);
   await expect(page).toHaveURL(/\/map$/);
