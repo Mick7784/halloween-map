@@ -17,6 +17,7 @@ import {
   ChevronRight,
   Ghost,
   HelpCircle,
+  Compass,
 } from "lucide-react";
 import type { User, Activity } from "../lib/domain";
 import { locateOrigin } from "../lib/geolocation";
@@ -31,6 +32,8 @@ import RoutePreparation from "./RoutePreparation";
 import RouteSheet from "./RouteSheet";
 import VisitorHouse from "./VisitorHouse";
 import FloatingWindow from "./FloatingWindow";
+import useMapOrientation from "./useMapOrientation";
+import "./MapOrientation.css";
 import ActivityIcon from "./ActivityIcon";
 import FearBadge, { AdaptedFearIcon } from "./FearBadge";
 import "./MapExperience.css";
@@ -225,6 +228,11 @@ export default function MapExperience({
           clock - consultationFix.timestamp <= 15000
         ? consultationFix.point
         : null;
+  const orientationFix = focused
+    ? controller.gpsState === "tracking" && controller.accuracy !== null && controller.accuracy <= 50 &&
+      !!controller.fixTimestamp && clock - controller.fixTimestamp <= 15000
+    : !!consultationFix && consultationFix.accuracy <= 50 && clock - consultationFix.timestamp <= 15000;
+  const orientation = useMapOrientation(!!orientationFix && !blocked && !optionsOpen && !pick);
   // A recorded location remains usable for the distance estimate after
   // the short freshness window needed by live nearest-house highlighting.
   const distancePoint = proximityPoint ??
@@ -575,6 +583,7 @@ export default function MapExperience({
                 ? controller.currentPosition
                 : (consultationFix?.point ?? null)
             }
+            heading={orientation.reading}
             recenterTarget={
               focused ? controller.recenterTarget : consultationFix
             }
@@ -633,6 +642,14 @@ export default function MapExperience({
               </p>
             )}
           </>
+        )}
+        {orientation.offer && (
+          <button className="map-orientation-offer" type="button" onClick={orientation.explain}>
+            <Compass size={18} aria-hidden="true" /> Afficher l’orientation
+          </button>
+        )}
+        {orientation.reading && !focused && (
+          <p className="map-orientation-note">Orientation magnétique approximative</p>
         )}
         {!focused && !pick && optionsOpen && (
           <section
@@ -1180,6 +1197,20 @@ export default function MapExperience({
             </div>
           </section>
         </div>
+      )}
+      {orientation.dialog && (
+        <FloatingWindow title="Orientation du téléphone" className="map-orientation-dialog" onClose={orientation.decline}>
+          <p>Vous pouvez afficher une flèche et un cône autour de votre position GPS.</p>
+          <p>Le navigateur peut demander l’accès aux capteurs du téléphone. Le cap magnétique reste approximatif et peut être perturbé par des objets métalliques. Il n’indique aucun chemin ni destination.</p>
+          <p>La carte reste fixe. Vous pouvez refuser et conserver le marqueur GPS classique. Aucune mesure d’orientation n’est envoyée au serveur ni enregistrée.</p>
+          <p>Si aucune mesure utilisable n’est disponible, le marqueur GPS reste inchangé.</p>
+          <div className="map-orientation-actions">
+            <button type="button" onClick={orientation.decline}>Conserver le marqueur GPS</button>
+            <button type="button" className="primary" disabled={orientation.pending} onClick={() => void orientation.accept()}>
+              {orientation.pending ? "Demande en cours…" : "Autoriser les capteurs"}
+            </button>
+          </div>
+        </FloatingWindow>
       )}
     </main>
   );

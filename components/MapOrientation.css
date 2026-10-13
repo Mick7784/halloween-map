@@ -1,0 +1,47 @@
+.route-experience .map-orientation-offer {
+  position: absolute;
+  z-index: 8;
+  left: max(12px, env(safe-area-inset-left));
+  bottom: calc(72px + env(safe-area-inset-bottom));
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  font-size: 13px;
+}
+.route-experience.is-focused .map-orientation-offer {
+  left: max(64px, calc(env(safe-area-inset-left) + 64px));
+  bottom: calc(var(--route-sheet-height, 78px) + 14px + env(safe-area-inset-bottom));
+}
+.map-orientation-note {
+  position: absolute;
+  left: max(12px, env(safe-area-inset-left));
+  bottom: calc(72px + env(safe-area-inset-bottom));
+  margin: 0;
+  padding: 6px 10px;
+  border: 1px solid var(--hm-line);
+  border-radius: 10px;
+  background: var(--hm-surface);
+  color: var(--hm-muted);
+  font-size: 12px;
+  pointer-events: none;
+}
+.map-orientation-dialog .floating-scroll { padding: 20px; }
+.map-orientation-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 20px; }
+.route-experience .current-position-direction {
+  position: absolute;
+  width: 100px;
+  height: 100px;
+  left: 50%;
+  top: 50%;
+  margin: -50px 0 0 -50px;
+  pointer-events: none;
+  transform: rotate(var(--map-heading, 0deg));
+  /* Actual orientation only; no transition, including reduced-motion. */
+}
+.current-position-direction[hidden] { display: none; }
+.current-position-direction svg { display: block; width: 100%; height: 100%; overflow: visible; }
+.current-position-direction .direction-cone { fill: #58a6ff30; stroke: #99ccff80; stroke-width: 1; }
+.current-position-direction .direction-arrow { fill: #a9d6ff; stroke: #10233b; stroke-width: 1.5; }
+.route-experience .current-position-marker[data-orientation="magnetic"] { transition: none; }

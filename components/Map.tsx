@@ -5,6 +5,22 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import type { PublicHouse } from "./common";
 import { frameRoute, mapPadding } from "../lib/map-framing";
 import type { MapCamera, SheetPosition } from "../lib/active-route";
+import { normalizeDegrees, type CompassReading } from "../lib/map-orientation";
+function paintDirection(point: HTMLElement, reading: CompassReading | null, bearing: number) {
+  const direction = point.querySelector<HTMLElement>(".current-position-direction");
+  if (!direction) return;
+  direction.hidden = !reading;
+  if (!reading) {
+    point.removeAttribute("data-orientation");
+    point.removeAttribute("aria-description");
+    point.removeAttribute("title");
+    return;
+  }
+  point.dataset.orientation = "magnetic";
+  point.setAttribute("aria-description", "Orientation magnétique approximative du téléphone");
+  point.title = "Orientation magnétique approximative · aucun guidage";
+  direction.style.setProperty("--map-heading", `${normalizeDegrees(reading.degrees - bearing)}deg`);
+}
 const houseSVG =
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 32" width="24" height="32"><path d="M12 31C10 27 2 18 2 11a10 10 0 0 1 20 0c0 7-8 16-10 20Z" fill="currentColor"/><circle cx="12" cy="11" r="3" fill="#211723"/></svg>';
 export default function MapView({
@@ -29,6 +45,7 @@ export default function MapView({
   visitedIds = [],
   nearestHouseId,
   collectionActive = false,
+  heading = null,
 }: {
   houses: (PublicHouse & { status?: string })[];
   center: [number, number];
@@ -51,6 +68,7 @@ export default function MapView({
   visitedIds?: string[];
   nearestHouseId?: string | null;
   collectionActive?: boolean;
+  heading?: CompassReading | null;
 }) {
   const el = useRef<HTMLDivElement>(null),
     map = useRef<MapType | null>(null),
@@ -73,6 +91,12 @@ export default function MapView({
   const restoredCamera = useRef(!!initialCamera);
   const livePosition = useRef(currentPosition);
   const liveMarker = useRef<import("maplibre-gl").Marker | null>(null);
+  const liveHeading = useRef(heading);
+  useEffect(() => {
+    liveHeading.current = heading;
+    if (liveMarker.current && map.current)
+      paintDirection(liveMarker.current.getElement(), heading, map.current.getBearing());
+  }, [heading]);
   const hasCurrentPosition = !!currentPosition;
   useEffect(() => {
     livePosition.current = currentPosition;
@@ -250,6 +274,7 @@ export default function MapView({
     const g = map.current;
     if (!loaded || !g || !hasCurrentPosition) return;
     let cancelled = false;
+    let redraw: (() => void) | undefined;
     let marker: import("maplibre-gl").Marker | undefined;
     import("maplibre-gl").then((m) => {
       if (cancelled || !livePosition.current) return;
@@ -257,13 +282,23 @@ export default function MapView({
       point.className = "current-position-marker";
       point.setAttribute("role", "img");
       point.setAttribute("aria-label", "Position GPS actuelle");
+      const direction = document.createElement("span");
+      direction.className = "current-position-direction";
+      direction.hidden = true;
+      direction.setAttribute("aria-hidden", "true");
+      direction.innerHTML = '<svg viewBox="0 0 100 100"><path class="direction-cone" d="M50 50 23 3Q50 -10 77 3Z"/><path class="direction-arrow" d="m50 27 8 18-8-4-8 4Z"/></svg>';
+      point.append(direction);
       marker = new m.Marker({ element: point })
         .setLngLat(livePosition.current)
         .addTo(g);
       liveMarker.current = marker;
+      redraw = () => paintDirection(point, liveHeading.current, g.getBearing());
+      redraw();
+      g.on("rotate", redraw); // Compensate manual map rotation; never change the camera.
     });
     return () => {
       cancelled = true;
+      if (redraw) g.off("rotate", redraw);
       marker?.remove();
       liveMarker.current = null;
     };
