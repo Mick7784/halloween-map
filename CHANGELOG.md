@@ -1,5 +1,17 @@
 # Changelog
 
+## V0.9
+
+- Refonte visuelle complète de l’accueil, inspirée de la maquette desktop/mobile validée : composition immersive cinématique, village nocturne en plein cadre, typographie éditoriale et palette bleu nuit, ambre et violet ; comptage central en verre fumé et fond désormais en `cover`, sans bandes vides.
+- Header identique desktop/mobile : marque Halloween Map et **un seul bouton Menu utilisateur**, sans barre de navigation additionnelle.
+- Mobile prioritaire : présentation sur un seul écran aux tailles courantes, réduction puis suppression de la bande d'informations lorsque la hauteur est insuffisante ; footer et actions essentielles jamais retirés.
+- Trois indications des possibilités de l’application : simples **informations statiques**, sans lien, bouton, chevron ou action. Carte des maisons, activités et collecte personnelle.
+- Accueil déconnecté : accès immédiat **Se connecter** (formulaire existant ouvert à la demande) et **Créer un compte**. Connexion, inscription, récupération, session et permissions inchangées.
+- Attente, préparation, saison réelle ouverte, TEST historique, clôture : tous les états existants et la source temporelle serveur sont conservés ; le décompte demeure dynamique et aucune ouverture fictive TEST n’est affichée.
+- Footer allégé, mentions et soutien existants conservés ; attribution « Une création de DomotiK Studio » avec le véritable logo DK compressé et volontairement discret ; numéro de version dynamique.
+- Copie de l’accueil, de la page À propos et des métadonnées précisant le rôle non-organisateur : cartographie et outil de gestion **individuelle**, sans rassemblement, itinéraire imposé ni déplacement organisé.
+- Strictement aucune migration, aucun changement aux services de saison, API métier, cartes, collecte, permissions, autorisations ou statistiques.
+
 ## V0.8.9
 
 - Navigation du compte : rubriques principales distinctes de leurs sous-menus indentés, bordure violette de rattachement et accordéons animés. Accessibilité clavier, inertie des rubriques fermées et réduction des mouvements conservées.

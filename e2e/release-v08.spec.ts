@@ -780,14 +780,14 @@ test("guest mobile entry offers authentication and legal documents; APIs reject 
   const heading = (await page.locator(".home-center h1").boundingBox())!,
     header = (await page.locator(".home-header").boundingBox())!;
   expect(heading.y).toBeGreaterThanOrEqual(header.y + header.height);
+  await expect(page.getByRole("button", { name: "Se connecter", exact: true })).toBeVisible();
   await expect(
-    page
-      .locator(".home-login")
-      .getByRole("button", { name: "Se connecter", exact: true }),
+    page.getByRole("link", { name: "Créer un compte", exact: true }),
   ).toBeVisible();
-  await expect(
-    page.getByRole("link", { name: "Créer mon compte", exact: true }),
-  ).toBeVisible();
+  await expect(page.locator(".home-login")).toHaveCount(0);
+  await page.getByRole("button", { name: "Se connecter", exact: true }).click();
+  await expect(page.locator(".home-login").getByRole("button", { name: "Se connecter", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Fermer la connexion" }).click();
   await expect(
     page.getByRole("link", { name: "La carte", exact: true }),
   ).toHaveCount(0);
@@ -830,7 +830,7 @@ test("anonymous countdown uses server time and becomes a thank-you after closure
   );
   await page.reload();
   await expect(
-    page.getByRole("heading", { name: /Merci d’avoir partagé/ }),
+    page.getByRole("heading", { name: /La saison est terminée/ }),
   ).toBeVisible();
   await expect(clock).toHaveCount(0);
   await expect(page.locator(".route-experience")).toHaveCount(0);
@@ -854,7 +854,8 @@ test("twelve-hour cookie and server expiry preserve accounts and request authent
   );
   expect(await (await page.request.get("/api/me")).json()).toBeNull();
   await page.reload();
-  await expect(page.locator(".home-login")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Se connecter" })).toBeVisible();
+  await expect(page.locator(".home-login")).toHaveCount(0);
   expect(
     (await pool.query("SELECT id FROM users WHERE id=$1", [ownerId])).rows,
   ).toHaveLength(1);
@@ -1182,7 +1183,7 @@ test("registration and login use actual forms, verification SMTP and persistent 
   await request.get("http://127.0.0.1:3108/reset");
   await page.goto("/");
   await page
-    .getByRole("link", { name: "Créer mon compte", exact: true })
+    .getByRole("link", { name: "Créer un compte", exact: true })
     .click();
   await page.getByLabel("Nom ou pseudo").fill("Alex inscrit");
   await page
@@ -1219,6 +1220,7 @@ test("registration and login use actual forms, verification SMTP and persistent 
   ).toBe("VERIFIED");
   await post(page, "logout", {});
   await page.goto("/");
+  await page.getByRole("button", { name: "Se connecter", exact: true }).click();
   await page
     .locator(".home-login")
     .getByLabel("Email")

@@ -26,7 +26,7 @@ export const metadata: Metadata = {
   icons: { icon: "/favicon.svg", apple: "/pwa/apple-touch-icon.png" },
   title: "Halloween · Carte des maisons",
   description:
-    "Découvrez les maisons participantes et préparez votre parcours Halloween.",
+    "Consultez la carte des maisons participantes et suivez individuellement votre collecte de bonbons.",
   robots: { index: false, follow: false },
 };
 export default function Layout({ children }: { children: React.ReactNode }) {
