@@ -1304,6 +1304,12 @@ test("nearest halo needs coherent reliable GPS and disappears when the position 
   await controlledGPS(page);
   await arrange(page);
   await generate(page);
+  // Wait for the real GPS subscription rather than sending fixes before a
+  // slow CI browser has finished mounting the active map. Do not weaken the
+  // subsequent coherence/expiry assertions.
+  await expect.poll(() =>
+    page.evaluate(() => window.__routeGPS.callbacks.size),
+  ).toBeGreaterThan(0);
   await page.evaluate(() => window.__routeGPS.emit(8));
   await expect(page.locator(".house-marker.is-nearest")).toHaveCount(0);
   await page.clock.fastForward(3000);
