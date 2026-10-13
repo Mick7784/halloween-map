@@ -1205,7 +1205,7 @@ for (const width of [390, 1440]) {
           );
         });
         const box = await card.boundingBox();
-        expect(box!.width).toBeCloseTo(width === 390 ? 358 : 620, 2);
+        expect(box!.width).toBeCloseTo(width === 390 ? 390 : 520, 2);
         expect(
           await page.evaluate(() => document.documentElement.scrollWidth),
         ).toBeLessThanOrEqual(width);
