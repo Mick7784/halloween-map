@@ -25,6 +25,12 @@ Reproduction : `node scripts/v091-extract-planes.mjs` puis `node scripts/v091-bu
 
 ## Prompt de la première proposition conservée
 
+## Prompt du masque de premier plan (outil intégré imagegen, alpha uniquement retenu)
+
+> Use case: background-extraction. Exact alpha extraction from supplied 1536x1024 master. Preserve full canvas 1536x1024 and exact pixel positions; do not crop, rescale, relocate, recolor or redraw any retained object. Retain ONLY foreground layer: the top/side overhanging branches and copper leaves, bottom left pumpkin and adjacent small lantern, very nearest low stone walls/iron railings at extreme left/right, nearest bottom cobbles and foreground leaves. Delete sky, moon, church, distant village and houses, and central middle-depth street to genuine transparent alpha. Output a full-canvas registered cutout for compositing back on same master. All retained colors and details must match master exactly, no generated replacement scenery, no shadow backdrop, no checkerboard painted into image. Transparent center and most of sky, occupied area below 60% of frame.
+
+## Prompt de la première proposition conservée
+
 > Edit target: supplied approved Halloween Map composite mockup. Produce ONLY the clean landscape illustration occupying the LEFT desktop panel from approximately x32,y71 to x982,y821 in source. Remove all interface text, title, pumpkin divider, header logo, menu circle, countdown panel and buttons by restoring the obscured scenery. Exclude footer, feature strip, phone and outer mockup surround. Precise-object-edit restoration, NOT a new interpretation: preserve EXACT same framing, left timber house and warm windows, top branches, moon upper right with same church silhouette, right houses, large glowing pumpkin bottom LEFT, iron railings, lantern at right edge, wet cobbled path, exact navy/violet/amber lighting and proportions. Do not invent a different village, valley or castle. Output clean 1280x1024-ish landscape master scene, no UI, no writing, no frames. Preserve visible original scene as closely as possible; only reconstruct areas occluded by UI.
 
 Le prompt exprime la cible ; il ne constitue pas une preuve que le résultat la respecte.

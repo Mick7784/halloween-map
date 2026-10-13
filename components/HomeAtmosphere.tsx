@@ -33,12 +33,11 @@ export default function HomeAtmosphere() {
 
     const mobile = window.matchMedia(MOBILE_PORTRAIT);
     const reducedMotion = window.matchMedia(REDUCED_MOTION);
-    // Permission-gated browsers keep the decorative scene static. Never
-    // prompt, probe a permission, or rely on synthetic readings there.
-    const sensor = window.DeviceOrientationEvent as
-      | (typeof DeviceOrientationEvent & { requestPermission?: unknown })
-      | undefined;
-    const sensorAvailable = !!sensor && typeof sensor.requestPermission !== "function";
+    // Listen passively, without calling or probing any permission API.
+    // A requestPermission method may exist even when access is already
+    // granted. Only valid readings establish that sensors are available;
+    // browsers withholding those readings keep the master static.
+    const sensorAvailable = !!window.DeviceOrientationEvent;
     const target: Tilt = { x: 0, y: 0 };
     const drawn: Tilt = { x: 0, y: 0 };
     let baseline: Tilt | null = null;

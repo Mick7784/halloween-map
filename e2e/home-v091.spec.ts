@@ -48,16 +48,18 @@ async function emit(page: Page, beta: number | null, gamma: number | null) {
   }, { beta, gamma });
 }
 
-async function passiveSensor(page: Page) {
+async function passiveSensor(page: Page, exposesPermissionApi = false) {
   // Model a browser that delivers readings without a permission API.
   // Recent Chromium versions expose requestPermission too; their native
   // constructor must not decide which capability this scenario exercises.
-  await page.addInitScript(() => {
+  await page.addInitScript((exposesPermissionApi) => {
     Object.defineProperty(window, "DeviceOrientationEvent", {
       configurable: true,
-      value: class extends Event {},
+      value: exposesPermissionApi ? Object.assign(class extends Event {}, {
+        requestPermission() { throw new Error("Decorative sensor permission requested"); },
+      }) : class extends Event {},
     });
-  });
+  }, exposesPermissionApi);
 }
 
 test("V0.9.1 static fallback never depends on sensor permissions or overlays", async ({ page }) => {
@@ -198,16 +200,41 @@ for (const mode of ["missing", "permission-required"] as const) {
     const errors: string[] = [];
     page.on("pageerror", (error) => errors.push(error.message));
     await enter(page);
-    await emit(page, 35, 10);
-    await emit(page, 55, 40);
+    // A permission-gated browser withholds usable readings. Merely
+    // exposing requestPermission must never trigger a call or prompt.
+    await emit(page, mode === "missing" ? 35 : null, mode === "missing" ? 10 : null);
+    await emit(page, mode === "missing" ? 55 : Number.NaN, 40);
     await page.clock.runFor(420);
     await expect(page.locator(".home-art")).not.toHaveAttribute("data-home-motion", "active");
-    await expect(page.locator(".home-art")).not.toHaveAttribute("data-home-sensor", "listening");
+    if (mode === "missing") {
+      await expect(page.locator(".home-art")).not.toHaveAttribute("data-home-sensor", "listening");
+    }
     await expect(page.locator(".home-art-plane--near")).toBeHidden();
     await expect(page.getByRole("dialog")).toHaveCount(0);
     expect(errors).toEqual([]);
   });
 }
+
+test("V0.9.1 already available readings work without invoking an exposed permission API", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  await passiveSensor(page, true);
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  await enter(page);
+  const art = page.locator(".home-art");
+  await expect(art).toHaveAttribute("data-home-sensor", "listening");
+  await emit(page, 35, 10);
+  await expect(art).toHaveAttribute("data-home-motion", "active");
+  await emit(page, 55, 40);
+  await page.clock.runFor(420);
+  const near = await art.evaluate((node) => parseFloat(node.style.getPropertyValue("--depth-near-x")));
+  expect(near).toBeGreaterThan(0.5);
+  expect(near).toBeLessThanOrEqual(8);
+  await expect(page.locator(".home-art-plane--near")).not.toHaveCSS("transform", "none");
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  expect(errors).toEqual([]);
+});
 
 test("V0.9.1 hidden page resets tilt and resumes from a fresh baseline", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
