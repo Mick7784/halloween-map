@@ -15,6 +15,10 @@ import { useEffect, useRef } from "react";
 const MOBILE_PORTRAIT = "(max-width: 759px) and (orientation: portrait)";
 const REDUCED_MOTION = "(prefers-reduced-motion: reduce)";
 
+// Do NOT make the temporary three-copy masks visible. Change to true only
+// when approved same-master alpha PNGs have been reviewed and committed.
+const APPROVED_DEPTH_ASSETS_READY = false;
+
 const clamp = (value: number, min: number, max: number) =>
   Math.max(min, Math.min(max, value));
 
@@ -128,7 +132,7 @@ export default function HomeAtmosphere() {
   }, []);
 
   return (
-    <div className="home-art" aria-hidden="true" ref={container}>
+    <div className="home-art" aria-hidden="true" ref={container} data-depth-assets={APPROVED_DEPTH_ASSETS_READY ? "ready" : "pending"}>
       <div className="home-art-plane home-art-plane--far" />
       <div className="home-art-plane home-art-plane--mid" />
       <div className="home-art-plane home-art-plane--near" />
