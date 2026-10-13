@@ -76,7 +76,7 @@ async function arrange(
   await expect(page.locator(".home-art")).toBeVisible();
   await expect(page.locator(".home-art")).toHaveCSS(
     "background-image",
-    /halloween-village-v2\\.png/,
+    /halloween-village-v2\.png/,
   );
   await page.locator(".home-art").evaluate(async () => {
     await document.fonts.ready;
