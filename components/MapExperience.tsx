@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import Link from "next/link";
 import {
   X,
@@ -14,6 +14,9 @@ import {
   Footprints,
   UserRound,
   ChevronUp,
+  ChevronRight,
+  Ghost,
+  HelpCircle,
 } from "lucide-react";
 import type { User, Activity } from "../lib/domain";
 import { locateOrigin } from "../lib/geolocation";
@@ -21,7 +24,7 @@ import { nearestHouse, selectableHouses } from "../lib/collection-view";
 import { gpsDistance, selectedCollectionStats } from "../lib/collection";
 import CollectionProgress from "./CollectionProgress";
 import { ACTIVE_ROUTE_KEY, type RouteParameters } from "../lib/active-route";
-import { Badges, Notice, labels, type PublicState } from "./common";
+import { Badges, Notice, labels, api, type PublicState } from "./common";
 import useActiveRoute from "./useActiveRoute";
 import MapView from "./Map";
 import RoutePreparation from "./RoutePreparation";
@@ -29,7 +32,7 @@ import RouteSheet from "./RouteSheet";
 import VisitorHouse from "./VisitorHouse";
 import FloatingWindow from "./FloatingWindow";
 import ActivityIcon from "./ActivityIcon";
-import FearBadge from "./FearBadge";
+import FearBadge, { AdaptedFearIcon } from "./FearBadge";
 import "./MapExperience.css";
 
 export default function MapExperience({
@@ -74,6 +77,13 @@ export default function MapExperience({
     [selectionNotice, setSelectionNotice] = useState(""),
     [locating, setLocating] = useState(false),
     [locationError, setLocationError] = useState("");
+  const [openedFromDiscovery, setOpenedFromDiscovery] = useState(false);
+  const [discoveryHelp, setDiscoveryHelp] = useState(false);
+  const [distanceRetry, setDistanceRetry] = useState(0);
+  const [distanceStatus, setDistanceStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
+  const [discoveryDistances, setDiscoveryDistances] = useState<Record<string, number | null>>({});
+  const discoveryCache = useRef(new Map<string, Record<string, number | null>>());
+  const discoveryTrigger = useRef<HTMLButtonElement>(null);
   const [consultationFix, setConsultationFix] = useState<{
     point: [number, number];
     token: number;
@@ -215,10 +225,61 @@ export default function MapExperience({
           clock - consultationFix.timestamp <= 15000
         ? consultationFix.point
         : null;
-  const distancePoint = proximityPoint ?? retainedOrigin;
+  // A recorded location remains usable for the distance estimate after
+  // the short freshness window needed by live nearest-house highlighting.
+  const distancePoint = proximityPoint ??
+    (!focused && consultationFix ? consultationFix.point : retainedOrigin);
   const distanceLabel = proximityPoint
     ? "votre position GPS"
-    : "le point de départ";
+    : !focused && consultationFix
+      ? "votre dernière position GPS"
+      : "le point de départ";
+  const distanceKey = distancePoint
+    ? distancePoint.map((n) => n.toFixed(4)).join(",")
+    : "";
+  useEffect(() => {
+    if (!optionsOpen || focused || pick || !distanceKey) {
+      setDistanceStatus("idle");
+      return;
+    }
+    const cached = discoveryCache.current.get(distanceKey);
+    if (cached) {
+      setDiscoveryDistances(cached);
+      setDistanceStatus("ready");
+      return;
+    }
+    let live = true;
+    setDistanceStatus("loading");
+    setDiscoveryDistances({});
+    const [longitude, latitude] = distanceKey.split(",").map(Number);
+    void api<{ distances: Record<string, number | null> }>("route/distances", {
+      origin: { longitude, latitude },
+    })
+      .then((answer) => {
+        if (!live) return;
+        if (!answer?.distances || typeof answer.distances !== "object")
+          throw new Error("Réponse de distances invalide");
+        discoveryCache.current.set(distanceKey, answer.distances);
+        setDiscoveryDistances(answer.distances);
+        setDistanceStatus("ready");
+      })
+      .catch(() => {
+        if (live) setDistanceStatus("error");
+      });
+    return () => { live = false; };
+  }, [optionsOpen, focused, pick, distanceKey, distanceRetry]);
+  useEffect(() => {
+    if (!optionsOpen || selectedHouse) return;
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setOptionsOpen(false);
+        discoveryTrigger.current?.focus();
+      }
+    };
+    window.addEventListener("keydown", escape);
+    return () => window.removeEventListener("keydown", escape);
+  }, [optionsOpen, selectedHouse]);
   const addCandidates = selectableHouses(
     state.routeCandidates ?? state.houses ?? [],
     5,
@@ -530,6 +591,7 @@ export default function MapExperience({
           <>
             <button
               className="collection-discovery"
+              ref={discoveryTrigger}
               type="button"
               onClick={() => {
                 setOptionsOpen(true);
@@ -573,11 +635,27 @@ export default function MapExperience({
           </>
         )}
         {!focused && !pick && optionsOpen && (
-          <FloatingWindow
-            title="Maisons et filtres"
-            onClose={() => setOptionsOpen(false)}
-            className="map-options-window"
+          <section
+            className="discovery-panel map-options-window"
+            role="dialog"
+            aria-modal="false"
+            aria-label="Maisons et filtres"
           >
+            <header className="discovery-panel-header">
+              <div>
+                <h2>Maisons à découvrir</h2>
+                <small>{houses.length} {houses.length === 1 ? "maison" : "maisons"} · {state.instance!.territory}</small>
+              </div>
+              <button
+                type="button"
+                aria-label="Fermer Maisons et filtres"
+                className="discovery-close"
+                onClick={() => {
+                  setOptionsOpen(false);
+                  discoveryTrigger.current?.focus();
+                }}
+              ><X size={20} /></button>
+            </header>
             <div className="route-discovery-filters">
               {(["DECORATION", "CANDY", "ACTING"] as Activity[]).map((a) => (
                 <button
@@ -594,46 +672,99 @@ export default function MapExperience({
                 </button>
               ))}
             </div>
+            <div className="discovery-distance-notice" role="status">
+              {distanceStatus === "loading" && "Calcul des distances piétonnes…"}
+              {distanceStatus === "ready" && "Distances estimées à pied, sans itinéraire."}
+              {distanceStatus === "idle" && "Localisez-vous pour afficher les distances piétonnes."}
+              {distanceStatus === "error" && (
+                <>
+                  Distances piétonnes indisponibles.
+                  <button
+                    type="button"
+                    onClick={() => {
+                      discoveryCache.current.delete(distanceKey);
+                      setDistanceRetry((n) => n + 1);
+                    }}
+                  >Réessayer</button>
+                </>
+              )}
+            </div>
             <div className="map-options-list">
               {houses
                 .slice()
-                .sort((a, b) =>
-                  distancePoint
-                    ? gpsDistance(distancePoint, [a.longitude, a.latitude]) -
-                      gpsDistance(distancePoint, [b.longitude, b.latitude])
-                    : 0,
-                )
-                .map((h) => (
-                  <button
-                    type="button"
-                    key={h.id}
-                    onClick={() => {
-                      setOptionsOpen(false);
-                      selectHouse(h);
-                    }}
-                  >
-                    <MapPin size={18} />
-                    <span>
-                      <strong>{h.name}</strong>
-                      <small>
-                        {distancePoint
-                          ? `À environ ${Math.round(gpsDistance(distancePoint, [h.longitude, h.latitude]))} m à vol d’oiseau depuis ${distanceLabel}`
-                          : "Distance actuelle indisponible"}
-                      </small>
-                      <span className="map-house-features">
-                        <Badges activities={h.activities} compact />
-                        <FearBadge
-                          fear={h.fear}
-                          adaptable={h.adaptable}
-                          labels={state.participation?.fearLabels}
-                        />
+                .sort((a, b) => {
+                  const ad = distanceStatus === "ready" ? discoveryDistances[a.id] : null;
+                  const bd = distanceStatus === "ready" ? discoveryDistances[b.id] : null;
+                  return (ad ?? Infinity) - (bd ?? Infinity) ||
+                    a.name.localeCompare(b.name, "fr");
+                })
+                .map((h) => {
+                  const distance = distanceStatus === "ready" ? discoveryDistances[h.id] : null;
+                  const distanceText = typeof distance !== "number"
+                    ? "Distance indisponible"
+                    : distance < 1000
+                      ? `${Math.round(distance)} m`
+                      : `${(distance / 1000).toLocaleString("fr-FR", {maximumFractionDigits: 1})} km`;
+                  return (
+                    <button
+                      type="button"
+                      className="discovery-house"
+                      key={h.id}
+                      aria-label={`${h.name} · ${distanceText} · ${h.activities.map((a) => labels[a]).join(" · ")} · ${h.adaptable ? "Frissons adaptés" : "Frayeur " + h.fear + " sur 5"}`}
+                      onClick={() => {
+                        setOptionsOpen(false);
+                        setOpenedFromDiscovery(true);
+                        selectHouse(h);
+                      }}
+                    >
+                      <span className="discovery-house-icon"><HouseIcon size={30} /></span>
+                      <span className="discovery-house-info">
+                        <strong title={h.name}>{h.name}</strong>
+                        <span className="discovery-house-meta">
+                          <small title={distanceText}>{distanceText}</small>
+                          <span className="discovery-house-fear" aria-hidden="true">
+                            {h.adaptable ? (
+                              <><AdaptedFearIcon size={14} /><span>Adapté</span></>
+                            ) : (
+                              <>
+                                <Ghost size={14} />
+                                <span className="discovery-fear-dots">
+                                  {[1,2,3,4,5].map((level) => (
+                                    <i key={level} className={level <= (h.fear ?? 0) ? "is-active" : ""} />
+                                  ))}
+                                </span>
+                                <span className="discovery-fear-number">{h.fear ?? "?"}/5</span>
+                              </>
+                            )}
+                          </span>
+                          <span className="discovery-house-activities" aria-hidden="true">
+                            {h.activities.map((a) => <ActivityIcon key={a} activity={a} size={14} />)}
+                          </span>
+                        </span>
                       </span>
-                    </span>
-                  </button>
-                ))}
-              {!houses.length && <p>Aucune maison disponible.</p>}
+                      <ChevronRight size={15} aria-hidden="true" />
+                    </button>
+                  );
+                })}
+              {!houses.length && <p>Aucune maison disponible avec ces filtres.</p>}
             </div>
-          </FloatingWindow>
+            <button
+              type="button"
+              className="discovery-help-toggle"
+              aria-expanded={discoveryHelp}
+              onClick={() => setDiscoveryHelp((open) => !open)}
+            >
+              <HelpCircle size={15} /> Comprendre les pictogrammes
+            </button>
+            {discoveryHelp && (
+              <p className="discovery-help-text">
+                Décoration, bonbons et mise en scène sont les activités proposées.
+                Le fantôme indique le niveau de frayeur de 1 à 5 ; le symbole
+                d’entraide signifie que les habitants adaptent les frissons.
+                Le choix et l’ordre des visites restent libres.
+              </p>
+            )}
+          </section>
         )}
         {readOnly && (
           <p className="route-closed-notice">
@@ -852,6 +983,7 @@ export default function MapExperience({
       )}
       {selectedHouse && (
         <VisitorHouse
+          consultation={!focused}
           fearLabels={state.participation?.fearLabels}
           house={selectedHouse}
           stop={selectedStop}
@@ -883,7 +1015,11 @@ export default function MapExperience({
           }
           selectionError={selectionError}
           timezone={state.instance!.timezone}
-          onClose={() => controller.selectHouse(null)}
+          onClose={() => {
+            controller.selectHouse(null);
+            if (openedFromDiscovery) setOptionsOpen(true);
+            setOpenedFromDiscovery(false);
+          }}
         />
       )}
       {launch && (

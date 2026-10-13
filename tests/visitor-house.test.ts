@@ -77,7 +77,7 @@ it.each([
     ])
       expect(html.includes(label)).toBe(!adaptable);
     expect(html).not.toContain("chevron");
-    expect(html).toContain("Voir sur la carte");
+    expect(html).toContain("Revenir à ma collecte");
   },
 );
 it("shows absent candy in gray without a stock block", () => {
@@ -110,4 +110,22 @@ it("does not invent stock or a reference fear for legacy browser houses", () => 
   expect(html).not.toContain("Niveau de référence non renseigné");
   expect(html).not.toContain("house-fear-gauge");
   expect(html).not.toContain("aria-valuenow=");
+});
+
+it("shows only offered activities and no redundant map action in consultation", () => {
+  const html = renderToStaticMarkup(
+    React.createElement(VisitorHouse, {
+      house: publicHouse({ ...base, activities: ["DECORATION", "CANDY"], rp: "", practical: "" }),
+      consultation: true,
+      timezone: "Europe/Paris",
+      onClose: () => {},
+    }),
+  );
+  expect(html).toContain("visitor-consultation-overlay");
+  expect(html.match(/class="is-offered"/g)).toHaveLength(2);
+  expect(html).not.toContain('class="is-absent"');
+  expect(html).toContain("Niveau de frayeur :");
+  expect(html).not.toContain("Voir sur la carte");
+  expect(html).not.toContain("Pas de description particulière");
+  expect(html).not.toContain("Aucune indication particulière");
 });

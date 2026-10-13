@@ -35,8 +35,10 @@ export default function AccountGroup({
         </span>
         <ChevronRight size={19} />
       </button>
-      <div id={id} className="account-group-content" hidden={!open}>
-        {children}
+      <div id={id} className={"account-group-content" + (open ? " is-open" : "")}>
+        <div className="account-group-inner" inert={!open} aria-hidden={!open}>
+          {children}
+        </div>
       </div>
     </section>
   );

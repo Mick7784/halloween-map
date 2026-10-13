@@ -1,5 +1,14 @@
 # Changelog
 
+## V0.8.9
+
+- Navigation du compte : rubriques principales distinctes de leurs sous-menus indentés, bordure violette de rattachement et accordéons animés. Accessibilité clavier, inertie des rubriques fermées et réduction des mouvements conservées.
+- Carte en consultation : fiches maison condensées, badges d'activités proposées, informations et disponibilité rapprochées ; disparition de « Voir sur la carte » ; panneau de détail remontant depuis le bas sur mobile, sans déplacer la carte.
+- « Maisons à découvrir » : panneau intégré en haut de la carte au lieu d'une fenêtre centrale. Lignes de 52 px (maison, nom, distance, frayeur sur cinq ou frissons adaptés, activités). Retour de la fiche vers la liste, filtres et aide discrète.
+- Distances piétonnes : nouvelle lecture matricielle source→maisons visibles uniquement, sans géométrie, itinéraire ni ordre de visite. API authentifiée, positions non persistées, limitation des calculs, cache temporaire de consultation et états chargement/indisponible.
+- Préparation de collecte : champs d'heures uniquement, date réelle dérivée de la saison du 31 octobre et prévisualisations TEST préservées ; choix individuel retiré au profit du compteur de maisons compatibles, plafonné à 30. Étape calculée ramenée au nombre validé et commandes de départ/sauvegarde ; édition après lancement inchangée.
+- Pas de migration ni de modification du schéma, des permissions, des statistiques, de la mesure GPS ou des règles de collecte libre.
+
 ## V0.8.8
 
 - Menu global regroupé en rubriques compactes « Carte et collecte », « Mes participations », « Profil et sécurité » et « Aide et application », avec une seule rubrique dépliée à la fois. Administration reste conditionnée à la permission effective `admin.access`, et déconnexion directement accessible à la racine.

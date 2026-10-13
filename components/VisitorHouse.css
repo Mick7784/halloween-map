@@ -319,3 +319,103 @@
 .visitor-overlay .visitor-house .visitor-address {
   font-size: 13px;
 }
+
+/* V0.8.9 — compact discovery details; active collection retains its actions. */
+.visitor-overlay .visitor-house.is-consultation {
+  width: min(520px, 100%);
+  height: auto;
+  max-height: calc(100dvh - 88px);
+  border-radius: 16px;
+}
+.visitor-overlay .visitor-house.is-consultation .visitor-house-hero {
+  flex-basis: 76px;
+}
+.visitor-overlay .visitor-house.is-consultation .visitor-house-body {
+  gap: 9px;
+  padding: 0 16px 16px;
+  overflow-y: auto;
+}
+.visitor-house.is-consultation .visitor-heading h1 {
+  font-size: clamp(20px, 4vw, 24px);
+  margin-bottom: 4px;
+}
+.visitor-overlay .visitor-house.is-consultation .visitor-activities {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.visitor-overlay .visitor-house.is-consultation .visitor-activities span {
+  flex-direction: row;
+  min-height: 29px;
+  gap: 6px;
+  padding: 4px 8px;
+  font-size: 11px;
+  border-radius: 7px;
+}
+.visitor-overlay .visitor-house.is-consultation .visitor-hours {
+  padding: 6px 8px;
+  font-size: 12px;
+  border: 0;
+  background: transparent;
+}
+.visitor-house.is-consultation .visitor-fear-section { padding: 0; }
+.visitor-house.is-consultation .visitor-fear-compact {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  color: #d4b4f1;
+  font-size: 13px;
+  margin: 3px 0;
+}
+.visitor-house.is-consultation .visitor-adapt { margin: 0; padding: 8px; }
+.visitor-house.is-consultation .visitor-availability {
+  padding: 9px;
+  gap: 7px;
+  border-radius: 9px;
+}
+.visitor-house.is-consultation .visitor-availability strong { font-size: 13px; }
+.visitor-house.is-consultation .visitor-availability small { display: none; }
+.visitor-house.is-consultation .visitor-stock strong { font-size: 12px; }
+.visitor-overlay .visitor-house.is-consultation .visitor-description {
+  padding: 6px 0;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.visitor-overlay .visitor-house.is-consultation .visitor-practical {
+  padding: 8px;
+  font-size: 12px;
+}
+.visitor-house.is-consultation .visitor-description h2,
+.visitor-house.is-consultation .visitor-practical h2 { margin-bottom: 5px; }
+@media (max-width: 767px) {
+  .route-overlay.visitor-consultation-overlay {
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    width: 100vw;
+    height: 100dvh;
+    padding: 0;
+    background: #03050a70;
+    backdrop-filter: blur(1px);
+  }
+  .visitor-overlay .visitor-house.is-consultation {
+    width: 100vw;
+    flex: 0 0 auto;
+    max-height: min(82dvh, calc(100dvh - 75px));
+    border-radius: 18px 18px 0 0;
+    margin: 0;
+    border-bottom: 0;
+    animation: visitor-sheet-enter 240ms ease-out both;
+  }
+  .visitor-overlay .visitor-house.is-consultation .visitor-house-hero { flex-basis: 70px; }
+  .visitor-overlay .visitor-house.is-consultation .visitor-house-body {
+    padding-bottom: max(14px, env(safe-area-inset-bottom));
+  }
+}
+@keyframes visitor-sheet-enter {
+  from { opacity: .75; transform: translateY(32px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .visitor-overlay .visitor-house.is-consultation { animation: none; }
+}

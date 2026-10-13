@@ -189,7 +189,8 @@ test("desktop compact menu uses the same grid for account, install and logout", 
         .evaluate((el) => el.getBoundingClientRect().x),
     );
   }
-  expect(Math.max(...positions) - Math.min(...positions)).toBeLessThan(1);
+  // V0.8.9: submenu actions are intentionally indented relative to logout.
+  expect(Math.min(positions[0], positions[1]) - positions[2]).toBeGreaterThan(10);
   expect((await dialog.boundingBox())!.height).toBeLessThan(650);
   const center = (await page.locator(".home-clock").boundingBox())!;
   expect(Math.abs(center.x + center.width / 2 - 720)).toBeLessThan(1);
