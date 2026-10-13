@@ -89,22 +89,20 @@ for (const size of [
       ).toBeVisible();
       await expect(page.locator(".home-art")).toHaveCSS(
         "background-image",
-        size.width >= 760 ? /home-reference-desktop-v1/ : /home-reference-v2/,
+        /halloween-village-v2/,
       );
       await expect(page.locator(".home-art")).toHaveCSS(
         "background-size",
-        "contain",
+        "cover",
       );
       if (guest) {
+        // A clean first-open choice; the existing form is still accessible on demand.
+        await expect(page.locator(".home-login")).toHaveCount(0);
         await expect(
-          page
-            .locator(".home-login")
-            .getByRole("button", { name: "Se connecter" }),
+          page.getByRole("button", { name: "Se connecter", exact: true }),
         ).toBeVisible();
         await expect(
-          page
-            .locator(".home-login")
-            .getByRole("link", { name: "Créer mon compte" }),
+          page.getByRole("link", { name: "Créer un compte", exact: true }),
         ).toBeVisible();
       }
       if (size.height >= 640)
