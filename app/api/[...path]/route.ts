@@ -320,6 +320,11 @@ async function handle(
         ),
       );
     }
+    if (path === "route/distances") {
+      if (!user) throw new HttpError(401, "Connexion requise");
+      await rateLimit("route-distances:" + user.id, 60);
+      return response(await service.discoveryDistances(user, input, realTime()));
+    }
     if (path === "route/availability") {
       if (!user) throw new HttpError(401, "Connexion requise");
       await rateLimit("route-availability:" + user.id, 120);
