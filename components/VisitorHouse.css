@@ -388,16 +388,19 @@
 .visitor-house.is-consultation .visitor-description h2,
 .visitor-house.is-consultation .visitor-practical h2 { margin-bottom: 5px; }
 @media (max-width: 767px) {
-  .visitor-consultation-overlay {
+  .route-overlay.visitor-consultation-overlay {
     display: flex;
     align-items: flex-end;
     justify-content: center;
+    width: 100vw;
+    height: 100dvh;
     padding: 0;
     background: #03050a70;
     backdrop-filter: blur(1px);
   }
   .visitor-overlay .visitor-house.is-consultation {
-    width: 100%;
+    width: 100vw;
+    flex: 0 0 auto;
     max-height: min(82dvh, calc(100dvh - 75px));
     border-radius: 18px 18px 0 0;
     margin: 0;
