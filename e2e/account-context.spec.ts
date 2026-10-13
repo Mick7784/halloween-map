@@ -470,14 +470,18 @@ test("map canvas, filters and active route remain mounted across account", async
       exact: true,
     })
     .click();
-  const resultBefore = await page.locator(".route-sheet").textContent();
+  const withoutLiveClock = (value: string | null) =>
+    (value ?? "").replace(/\b\d+:\d{2}(?=—\d+ %)/g, "<chronomètre>");
+  const resultBefore = withoutLiveClock(await page.locator(".route-sheet").textContent());
   const routeBefore = await read();
   await page.getByRole("link", { name: "Mon compte", exact: true }).click();
   await expect(page.locator(".account-dialog")).toBeVisible();
   await page.getByRole("button", { name: "Fermer Mon compte" }).click();
   await expect(page.locator(".account-dialog")).toHaveCount(0);
   await expect(canvas).toHaveAttribute("data-preserved", "yes");
-  await expect(page.locator(".route-sheet")).toHaveText(resultBefore!);
+  await expect.poll(async () =>
+    withoutLiveClock(await page.locator(".route-sheet").textContent()),
+  ).toBe(resultBefore);
   expect((await read()).camera).toEqual(routeBefore.camera);
   expect((await read()).parameters).toEqual(routeBefore.parameters);
   await expect(page).toHaveURL(/\/map$/);
