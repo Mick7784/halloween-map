@@ -141,9 +141,11 @@ export default function HomeAtmosphere() {
       if (enabled() && !subscribed) {
         window.addEventListener("deviceorientation", onOrientation, { passive: true });
         subscribed = true;
+        art.setAttribute("data-home-sensor", "listening");
       } else if (!enabled() && subscribed) {
         window.removeEventListener("deviceorientation", onOrientation);
         subscribed = false;
+        art.removeAttribute("data-home-sensor");
         reset();
       } else if (!enabled()) {
         reset();
@@ -161,6 +163,7 @@ export default function HomeAtmosphere() {
       reducedMotion.removeEventListener("change", reconcile);
       document.removeEventListener("visibilitychange", reconcile);
       if (subscribed) window.removeEventListener("deviceorientation", onOrientation);
+      art.removeAttribute("data-home-sensor");
       reset();
     };
   }, []);

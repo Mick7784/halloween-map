@@ -81,6 +81,7 @@ test("V0.9.1 portrait mobile tilts only artwork, smoothly and within bounds", as
   await passiveSensor(page);
   await enter(page);
   const art = page.locator(".home-art");
+  await expect(art).toHaveAttribute("data-home-sensor", "listening");
 
   // Invalid sensor values may never activate the motion mode.
   await emit(page, null, null);
@@ -121,12 +122,16 @@ test("V0.9.1 portrait mobile tilts only artwork, smoothly and within bounds", as
   // and unregisters the sensor listener. Returning to portrait can re-arm.
   await page.setViewportSize({ width: 1440, height: 900 });
   await expect(art).not.toHaveAttribute("data-home-motion", "active");
+  await expect(art).not.toHaveAttribute("data-home-sensor", "listening");
   await expect(art).toHaveCSS("--depth-near-x", "0.00px");
   await emit(page, 50, 60);
   await emit(page, 80, 90);
   await page.clock.runFor(100);
   await expect(art).not.toHaveAttribute("data-home-motion", "active");
   await page.setViewportSize({ width: 390, height: 844 });
+  // Browser media-query notifications arrive asynchronously after resize.
+  // Wait for the actual subscription before dispatching a one-off reading.
+  await expect(art).toHaveAttribute("data-home-sensor", "listening");
   await emit(page, 35, 10);
   await expect(art).toHaveAttribute("data-home-motion", "active");
   await emit(page, 40, 20);
@@ -135,6 +140,7 @@ test("V0.9.1 portrait mobile tilts only artwork, smoothly and within bounds", as
   // Changing to reduced motion immediately removes the effect.
   await page.emulateMedia({ reducedMotion: "reduce" });
   await expect(art).not.toHaveAttribute("data-home-motion", "active");
+  await expect(art).not.toHaveAttribute("data-home-sensor", "listening");
   await expect(art).toHaveCSS("--depth-near-x", "0.00px");
   await expect(page.locator(".home-art-plane--near")).toBeHidden();
 });
@@ -152,6 +158,7 @@ test("V0.9.1 desktop and mobile landscape always remain still", async ({ page })
   await page.clock.runFor(150);
   await expect(page.locator(".home-art")).not.toHaveAttribute("data-home-motion", "active");
   await expect(page.locator(".home-art-plane--far")).toBeHidden();
+  await expect(page.locator(".home-art")).not.toHaveAttribute("data-home-sensor", "listening");
 
   await page.setViewportSize({ width: 844, height: 390 });
   await emit(page, 40, 20);
@@ -159,6 +166,7 @@ test("V0.9.1 desktop and mobile landscape always remain still", async ({ page })
   await page.clock.runFor(150);
   await expect(page.locator(".home-art")).not.toHaveAttribute("data-home-motion", "active");
   await expect(page.locator(".home-art-plane--mid")).toBeHidden();
+  await expect(page.locator(".home-art")).not.toHaveAttribute("data-home-sensor", "listening");
   expect(depthRequests).toEqual([]);
 });
 
@@ -167,6 +175,7 @@ test("V0.9.1 unavailable optional plane keeps the master static", async ({ page 
   await passiveSensor(page);
   await page.route("**/art/home-v091-mid.webp", (route) => route.abort());
   await enter(page);
+  await expect(page.locator(".home-art")).toHaveAttribute("data-home-sensor", "listening");
   await emit(page, 35, 10);
   await emit(page, 55, 40);
   await page.clock.runFor(420);
@@ -193,6 +202,7 @@ for (const mode of ["missing", "permission-required"] as const) {
     await emit(page, 55, 40);
     await page.clock.runFor(420);
     await expect(page.locator(".home-art")).not.toHaveAttribute("data-home-motion", "active");
+    await expect(page.locator(".home-art")).not.toHaveAttribute("data-home-sensor", "listening");
     await expect(page.locator(".home-art-plane--near")).toBeHidden();
     await expect(page.getByRole("dialog")).toHaveCount(0);
     expect(errors).toEqual([]);
@@ -205,6 +215,7 @@ test("V0.9.1 hidden page resets tilt and resumes from a fresh baseline", async (
   await passiveSensor(page);
   await enter(page);
   const art = page.locator(".home-art");
+  await expect(art).toHaveAttribute("data-home-sensor", "listening");
   const title = page.locator(".home-center h1");
   const originalTitle = await title.boundingBox();
   await emit(page, 35, 10);
@@ -217,6 +228,7 @@ test("V0.9.1 hidden page resets tilt and resumes from a fresh baseline", async (
     document.dispatchEvent(new Event("visibilitychange"));
   });
   await expect(art).not.toHaveAttribute("data-home-motion", "active");
+  await expect(art).not.toHaveAttribute("data-home-sensor", "listening");
   await expect(art).toHaveCSS("--depth-near-x", "0.00px");
   await emit(page, 80, 80);
   await page.clock.runFor(420);
@@ -225,6 +237,7 @@ test("V0.9.1 hidden page resets tilt and resumes from a fresh baseline", async (
     Object.defineProperty(document, "visibilityState", { configurable: true, value: "visible" });
     document.dispatchEvent(new Event("visibilitychange"));
   });
+  await expect(art).toHaveAttribute("data-home-sensor", "listening");
   await emit(page, 80, 80);
   await expect(art).toHaveAttribute("data-home-motion", "active");
   await expect(art).toHaveCSS("--depth-near-x", "0.00px");
