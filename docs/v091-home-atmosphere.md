@@ -4,6 +4,18 @@
 >
 > Base : `main` / release V0.9 validée. Mission strictement visuelle, **uniquement sur la page d’accueil**.
 
+## Reprise locale du 13 octobre 2026
+
+- Branche/PR existantes reprises sans réinitialisation. Aucun changement métier, aucune fusion, release ou publication de `latest`.
+- [Comparaison desktop/mobile](../artwork/v091/review/comparison.html), maquette originale et captures conservées dans `artwork/v091/review/`. Captures supplémentaires 360×640, 430×932 et 2048×1042 produites par les tests existants (artefact CI `browser-report`).
+- [Restauration proposée et provenance](../artwork/v091/review/README.md) : image propre obtenue via imagegen, **non identique et non approuvée**. Elle n’est pas utilisée dans l’application. Le master strictement fidèle et les plans alpha restent bloqués ; aucune activation du décor multi-plans.
+- Footer compact : copie binaire du logo DK fourni (`public/art/dk-original.png`), sans filtre ni redessin.
+- Capteurs : repli statique explicite si API absente ou si `requestPermission` est exposée ; jamais d’appel à cette méthode. Ce choix conservateur peut aussi laisser statique un navigateur déjà autorisé qui expose cette API. Tests supplémentaires : permission requise, API absente, page masquée, reprise à zéro et stabilité du titre. Les scénarios positifs simulent explicitement un navigateur sans demande de permission.
+- Vérifications locales : lint et TypeScript réussis ; 230 tests unitaires réussis ; build de production réussi. Playwright complet : 161/164 au premier parcours, puis 3/3 échecs rejoués avec succès après correction de la simulation des capteurs et utilisation de `APP_ORIGIN=http://localhost:3000` comme attendue par le test SMTP. Aucune assertion supprimée. Les restrictions Windows sur les fichiers temporaires/jonctions et les serveurs locaux ont nécessité une exécution hors bac à sable.
+- Docker n’est pas installé sur cette machine : sa validation est effectuée par le job Docker de la PR. La CI précédente (`7e3b132`) était entièrement verte, Docker compris ; vérifier la nouvelle CI du dernier commit avant toute validation.
+
+**Recette visuelle : non acquise.** Le château/vallee du fallback, le header séparé, l’opacité du compteur et la compacité des descriptions mobiles diffèrent encore de la maquette. Les tests de structure et les captures ne prouvent pas une fidélité graphique. La livraison reste bloquée par le master original sans interface ou une décision explicite de l’utilisateur acceptant une nouvelle base.
+
 ## Référence esthétique OBLIGATOIRE
 
 La maquette approuvée du 13 octobre 2026 (desktop à gauche, mobile à droite, nom du fichier source dans la conversation : `interface_halloween_cinématique_desktop_et_mobile.png`) **fait foi**.

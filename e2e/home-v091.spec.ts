@@ -48,6 +48,18 @@ async function emit(page: Page, beta: number | null, gamma: number | null) {
   }, { beta, gamma });
 }
 
+async function passiveSensor(page: Page) {
+  // Model a browser that delivers readings without a permission API.
+  // Recent Chromium versions expose requestPermission too; their native
+  // constructor must not decide which capability this scenario exercises.
+  await page.addInitScript(() => {
+    Object.defineProperty(window, "DeviceOrientationEvent", {
+      configurable: true,
+      value: class extends Event {},
+    });
+  });
+}
+
 test("V0.9.1 static fallback never depends on sensor permissions or overlays", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await enter(page);
@@ -66,6 +78,7 @@ test("V0.9.1 static fallback never depends on sensor permissions or overlays", a
 test("V0.9.1 portrait mobile tilts only artwork, smoothly and within bounds", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.emulateMedia({ reducedMotion: "no-preference" });
+  await passiveSensor(page);
   await enter(page);
   const art = page.locator(".home-art");
 
@@ -166,6 +179,7 @@ for (const mode of ["missing", "permission-required"] as const) {
 test("V0.9.1 hidden page resets tilt and resumes from a fresh baseline", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.emulateMedia({ reducedMotion: "no-preference" });
+  await passiveSensor(page);
   await enter(page);
   const art = page.locator(".home-art");
   const title = page.locator(".home-center h1");

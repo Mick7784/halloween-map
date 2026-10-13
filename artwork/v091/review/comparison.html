@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="fr">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Halloween Map — comparaison V0.9.1</title>
+<style>
+body{margin:0;padding:24px;background:#0a0d18;color:#f4eff7;font:16px/1.5 system-ui,sans-serif}main{max-width:1500px;margin:auto}h1{font-size:28px}h2{font-size:20px}p{max-width:950px;color:#d1c8df}.status{border-left:4px solid #ffa743;padding:12px 18px;background:#231b25}.grid{display:grid;grid-template-columns:1fr 1fr;gap:24px}figure{margin:0;background:#131727;padding:16px;border-radius:12px}img{display:block;width:100%;height:auto}figcaption{margin-bottom:12px;color:#ffbd7c}.mobile{max-width:390px;margin:auto}a{color:#ffbd7c}@media(max-width:800px){.grid{grid-template-columns:1fr}body{padding:14px}}
+</style>
+<main>
+<h1>Halloween Map · revue V0.9.1</h1>
+<p class="status"><strong>Fidélité non acquise — PR en brouillon.</strong> Le décor actuel reste non conforme. La restauration proposée est une approximation non intégrée. Aucune release ni modification de latest.</p>
+<h2>Maquette approuvée et rendu actuel</h2>
+<div class="grid">
+<figure><figcaption>Référence impérative — fichier original fourni</figcaption><img src="approved-mockup.png" alt="Maquette approuvée, desktop et mobile"></figure>
+<figure><figcaption>Capture réelle desktop — 1440 × 900</figcaption><img src="current-desktop.png" alt="Accueil actuel avec l'ancien château, non conforme"></figure>
+<figure><figcaption>Capture réelle mobile — 390 × 844</figcaption><img class="mobile" src="current-mobile.png" alt="Accueil mobile actuel, actions et footer visibles"></figure>
+<figure><figcaption>Restauration proposée — non approuvée, non intégrée</figcaption><img src="restoration-candidate.png" alt="Proposition de village nettoyé sans interface"><p>Maisons, fenêtres, clocher, lune et perspective présentent des différences. Cette image ne remplace pas le master original demandé.</p></figure>
+</div>
+<h2>Constats de revue</h2>
+<p>Le village intimiste, la grande citrouille gauche et les lanternes de la maquette manquent dans le décor actuel. Le header reste une bande séparée, le compteur plus opaque et la bande informative mobile plus compacte que la référence. La mise en page n’est donc pas déclarée identique.</p>
+<p>Le vrai fichier DK est repris sans redessin. Le menu reste unique, les descriptions non interactives, les actions d’authentification et les mentions restent visibles. Les captures sont réalisées avec une horloge serveur simulée ; elles ne constituent pas un relevé de données de production.</p>
+<p><a href="https://github.com/Mick7784/halloween-map/pull/30">Reprendre la PR 30</a> · <a href="README.md">Provenance et prompt de restauration</a></p>
+</main>
+</html>
