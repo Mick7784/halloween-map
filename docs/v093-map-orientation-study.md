@@ -1,6 +1,6 @@
 # V0.9.3 — étude et prototype d’orientation sur la carte
 
-Branche distincte `work/v093-map-orientation-study`, empilée sur la V0.9.2 (#31). Aucun merge ni publication. VERSION et latest restent inchangés. Ce prototype ne constitue pas une validation sur téléphone réel.
+Branche distincte `work/v093-map-orientation-study`, préparée sur la V0.9.2 (#31). Le 13 octobre 2026, l’utilisateur a expressément demandé la publication en release et indiqué qu’il effectuerait lui-même les essais. Cette instruction autorise l’intégration ordonnée des PR #30/#31/#32 et la publication V0.9.3, image versionnée et latest. Elle ne constitue pas une validation sur téléphone réel.
 
 ## Résultat de l’étude
 

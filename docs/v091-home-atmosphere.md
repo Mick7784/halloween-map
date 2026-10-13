@@ -111,6 +111,8 @@ Le master restauré est présent dans le dépôt. L’utilisateur l’a accepté
 - [x] master décor propre restauré accepté comme base / intégré, commun aux deux formats
 - [x] couches alpha générées à partir du même master, dimensions et pixels vérifiés
 - [x] parallaxe mobile progressive (sans pop-up), fallback stable
-- [ ] capture desktop / mobile rapprochée des références
-- [ ] tests, CI et revue visuelle
-- [ ] approbation utilisateur puis publication séparée
+- [x] captures desktop / mobile comparées, base restaurée acceptée
+- [x] tests, CI et revue visuelle automatisée ; CI #168 verte
+- [x] publication désormais autorisée expressément par l’utilisateur le 13 octobre 2026, avec essais téléphone effectués par lui après la release V0.9.3
+
+Cette dernière instruction remplace l’interdiction de publication en attente de recette, sans prétendre que la recette sur téléphone réel a déjà été effectuée. Les PR #30, #31 et #32 restent intégrées séparément et dans l’ordre.
