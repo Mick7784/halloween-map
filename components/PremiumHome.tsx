@@ -65,6 +65,7 @@ export default function PremiumHome({
 
   useEffect(() => {
     if (!loginOpen) return;
+    const trigger = loginTrigger.current;
     loginClose.current?.focus();
     function onEscape(event: KeyboardEvent) {
       if (event.key === "Escape") setLoginOpen(false);
@@ -72,7 +73,7 @@ export default function PremiumHome({
     document.addEventListener("keydown", onEscape);
     return () => {
       document.removeEventListener("keydown", onEscape);
-      loginTrigger.current?.focus({ preventScroll: true });
+      trigger?.focus({ preventScroll: true });
     };
   }, [loginOpen]);
 
