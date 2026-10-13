@@ -480,7 +480,7 @@ test("map canvas, filters and active route remain mounted across account", async
   // The live chronometer legitimately advances while the account overlay is open.
   // Compare all other visible collection details without freezing real time.
   const stableSheetText = (value: string | null) =>
-    (value ?? "").replace(/\\b\\d{1,2}:\\d{2}\\b/g, "<chronometer>");
+    (value ?? "").replace(/\b\d{1,2}:\d{2}\b/g, "<chronometer>");
   expect(stableSheetText(await page.locator(".route-sheet").textContent()))
     .toBe(stableSheetText(resultBefore));
   expect((await read()).camera).toEqual(routeBefore.camera);
