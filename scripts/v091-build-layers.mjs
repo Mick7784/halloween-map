@@ -44,6 +44,13 @@ if (master.width < minimum.width || master.height < minimum.height) {
   );
 }
 
+// Structural alpha checks are not enough: detect a layer generated from a
+// different illustration. Opaque pixels must match the same master canvas.
+const masterPixels = await sharp(masterPath)
+  .removeAlpha()
+  .raw()
+  .toBuffer();
+
 const inputs = await Promise.all(layers.map(async (name) => {
   const path = join(source, `plane-${name}.png`);
   const meta = await openMeta(path);
@@ -65,6 +72,28 @@ const inputs = await Promise.all(layers.map(async (name) => {
     .toBuffer({ resolveWithObject: true });
   const nonzero = data.reduce((sum, a) => sum + (a > 0 ? 1 : 0), 0);
   const proportion = nonzero / (info.width * info.height);
+  const planeRGB = await sharp(path).removeAlpha().raw().toBuffer();
+  let samples = 0;
+  let mismatches = 0;
+  // An inexpensive 1-in-31 pixel check, only where alpha is nearly opaque.
+  for (let i = 0; i < info.width * info.height; i += 31) {
+    if (data[i] < 240) continue;
+    samples++;
+    const pos = i * 3;
+    const diff = Math.max(
+      Math.abs(planeRGB[pos] - masterPixels[pos]),
+      Math.abs(planeRGB[pos + 1] - masterPixels[pos + 1]),
+      Math.abs(planeRGB[pos + 2] - masterPixels[pos + 2]),
+    );
+    if (diff > 22) mismatches++;
+  }
+  if (samples < 150 || mismatches / samples > .03) {
+    throw new Error(
+      `V0.9.1 : le plan ${name} ne correspond pas au master ` +
+      `(${samples} pixels contrôlés, ${mismatches} écarts). ` +
+      "Ne pas régénérer les couches séparément."
+    );
+  }
   // Refuse an entirely opaque screenshot reused as a moving plane.
   if (proportion < .015 || proportion > .90) {
     throw new Error(
