@@ -1,0 +1,327 @@
+/* V0.9.2 — one visual language for application surfaces.
+ * Geometry, stacking, map markers, business states and the V0.9.1 home
+ * remain owned by their components. No sensor or parallax styles here.
+ */
+:root {
+  --hm-bg: #080b18;
+  --hm-surface: #0e1328;
+  --hm-card: #171b32;
+  --hm-control: #1a1e36;
+  --hm-control-hover: #26223e;
+  --hm-input: #0a1022;
+  --hm-text: #fbf3f2;
+  --hm-muted: #cbc7d7;
+  --hm-line: #574561;
+  --hm-violet: #b98cec;
+  --hm-amber: #ff9d45;
+  --hm-danger: #ff9aa8;
+  --hm-danger-bg: #331824;
+  --hm-success: #a9d8b7;
+  --hm-radius: 18px;
+  --hm-control-radius: 12px;
+  --bg: var(--hm-bg);
+  --panel: var(--hm-surface);
+  --panel2: var(--hm-card);
+  --line: var(--hm-line);
+  --text: var(--hm-text);
+  --muted: var(--hm-muted);
+  --purple: var(--hm-violet);
+  --orange: var(--hm-amber);
+  --red: var(--hm-danger);
+  --brand-accent: var(--hm-amber);
+  --control-radius: var(--hm-control-radius);
+}
+body.hm-premium {
+  background:
+    radial-gradient(ellipse at 75% 0, #49306738, transparent 55%),
+    radial-gradient(ellipse at 0 100%, #8b42181c, transparent 50%),
+    var(--hm-bg);
+  color: var(--hm-text);
+}
+body.hm-premium .application > .site-header {
+  background: linear-gradient(110deg, #11142cf5, #080b18f5);
+  border-color: var(--hm-line);
+  box-shadow: 0 8px 30px #02030a38;
+}
+body.hm-premium .brand-mark {
+  color: var(--hm-amber);
+  background: #2b1a29;
+  border: 1px solid #754751;
+  box-shadow: 0 0 24px #ff9d4514;
+}
+body.hm-premium .brand strong {
+  font-family: var(--font-editorial);
+  font-weight: 600;
+}
+body.hm-premium .brand strong > span { color: var(--hm-amber); }
+body.hm-premium .brand :is(small, em) { color: var(--hm-muted); }
+body.hm-premium .application > footer {
+  color: var(--hm-muted);
+  background: var(--hm-bg);
+  border-color: var(--hm-line);
+}
+body.hm-premium .application > footer .site-footer-links {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px 18px;
+}
+body.hm-premium :is(
+  .narrow > h1, .account-header h1, .participation-header h1,
+  .visitor-house h1, .floating-header h2, .route-preparation h1,
+  .route-dialog h1, .beta-header h1
+) {
+  font-family: var(--font-editorial);
+  font-weight: 600;
+  color: var(--hm-text);
+}
+body.hm-premium :is(
+  [role="dialog"], .participation-dialog, .route-sheet,
+  .route-map-title, .route-overview, .collection-discovery,
+  .collection-bottom-bar, .route-point-picker, .discovery-help-text
+) {
+  color: var(--hm-text);
+  background-color: var(--hm-surface);
+  border-color: var(--hm-line);
+  box-shadow: 0 20px 60px #02030a55;
+}
+body.hm-premium :is(
+  .account-dialog, .participation-dialog, .floating-window,
+  .route-preparation, .route-confirm, .route-guidelines,
+  .participation-confirm, .participation-guidelines-dialog,
+  .project-support-dialog, .home-auth-dialog, .admin-confirmation
+) { background-image: linear-gradient(145deg, #30234324, transparent 55%); }
+body.hm-premium .account-dialog::before {
+  background: radial-gradient(ellipse at 80% 0, #76509638, transparent 70%);
+  opacity: 1;
+}
+body.hm-premium .participation-dialog {
+  background-image: radial-gradient(ellipse at 85% 0, #76509628, transparent 55%);
+}
+body.hm-premium :is(
+  .account-header, .participation-header, .floating-header,
+  .route-preparation-header, .route-sheet-heading
+) {
+  background: linear-gradient(110deg, #2e214332, transparent);
+  border-color: var(--hm-line);
+}
+body.hm-premium :is(
+  .panel, .account-card, .participation-section,
+  .route-origin-label, .route-times-day, .collection-preview-summary,
+  .visitor-hours, .visitor-adapt, .house-information, .recap
+) {
+  color: var(--hm-text);
+  background: linear-gradient(140deg, var(--hm-card), var(--hm-surface));
+  border-color: var(--hm-line);
+  border-radius: var(--hm-radius);
+}
+body.hm-premium :is(.account-card, .participation-section) {
+  box-shadow: inset 0 1px #ffffff04;
+}
+body.hm-premium :is(
+  .account-row, .account-session button, .account-install .install-cta,
+  .discovery-house, .collection-choice, .collection-add-choice
+) {
+  background: linear-gradient(110deg, var(--hm-card), var(--hm-surface));
+  color: var(--hm-text);
+  border-color: var(--hm-line);
+  border-radius: var(--hm-control-radius);
+}
+/* Scope controls to application and dialog surfaces; never alter the
+ * renderer's geographically anchored markers or MapLibre controls. */
+body.hm-premium :is(.application, .narrow, [role="dialog"], .route-sheet)
+  :is(button, .button):where(:not(.house-marker, .house-marker *, .maplibregl-map *, .maplibregl-control-container *)) {
+  color: var(--hm-text);
+  background-color: var(--hm-control);
+  border-color: var(--hm-line);
+  border-radius: var(--hm-control-radius);
+  font-family: var(--font-body);
+  transition: background-color 150ms ease, border-color 150ms ease, box-shadow 150ms ease;
+}
+body.hm-premium :is(.application, .narrow, [role="dialog"], .route-sheet)
+  :is(button, .button):where(:not(.house-marker, .house-marker *, .maplibregl-map *, .maplibregl-control-container *)):hover:where(:not(:disabled, [aria-disabled="true"])) {
+  background-color: var(--hm-control-hover);
+  border-color: var(--hm-violet);
+}
+body.hm-premium :is(.application, .narrow, [role="dialog"], .route-sheet)
+  :is(button.primary, .button.primary, .visitor-select, .visitor-visit) {
+  color: #211322;
+  background: linear-gradient(110deg, #ffb85e, #ff8735);
+  border-color: #ffb473;
+  box-shadow: 0 4px 18px #ff83281c;
+  font-weight: 600;
+}
+body.hm-premium :is(.application, .narrow, [role="dialog"], .route-sheet)
+  :is(button.primary, .button.primary, .visitor-select, .visitor-visit):hover:where(:not(:disabled, [aria-disabled="true"])) {
+  color: #211322;
+  background: #ffc17a;
+  border-color: #ffc17a;
+}
+body.hm-premium :is(.application, .narrow, [role="dialog"], .route-sheet)
+  :is(button, .button).danger {
+  color: var(--hm-danger);
+  background: var(--hm-danger-bg);
+  border-color: #a9566d;
+  box-shadow: none;
+}
+body.hm-premium :is(.application, .narrow, [role="dialog"])
+  :is(input, textarea, select):where(:not([type="checkbox"], [type="radio"], [type="range"], [type="color"])) {
+  color: var(--hm-text);
+  background: var(--hm-input);
+  border-color: var(--hm-line);
+  border-radius: var(--hm-control-radius);
+  font-family: var(--font-body);
+}
+body.hm-premium :is(.application, .narrow, [role="dialog"])
+  :is(input, textarea)::placeholder { color: #a69daf; opacity: 1; }
+body.hm-premium :is(.application, .narrow, [role="dialog"])
+  :is(input[type="checkbox"], input[type="radio"], input[type="range"]) {
+  accent-color: var(--hm-amber);
+}
+body.hm-premium :is(.application, .narrow, [role="dialog"], .route-sheet)
+  :is(button, a, input, select, textarea, summary):focus-visible {
+  outline: 2px solid var(--hm-amber);
+  outline-offset: 3px;
+}
+body.hm-premium :is(.account-row, .account-group-toggle):hover {
+  border-color: var(--hm-violet);
+}
+body.hm-premium :is(.account-row-icon, .account-card h2 svg, .participation-section h2 svg) {
+  color: var(--hm-violet);
+}
+body.hm-premium :is(
+  .account-hint, .account-policy-meta,
+  .route-subtitle, .visitor-address, .route-gps-status,
+  .discovery-house small, .collection-choice small, .collection-add-choice small,
+  .field > span, .route-map-title small, .route-overview small
+) { color: var(--hm-muted); }
+body.hm-premium :is(.account-role, .account-group-badge) {
+  color: #dfc4ff;
+  background: #302044;
+  border-color: #805ba3;
+}
+body.hm-premium :is(.account-close, .account-back, .user-menu-toggle, .visitor-house > .close) {
+  border-radius: 50%;
+}
+body.hm-premium .application:has(> .narrow form) .desktop-login { display: none; }
+body.hm-premium .visitor-overlay .visitor-house-hero {
+  background:
+    linear-gradient(180deg, #080b1810, #080b1838 55%, var(--hm-surface)),
+    url("/art/house-detail-v1.png") center 55% / cover no-repeat;
+}
+body.hm-premium .visitor-overlay .visitor-activities .is-offered {
+  color: #ffd09a;
+  background: #39271f;
+  border-color: var(--hm-amber);
+}
+body.hm-premium .visitor-overlay .visitor-activities .is-absent {
+  color: var(--hm-muted);
+  background: var(--hm-card);
+  border-color: var(--hm-line);
+}
+body.hm-premium .collection-potion {
+  background: var(--hm-card);
+  border-color: var(--hm-amber);
+  border-radius: var(--hm-control-radius);
+}
+body.hm-premium .route-experience {
+  --route-ink: var(--hm-bg);
+  --route-border: var(--hm-line);
+  --route-violet: var(--hm-violet);
+}
+body.hm-premium .route-experience :is(.route-sheet, .collection-discovery, .route-map-title, .route-overview) {
+  background-color: var(--hm-surface);
+  border-color: var(--hm-line);
+}
+body.hm-premium .route-experience .route-sheet.collection-bottom-bar {
+  background-color: var(--hm-surface);
+  border-color: var(--hm-line);
+}
+body.hm-premium .collection-bottom-bar .collection-dense-steps .route-step {
+  background-color: var(--hm-card);
+  border-color: var(--hm-line);
+}
+/* Administration retains its light/dark/system setting and semantic states. */
+body.hm-premium .admin-beta {
+  --bg: var(--hm-bg);
+  --surface: var(--hm-surface);
+  --panel: var(--hm-surface);
+  --text: var(--hm-text);
+  --muted: var(--hm-muted);
+  --line: var(--hm-line);
+  --accent: var(--hm-amber);
+  --orange: var(--hm-amber);
+  --success: var(--hm-success);
+}
+body.hm-premium .admin-beta[data-theme="light"] {
+  color-scheme: light;
+  --hm-bg: #f5f2fa;
+  --hm-surface: #ffffff;
+  --hm-card: #f2edf8;
+  --hm-control: #ece6f5;
+  --hm-control-hover: #e3d9f1;
+  --hm-input: #ffffff;
+  --hm-text: #22172e;
+  --hm-muted: #675875;
+  --hm-line: #c5bad7;
+  --hm-violet: #754995;
+  --hm-amber: #96450f;
+  --hm-danger: #a32943;
+  --hm-danger-bg: #fff0f4;
+  --hm-success: #276a50;
+}
+@media (prefers-color-scheme: light) {
+  body.hm-premium .admin-beta[data-theme="system"] {
+    color-scheme: light;
+    --hm-bg: #f5f2fa;
+    --hm-surface: #ffffff;
+    --hm-card: #f2edf8;
+    --hm-control: #ece6f5;
+    --hm-control-hover: #e3d9f1;
+    --hm-input: #ffffff;
+    --hm-text: #22172e;
+    --hm-muted: #675875;
+    --hm-line: #c5bad7;
+    --hm-violet: #754995;
+    --hm-amber: #96450f;
+    --hm-danger: #a32943;
+    --hm-danger-bg: #fff0f4;
+    --hm-success: #276a50;
+  }
+}
+body.hm-premium .beta-sidebar nav button { background-color: var(--hm-surface); }
+body.hm-premium .beta-sidebar nav button.is-current {
+  background: color-mix(in srgb, var(--hm-amber) 14%, var(--hm-surface));
+  color: var(--hm-amber);
+  border-color: color-mix(in srgb, var(--hm-amber) 45%, var(--hm-line));
+}
+body.hm-premium :is(.beta-card, .beta-panel, .beta-stat, .beta-table-scroll) {
+  border-color: var(--hm-line);
+  border-radius: var(--hm-radius);
+}
+body.hm-premium .beta-sidebar { background: var(--hm-surface); }
+body.hm-premium .admin-beta .beta-logo .admin-brand-mark {
+  background: var(--hm-card);
+  color: var(--hm-amber);
+  border: 1px solid var(--hm-line);
+}
+body.hm-premium .application.admin-app .admin-beta button.danger {
+  color: var(--hm-danger);
+  background: var(--hm-danger-bg);
+  border-color: var(--hm-danger);
+}
+body.hm-premium .application.admin-app .admin-beta button.primary {
+  color: #211322;
+  background: linear-gradient(110deg, #ffb85e, #ff8735);
+  border-color: #ffb473;
+}
+@media (max-width: 759px) {
+  body.hm-premium :is(.narrow, .account-dialog, .participation-dialog, .floating-window)
+    :is(input, textarea, select):where(:not([type="checkbox"], [type="radio"], [type="range"], [type="color"])) {
+    font-size: 16px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  body.hm-premium :is(.application, .narrow, [role="dialog"], .route-sheet)
+    :is(button, .button) { transition: none; }
+}

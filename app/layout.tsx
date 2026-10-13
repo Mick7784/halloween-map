@@ -6,9 +6,10 @@ import "@fontsource/cormorant-garamond/500.css";
 import "@fontsource/cormorant-garamond/600.css";
 import "./globals.css";
 import "../components/ReleaseDesign.css";
+import "../components/PremiumApp.css";
 import { InstallAppProvider } from "../components/InstallApp";
 export const viewport: Viewport = {
-  themeColor: "#17171e",
+  themeColor: "#080b18",
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
@@ -23,8 +24,15 @@ export const metadata: Metadata = {
     statusBarStyle: "black-translucent",
     title: "Halloween Map",
   },
-  icons: { icon: "/favicon.svg", apple: "/pwa/apple-touch-icon.png" },
-  title: "Halloween · Carte des maisons",
+  icons: {
+    icon: [
+      { url: "/favicon.svg", type: "image/svg+xml" },
+      { url: "/favicon-32.png", type: "image/png", sizes: "32x32" },
+      { url: "/favicon-16.png", type: "image/png", sizes: "16x16" },
+    ],
+    apple: "/pwa/apple-touch-icon.png",
+  },
+  title: "Halloween Map · Maisons participantes",
   description:
     "Consultez la carte des maisons participantes et suivez individuellement votre collecte de bonbons.",
   robots: { index: false, follow: false },
@@ -32,7 +40,7 @@ export const metadata: Metadata = {
 export default function Layout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="fr">
-      <body>
+      <body className="hm-premium">
         <InstallAppProvider>{children}</InstallAppProvider>
       </body>
     </html>

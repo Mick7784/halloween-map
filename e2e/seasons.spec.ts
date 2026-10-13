@@ -188,7 +188,7 @@ test("compact season list, creation of a real draft, and dark/light appearance",
   await page.getByLabel("Apparence", { exact: true }).selectOption("dark");
   await expect(page.locator(".beta-sidebar nav button").first()).toHaveCSS(
     "background-color",
-    "rgb(21, 28, 40)",
+    "rgb(14, 19, 40)",
   );
   await page.screenshot({ path: "test-results/seasons-desktop-dark.png" });
   await page.getByLabel("Apparence", { exact: true }).selectOption("light");
