@@ -214,7 +214,7 @@ export default function VisitorHouse({
               onClick={onClose}
             >
               <X size={20} />
-              Fermer la fiche
+              Revenir à ma collecte
             </button>
           </footer>
         )}
