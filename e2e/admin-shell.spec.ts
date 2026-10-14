@@ -430,22 +430,22 @@ test("own account and protected administrators expose no rejected user-managemen
     .getByRole("button", { name: "Utilisateurs", exact: true })
     .click();
   await page.getByRole("button", { name: "Mon profil", exact: true }).click();
-  let dialog = page.getByRole("dialog");
+  let detail = page.locator(".admin-inline-detail");
   await expect(
-    dialog.getByRole("link", { name: "Mon compte", exact: true }),
+    detail.getByRole("link", { name: "Mon compte", exact: true }),
   ).toBeVisible();
-  await expect(dialog.locator("form")).toHaveCount(0);
+  await expect(detail.locator("form")).toHaveCount(0);
   await expect(
-    dialog.getByRole("button", { name: "Désactiver", exact: true }),
+    detail.getByRole("button", { name: "Désactiver", exact: true }),
   ).toHaveCount(0);
-  await dialog.getByRole("button", { name: "Fermer", exact: true }).click();
+  await detail.getByRole("button", { name: /Refermer la fiche/ }).click();
   await page
     .getByRole("button", { name: "Super protégé", exact: true })
     .click();
-  dialog = page.getByRole("dialog");
-  await expect(dialog.locator("form")).toHaveCount(0);
+  detail = page.locator(".admin-inline-detail");
+  await expect(detail.locator("form")).toHaveCount(0);
   await expect(
-    dialog.getByRole("button", { name: "Désactiver", exact: true }),
+    detail.getByRole("button", { name: "Désactiver", exact: true }),
   ).toHaveCount(0);
 });
 
