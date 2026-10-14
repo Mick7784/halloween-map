@@ -1,4 +1,4 @@
-import { parse } from "parse5";
+import { parse, parseFragment } from "parse5";
 import { escapeHtml } from "./editorial-format";
 
 type EmailNode = {
@@ -165,4 +165,34 @@ export function renderEmailHtmlDocument(
   const bodyStyle = attribute(body, "style");
   const bodyAttrs = bodyStyle ? ' style="' + escapeHtml(style(bodyStyle)) + '"' : "";
   return '<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body' + bodyAttrs + ">" + content + "</body></html>";
+}
+
+
+/** Multipart text alternative derived only from validated HTML email documents. */
+export function emailDocumentText(validatedHtml: string): string {
+  const dom = parseFragment(validatedHtml) as unknown as EmailNode;
+  const lines: string[] = [];
+  const breaks = new Set(["p", "div", "tr", "li", "h1", "h2", "h3", "h4", "br", "hr"]);
+  function walk(node: EmailNode) {
+    if (node.nodeName === "#text") {
+      lines.push(node.value ?? "");
+      return;
+    }
+    const tag = node.tagName ?? node.nodeName;
+    if (tag === "head" || tag === "style" || tag === "title") return;
+    if (breaks.has(tag)) lines.push("\n");
+    if (tag === "img") {
+      lines.push(attribute(node, "alt") ?? "");
+      return;
+    }
+    for (const child of node.childNodes ?? []) walk(child);
+    if (tag === "a") {
+      const href = attribute(node, "href");
+      if (href) lines.push(" (" + href + ")");
+    }
+    if (breaks.has(tag)) lines.push("\n");
+  }
+  walk(dom);
+  return lines.join("").replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n").trim();
 }
