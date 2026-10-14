@@ -1,5 +1,6 @@
 import { mailLayout } from "./mail-layout";
 import { editorialText } from "./editorial-format";
+import { renderEmailHtmlDocument, emailDocumentText } from "./email-html";
 export const messageKinds = [
   "VERIFY",
   "INVITE",
@@ -9,7 +10,7 @@ export const messageKinds = [
   "HOUSE_REFUSED",
 ] as const;
 export type MessageKind = (typeof messageKinds)[number];
-export type MessageTemplate = { subject: string; body: string };
+export type MessageTemplate = { subject: string; body: string; html_body?: string | null };
 export const messageVariables = [
   "name",
   "event_name",
@@ -76,6 +77,15 @@ export function renderMessage(
   const fill = (value: string) =>
     value.replace(/\{\{\s*(\w+)\s*\}\}/g, (_, key) => variables[key] ?? "");
   const subject = fill(template.subject).replace(/[\r\n]/g, " ");
+  if (template.html_body?.trim()) {
+    const html = renderEmailHtmlDocument(template.html_body, {
+      allowedVariables: messageVariables,
+      variables,
+      requireSecureAction: !!cta,
+      secureActionUrl: cta?.url,
+    });
+    return { subject, html, text: emailDocumentText(html) };
+  }
   return {
     subject,
     html: mailLayout(subject, template.body, cta, variables),
