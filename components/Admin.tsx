@@ -1344,10 +1344,15 @@ export default function Admin({
                 <option value="CLOSED">Fermées</option>
               </Select>
             </div>
-            {loading && !error ? (
+            {loadedView !== viewKey && loading ? (
               <p role="status">Chargement des maisons…</p>
             ) : (
-              !error && table(list)
+              !error && (
+                <>
+                  {loading && <p role="status" className="small muted">Actualisation des maisons…</p>}
+                  {table(list)}
+                </>
+              )
             )}
           </section>
         )}
