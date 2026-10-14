@@ -16,7 +16,9 @@ import {
 } from "./common";
 import { seasonFinished } from "../lib/domain";
 import VisualEditor from "./VisualEditor";
-import { editorialText } from "../lib/editorial-format";
+import EmailHtmlEditor from "./EmailHtmlEditor";
+import { renderEmailHtmlDocument, emailDocumentText } from "../lib/email-html";
+import { editorialText, editorialHtml } from "../lib/editorial-format";
 import type { Season, User } from "../lib/domain";
 type Campaign = {
   id: string;
@@ -24,6 +26,7 @@ type Campaign = {
   season_id: string;
   subject: string;
   body: string;
+  html_body?: string | null;
   audience: string;
   active: boolean;
   schedule_mode: string;
@@ -194,6 +197,7 @@ function CampaignForm({
       campaign?.body ??
         "Bonjour {{name}},\n\n{{event_name}} ouvre le {{map_open_date}}. À bientôt !",
     ),
+    [htmlBody, setHtmlBody] = useState<string | null>(campaign?.html_body ?? null),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false);
   const dirty =
@@ -201,7 +205,8 @@ function CampaignForm({
     body !==
       (campaign?.body ??
         "Bonjour {{name}},\n\n{{event_name}} ouvre le {{map_open_date}}. À bientôt !") ||
-    mode !== (campaign?.schedule_mode ?? "RELATIVE");
+    mode !== (campaign?.schedule_mode ?? "RELATIVE") ||
+    htmlBody !== (campaign?.html_body ?? null);
   useDraftGuard(dirty);
   const preview = (text: string) =>
     text.replace(
@@ -221,6 +226,17 @@ function CampaignForm({
           }) as Record<string, string>
         )[v] ?? "",
     );
+  let rendered: { html: string; text: string } | null = null;
+  let htmlError = "";
+  try {
+    const vars = Object.fromEntries(variables.map((key) => [key, preview("{{" + key + "}}")]));
+    const html = htmlBody
+      ? renderEmailHtmlDocument(htmlBody, { allowedVariables: variables, variables: vars })
+      : mailLayout(preview(subject), body, undefined, vars);
+    rendered = { html, text: htmlBody ? emailDocumentText(html) : preview(editorialText(body)) };
+  } catch (e) {
+    htmlError = (e as Error).message;
+  }
   return (
     <div className="modal-backdrop">
       <Dialog
@@ -261,6 +277,7 @@ function CampaignForm({
                   name: v.name,
                   subject,
                   body,
+                  html_body: htmlBody,
                   audience: v.audience,
                   active: v.active === "on",
                   schedule_mode: mode,
@@ -287,12 +304,27 @@ function CampaignForm({
               onChange={(e) => setSubject(e.target.value)}
             />
           </label>
-          <VisualEditor
-            value={body}
-            onChange={setBody}
-            variables={variables}
-            maxLength={5000}
-          />
+          {htmlBody ? (
+            <>
+              <EmailHtmlEditor value={htmlBody} onChange={setHtmlBody}
+                variables={variables} />
+              <Button type="button" onClick={() => {
+                if (!window.confirm("Revenir au format simple ? Le brouillon HTML sera abandonné.")) return;
+                setHtmlBody(null);
+              }}>Revenir à l’éditeur simple</Button>
+            </>
+          ) : (
+            <>
+              <VisualEditor value={body} onChange={setBody}
+                variables={variables} maxLength={5000} />
+              <Button type="button" onClick={() => {
+                setHtmlBody('<!doctype html><html lang="fr"><body style="margin:0;background-color:#17171e;color:#ffffff;font-family:Arial,sans-serif">' +
+                  '<table role="presentation" width="100%" cellpadding="20"><tbody><tr><td>' +
+                  '<h1>Halloween Map</h1>' + editorialHtml(body) +
+                  '<hr style="border-top:1px solid #777777"></td></tr></tbody></table></body></html>');
+              }}>Passer à l’éditeur HTML complet</Button>
+            </>
+          )}
           <p className="small muted">
             Variables : {variables.map((v) => "{{" + v + "}}").join(" · ")}
           </p>
@@ -357,23 +389,20 @@ function CampaignForm({
           </Button>
         </form>
         <h3>Aperçu</h3>
-        <iframe
-          title="Aperçu de l’email HTML"
-          sandbox=""
-          srcDoc={mailLayout(
-            preview(subject),
-            body,
-            undefined,
-            Object.fromEntries(
-              variables.map((key) => [key, preview("{{" + key + "}}")]),
-            ),
-          )}
-          style={{ width: "100%", height: 480, border: 0 }}
-        />
-        <details>
-          <summary>Version texte</summary>
-          <p className="mail-preview">{preview(editorialText(body))}</p>
-        </details>
+        {htmlError && <p role="alert" className="notice error">
+          Document HTML invalide : {htmlError}
+        </p>}
+        {rendered && (
+          <>
+            <iframe title="Aperçu de l’email HTML" sandbox=""
+              srcDoc={rendered.html}
+              style={{ width: "100%", height: 480, border: 0 }} />
+            <details>
+              <summary>Version texte</summary>
+              <p className="mail-preview">{rendered.text}</p>
+            </details>
+          </>
+        )}
       </Dialog>
     </div>
   );
