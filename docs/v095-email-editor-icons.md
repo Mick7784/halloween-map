@@ -7,9 +7,9 @@ Décision du 14/10/2026. Ce chantier part de V0.9.4 et ne modifie **aucune mise 
 ### Assets
 - **Application/PWA** : image d'origine du propriétaire (citrouille orange en repère GPS, village et route nocturnes), sans substitution graphique ; générer 192/512, Android maskable safe-area, Apple 180.
 - **Favicon** : image mini simplifiée approuvée (citrouille-repère centrée), puis 16px/32px/ico ; conserver une variante source haute résolution.
-- `scripts/pwa-assets.mjs` génère actuellement tous les assets à partir du seul `public/favicon.svg`. **Découpler la source app de la source favicon** : ne pas régénérer une icône PWA complexe à partir du mini favicon.
+- **Sources intégrées dans GitHub** : `public/pwa/app-icon-source.webp` (illustration complète approuvée) et `public/favicon-mini-source.webp` (déclinaison compacte). `scripts/pwa-assets.mjs` génère séparément PWA 192/512, Apple 180, maskable, favicon PNG 16/32 et ICO 16/32. L'ancien `favicon.svg` n'est plus référencé par les métadonnées, sans le supprimer des ressources publiques.
 - Mettre à jour les références `app/manifest.ts`/`app/layout.tsx` seulement si chemins changent. Cache/version des icônes et tests d'assets.
-- Ne jamais engager une approximation manuelle sous le nom de l'image utilisateur ; fichiers sources à intégrer en binaire avant l'acceptation.
+- Les deux visuels source optimisés sont committés comme blobs binaires, avec vérification des exports générés et de leur cohérence dans `tests/pwa-identity.test.ts`. Aucun remplacement manuel du design public n'est effectué.
 
 ### Emails — prérequis critiques
 - L'éditeur actuel `VisualEditor` sérialise un sous-ensemble Tiptap en mini Markdown, rejetant l'HTML (via `sanitizeContent`). Cela doit rester le **chemin de lecture et envoi legacy** tant que les six modèles et campagnes ne sont pas migrés.
