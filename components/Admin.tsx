@@ -126,6 +126,9 @@ export default function Admin({
     [review, setReview] = useState("ALL"),
     [availability, setAvailability] = useState("ALL"),
     [housePage, setHousePage] = useState(1),
+    [housePageSize, setHousePageSize] = useState(25),
+    [houseSort, setHouseSort] = useState("name"),
+    [houseSortDirection, setHouseSortDirection] = useState<"asc" | "desc">("asc"),
     [theme, setTheme] = useState("system"),
     [menuOpen, setMenuOpen] = useState(false),
     [mobileView, setMobileView] = useState(false),
@@ -383,37 +386,73 @@ export default function Admin({
     setReason(h.refusal_reason ?? "");
   }
   function table(items: ManagedHouse[], moderation = false) {
+    const sortedItems = items.slice().sort((a, b) => {
+      const value = (h: ManagedHouse) =>
+        ({
+          name: h.name,
+          address: h.address,
+          status: h.review_status ?? "",
+          availability: availabilityLabel(h),
+          activities: h.activities.join(", "),
+          modification: String(h.updated_at ?? ""),
+          submission: String(h.submitted_at ?? ""),
+        })[houseSort] ?? h.name;
+      const diff = value(a).localeCompare(value(b), "fr", {
+        sensitivity: "base",
+        numeric: true,
+      });
+      return diff * (houseSortDirection === "asc" ? 1 : -1);
+    });
+    function sortHeader(id: string, label: string) {
+      return (
+        <th aria-sort={houseSort === id
+          ? (houseSortDirection === "asc" ? "ascending" : "descending")
+          : "none"}>
+          <Button type="button" className="admin-sort-column" onClick={() => {
+            if (houseSort === id)
+              setHouseSortDirection((v) => v === "asc" ? "desc" : "asc");
+            else {
+              setHouseSort(id);
+              setHouseSortDirection("asc");
+            }
+            setHousePage(1);
+          }}>
+            {label} {houseSort === id ? (houseSortDirection === "asc" ? "↑" : "↓") : ""}
+          </Button>
+        </th>
+      );
+    }
     return (
       <div className="beta-table-scroll">
         <DataTable className="houses-table">
           <thead>
             <tr>
-              <th>Maison / propriétaire</th>
-              <th>Adresse</th>
-              <th>Statut</th>
+              {sortHeader("name", "Maison / propriétaire")}
+              {sortHeader("address", "Adresse")}
+              {sortHeader("status", "Statut")}
               {moderation ? (
-                <th>Soumission</th>
+                sortHeader("submission", "Soumission")
               ) : (
                 <>
-                  <th>Disponibilité</th>
-                  <th>Activités</th>
-                  <th>Modification</th>
+                  {sortHeader("availability", "Disponibilité")}
+                  {sortHeader("activities", "Activités")}
+                  {sortHeader("modification", "Modification")}
                 </>
               )}
               <th>Action</th>
             </tr>
           </thead>
           <tbody>
-            {items
+            {sortedItems
               .slice(
                 (Math.min(
                   housePage,
-                  Math.max(1, Math.ceil(items.length / 25)),
+                  Math.max(1, Math.ceil(items.length / housePageSize)),
                 ) -
                   1) *
-                  25,
-                Math.min(housePage, Math.max(1, Math.ceil(items.length / 25))) *
-                  25,
+                  housePageSize,
+                Math.min(housePage, Math.max(1, Math.ceil(items.length / housePageSize))) *
+                  housePageSize,
               )
               .map((h) => (
                 <Fragment key={h.id}>
@@ -809,11 +848,27 @@ export default function Admin({
               ))}
           </tbody>
         </DataTable>
-        <Pagination
-          count={items.length}
-          page={Math.min(housePage, Math.max(1, Math.ceil(items.length / 25)))}
-          onPage={setHousePage}
-        />
+        <div className="admin-pagination-toolbar">
+          <label>
+            Lignes par page{" "}
+            <Select aria-label="Lignes maisons par page"
+              value={housePageSize}
+              onChange={(e) => {
+                setHousePageSize(Number(e.target.value));
+                setHousePage(1);
+              }}>
+              <option value={25}>25</option>
+              <option value={50}>50</option>
+              <option value={100}>100</option>
+            </Select>
+          </label>
+          <Pagination
+            count={items.length}
+            page={Math.min(housePage, Math.max(1, Math.ceil(items.length / housePageSize)))}
+            pageSize={housePageSize}
+            onPage={setHousePage}
+          />
+        </div>
         {!items.length && (
           <p className="beta-empty">
             {moderation
