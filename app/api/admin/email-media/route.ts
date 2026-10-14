@@ -41,6 +41,8 @@ export async function POST(req: NextRequest) {
     const origin = process.env.APP_ORIGIN;
     if (!origin || req.headers.get("origin") !== new URL(origin).origin)
       throw new HttpError(403, "Origine interdite");
+    if (!origin.startsWith("https://") && process.env.NODE_ENV === "production")
+      throw new HttpError(503, "APP_ORIGIN doit être HTTPS pour les images d'emails");
     const user = await admin(req);
     await rateLimit("email-image-upload:" + user.id, 25);
     if (Number(req.headers.get("content-length") ?? 0) > 2_200_000)
@@ -87,8 +89,6 @@ export async function POST(req: NextRequest) {
       )).rows[0]?.id;
     }
     if (!id) throw new HttpError(500, "Impossible de sauvegarder l'image");
-    if (!origin.startsWith("https://") && process.env.NODE_ENV === "production")
-      throw new HttpError(503, "APP_ORIGIN doit être HTTPS pour les images d'emails");
     return NextResponse.json({
       url: origin.replace(/\/$/, "") + "/api/email-media/" + id,
       id, filename: file.name, size_bytes: compressed.byteLength,
