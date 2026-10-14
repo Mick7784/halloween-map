@@ -11,6 +11,7 @@ export default function AdminActivity({
   zone,
   seasonId,
   onHouse,
+  onUser,
 }: {
   audit: AdminAudit[];
   scope: string;
@@ -19,6 +20,7 @@ export default function AdminActivity({
   zone: string;
   seasonId?: string;
   onHouse: (id: string) => void;
+  onUser?: (id: string) => void;
 }) {
   const [search, setSearch] = useState(""),
     [category, setCategory] = useState("all"),
@@ -147,6 +149,12 @@ export default function AdminActivity({
                 {row.target_label &&
                   (row.target_kind === "house" && row.target_id ? (
                     <Button onClick={() => onHouse(row.target_id!)}>
+                      {row.target_label}
+                    </Button>
+                  ) : row.target_kind === "user" &&
+                    row.target_id &&
+                    onUser ? (
+                    <Button onClick={() => onUser(row.target_id!)}>
                       {row.target_label}
                     </Button>
                   ) : (
