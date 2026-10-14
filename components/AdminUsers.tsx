@@ -159,7 +159,7 @@ export default function AdminUsers({
           <thead>
             <tr>
               <th>Utilisateur</th>
-              <th>Email</th>
+              <th>Vérification</th>
               <th>Compte</th>
               <th>Participation</th>
               <th>Profil</th>
