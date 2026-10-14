@@ -116,7 +116,7 @@ export async function PATCH(req: NextRequest) {
     await rateLimit("email-image-archive:" + user.id, 25);
     const payload = await req.json() as { id?: unknown };
     if (typeof payload?.id !== "string" ||
-        !/^[a-f\\d]{8}-[a-f\\d]{4}-[1-8][a-f\\d]{3}-[89ab][a-f\\d]{3}-[a-f\\d]{12}$/i.test(payload.id))
+        !/^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(payload.id))
       throw new HttpError(400, "Identifiant d'image invalide");
     const row = (await db().query(
       "UPDATE email_media SET hidden=true WHERE id=$1 AND instance_id=$2 RETURNING id",
