@@ -73,12 +73,12 @@ type ManagedHouse = House & {
 };
 type Dashboard = AdminMetrics;
 type Audit = AdminAudit;
-function dateLabel(value: string, zone: string) {
+function dateLabel(value: string | Date, zone: string) {
   return new Intl.DateTimeFormat("fr-FR", {
     dateStyle: "short",
     timeStyle: "short",
     timeZone: zone,
-  }).format(new Date(value));
+  }).format(value instanceof Date ? value : new Date(value));
 }
 const reviews: Record<string, string> = {
   VALIDATED: "Validée",
