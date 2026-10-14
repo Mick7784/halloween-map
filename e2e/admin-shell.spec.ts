@@ -193,6 +193,12 @@ test("dashboard stays active while BO house browsing is independently persisted;
   const nav = page.getByRole("navigation", {
     name: "Navigation administration",
   });
+  await expect(nav.getByText("Gestion", { exact: true })).toBeVisible();
+  await expect(nav.getByText("Suivi & communication", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Réduire aux icônes" }).click();
+  await expect(page.locator(".beta-sidebar")).toHaveClass(/is-collapsed/);
+  await page.getByRole("button", { name: "Développer le menu" }).click();
+  await expect(page.locator(".beta-sidebar")).not.toHaveClass(/is-collapsed/);
   await expect(
     page.locator(".beta-kpis article").filter({ hasText: "Maisons validées" }),
   ).toContainText("24");
