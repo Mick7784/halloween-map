@@ -53,6 +53,8 @@ export default function EmailHtmlEditor({
   const [linkUrl, setLinkUrl] = useState("https://");
   const surface = useRef<HTMLDivElement | null>(null);
   const selection = useRef<Range | null>(null);
+  const tableCell = useRef<HTMLTableCellElement | null>(null);
+  const [tableActive, setTableActive] = useState(false);
   const lastSent = useRef(value);
   const editing = useRef(false);
 
@@ -113,6 +115,9 @@ export default function EmailHtmlEditor({
   }
   function editImage(event: React.MouseEvent<HTMLDivElement>) {
     const target = event.target;
+    const cell = target instanceof Element ? target.closest("td,th") : null;
+    tableCell.current = cell instanceof HTMLTableCellElement ? cell : null;
+    setTableActive(!!tableCell.current);
     if (target instanceof HTMLImageElement) {
       setSelectedImage(target);
       setImageFields({
@@ -160,6 +165,44 @@ export default function EmailHtmlEditor({
     } finally {
       setUploadBusy(false);
     }
+  }
+  function updateTable(action: "add-row" | "add-column" | "remove-row" | "remove-column") {
+    const cell = tableCell.current;
+    const table = cell?.closest("table");
+    const row = cell?.closest("tr");
+    if (!cell || !table || !row || disabled) return;
+    // Prevent a simplistic row operation from corrupting complex merged cells.
+    if (Array.from(table.querySelectorAll("td,th")).some((item) =>
+      (item as HTMLTableCellElement).colSpan !== 1 ||
+      (item as HTMLTableCellElement).rowSpan !== 1,
+    )) return;
+    if (action === "add-row") {
+      const nextRow = row.cloneNode(true) as HTMLTableRowElement;
+      for (const target of Array.from(nextRow.cells)) target.innerHTML = "&nbsp;";
+      row.after(nextRow);
+    }
+    if (action === "add-column") {
+      const index = cell.cellIndex;
+      for (const targetRow of Array.from(table.rows)) {
+        const sample = targetRow.cells[index] ?? targetRow.cells[targetRow.cells.length - 1];
+        const next = document.createElement(sample?.tagName.toLowerCase() === "th" ? "th" : "td");
+        next.innerHTML = "&nbsp;";
+        if (sample) sample.after(next);
+        else targetRow.append(next);
+      }
+    }
+    if (action === "remove-row") {
+      if (table.rows.length <= 1) table.remove();
+      else row.remove();
+    }
+    if (action === "remove-column") {
+      const index = cell.cellIndex;
+      if (table.rows[0]?.cells.length <= 1) table.remove();
+      else for (const targetRow of Array.from(table.rows)) targetRow.cells[index]?.remove();
+    }
+    tableCell.current = null;
+    setTableActive(false);
+    snapshot();
   }
   function saveImage() {
     setImageError("");
@@ -239,6 +282,14 @@ export default function EmailHtmlEditor({
           '<td width="50%" style="vertical-align:top">Colonne 1</td>' +
           '<td width="50%" style="vertical-align:top">Colonne 2</td></tr></tbody></table><p></p>',
         )} disabled={editingTools} />
+        <ToolbarButton label="Ajouter une ligne au tableau" icon={ListOrdered}
+          onClick={() => updateTable("add-row")} disabled={editingTools || !tableActive} />
+        <ToolbarButton label="Ajouter une colonne au tableau" icon={Table2}
+          onClick={() => updateTable("add-column")} disabled={editingTools || !tableActive} />
+        <Button type="button" title="Supprimer la ligne sélectionnée"
+          disabled={editingTools || !tableActive} onClick={() => updateTable("remove-row")}>Ligne −</Button>
+        <Button type="button" title="Supprimer la colonne sélectionnée"
+          disabled={editingTools || !tableActive} onClick={() => updateTable("remove-column")}>Col. −</Button>
         <ToolbarButton label="Séparateur" icon={Minus} onClick={() => insert('<hr style="border-top:1px solid #777777">')} disabled={editingTools} />
         <ToolbarButton label="Annuler" icon={Undo2} onClick={() => exec("undo")} disabled={editingTools} />
         <ToolbarButton label="Rétablir" icon={Redo2} onClick={() => exec("redo")} disabled={editingTools} />
