@@ -94,8 +94,10 @@ export function renderEmailHtmlDocument(
   const parsed = parse(source) as unknown as EmailNode;
   const head = find(parsed, "head");
   for (const node of head?.childNodes ?? []) {
-    if (node.tagName && !["meta", "title"].includes(node.tagName))
+    if (node.tagName === "style")
       throw new Error("Le CSS doit être intégré dans les éléments de l’email");
+    if (node.tagName && !["meta", "title"].includes(node.tagName))
+      throw new Error("Balise HTML non autorisée : " + node.tagName);
   }
   const body = find(parsed, "body");
   if (!body) throw new Error("Corps HTML manquant");
