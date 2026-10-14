@@ -148,15 +148,14 @@ test("admin hides a house publicly, retains it in administration, and restores i
     .click();
   const row = page.getByRole("row").filter({ hasText: "Maison 0" });
   await row.getByRole("button", { name: "Gérer", exact: true }).click();
-  await page
-    .getByRole("dialog")
+  await page.getByRole("tab", { name: "Gestion" }).click();
+  page.once("dialog", (dialog) => dialog.accept());
+  await page.locator(".admin-inline-detail")
     .getByRole("button", { name: "Masquer", exact: true })
     .click();
-  await expect(page.getByRole("dialog")).toContainText("Masquée");
-  await page
-    .getByRole("dialog")
-    .getByRole("button", { name: "Fermer", exact: true })
-    .click();
+  await expect(page.locator(".admin-inline-detail")).toContainText("Masquée");
+  await page.locator(".admin-inline-detail")
+    .getByRole("button", { name: /Refermer la fiche/ }).click();
   await expect(row.getByText("Masquée", { exact: true })).toBeVisible();
   await row.getByRole("button", { name: "Gérer", exact: true }).click();
   const context = await browser.newContext({ baseURL: origin }),
@@ -169,11 +168,11 @@ test("admin hides a house publicly, retains it in administration, and restores i
   expect(houses.find((h: { id: string }) => h.id === houseId).status).toBe(
     "HIDDEN",
   );
-  await page
-    .getByRole("dialog")
+  await page.getByRole("tab", { name: "Gestion" }).click();
+  await page.locator(".admin-inline-detail")
     .getByRole("button", { name: "Réafficher", exact: true })
     .click();
-  await expect(page.getByRole("dialog")).toContainText("Visible");
+  await expect(page.locator(".admin-inline-detail")).toContainText("Visible");
   await context.close();
 });
 test("Super Admin has no obsolete demo action before REAL opening", async ({

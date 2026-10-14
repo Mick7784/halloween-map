@@ -121,15 +121,17 @@ test("beta desktop exposes only useful navigation, pending moderation and normal
     .filter({ hasText: "Mr Test 4" })
     .getByRole("button", { name: "Gérer" })
     .click();
+  await page.getByRole("tab", { name: "Gestion" }).click();
+  page.once("dialog", (dialog) => dialog.accept());
   await page
     .getByRole("button", { name: "Fermer la maison", exact: true })
     .click();
-  await expect(page.getByRole("dialog")).toContainText("Fermée");
+  await expect(page.locator(".admin-inline-detail")).toContainText("Fermée");
   await page
     .getByRole("button", { name: "Rouvrir la maison", exact: true })
     .click();
-  await expect(page.getByRole("dialog")).toContainText("Ouverte");
-  await page.getByRole("button", { name: "Fermer", exact: true }).click();
+  await expect(page.locator(".admin-inline-detail")).toContainText("Ouverte");
+  await page.getByRole("button", { name: /Refermer la fiche/ }).click();
   const previous = mutations;
   await page.getByLabel("Saison du back-office").selectOption(realId);
   await expect(page.locator("tbody tr")).toHaveCount(0);

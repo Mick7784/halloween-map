@@ -88,6 +88,28 @@ async function arrange(page: Page, role = "SUPER_ADMIN") {
         houses: [],
       };
     else if (path === "/api/admin/seasons") data = seasons;
+    else if (path === "/api/admin/settings")
+      data = {
+        id: "instance",
+        public_name: "Halloween Map",
+        territory: "Rennes",
+        postal_code: "35000",
+        country: "France",
+        timezone: "Europe/Paris",
+        latitude: 48.1,
+        longitude: -1.67,
+        zoom: 14,
+        config: {
+          defaultOpen: "10-31T18:00",
+          defaultClose: "11-01T01:00",
+        },
+      };
+    else if (path === "/api/admin/settings-impact")
+      data = {
+        changes: ["commune / territoire"],
+        fingerprint: "a".repeat(64),
+        houses: 3,
+      };
     else if (path === "/api/admin/dashboard")
       data =
         sid === real
@@ -95,6 +117,28 @@ async function arrange(page: Page, role = "SUPER_ADMIN") {
           : sid === testId
             ? { approved: 5, pending: 1, routes: 3, users: 7 }
             : { approved: 0, pending: 0, routes: 0, users: 0 };
+    else if (path === "/api/admin/statistics")
+      data = {
+        seasonId: sid,
+        snapshot: false,
+        stats: {
+          houses: 26,
+          approved: 24,
+          pending: 1,
+          refused: 1,
+          participants: 30,
+          routes: 18,
+          candy: 16,
+          decoration: 12,
+          acting: 3,
+          collections_started: 7,
+          collections_finished: 4,
+          visited: 11,
+          completion_sum: 2.5,
+          distance_meters: 10000,
+          duration_seconds: 7200,
+        },
+      };
     else if (path === "/api/admin/houses")
       data =
         sid === other ||
@@ -171,6 +215,12 @@ test("dashboard stays active while BO house browsing is independently persisted;
   const nav = page.getByRole("navigation", {
     name: "Navigation administration",
   });
+  await expect(nav.getByText("Gestion", { exact: true })).toBeVisible();
+  await expect(nav.getByText("Suivi & communication", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Réduire aux icônes" }).click();
+  await expect(page.locator(".beta-sidebar")).toHaveClass(/is-collapsed/);
+  await page.getByRole("button", { name: "Développer le menu" }).click();
+  await expect(page.locator(".beta-sidebar")).not.toHaveClass(/is-collapsed/);
   await expect(
     page.locator(".beta-kpis article").filter({ hasText: "Maisons validées" }),
   ).toContainText("24");
@@ -199,27 +249,60 @@ test("dashboard stays active while BO house browsing is independently persisted;
     await expect(page.locator(".beta-page-title h1")).toHaveText(name);
   }
 });
-test("mobile dashboard and ADMIN navigation respect permissions", async ({
+test("settings location change requires impact preview and deliberate confirmation", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  const { mutations } = await arrange(page);
+  await page.goto("/admin");
+  const nav = page.getByRole("navigation", { name: "Navigation administration" });
+  await nav.getByRole("button", { name: "Paramètres", exact: true }).click();
+  await page.getByLabel("Territoire / commune").fill("Nantes");
+  await page.getByRole("button", { name: "Enregistrer les paramètres" }).click();
+  const preview = page.getByRole("dialog", { name: "Confirmer l’action sensible" });
+  await expect(preview).toContainText("commune / territoire");
+  await expect(preview).toContainText("3 maison(s)");
+  expect(mutations.filter((m) => m.action === "settings")).toHaveLength(0);
+  await preview.getByRole("button", { name: "Annuler", exact: true }).click();
+  await expect(preview).toHaveCount(0);
+  expect(mutations.filter((m) => m.action === "settings")).toHaveLength(0);
+  await page.getByRole("button", { name: "Enregistrer les paramètres" }).click();
+  await preview.getByLabel("Confirmation de l’opération").fill("MODIFIER LA LOCALISATION");
+  await preview.getByLabel("Mot de passe").fill("test-password");
+  await preview.getByRole("button", { name: "Confirmer", exact: true }).click();
+  await expect.poll(() => mutations.filter((m) => m.action === "settings").length).toBe(1);
+  const saved = mutations.filter((m) => m.action === "settings");
+  expect(saved).toHaveLength(1);
+  const payload = (saved[0] as { payload?: Record<string, unknown> }).payload;
+  expect(payload).toMatchObject({
+    territory: "Nantes",
+    location_confirmed: true,
+    location_fingerprint: "a".repeat(64),
+  });
+});
+
+test("mobile administration exposes only read-only statistics in tabs", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await arrange(page, "ADMIN");
   await page.goto("/admin");
-  await expect(page.locator(".beta-kpis article")).toHaveCount(4);
+  await expect(page.getByRole("heading", { name: "Statistiques" })).toBeVisible();
+  await expect(page.getByRole("tab", { name: "Vue d’ensemble" })).toBeVisible();
+  await expect(page.getByRole("tab", { name: "Maisons" })).toBeVisible();
+  await expect(page.getByRole("tab", { name: "Collectes" })).toBeVisible();
+  await expect(page.getByRole("tab", { name: "Fréquentation" })).toBeVisible();
+  await expect(page.locator(".beta-sidebar")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Ouvrir la navigation" })).toHaveCount(0);
+  await expect(page.getByText("Consultation uniquement")).toBeVisible();
+  await page.getByRole("tab", { name: "Maisons" }).click();
+  await expect(page.getByText("Bonbons", { exact: true })).toBeVisible();
+  await page.getByRole("tab", { name: "Collectes" }).click();
+  await expect(page.getByText("Taux de collectes terminées")).toBeVisible();
+  await page.getByRole("tab", { name: "Fréquentation" }).click();
   expect(
     await page.evaluate(() => document.documentElement.scrollWidth),
   ).toBeLessThanOrEqual(390);
-  await page.getByRole("button", { name: "Ouvrir la navigation" }).click();
-  const nav = page.getByRole("navigation");
-  await expect(
-    nav.getByRole("button", { name: "Rôles & permissions", exact: true }),
-  ).toHaveCount(0);
-  await expect(
-    nav.getByRole("button", { name: "Paramètres", exact: true }),
-  ).toHaveCount(0);
-  await nav.getByRole("button", { name: "Maisons", exact: true }).click();
-  await expect(page.locator(".beta-sidebar")).not.toHaveClass(/is-open/);
-  await expect(page.getByLabel("Saison du back-office")).toHaveValue(real);
 });
 
 test("communications and activity follow the consulted season; TEST disables email actions", async ({
@@ -299,13 +382,14 @@ test("reexamining a refused house opens moderation without implicitly validating
     .getByRole("button", { name: "Maisons", exact: true })
     .click();
   await page.getByRole("button", { name: "Gérer", exact: true }).click();
+  await page.getByRole("tab", { name: "Modération" }).click();
   await page.getByRole("button", { name: "Réexaminer", exact: true }).click();
   await expect(
-    page.getByRole("button", { name: "Valider", exact: true }),
+    page.getByRole("button", { name: "Valider la maison", exact: true }),
   ).toBeVisible();
   expect(mutations).toEqual([]);
   await page
-    .getByRole("button", { name: "Mettre en attente", exact: true })
+    .getByRole("button", { name: "Laisser en attente", exact: true })
     .click();
   await expect.poll(() => mutations.length).toBe(1);
   expect(mutations[0]).toMatchObject({
@@ -350,22 +434,22 @@ test("own account and protected administrators expose no rejected user-managemen
     .getByRole("button", { name: "Utilisateurs", exact: true })
     .click();
   await page.getByRole("button", { name: "Mon profil", exact: true }).click();
-  let dialog = page.getByRole("dialog");
+  let detail = page.locator(".admin-inline-detail");
   await expect(
-    dialog.getByRole("link", { name: "Mon compte", exact: true }),
+    detail.getByRole("link", { name: "Mon compte", exact: true }),
   ).toBeVisible();
-  await expect(dialog.locator("form")).toHaveCount(0);
+  await expect(detail.locator("form")).toHaveCount(0);
   await expect(
-    dialog.getByRole("button", { name: "Désactiver", exact: true }),
+    detail.getByRole("button", { name: "Désactiver", exact: true }),
   ).toHaveCount(0);
-  await dialog.getByRole("button", { name: "Fermer", exact: true }).click();
+  await detail.getByRole("button", { name: /Refermer la fiche/ }).click();
   await page
     .getByRole("button", { name: "Super protégé", exact: true })
     .click();
-  dialog = page.getByRole("dialog");
-  await expect(dialog.locator("form")).toHaveCount(0);
+  detail = page.locator(".admin-inline-detail");
+  await expect(detail.locator("form")).toHaveCount(0);
   await expect(
-    dialog.getByRole("button", { name: "Désactiver", exact: true }),
+    detail.getByRole("button", { name: "Désactiver", exact: true }),
   ).toHaveCount(0);
 });
 
@@ -437,13 +521,13 @@ test("dashboard moderation link switches to the active season and refreshes afte
     })
     .click();
   await expect(page.getByLabel("Saison du back-office")).toHaveValue(real);
-  await expect(page.locator(".beta-panel")).toContainText(
-    "Jardin des lanternes",
-  );
+  const detail = page.locator(".admin-inline-detail");
+  await expect(detail).toContainText("Jardin des lanternes");
+  await detail.getByRole("tab", { name: "Modération" }).click();
   const refreshed = page.waitForResponse(
     (response) => new URL(response.url()).pathname === "/api/admin/houses",
   );
-  await page.getByRole("button", { name: "Valider", exact: true }).click();
+  await detail.getByRole("button", { name: "Valider la maison", exact: true }).click();
   await refreshed;
   await expect(
     page.locator(".beta-table-scroll tbody tr").first(),

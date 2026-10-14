@@ -965,3 +965,267 @@
     font-size: 18px;
   }
 }
+
+/* V0.9.4 — read-only mobile monitoring, no administrative navigation. */
+@media (max-width: 700px) {
+  .admin-beta:not(.admin-mobile-view) {
+    visibility: hidden;
+  }
+  .admin-beta.admin-mobile-view {
+    display: block;
+    padding: 20px 14px 28px;
+    min-height: 100dvh;
+    overflow-x: hidden;
+  }
+  .admin-mobile-statistics {
+    max-width: 660px;
+    margin: 0 auto;
+  }
+  .admin-mobile-heading h1 {
+    margin: 4px 0;
+    font-size: 24px;
+  }
+  .admin-mobile-heading p {
+    margin: 0;
+  }
+  .admin-mobile-tabs {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    margin: 18px 0;
+  }
+  .admin-mobile-tabs button {
+    font-size: 13px;
+    min-height: 44px;
+    white-space: normal;
+    padding: 10px 8px;
+    text-align: center;
+  }
+  .admin-mobile-tabs button.is-current {
+    color: var(--accent);
+    border-color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+  }
+  .admin-mobile-statistics .stats-kpis {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+  .admin-mobile-statistics .beta-card {
+    min-width: 0;
+    padding: 14px;
+  }
+}
+
+/* V0.9.4 — categories and icon-only sidebar in the desktop back office. */
+.admin-beta.sidebar-collapsed {
+  grid-template-columns: 72px minmax(0, 1fr);
+}
+.beta-sidebar {
+  min-width: 0;
+}
+.beta-logo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.beta-logo .beta-logo-title {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  font-size: 16px;
+  color: var(--text);
+}
+.beta-logo-title small {
+  display: block;
+  font-size: 11px;
+  color: var(--muted);
+  font-weight: normal;
+}
+.beta-sidebar nav {
+  gap: 18px;
+}
+.beta-nav-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.beta-nav-heading {
+  font-size: 10px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-weight: 700;
+  padding: 0 12px 4px;
+}
+.beta-sidebar-collapse {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 12px;
+  border-color: transparent !important;
+  color: var(--muted) !important;
+  min-height: 40px;
+}
+.beta-sidebar.is-collapsed {
+  padding: 28px 9px;
+  gap: 20px;
+}
+.beta-sidebar.is-collapsed .beta-logo {
+  justify-content: center;
+}
+.beta-sidebar.is-collapsed .beta-logo-title,
+.beta-sidebar.is-collapsed .beta-nav-heading,
+.beta-sidebar.is-collapsed .beta-nav-label,
+.beta-sidebar.is-collapsed .beta-public-label {
+  display: none;
+}
+.beta-sidebar.is-collapsed .beta-sidebar-collapse,
+.beta-sidebar.is-collapsed nav button,
+.beta-sidebar.is-collapsed .beta-public-link {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding-left: 9px;
+  padding-right: 9px;
+}
+@media (max-width: 700px) {
+  .admin-beta.sidebar-collapsed {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* V0.9.4 — one inline detail pattern for users and houses. */
+.admin-beta .admin-clickable-row {
+  cursor: pointer;
+}
+.admin-beta .admin-clickable-row:hover td {
+  background: color-mix(in srgb, var(--accent) 7%, var(--surface));
+}
+.admin-beta .admin-clickable-row[aria-expanded="true"] td {
+  border-bottom-color: transparent;
+}
+.admin-beta .admin-clickable-row:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -3px;
+}
+.admin-beta .admin-detail-row > td {
+  padding: 0 10px 12px !important;
+  background: transparent;
+  border-bottom: 1px solid var(--line);
+}
+.admin-inline-detail {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--surface) 92%, var(--accent));
+  padding: 18px;
+  margin: 0 8px;
+  min-width: 0;
+}
+.admin-inline-detail-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+.admin-inline-detail-header h3 {
+  margin: 0;
+}
+.admin-inline-detail-header p {
+  margin: 0;
+}
+.admin-inline-detail-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  border-bottom: 1px solid var(--line);
+  gap: 4px;
+  margin: 14px 0 18px;
+  padding-bottom: 8px;
+}
+.admin-inline-detail-tabs button {
+  border: 0;
+  border-radius: 6px;
+}
+.admin-inline-detail-tabs button.is-current {
+  background: color-mix(in srgb, var(--accent) 14%, var(--surface));
+  color: var(--accent);
+}
+.admin-inline-detail-body {
+  min-width: 0;
+}
+.admin-inline-detail-body h4 {
+  margin: 14px 0 8px;
+}
+.admin-inline-detail-body p {
+  margin-top: 6px;
+}
+.admin-detail-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 18px;
+}
+.admin-detail-facts p {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  margin: 0;
+}
+.admin-detail-facts p > strong {
+  font-size: 11px;
+  color: var(--muted);
+}
+.admin-detail-facts p > span {
+  overflow-wrap: anywhere;
+}
+.admin-detail-form {
+  display: grid;
+  gap: 12px;
+}
+.admin-advanced-actions {
+  margin: 12px 18px 18px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+}
+.admin-advanced-actions > summary {
+  cursor: pointer;
+  color: var(--muted);
+}
+.admin-advanced-actions .actions {
+  margin-top: 12px;
+}
+
+/* V0.9.4 — consistent sortable column headings and pagination controls. */
+.admin-beta .admin-sort-column {
+  border: 0;
+  background: transparent;
+  padding: 3px 0;
+  font-size: inherit;
+  font-weight: inherit;
+  text-align: left;
+  color: inherit;
+}
+.admin-beta .admin-sort-column:hover {
+  color: var(--accent);
+}
+.admin-pagination-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin: 10px 0;
+}
+.admin-pagination-toolbar label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.admin-pagination-toolbar select {
+  padding: 5px 9px;
+}

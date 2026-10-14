@@ -168,11 +168,11 @@ test("user profile edit is separate, cancels cleanly and confirms actual grade/g
     .getByRole("navigation")
     .getByRole("button", { name: "Utilisateurs", exact: true })
     .click();
-  const row = page.getByRole("row").filter({ hasText: "Camille" });
+  const row = page.locator("tr.admin-clickable-row").filter({ hasText: "Camille" });
   await row
     .getByRole("button", { name: "Voir la fiche de Camille", exact: true })
     .click();
-  const sheet = page.getByRole("dialog").first();
+  const sheet = page.locator(".admin-inline-detail");
   await expect(sheet.getByLabel("Profil")).toHaveCount(0);
   await sheet
     .getByRole("button", { name: "Modifier l’utilisateur", exact: true })
@@ -205,13 +205,10 @@ test("user profile edit is separate, cancels cleanly and confirms actual grade/g
     .getByRole("button", { name: "Confirmer", exact: true })
     .click();
   await expect(
-    sheet.getByRole("button", {
-      name: "Enregistrer l’utilisateur",
-      exact: true,
-    }),
-  ).toBeEnabled();
+    sheet.getByRole("button", { name: "Modifier l’utilisateur", exact: true }),
+  ).toBeVisible();
   await expect(sheet).toContainText("Admin");
-  await sheet.getByRole("button", { name: "Fermer", exact: true }).click();
+  await sheet.getByRole("button", { name: "Refermer la fiche Camille" }).click();
   await expect(row).toContainText("Admin");
   const persisted = (
     await pool.query(
@@ -310,36 +307,26 @@ test("real API rejects forged addresses; house decisions dispatch one message an
   await request.get("http://127.0.0.1:3108/reset");
   await dispatchEmails(new Date(), smtpSender());
   await login(page);
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto("/admin");
-  await page
-    .getByRole("button", { name: "Ouvrir la navigation", exact: true })
-    .click();
   await page
     .getByRole("navigation")
     .getByRole("button", { name: "Maisons", exact: true })
     .click();
-  const card = page.locator("tr").filter({ hasText: house.name });
-  await card.locator("summary").click();
-  await card
-    .getByRole("button", { name: "Voir la fiche", exact: true })
-    .click();
-  const sheet = page.getByRole("dialog", { name: house.name });
-  await expect(
-    sheet.getByRole("heading", { name: "Informations", exact: true }),
-  ).toBeVisible();
-  await expect(
-    sheet.getByRole("heading", { name: "Modération", exact: true }),
-  ).toBeVisible();
-  await expect(
-    sheet.getByRole("heading", { name: "Gestion", exact: true }),
-  ).toBeVisible();
+  const card = page.locator("tr.admin-clickable-row").filter({ hasText: house.name });
+  await card.click();
+  const sheet = page.locator(".admin-inline-detail");
+  await expect(sheet.getByRole("tab", { name: "Informations" })).toBeVisible();
+  await expect(sheet.getByRole("tab", { name: "Modération" })).toBeVisible();
+  await expect(sheet.getByRole("tab", { name: "Gestion" })).toBeVisible();
+  await sheet.getByRole("tab", { name: "Modération" }).click();
   await page.screenshot({
-    path: "test-results/v081-house-mobile.png",
+    path: "test-results/v094-house-inline-desktop.png",
     fullPage: true,
   });
-  await sheet.getByRole("button", { name: "Valider", exact: true }).click();
+  await sheet.getByRole("button", { name: "Valider la maison", exact: true }).click();
   await expect(sheet).toContainText("Validée");
+  await sheet.getByRole("tab", { name: "Gestion" }).click();
   await sheet
     .getByRole("button", { name: "Plus de bonbons et fermer", exact: true })
     .click();
@@ -409,16 +396,11 @@ test("real API rejects forged addresses; house decisions dispatch one message an
   await login(page);
   await page.goto("/admin");
   await page
-    .getByRole("button", { name: "Ouvrir la navigation", exact: true })
-    .click();
-  await page
     .getByRole("navigation")
     .getByRole("button", { name: "Maisons", exact: true })
     .click();
-  await card.locator("summary").click();
-  await card
-    .getByRole("button", { name: "Voir la fiche", exact: true })
-    .click();
+  await card.click();
+  await sheet.getByRole("tab", { name: "Modération" }).click();
   await sheet
     .getByLabel("Motif du refus", { exact: true })
     .selectOption("OTHER");
@@ -482,7 +464,7 @@ async function login(page: Page, email = "release-admin@example.invalid") {
   expect(r.status()).toBe(200);
   return r;
 }
-for (const width of [390, 1440])
+for (const width of [1440])
   test(`free selection UI API DB never contacts directions ${width}`, async ({
     page,
     request,
@@ -647,7 +629,7 @@ for (const width of [390, 1440])
       ).rows[0].routes_count,
     ).toBe(1);
   });
-for (const width of [390, 1440])
+for (const width of [1440])
   test(`Tiptap saves combined formatting through the real API and PostgreSQL, with matching email preview ${width}`, async ({
     page,
   }) => {
@@ -1119,7 +1101,7 @@ test("settings preview confirms consequences; new seasons use defaults and exist
       .active_season_id,
   ).toBe(seasonId);
 });
-test("all nine administration sections retain usable desktop/mobile layouts in three appearances", async ({
+test("all nine administration sections retain usable desktop layouts in three appearances", async ({
   page,
 }) => {
   await login(page);
@@ -1132,10 +1114,10 @@ test("all nine administration sections retain usable desktop/mobile layouts in t
     "Saison",
     "Communications",
     "Activité",
-    "Textes & documents",
+    "Contenus & documents",
     "Paramètres",
   ];
-  for (const width of [1440, 390]) {
+  for (const width of [1440]) {
     await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
     for (const theme of ["light", "dark", "system"]) {
       await page.getByLabel("Apparence").selectOption(theme);

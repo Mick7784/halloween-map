@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useState, useRef } from "react";
+import { Fragment, useCallback, useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import { confirmDraftNavigation } from "./useDraftGuard";
 import {
@@ -17,6 +17,8 @@ import {
   SunMoon,
   RefreshCw,
   ExternalLink,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from "lucide-react";
 import type { House, User, Season } from "../lib/domain";
 import {
@@ -36,6 +38,8 @@ import AdminDashboard, {
   type AdminMetrics,
 } from "./AdminDashboard";
 import AdminStatistics, { type SeasonStatistics } from "./AdminStatistics";
+import AdminMobileStats from "./AdminMobileStats";
+import AdminInlineDetail from "./AdminInlineDetail";
 import Campaigns from "./Campaigns";
 import AdminActivity from "./AdminActivity";
 import AdminExistingPage from "./AdminExistingPage";
@@ -69,12 +73,12 @@ type ManagedHouse = House & {
 };
 type Dashboard = AdminMetrics;
 type Audit = AdminAudit;
-function dateLabel(value: string, zone: string) {
+function dateLabel(value: string | Date, zone: string) {
   return new Intl.DateTimeFormat("fr-FR", {
     dateStyle: "short",
     timeStyle: "short",
     timeZone: zone,
-  }).format(new Date(value));
+  }).format(value instanceof Date ? value : new Date(value));
 }
 const reviews: Record<string, string> = {
   VALIDATED: "Validée",
@@ -122,8 +126,13 @@ export default function Admin({
     [review, setReview] = useState("ALL"),
     [availability, setAvailability] = useState("ALL"),
     [housePage, setHousePage] = useState(1),
+    [housePageSize, setHousePageSize] = useState(25),
+    [houseSort, setHouseSort] = useState("name"),
+    [houseSortDirection, setHouseSortDirection] = useState<"asc" | "desc">("asc"),
     [theme, setTheme] = useState("system"),
     [menuOpen, setMenuOpen] = useState(false),
+    [mobileView, setMobileView] = useState(false),
+    [sidebarCollapsed, setSidebarCollapsed] = useState(false),
     [loading, setLoading] = useState(true),
     [users, setUsers] = useState<ManagedUser[]>([]),
     [roles, setRoles] = useState<
@@ -166,6 +175,16 @@ export default function Admin({
       !!selectedSeason?.active,
     );
   const open = (h: ManagedHouse) => availabilityLabel(h) === "Ouverte";
+  useEffect(() => {
+    const media = window.matchMedia("(max-width: 700px)");
+    const update = () => setMobileView(media.matches);
+    update();
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
+  useEffect(() => {
+    if (mobileView && has(user, "stats.read")) setSection("statistics");
+  }, [mobileView, user]);
   const seasonStorageKey =
     "halloween.admin.season." + state.instance?.id + "." + user.id;
   const reloadSeasons = useCallback(async () => {
@@ -301,9 +320,19 @@ export default function Admin({
       setEdit(false);
       setReexamining(false);
       setReason(house.refusal_reason ?? "");
+      setSearch("");
+      setReview("ALL");
+      setAvailability("ALL");
+      setHouseSort("name");
+      setHouseSortDirection("asc");
+      const sorted = houses.slice().sort((a, b) =>
+        a.name.localeCompare(b.name, "fr", { sensitivity: "base", numeric: true }),
+      );
+      const index = sorted.findIndex((h) => h.id === house.id);
+      if (index >= 0) setHousePage(Math.floor(index / housePageSize) + 1);
     }
     setPendingHouseId(null);
-  }, [section, loadedView, viewKey, pendingHouseId, houses]);
+  }, [section, loadedView, viewKey, pendingHouseId, houses, housePageSize]);
   async function seasonAction(action: string, payload: unknown, id?: string) {
     await api("admin", { action, payload, id });
     await reloadSeasons();
@@ -327,6 +356,11 @@ export default function Admin({
     } catch {}
     if (stored && ["dark", "light", "system"].includes(stored))
       setTheme(stored);
+    try {
+      setSidebarCollapsed(
+        localStorage.getItem("halloween.admin.sidebar.collapsed") === "true",
+      );
+    } catch {}
   }, []);
   const current = (loadedView === viewKey ? houses : []).find(
     (h) => h.id === selected,
@@ -350,46 +384,104 @@ export default function Admin({
       (availability === "ALL" || open(h) === (availability === "OPEN")),
   );
   function select(h: ManagedHouse, editing = false) {
+    if (selected && !confirmDraftNavigation()) return;
+    if (selected === h.id && !editing) {
+      setSelected(null);
+      setEdit(false);
+      return;
+    }
     setSelected(h.id);
     setEdit(editing);
     setReexamining(false);
     setReason(h.refusal_reason ?? "");
   }
   function table(items: ManagedHouse[], moderation = false) {
+    const sortedItems = items.slice().sort((a, b) => {
+      const value = (h: ManagedHouse) =>
+        ({
+          name: h.name,
+          address: h.address,
+          status: h.review_status ?? "",
+          availability: availabilityLabel(h),
+          activities: h.activities.join(", "),
+          modification: String(h.updated_at ?? ""),
+          submission: String(h.submitted_at ?? ""),
+        })[houseSort] ?? h.name;
+      const diff = value(a).localeCompare(value(b), "fr", {
+        sensitivity: "base",
+        numeric: true,
+      });
+      return diff * (houseSortDirection === "asc" ? 1 : -1);
+    });
+    function sortHeader(id: string, label: string) {
+      return (
+        <th aria-sort={houseSort === id
+          ? (houseSortDirection === "asc" ? "ascending" : "descending")
+          : "none"}>
+          <Button type="button" className="admin-sort-column" onClick={() => {
+            if (houseSort === id)
+              setHouseSortDirection((v) => v === "asc" ? "desc" : "asc");
+            else {
+              setHouseSort(id);
+              setHouseSortDirection("asc");
+            }
+            setHousePage(1);
+          }}>
+            {label} {houseSort === id ? (houseSortDirection === "asc" ? "↑" : "↓") : ""}
+          </Button>
+        </th>
+      );
+    }
     return (
       <div className="beta-table-scroll">
         <DataTable className="houses-table">
           <thead>
             <tr>
-              <th>Maison / propriétaire</th>
-              <th>Adresse</th>
-              <th>Statut</th>
+              {sortHeader("name", "Maison / propriétaire")}
+              {sortHeader("address", "Adresse")}
+              {sortHeader("status", "Statut")}
               {moderation ? (
-                <th>Soumission</th>
+                sortHeader("submission", "Soumission")
               ) : (
                 <>
-                  <th>Disponibilité</th>
-                  <th>Activités</th>
-                  <th>Modification</th>
+                  {sortHeader("availability", "Disponibilité")}
+                  {sortHeader("activities", "Activités")}
+                  {sortHeader("modification", "Modification")}
                 </>
               )}
               <th>Action</th>
             </tr>
           </thead>
           <tbody>
-            {items
+            {sortedItems
               .slice(
                 (Math.min(
                   housePage,
-                  Math.max(1, Math.ceil(items.length / 25)),
+                  Math.max(1, Math.ceil(items.length / housePageSize)),
                 ) -
                   1) *
-                  25,
-                Math.min(housePage, Math.max(1, Math.ceil(items.length / 25))) *
-                  25,
+                  housePageSize,
+                Math.min(housePage, Math.max(1, Math.ceil(items.length / housePageSize))) *
+                  housePageSize,
               )
               .map((h) => (
-                <tr key={h.id}>
+                <Fragment key={h.id}>
+                <tr
+                  className="admin-clickable-row"
+                  tabIndex={0}
+                  aria-expanded={current?.id === h.id}
+                  onClick={(event) => {
+                    if ((event.target as HTMLElement).closest("button,a,summary,input,select,textarea")) return;
+                    select(h);
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.target !== event.currentTarget) return;
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      select(h);
+                    }
+                  }}
+                >
                   <td data-label="Maison">
                     <strong>{h.name}</strong>
                     {h.season_is_test && (
@@ -536,14 +628,257 @@ export default function Admin({
                     </div>
                   </td>
                 </tr>
+                {current?.id === h.id && (
+                  <tr className="admin-detail-row">
+                    <td colSpan={moderation ? 5 : 7}>
+                      <AdminInlineDetail
+                        key={h.id}
+                        title={current.name}
+                        subtitle={current.owner_name + " · " + current.address}
+                        initialTab="info"
+                        onClose={() => {
+                          setSelected(null);
+                          setEdit(false);
+                        }}
+                        tabs={[
+                          {
+                            id: "info",
+                            label: "Informations",
+                            content: (
+                              <section>
+                                <div className="admin-detail-facts">
+                                  <p><strong>Propriétaire</strong><span>{current.owner_name} · {current.email}</span></p>
+                                  <p><strong>Adresse</strong><span>{current.address}</span></p>
+                                  <p><strong>Position</strong><span>{current.latitude.toFixed(5)}, {current.longitude.toFixed(5)}</span></p>
+                                  <p><strong>Accueil</strong><span>{dateLabel(current.starts_at, state.instance?.timezone ?? "Europe/Paris")} → {dateLabel(current.ends_at, state.instance?.timezone ?? "Europe/Paris")}</span></p>
+                                  <p><strong>Frayeur</strong><span>{current.adaptable ? "Frissons adaptés" : "Niveau " + current.fear}</span></p>
+                                  <p><strong>Activités</strong><span><Badges activities={current.activities} /></span></p>
+                                </div>
+                                {current.rp && <p>{current.rp}</p>}
+                                {current.practical && <p>{current.practical}</p>}
+                                {has(user, "users.read") && (
+                                  <Button onClick={() => {
+                                    if (!confirmDraftNavigation()) return;
+                                    setPendingUserId(current.user_id);
+                                    setSelected(null);
+                                    setSection("users");
+                                  }}>Voir le propriétaire</Button>
+                                )}
+                                {selectedSeason && !seasonFinished(selectedSeason) &&
+                                  has(user, "participants.edit") && !edit && (
+                                    <Button onClick={() => setEdit(true)}>Modifier les informations et horaires</Button>
+                                  )}
+                                {edit && state.instance && (
+                                  <>
+                                    <Button type="button" onClick={() => {
+                                      if (!confirmDraftNavigation()) return;
+                                      setEdit(false);
+                                    }}>Annuler la modification</Button>
+                                    <HouseForm
+                                      key={current.updated_at}
+                                      house={current}
+                                      center={[state.instance.longitude, state.instance.latitude]}
+                                      zone={state.instance.timezone}
+                                      opens={current.season_opens_at}
+                                      closes={current.season_closes_at}
+                                      isTest={current.season_is_test}
+                                      styleUrl={mapStyle}
+                                      settings={state.participation}
+                                      onSave={async (payload) => {
+                                        await act("editHouse", payload);
+                                        setEdit(false);
+                                      }}
+                                    />
+                                  </>
+                                )}
+                              </section>
+                            ),
+                          },
+                          {
+                            id: "moderation",
+                            label: "Modération",
+                            content: (
+                              <section>
+                                <p>
+                                  <strong>Statut : </strong>{reviews[current.review_status ?? "VALIDATED"]}
+                                  {" · "}
+                                  Soumission : {current.submitted_at
+                                    ? dateLabel(current.submitted_at, state.instance?.timezone ?? "Europe/Paris")
+                                    : "Date non disponible"}
+                                </p>
+                                {current.refusal_reason && <p>Motif précédent : {current.refusal_reason}</p>}
+                                {selectedSeason && !seasonFinished(selectedSeason) &&
+                                  has(user, "participants.edit") && (
+                                    <>
+                                      {current.review_status === "VALIDATED" && (
+                                        <AsyncButton onClick={() => act("reviewHouse", {status:"PENDING"})}>
+                                          Remettre en attente
+                                        </AsyncButton>
+                                      )}
+                                      {current.review_status === "REFUSED" && !reexamining && (
+                                        <Button className="primary" onClick={() => setReexamining(true)}>
+                                          Réexaminer
+                                        </Button>
+                                      )}
+                                      {(current.review_status === "PENDING" ||
+                                        (current.review_status === "REFUSED" && reexamining)) && (
+                                        <div className="admin-detail-form">
+                                          <div className="beta-actions">
+                                            <AsyncButton onClick={() => act("reviewHouse", {status:"VALIDATED"})}>
+                                              Valider la maison
+                                            </AsyncButton>
+                                            <AsyncButton onClick={() => act("reviewHouse", {status:"PENDING"})}>
+                                              Laisser en attente
+                                            </AsyncButton>
+                                          </div>
+                                          <label className="field">
+                                            <span>Motif du refus</span>
+                                            <Select aria-label="Motif du refus" value={reasonCode}
+                                              onChange={(e) => {
+                                                setReasonCode(e.target.value as RefusalCode);
+                                                setReason("");
+                                              }}>
+                                              {Object.entries(refusalReasons).map(([code,label]) =>
+                                                <option key={code} value={code}>{label}</option>
+                                              )}
+                                            </Select>
+                                            <TextArea aria-label="Précisions du refus" maxLength={500}
+                                              value={reason} onChange={(e) => setReason(e.target.value)} />
+                                          </label>
+                                          <p className="small">Motif transmis : {refusalText(reasonCode,reason) || "Une explication est obligatoire."}</p>
+                                          <RefusalPreview id={current.id}
+                                            reason={refusalText(reasonCode, reason).slice(0,500)} />
+                                          <AsyncButton onClick={() => act("reviewHouse", {
+                                            status:"REFUSED",reason,reason_code:reasonCode
+                                          })}>Refuser avec motif</AsyncButton>
+                                        </div>
+                                      )}
+                                    </>
+                                  )}
+                                {!has(user, "participants.edit") || !selectedSeason || seasonFinished(selectedSeason)
+                                  ? <p className="small muted">Consultation en lecture seule.</p>
+                                  : null}
+                              </section>
+                            ),
+                          },
+                          {
+                            id: "management",
+                            label: "Gestion",
+                            content: (
+                              <section>
+                                <div className="admin-detail-facts">
+                                  <p><strong>Disponibilité</strong><span>{availabilityLabel(current)}</span></p>
+                                  <p><strong>Visibilité</strong><span>{current.status === "HIDDEN" ? "Masquée" : "Visible"}</span></p>
+                                  <p><strong>Bonbons</strong><span>{current.candy_available ? "Disponibles" : "Épuisés"}</span></p>
+                                </div>
+                                <p className="small muted">
+                                  Ouverture, distribution et visibilité sont indépendantes de la validation.
+                                </p>
+                                {selectedSeason && !seasonFinished(selectedSeason) &&
+                                  has(user, "participants.edit") ? (
+                                    <>
+                                      <div className="beta-actions">
+                                        <AsyncButton onClick={() => {
+                                          if (current.activity === "ACTIVE" &&
+                                            !window.confirm("Fermer l'accueil de cette maison ?")) return Promise.resolve();
+                                          return act("houseActivity", {
+                                            action: current.activity === "ACTIVE" ? "end" : "resume"
+                                          });
+                                        }}>
+                                          {current.activity === "ACTIVE" ? "Fermer la maison" : "Rouvrir la maison"}
+                                        </AsyncButton>
+                                        {current.candy_available && current.activities.includes("CANDY") ? (
+                                          <>
+                                            <AsyncButton onClick={() => act("houseActivity", {
+                                              action:"deplete",choice:"close"
+                                            })}>Plus de bonbons et fermer</AsyncButton>
+                                            {current.activities.includes("ACTING") && (
+                                              <AsyncButton onClick={() => act("houseActivity", {
+                                                action:"deplete",choice:"continue"
+                                              })}>Plus de bonbons, continuer la mise en scène</AsyncButton>
+                                            )}
+                                          </>
+                                        ) : (
+                                          <AsyncButton onClick={() => act("houseActivity", {
+                                            action:"candy",available:true
+                                          })}>Remettre les bonbons disponibles</AsyncButton>
+                                        )}
+                                        <AsyncButton onClick={() => {
+                                          if (current.status !== "HIDDEN" &&
+                                            !window.confirm("Masquer cette maison de la carte ?")) return Promise.resolve();
+                                          return act("visibility", current.status === "HIDDEN" ? "VISIBLE" : "HIDDEN");
+                                        }}>
+                                          {current.status === "HIDDEN" ? "Réafficher" : "Masquer"}
+                                        </AsyncButton>
+                                      </div>
+                                    </>
+                                  ) : <p className="small muted">Consultation en lecture seule.</p>}
+                                {selectedSeason && !seasonFinished(selectedSeason) &&
+                                  has(user, "participants.delete") && (
+                                    <details className="admin-advanced-actions">
+                                      <summary>Actions avancées</summary>
+                                      <AsyncButton danger onClick={async () => {
+                                        await act("deleteHouse", "SUPPRIMER LA MAISON");
+                                        setSelected(null);
+                                      }}>Supprimer la maison</AsyncButton>
+                                    </details>
+                                  )}
+                              </section>
+                            ),
+                          },
+                          {
+                            id: "history",
+                            label: "Historique",
+                            content: (
+                              <section>
+                                <p>Soumission : {current.submitted_at
+                                  ? dateLabel(current.submitted_at, state.instance?.timezone ?? "Europe/Paris")
+                                  : "Date non renseignée"}</p>
+                                <p>Dernière modification : {current.updated_at
+                                  ? dateLabel(current.updated_at, state.instance?.timezone ?? "Europe/Paris")
+                                  : "Date non renseignée"}</p>
+                                <p className="small muted">
+                                  Les autres interventions sont consultables dans Activité selon les
+                                  droits et la durée de conservation du journal.
+                                </p>
+                                {has(user, "audit.read") && (
+                                  <Button onClick={() => setSection("activity")}>
+                                    Consulter le journal d’activité
+                                  </Button>
+                                )}
+                              </section>
+                            ),
+                          },
+                        ]}
+                      />
+                    </td>
+                  </tr>
+                )}
+                </Fragment>
               ))}
           </tbody>
         </DataTable>
-        <Pagination
-          count={items.length}
-          page={Math.min(housePage, Math.max(1, Math.ceil(items.length / 25)))}
-          onPage={setHousePage}
-        />
+        <div className="admin-pagination-toolbar">
+          <label>
+            Lignes par page{" "}
+            <Select aria-label="Lignes maisons par page"
+              value={housePageSize}
+              onChange={(e) => {
+                setHousePageSize(Number(e.target.value));
+                setHousePage(1);
+              }}>
+              <option value={25}>25</option>
+              <option value={50}>50</option>
+              <option value={100}>100</option>
+            </Select>
+          </label>
+          <Pagination
+            count={items.length}
+            page={Math.min(housePage, Math.max(1, Math.ceil(items.length / housePageSize)))}
+            pageSize={housePageSize}
+            onPage={setHousePage}
+          />
+        </div>
         {!items.length && (
           <p className="beta-empty">
             {moderation
@@ -554,8 +889,33 @@ export default function Admin({
       </div>
     );
   }
+  if (mobileView) {
+    return (
+      <main className="admin-beta admin-mobile-view" data-theme={theme}>
+        {has(user, "stats.read") ? (
+          <>
+            <AdminMobileStats
+              data={loadedView === viewKey ? statistics : null}
+              loading={loading || loadedView !== viewKey}
+              zone={state.instance?.timezone ?? "Europe/Paris"}
+              seasonName={selectedSeason?.name ?? "Aucune saison"}
+            />
+            {error && <Notice error={error} />}
+          </>
+        ) : (
+          <section className="admin-mobile-statistics">
+            <h1>Statistiques</h1>
+            <p>Votre compte n’a pas accès aux statistiques.</p>
+          </section>
+        )}
+      </main>
+    );
+  }
   return (
-    <div className="admin-beta" data-theme={theme}>
+    <div
+      className={"admin-beta" + (sidebarCollapsed ? " sidebar-collapsed" : "")}
+      data-theme={theme}
+    >
       {menuOpen && (
         <Button
           className="beta-menu-backdrop"
@@ -564,7 +924,11 @@ export default function Admin({
         />
       )}
       <aside
-        className={"beta-sidebar" + (menuOpen ? " is-open" : "")}
+        className={
+          "beta-sidebar" +
+          (menuOpen ? " is-open" : "") +
+          (sidebarCollapsed ? " is-collapsed" : "")
+        }
         id="admin-navigation"
       >
         <a
@@ -572,50 +936,89 @@ export default function Admin({
           href="https://github.com/Mick7784/halloween-map"
           target="_blank"
           rel="noreferrer"
+          title="Halloween Map sur GitHub"
         >
           <span className="admin-brand-mark">
             <PumpkinMark />
           </span>
-          <span>
+          <span className="beta-logo-title">
             Halloween Map<small>Administration</small>
           </span>
         </a>
+        <Button
+          type="button"
+          className="beta-sidebar-collapse"
+          title={sidebarCollapsed ? "Développer le menu" : "Réduire aux icônes"}
+          aria-label={sidebarCollapsed ? "Développer le menu" : "Réduire aux icônes"}
+          aria-expanded={!sidebarCollapsed}
+          onClick={() => {
+            const next = !sidebarCollapsed;
+            setSidebarCollapsed(next);
+            try {
+              localStorage.setItem("halloween.admin.sidebar.collapsed", String(next));
+            } catch {}
+          }}
+        >
+          {sidebarCollapsed ? <PanelLeftOpen size={19} /> : <PanelLeftClose size={19} />}
+          {!sidebarCollapsed && <span>Réduire le menu</span>}
+        </Button>
         <nav aria-label="Navigation administration">
           {(
             [
-              ["dashboard", "Tableau de bord", "stats.read", LayoutDashboard],
-              ["houses", "Maisons", "participants.read", HouseIcon],
-              ["users", "Utilisateurs", "users.read", Users],
-              ["statistics", "Statistiques", "stats.read", ChartColumn],
-              ["seasons", "Saison", "season.read", CalendarDays],
-              ["communications", "Communications", "communications.read", Mail],
-              ["activity", "Activité", "audit.read", Activity],
-              ["content", "Textes & documents", "content.manage", FileText],
-              ["settings", "Paramètres", "settings.read", Settings],
+              ["Accueil", [
+                ["dashboard", "Tableau de bord", "stats.read", LayoutDashboard],
+              ]],
+              ["Gestion", [
+                ["houses", "Maisons", "participants.read", HouseIcon],
+                ["users", "Utilisateurs", "users.read", Users],
+                ["seasons", "Saison", "season.read", CalendarDays],
+              ]],
+              ["Suivi & communication", [
+                ["statistics", "Statistiques", "stats.read", ChartColumn],
+                ["activity", "Activité", "audit.read", Activity],
+                ["communications", "Communications", "communications.read", Mail],
+              ]],
+              ["Configuration", [
+                ["content", "Contenus & documents", "content.manage", FileText],
+                ["settings", "Paramètres", "settings.read", Settings],
+              ]],
             ] as const
-          ).map(
-            ([id, title, permission, Icon]) =>
-              has(user, permission) && (
-                <Button
-                  key={id}
-                  className={section === id ? "is-current" : ""}
-                  aria-current={section === id ? "page" : undefined}
-                  onClick={() => {
-                    if (!confirmDraftNavigation()) return;
-                    setUserCreate(false);
-                    setSection(id);
-                    setMenuOpen(false);
-                  }}
-                >
-                  <Icon size={18} />
-                  {title}
-                </Button>
-              ),
-          )}
+          ).map(([group, links]) => {
+            const allowed = links.filter(([, , permission]) => has(user, permission));
+            if (!allowed.length) return null;
+            return (
+              <div className="beta-nav-group" key={group}>
+                <span className="beta-nav-heading">{group}</span>
+                {allowed.map(([id, title, , Icon]) => (
+                  <Button
+                    key={id}
+                    type="button"
+                    className={section === id ? "is-current" : ""}
+                    aria-label={title}
+                    title={sidebarCollapsed ? title : undefined}
+                    aria-current={section === id ? "page" : undefined}
+                    onClick={() => {
+                      if (!confirmDraftNavigation()) return;
+                      setUserCreate(false);
+                      setSection(id);
+                      setMenuOpen(false);
+                    }}
+                  >
+                    <Icon size={18} />
+                    <span className="beta-nav-label">{title}</span>
+                  </Button>
+                ))}
+              </div>
+            );
+          })}
         </nav>
-        <Link className="beta-public-link" href="/map">
+        <Link
+          className="beta-public-link"
+          href="/map"
+          title={sidebarCollapsed ? "Retour à la carte" : undefined}
+        >
           <ExternalLink size={17} />
-          Voir la carte
+          <span className="beta-public-label">Retour à Halloween Map</span>
         </Link>
       </aside>
       <main className="beta-content">
@@ -640,7 +1043,7 @@ export default function Admin({
                   communications: "Communications",
                   activity: "Activité",
                   seasons: "Saison",
-                  content: "Textes & documents",
+                  content: "Contenus & documents",
                   settings: "Paramètres",
                   roles: "Rôles & permissions",
                 }[section]
@@ -824,6 +1227,14 @@ export default function Admin({
               setPendingHouseId(id);
               setSection("houses");
             }}
+            onUser={
+              has(user, "users.read")
+                ? (id) => {
+                    setPendingUserId(id);
+                    setSection("users");
+                  }
+                : undefined
+            }
             audit={loadedView === viewKey ? audit : []}
             scope={auditScope}
             onScope={setAuditScope}
@@ -933,10 +1344,15 @@ export default function Admin({
                 <option value="CLOSED">Fermées</option>
               </Select>
             </div>
-            {loading && !error ? (
+            {loadedView !== viewKey && loading ? (
               <p role="status">Chargement des maisons…</p>
             ) : (
-              !error && table(list)
+              !error && (
+                <>
+                  {loading && <p role="status" className="small muted">Actualisation des maisons…</p>}
+                  {table(list)}
+                </>
+              )
             )}
           </section>
         )}
@@ -1073,363 +1489,6 @@ export default function Admin({
                   await refresh();
                 }}
               />
-            )}
-          </Dialog>
-        </div>
-      )}
-      {current && (
-        <div className="beta-overlay">
-          <Dialog
-            className="beta-panel"
-            role="dialog"
-            onClick={(event) => event.stopPropagation()}
-            aria-modal="true"
-            aria-label={current.name}
-            data-house-sheet="true"
-          >
-            <header>
-              <h2>{current.name}</h2>
-              <Button
-                className="close secondary"
-                aria-label="Fermer"
-                onClick={() => {
-                  if (confirmDraftNavigation()) setSelected(null);
-                }}
-              >
-                <X size={20} />
-              </Button>
-            </header>
-            <section className="house-information">
-              <h3>Informations</h3>
-              <p>
-                {current.owner_name} · {current.email}
-                {has(user, "users.read") && (
-                  <Button
-                    onClick={() => {
-                      setPendingUserId(current.user_id);
-                      setSelected(null);
-                      setSection("users");
-                    }}
-                  >
-                    Voir le propriétaire
-                  </Button>
-                )}
-              </p>
-              <p>{current.address}</p>
-              <p className="small muted">
-                Position : {current.latitude.toFixed(5)},{" "}
-                {current.longitude.toFixed(5)}
-              </p>
-              <p>
-                {reviews[current.review_status ?? "VALIDATED"]} ·{" "}
-                {current.status === "HIDDEN" ? "Masquée" : "Visible"} ·{" "}
-                {availabilityLabel(current)}{" "}
-                {current.season_is_test && (
-                  <span className="beta-badge">Test</span>
-                )}
-              </p>
-              <Badges activities={current.activities} />
-              <p>
-                Accueil :{" "}
-                {dateLabel(
-                  new Date(current.starts_at).toISOString(),
-                  state.instance?.timezone ?? "Europe/Paris",
-                )}{" "}
-                →{" "}
-                {dateLabel(
-                  new Date(current.ends_at).toISOString(),
-                  state.instance?.timezone ?? "Europe/Paris",
-                )}
-              </p>
-              <p>
-                {current.adaptable
-                  ? "Frissons adaptés"
-                  : "Niveau de frayeur : " + current.fear}{" "}
-                ·{" "}
-                {current.candy_available
-                  ? "Bonbons disponibles"
-                  : "Plus de bonbons"}
-              </p>
-              <p>{current.rp}</p>
-              <p>{current.practical}</p>
-            </section>
-            {selectedSeason &&
-              !seasonFinished(selectedSeason) &&
-              has(user, "participants.edit") &&
-              edit && (
-                <div className="beta-actions">
-                  <Button
-                    className="secondary"
-                    onClick={() => {
-                      if (!edit || confirmDraftNavigation()) setEdit(!edit);
-                    }}
-                  >
-                    {edit
-                      ? "Consulter / gérer"
-                      : "Modifier les informations et horaires"}
-                  </Button>
-                </div>
-              )}
-            {edit && state.instance ? (
-              <HouseForm
-                key={current.updated_at}
-                house={current}
-                center={[state.instance.longitude, state.instance.latitude]}
-                zone={state.instance.timezone}
-                opens={current.season_opens_at}
-                closes={current.season_closes_at}
-                isTest={current.season_is_test}
-                styleUrl={mapStyle}
-                settings={state.participation}
-                onSave={async (payload) => {
-                  await act("editHouse", payload);
-                  setEdit(false);
-                }}
-              />
-            ) : (
-              <>
-                {(!selectedSeason ||
-                  seasonFinished(selectedSeason) ||
-                  !has(user, "participants.edit")) && (
-                  <>
-                    <section className="house-moderation">
-                      <h3>Modération</h3>
-                      <p>
-                        {reviews[current.review_status ?? "VALIDATED"]} ·
-                        Soumission :{" "}
-                        {current.submitted_at
-                          ? dateLabel(
-                              current.submitted_at,
-                              state.instance?.timezone ?? "Europe/Paris",
-                            )
-                          : "Date non disponible"}
-                      </p>
-                      <p>{current.refusal_reason}</p>
-                    </section>
-                    <section>
-                      <h3>Gestion</h3>
-                      <p>
-                        {availabilityLabel(current)} ·{" "}
-                        {current.status === "HIDDEN" ? "Masquée" : "Visible"} ·{" "}
-                        {current.candy_available
-                          ? "Bonbons disponibles"
-                          : "Plus de bonbons"}
-                      </p>
-                      <p className="small muted">
-                        Consultation en lecture seule.
-                      </p>
-                    </section>
-                  </>
-                )}
-                {selectedSeason &&
-                  !seasonFinished(selectedSeason) &&
-                  has(user, "participants.edit") && (
-                    <>
-                      <section className="house-moderation">
-                        <h3>Modération</h3>
-                        <p>
-                          {reviews[current.review_status ?? "VALIDATED"]} ·
-                          Soumission :{" "}
-                          {current.submitted_at
-                            ? dateLabel(
-                                current.submitted_at,
-                                state.instance?.timezone ?? "Europe/Paris",
-                              )
-                            : "Date non disponible"}
-                        </p>
-                        {current.review_status === "VALIDATED" && (
-                          <AsyncButton
-                            onClick={() =>
-                              act("reviewHouse", { status: "PENDING" })
-                            }
-                          >
-                            Remettre en attente
-                          </AsyncButton>
-                        )}
-                        {current.review_status === "REFUSED" &&
-                          !reexamining && (
-                            <Button
-                              className="primary"
-                              onClick={() => setReexamining(true)}
-                            >
-                              Réexaminer
-                            </Button>
-                          )}
-                        {(current.review_status === "PENDING" ||
-                          (current.review_status === "REFUSED" &&
-                            reexamining)) && (
-                          <section>
-                            <div className="beta-actions">
-                              <AsyncButton
-                                onClick={() =>
-                                  act("reviewHouse", { status: "VALIDATED" })
-                                }
-                              >
-                                Valider
-                              </AsyncButton>
-                              <AsyncButton
-                                onClick={() =>
-                                  act("reviewHouse", { status: "PENDING" })
-                                }
-                              >
-                                Mettre en attente
-                              </AsyncButton>
-                            </div>
-                            <label>
-                              Motif du refus
-                              <Select
-                                aria-label="Motif du refus"
-                                value={reasonCode}
-                                onChange={(e) => {
-                                  setReasonCode(e.target.value as RefusalCode);
-                                  setReason("");
-                                }}
-                              >
-                                {Object.entries(refusalReasons).map(
-                                  ([code, label]) => (
-                                    <option key={code} value={code}>
-                                      {label}
-                                    </option>
-                                  ),
-                                )}
-                              </Select>
-                              <TextArea
-                                aria-label="Précisions du refus"
-                                maxLength={500}
-                                value={reason}
-                                onChange={(e) => setReason(e.target.value)}
-                              />
-                            </label>
-                            <AsyncButton
-                              onClick={() =>
-                                act("reviewHouse", {
-                                  status: "REFUSED",
-                                  reason,
-                                  reason_code: reasonCode,
-                                })
-                              }
-                            >
-                              Refuser avec motif
-                            </AsyncButton>
-                            <p className="small">
-                              Motif transmis au propriétaire :{" "}
-                              {refusalText(reasonCode, reason) ||
-                                "Une explication est obligatoire."}
-                            </p>
-                            <RefusalPreview
-                              id={current.id}
-                              reason={refusalText(reasonCode, reason).slice(
-                                0,
-                                500,
-                              )}
-                            />
-                          </section>
-                        )}
-                      </section>
-                      <section>
-                        <h3>Gestion</h3>
-                        <Button
-                          className="secondary"
-                          onClick={() => setEdit(true)}
-                        >
-                          Modifier les informations et horaires
-                        </Button>
-                        <p className="small muted">
-                          Disponibilité de l’accueil et bonbons, indépendants de
-                          la décision de modération.
-                        </p>
-                        <div className="beta-actions">
-                          <AsyncButton
-                            onClick={() =>
-                              act("houseActivity", {
-                                action:
-                                  current.activity === "ACTIVE"
-                                    ? "end"
-                                    : "resume",
-                              })
-                            }
-                          >
-                            {current.activity === "ACTIVE"
-                              ? "Fermer la maison"
-                              : "Rouvrir la maison"}
-                          </AsyncButton>
-                          {current.candy_available &&
-                          current.activities.includes("CANDY") ? (
-                            <>
-                              <AsyncButton
-                                onClick={() =>
-                                  act("houseActivity", {
-                                    action: "deplete",
-                                    choice: "close",
-                                  })
-                                }
-                              >
-                                Plus de bonbons et fermer
-                              </AsyncButton>
-                              {current.activities.includes("ACTING") && (
-                                <AsyncButton
-                                  onClick={() =>
-                                    act("houseActivity", {
-                                      action: "deplete",
-                                      choice: "continue",
-                                    })
-                                  }
-                                >
-                                  Plus de bonbons, continuer la mise en scène
-                                </AsyncButton>
-                              )}
-                            </>
-                          ) : (
-                            <AsyncButton
-                              onClick={() =>
-                                act("houseActivity", {
-                                  action: "candy",
-                                  available: true,
-                                })
-                              }
-                            >
-                              Remettre les bonbons disponibles
-                            </AsyncButton>
-                          )}
-                        </div>
-                      </section>
-                    </>
-                  )}
-                {selectedSeason &&
-                  !seasonFinished(selectedSeason) &&
-                  has(user, "participants.edit") && (
-                    <section>
-                      <h4>Visibilité administrative</h4>
-                      <p>La visibilité est indépendante de la modération.</p>
-                      <AsyncButton
-                        onClick={() =>
-                          act(
-                            "visibility",
-                            current.status === "HIDDEN" ? "VISIBLE" : "HIDDEN",
-                          )
-                        }
-                      >
-                        {current.status === "HIDDEN" ? "Réafficher" : "Masquer"}
-                      </AsyncButton>
-                    </section>
-                  )}
-                {selectedSeason &&
-                  !seasonFinished(selectedSeason) &&
-                  has(user, "participants.delete") && (
-                    <section>
-                      <h4>Suppression</h4>
-                      <AsyncButton
-                        danger
-                        onClick={async () => {
-                          await act("deleteHouse", "SUPPRIMER LA MAISON");
-                          setSelected(null);
-                        }}
-                      >
-                        Supprimer la maison
-                      </AsyncButton>
-                    </section>
-                  )}
-              </>
             )}
           </Dialog>
         </div>
