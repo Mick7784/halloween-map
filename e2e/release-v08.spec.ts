@@ -693,6 +693,34 @@ test("V0.9.5 HTML emails preserve full source, safe CTA and reusable uploaded im
   }
 });
 
+test("V0.9.5 rejects executable source HTML before opening visual editor", async ({
+  page,
+}) => {
+  await login(page);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/admin");
+  await page.getByRole("navigation", { name: "Navigation administration" })
+    .getByRole("button", { name: "Communications", exact: true }).click();
+  await page.getByRole("button", { name: "Passer à l’éditeur HTML complet" }).click();
+  const editor = page.locator(".email-html-editor").first();
+  await editor.getByRole("button", { name: "HTML", exact: true }).click();
+  const source = editor.getByRole("textbox", { name: "Code source HTML de l'email" });
+  await source.fill('<body><p>Test</p><img src="https://invalid.example/image.png" ' +
+    'onerror="window.__halloweenEmailXss=1">' +
+    '<a href="{{secure_action_url}}">Vérifier</a></body>');
+  await editor.getByRole("button", { name: "Visuel", exact: true }).click();
+  await expect(editor.getByRole("alert")).toContainText("Attribut HTML non autorisé");
+  await expect(source).toBeVisible();
+  expect(await page.evaluate(() =>
+    (window as unknown as { __halloweenEmailXss?: number }).__halloweenEmailXss,
+  )).toBeUndefined();
+  await source.fill('<body><p>Bonjour {{name}}</p>' +
+    '<a href="{{secure_action_url}}">Vérifier</a></body>');
+  await editor.getByRole("button", { name: "Visuel", exact: true }).click();
+  await expect(editor.getByRole("textbox", { name: "Document HTML d'email" }))
+    .toContainText("Bonjour");
+});
+
 test("V0.9.5 rich editor allows direct text and table editing without touching public pages", async ({
   page,
 }) => {
