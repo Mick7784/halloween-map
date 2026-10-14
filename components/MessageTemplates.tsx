@@ -15,6 +15,9 @@ import {
 } from "../lib/message-templates";
 import { api, AsyncButton, Notice } from "./common";
 import VisualEditor from "./VisualEditor";
+import EmailHtmlEditor from "./EmailHtmlEditor";
+import { editorialHtml } from "../lib/editorial-format";
+import { Button } from "./ui";
 export default function MessageTemplates({ user }: { user: User }) {
   const [models, setModels] = useState<Record<
       MessageKind,
@@ -36,7 +39,8 @@ export default function MessageTemplates({ user }: { user: User }) {
   const dirty =
     models &&
     (models[kind].subject !== template.subject ||
-      models[kind].body !== template.body);
+      models[kind].body !== template.body ||
+      (models[kind].html_body ?? null) !== (template.html_body ?? null));
   useDraftGuard(!!dirty);
   async function act(action: "save" | "reset" | "test") {
     setResult("");
@@ -52,13 +56,19 @@ export default function MessageTemplates({ user }: { user: User }) {
     }
     setResult(answer.message ?? "Modèle enregistré.");
   }
-  const preview = renderMessage(
+  let preview: ReturnType<typeof renderMessage> | null = null;
+  let previewError = "";
+  try {
+    preview = renderMessage(
     template,
     templateExamples,
     ["VERIFY", "INVITE", "RESET"].includes(kind)
       ? { label: "Exemple inactif", url: "https://example.invalid/preview" }
       : undefined,
-  );
+    );
+  } catch (e) {
+    previewError = (e as Error).message;
+  }
   return (
     <section className="beta-card">
       <h2>Modèles des emails de service</h2>
@@ -97,16 +107,50 @@ export default function MessageTemplates({ user }: { user: User }) {
           }
         />
       </label>
-      <VisualEditor
-        saveStatus={
-          dirty ? "Modifications non enregistrées" : "Modèle enregistré"
-        }
-        disabled={!manage || !models}
-        value={template.body}
-        onChange={(body) => setTemplate({ ...template, body })}
-        variables={messageVariables}
-        maxLength={5000}
-      />
+
+      {template.html_body ? (
+        <>
+          <p className="small muted">
+            Document HTML complet : personnalisez librement son en-tête,
+            ses images, ses tableaux, ses couleurs et son pied de page.
+          </p>
+          <EmailHtmlEditor
+            key={kind}
+            disabled={!manage || !models}
+            value={template.html_body}
+            onChange={(html_body) => setTemplate((prev) => ({ ...prev, html_body }))}
+            variables={messageVariables}
+            requireSecureAction={["VERIFY", "INVITE", "RESET"].includes(kind)}
+          />
+          {manage && <Button type="button" onClick={() => {
+            if (!window.confirm("Revenir au format simple ? Le brouillon HTML sera abandonné.")) return;
+            setTemplate({ ...template, html_body: null });
+          }}>Revenir à l’éditeur simple</Button>}
+        </>
+      ) : (
+        <>
+          <VisualEditor
+            saveStatus={dirty ? "Modifications non enregistrées" : "Modèle enregistré"}
+            disabled={!manage || !models}
+            value={template.body}
+            onChange={(body) => setTemplate({ ...template, body })}
+            variables={messageVariables}
+            maxLength={5000}
+          />
+          {manage && <Button type="button" onClick={() => {
+            const action = ["VERIFY", "INVITE", "RESET"].includes(kind)
+              ? '<p><a href="{{secure_action_url}}" style="display:inline-block;padding:14px;background-color:#ff922f;color:#17171e">Ouvrir mon compte</a></p>'
+              : "";
+            setTemplate({ ...template,
+              html_body: '<!doctype html><html lang="fr"><body style="margin:0;background-color:#17171e;color:#ffffff;font-family:Arial,sans-serif">' +
+                '<table role="presentation" width="100%" cellpadding="20"><tbody><tr><td>' +
+                '<h1>Halloween Map</h1>' + editorialHtml(template.body) + action +
+                '<hr style="border-top:1px solid #777777"><p>Halloween Map · Une nuit à partager.</p>' +
+                '</td></tr></tbody></table></body></html>',
+            });
+          }}>Passer à l’éditeur HTML complet</Button>}
+        </>
+      )}
       <p className="small muted">
         Les boutons sécurisés et la durée de validité sont ajoutés par le
         serveur aux messages de compte. Les notifications de maison sont
@@ -134,19 +178,23 @@ export default function MessageTemplates({ user }: { user: User }) {
           {result}
         </p>
       )}
-      <details open>
-        <summary>Aperçu HTML</summary>
-        <iframe
-          title="Aperçu du modèle"
-          sandbox=""
-          srcDoc={preview.html}
-          className="mail-frame"
-        />
-      </details>
-      <details>
-        <summary>Texte brut</summary>
-        <pre className="mail-preview">{preview.text}</pre>
-      </details>
+
+      {previewError && <p role="alert" className="notice error">
+        Document HTML invalide : {previewError}
+      </p>}
+      {preview && (
+        <>
+          <details open>
+            <summary>Aperçu du véritable email envoyé</summary>
+            <iframe title="Aperçu du modèle" sandbox=""
+              srcDoc={preview.html} className="mail-frame" />
+          </details>
+          <details>
+            <summary>Texte brut</summary>
+            <pre className="mail-preview">{preview.text}</pre>
+          </details>
+        </>
+      )}
     </section>
   );
 }
