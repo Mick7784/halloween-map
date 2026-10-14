@@ -1,5 +1,14 @@
 # Changelog
 
+## V0.9.5
+
+- **Éditeur d’emails HTML complet** dans le back-office pour les six modèles automatiques et les campagnes : barre d’outils de traitement de texte, mise en forme, tableaux éditables, liens, images, mode source HTML et aperçu. Ancien éditeur conservé en option et modèles historiques non modifiés tant qu’un passage au HTML n’est pas demandé.
+- **Images dans les emails** : import sécurisé PNG/JPEG/WebP, optimisation WebP, bibliothèque réutilisable et URLs stables accessibles aux destinataires ; stockage en base et quota par instance.
+- **Sécurité des emails** : HTML et CSS contrôlés avant enregistrement et rendu dans l’administration ; liens d’activation et de réinitialisation générés côté serveur, mentions de durée de validité conservées ; alternative en texte brut.
+- **Nouvelle identité de l’application** : illustration validée pour les icônes PWA 192/512, Apple et Android maskable ; favicon simplifié validé décliné en PNG 16/32 et ICO. **Aucun changement de design des pages publiques.**
+- **Corrections du back-office V0.9.4** : fiches Maison et Utilisateur dépliables sans répétition du nom, de l’adresse, de l’email ni des informations déjà présentes dans leurs tableaux.
+- **Compatibilité** : migrations additives, anciens modèles d’emails et moteur d’envoi maintenus ; vérifications unitaires, navigateur, build et Docker via CI. À valider après déploiement de test : envoi SMTP et affichage réel dans les clients email.
+
 ## V0.9.4
 
 - Refonte du back-office desktop : barre latérale regroupée par catégories Accueil, Gestion, Suivi & communication et Configuration, réductible aux icônes avec préférence conservée et navigation directe selon les autorisations.
