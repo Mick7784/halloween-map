@@ -1016,3 +1016,82 @@
     padding: 14px;
   }
 }
+
+/* V0.9.4 — categories and icon-only sidebar in the desktop back office. */
+.admin-beta.sidebar-collapsed {
+  grid-template-columns: 72px minmax(0, 1fr);
+}
+.beta-sidebar {
+  min-width: 0;
+}
+.beta-logo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.beta-logo .beta-logo-title {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  font-size: 16px;
+  color: var(--text);
+}
+.beta-logo-title small {
+  display: block;
+  font-size: 11px;
+  color: var(--muted);
+  font-weight: normal;
+}
+.beta-sidebar nav {
+  gap: 18px;
+}
+.beta-nav-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.beta-nav-heading {
+  font-size: 10px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-weight: 700;
+  padding: 0 12px 4px;
+}
+.beta-sidebar-collapse {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 12px;
+  border-color: transparent !important;
+  color: var(--muted) !important;
+  min-height: 40px;
+}
+.beta-sidebar.is-collapsed {
+  padding: 28px 9px;
+  gap: 20px;
+}
+.beta-sidebar.is-collapsed .beta-logo {
+  justify-content: center;
+}
+.beta-sidebar.is-collapsed .beta-logo-title,
+.beta-sidebar.is-collapsed .beta-nav-heading,
+.beta-sidebar.is-collapsed .beta-nav-label,
+.beta-sidebar.is-collapsed .beta-public-label {
+  display: none;
+}
+.beta-sidebar.is-collapsed .beta-sidebar-collapse,
+.beta-sidebar.is-collapsed nav button,
+.beta-sidebar.is-collapsed .beta-public-link {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding-left: 9px;
+  padding-right: 9px;
+}
+@media (max-width: 700px) {
+  .admin-beta.sidebar-collapsed {
+    grid-template-columns: 1fr;
+  }
+}
