@@ -68,19 +68,48 @@ export default function AdminUsers({
     [selected, setSelected] = useState<string | null>(initialUserId ?? null),
     [editing, setEditing] = useState(false),
     [page, setPage] = useState(1),
+    [pageSize, setPageSize] = useState(25),
+    [sortColumn, setSortColumn] = useState("name"),
+    [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc"),
     [create, setCreate] = useState(initialCreate);
-  const list = users.filter(
-    (u) =>
-      (u.display_name + " " + u.email)
-        .toLowerCase()
-        .includes(search.toLowerCase()) &&
-      (filter === "ALL" ||
-        (filter === "PARTICIPANTS" && u.role_name === "USER") ||
-        (filter === "ADMIN" &&
-          ["ADMIN", "SUPER_ADMIN"].includes(u.role_name ?? "")) ||
-        (filter === "DISABLED" && u.account_status === "DISABLED") ||
-        (filter === "UNVERIFIED" && u.email_status !== "VERIFIED")),
-  );
+  const list = users
+    .filter(
+      (u) =>
+        (u.display_name + " " + u.email)
+          .toLowerCase()
+          .includes(search.toLowerCase()) &&
+        (filter === "ALL" ||
+          (filter === "PARTICIPANTS" && u.role_name === "USER") ||
+          (filter === "ADMIN" &&
+            ["ADMIN", "SUPER_ADMIN"].includes(u.role_name ?? "")) ||
+          (filter === "DISABLED" && u.account_status === "DISABLED") ||
+          (filter === "UNVERIFIED" && u.email_status !== "VERIFIED")),
+    )
+    .sort((a, b) => {
+      const value = (u: ManagedUser) =>
+        ({
+          name: u.display_name,
+          verification: u.email_status,
+          account: u.account_status,
+          participation: u.participation?.name ?? "",
+          role: u.role_name ?? "",
+          last_login: u.last_login_at ?? "",
+        })[sortColumn] ?? u.display_name;
+      const result = value(a).localeCompare(value(b), "fr", {
+        sensitivity: "base",
+        numeric: true,
+      });
+      return (sortDirection === "asc" ? 1 : -1) * result;
+    });
+  function toggleSort(column: string) {
+    if (sortColumn === column)
+      setSortDirection((v) => (v === "asc" ? "desc" : "asc"));
+    else {
+      setSortColumn(column);
+      setSortDirection("asc");
+    }
+    setPage(1);
+  }
   const current = users.find((u) => u.id === selected);
   function showUser(id: string, edit = false) {
     if (selected && !confirmDraftNavigation()) return;
@@ -167,21 +196,32 @@ export default function AdminUsers({
         <DataTable className="users-table">
           <thead>
             <tr>
-              <th>Utilisateur</th>
-              <th>Vérification</th>
-              <th>Compte</th>
-              <th>Participation</th>
-              <th>Profil</th>
-              <th>Dernière connexion</th>
+              {([
+                ["name", "Utilisateur"],
+                ["verification", "Vérification"],
+                ["account", "Compte"],
+                ["participation", "Participation"],
+                ["role", "Profil"],
+                ["last_login", "Dernière connexion"],
+              ] as const).map(([id, label]) => (
+                <th key={id} aria-sort={sortColumn === id
+                  ? (sortDirection === "asc" ? "ascending" : "descending")
+                  : "none"}>
+                  <Button type="button" className="admin-sort-column"
+                    onClick={() => toggleSort(id)}>
+                    {label} {sortColumn === id ? (sortDirection === "asc" ? "↑" : "↓") : ""}
+                  </Button>
+                </th>
+              ))}
               <th>Actions</th>
             </tr>
           </thead>
           <tbody>
             {list
               .slice(
-                (Math.min(page, Math.max(1, Math.ceil(list.length / 25))) - 1) *
-                  25,
-                Math.min(page, Math.max(1, Math.ceil(list.length / 25))) * 25,
+                (Math.min(page, Math.max(1, Math.ceil(list.length / pageSize))) - 1) *
+                  pageSize,
+                Math.min(page, Math.max(1, Math.ceil(list.length / pageSize))) * pageSize,
               )
               .map((u) => (
                 <Fragment key={u.id}>
@@ -507,11 +547,27 @@ export default function AdminUsers({
               ))}
           </tbody>
         </DataTable>
-        <Pagination
-          count={list.length}
-          page={Math.min(page, Math.max(1, Math.ceil(list.length / 25)))}
-          onPage={setPage}
-        />
+        <div className="admin-pagination-toolbar">
+          <label>
+            Lignes par page{" "}
+            <Select aria-label="Lignes utilisateurs par page"
+              value={pageSize}
+              onChange={(e) => {
+                setPageSize(Number(e.target.value));
+                setPage(1);
+              }}>
+              <option value={25}>25</option>
+              <option value={50}>50</option>
+              <option value={100}>100</option>
+            </Select>
+          </label>
+          <Pagination
+            count={list.length}
+            page={Math.min(page, Math.max(1, Math.ceil(list.length / pageSize)))}
+            pageSize={pageSize}
+            onPage={setPage}
+          />
+        </div>
       </div>
       {create && (
         <div className="modal-backdrop">
