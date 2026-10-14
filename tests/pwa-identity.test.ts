@@ -3,6 +3,24 @@ import { readFile } from "node:fs/promises";
 import sharp from "sharp";
 import manifest from "../app/manifest";
 
+it("generates the app and mini favicon from the two distinct approved sources", async () => {
+  const appSource = await readFile("public/pwa/app-icon-source.webp");
+  const miniSource = await readFile("public/favicon-mini-source.webp");
+  expect(appSource.equals(miniSource)).toBe(false);
+  expect((await sharp(appSource).metadata()).width).toBeGreaterThanOrEqual(256);
+  expect((await sharp(miniSource).metadata()).width).toBeGreaterThanOrEqual(256);
+  for (const size of [16, 32]) {
+    const expected = await sharp(miniSource).resize(size, size).png().toBuffer();
+    const actual = await readFile(`public/favicon-${size}.png`);
+    expect(actual.equals(expected)).toBe(true);
+  }
+  for (const size of [192, 512]) {
+    const expected = await sharp(appSource).resize(size, size).png().toBuffer();
+    const actual = await readFile(`public/pwa/icon-${size}.png`);
+    expect(actual.equals(expected)).toBe(true);
+  }
+});
+
 it("declares real icon sizes and opaque maskable/iOS exports with safe foreground", async () => {
   const identity = manifest();
   expect(identity.id).toBe("/");
