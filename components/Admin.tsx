@@ -36,6 +36,7 @@ import AdminDashboard, {
   type AdminMetrics,
 } from "./AdminDashboard";
 import AdminStatistics, { type SeasonStatistics } from "./AdminStatistics";
+import AdminMobileStats from "./AdminMobileStats";
 import Campaigns from "./Campaigns";
 import AdminActivity from "./AdminActivity";
 import AdminExistingPage from "./AdminExistingPage";
@@ -124,6 +125,7 @@ export default function Admin({
     [housePage, setHousePage] = useState(1),
     [theme, setTheme] = useState("system"),
     [menuOpen, setMenuOpen] = useState(false),
+    [mobileView, setMobileView] = useState(false),
     [loading, setLoading] = useState(true),
     [users, setUsers] = useState<ManagedUser[]>([]),
     [roles, setRoles] = useState<
@@ -166,6 +168,16 @@ export default function Admin({
       !!selectedSeason?.active,
     );
   const open = (h: ManagedHouse) => availabilityLabel(h) === "Ouverte";
+  useEffect(() => {
+    const media = window.matchMedia("(max-width: 700px)");
+    const update = () => setMobileView(media.matches);
+    update();
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
+  useEffect(() => {
+    if (mobileView && has(user, "stats.read")) setSection("statistics");
+  }, [mobileView, user]);
   const seasonStorageKey =
     "halloween.admin.season." + state.instance?.id + "." + user.id;
   const reloadSeasons = useCallback(async () => {
@@ -552,6 +564,28 @@ export default function Admin({
           </p>
         )}
       </div>
+    );
+  }
+  if (mobileView) {
+    return (
+      <main className="admin-beta admin-mobile-view" data-theme={theme}>
+        {has(user, "stats.read") ? (
+          <>
+            <AdminMobileStats
+              data={loadedView === viewKey ? statistics : null}
+              loading={loading || loadedView !== viewKey}
+              zone={state.instance?.timezone ?? "Europe/Paris"}
+              seasonName={selectedSeason?.name ?? "Aucune saison"}
+            />
+            {error && <Notice error={error} />}
+          </>
+        ) : (
+          <section className="admin-mobile-statistics">
+            <h1>Statistiques</h1>
+            <p>Votre compte n’a pas accès aux statistiques.</p>
+          </section>
+        )}
+      </main>
     );
   }
   return (
