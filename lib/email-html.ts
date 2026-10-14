@@ -17,12 +17,12 @@ type RenderOptions = {
 const tags = new Set([
   "a", "b", "blockquote", "br", "center", "div", "em", "h1", "h2", "h3",
   "h4", "hr", "i", "img", "li", "ol", "p", "s", "small", "span", "strong",
-  "table", "tbody", "td", "th", "thead", "tfoot", "tr", "u", "ul",
+  "table", "tbody", "td", "th", "thead", "tfoot", "tr", "u", "ul", "strike",
 ]);
 const voidTags = new Set(["br", "hr", "img"]);
 const commonAttributes = new Set(["style", "title", "align", "valign", "width", "height"]);
 const styleProperties = new Set([
-  "background", "background-color", "border", "border-bottom", "border-collapse",
+  "background", "background-color", "border", "border-top", "border-bottom", "border-collapse",
   "border-color", "border-radius", "border-spacing", "border-style", "border-width",
   "color", "display", "font-family", "font-size", "font-style", "font-weight",
   "height", "letter-spacing", "line-height", "margin", "margin-bottom",
