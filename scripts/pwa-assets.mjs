@@ -1,24 +1,51 @@
 import { readFile, mkdir, writeFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import sharp from "sharp";
-const icon = await readFile("public/favicon.svg");
+
+// Sources intentionally independent in V0.9.5:
+// - App icon: full Halloween Map artwork supplied by the owner
+// - Mini favicon: approved simplified pumpkin / map pin artwork
+// Until the two source files are committed, legacy assets remain the fallback.
+const legacy = await readFile("public/favicon.svg");
+const appIcon = existsSync("public/pwa/app-icon-source.png")
+  ? await readFile("public/pwa/app-icon-source.png")
+  : legacy;
+const favicon = existsSync("public/favicon-mini-source.png")
+  ? await readFile("public/favicon-mini-source.png")
+  : legacy;
 const background = "#080b18";
 await mkdir("public/pwa", { recursive: true });
+
 for (const size of [16, 32])
-  await sharp(icon).resize(size, size).png().toFile(`public/favicon-${size}.png`);
+  await sharp(favicon).resize(size, size).png().toFile(`public/favicon-${size}.png`);
+
 for (const size of [192, 512])
-  await sharp(icon)
-    .resize(size, size)
-    .png()
-    .toFile(`public/pwa/icon-${size}.png`);
-await sharp(icon)
+  await sharp(appIcon).resize(size, size).png().toFile(`public/pwa/icon-${size}.png`);
+
+await sharp(appIcon)
   .resize(180, 180)
   .flatten({ background })
   .png()
   .toFile("public/pwa/apple-touch-icon.png");
-// Opaque background and centered artwork for launcher masking.
-const mask = `<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 128 128"><rect width="128" height="128" fill="${background}"/><svg x="16" y="16" width="96" height="96" viewBox="0 0 96 96">${icon.toString().replace(/<svg[^>]*>|<\/svg>/g, "")}</svg></svg>`;
-for (const size of [192, 512])
-  await sharp(Buffer.from(mask)).resize(size, size).png().toFile(`public/pwa/maskable-${size}.png`);
+
+// Only the foreground inside the central 80% circular safe zone must survive
+// Android's masks: 56% square art fits fully in that circle.
+for (const size of [192, 512]) {
+  const innerSize = Math.round(size * .56);
+  const foreground = await sharp(appIcon).resize(innerSize, innerSize).png().toBuffer();
+  await sharp({
+    create: {
+      width: size,
+      height: size,
+      channels: 4,
+      background,
+    },
+  })
+    .composite([{ input: foreground, gravity: "centre" }])
+    .flatten({ background })
+    .png()
+    .toFile(`public/pwa/maskable-${size}.png`);
+}
 const version = (await readFile("VERSION", "utf8")).trim();
 const sw = (await readFile("scripts/sw-template.js", "utf8")).replace(
   "__VERSION__",
