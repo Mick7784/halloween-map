@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useState, useRef } from "react";
+import { Fragment, useCallback, useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import { confirmDraftNavigation } from "./useDraftGuard";
 import {
@@ -39,6 +39,7 @@ import AdminDashboard, {
 } from "./AdminDashboard";
 import AdminStatistics, { type SeasonStatistics } from "./AdminStatistics";
 import AdminMobileStats from "./AdminMobileStats";
+import AdminInlineDetail from "./AdminInlineDetail";
 import Campaigns from "./Campaigns";
 import AdminActivity from "./AdminActivity";
 import AdminExistingPage from "./AdminExistingPage";
@@ -370,6 +371,12 @@ export default function Admin({
       (availability === "ALL" || open(h) === (availability === "OPEN")),
   );
   function select(h: ManagedHouse, editing = false) {
+    if (selected && !confirmDraftNavigation()) return;
+    if (selected === h.id && !editing) {
+      setSelected(null);
+      setEdit(false);
+      return;
+    }
     setSelected(h.id);
     setEdit(editing);
     setReexamining(false);
@@ -409,7 +416,23 @@ export default function Admin({
                   25,
               )
               .map((h) => (
-                <tr key={h.id}>
+                <Fragment key={h.id}>
+                <tr
+                  className="admin-clickable-row"
+                  tabIndex={0}
+                  aria-expanded={current?.id === h.id}
+                  onClick={(event) => {
+                    if ((event.target as HTMLElement).closest("button,a,summary,input,select,textarea")) return;
+                    select(h);
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.target !== event.currentTarget) return;
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      select(h);
+                    }
+                  }}
+                >
                   <td data-label="Maison">
                     <strong>{h.name}</strong>
                     {h.season_is_test && (
@@ -556,6 +579,233 @@ export default function Admin({
                     </div>
                   </td>
                 </tr>
+                {current?.id === h.id && (
+                  <tr className="admin-detail-row">
+                    <td colSpan={moderation ? 5 : 7}>
+                      <AdminInlineDetail
+                        key={h.id}
+                        title={current.name}
+                        subtitle={current.owner_name + " · " + current.address}
+                        initialTab="info"
+                        onClose={() => {
+                          setSelected(null);
+                          setEdit(false);
+                        }}
+                        tabs={[
+                          {
+                            id: "info",
+                            label: "Informations",
+                            content: (
+                              <section>
+                                <div className="admin-detail-facts">
+                                  <p><strong>Propriétaire</strong><span>{current.owner_name} · {current.email}</span></p>
+                                  <p><strong>Adresse</strong><span>{current.address}</span></p>
+                                  <p><strong>Position</strong><span>{current.latitude.toFixed(5)}, {current.longitude.toFixed(5)}</span></p>
+                                  <p><strong>Accueil</strong><span>{dateLabel(current.starts_at, state.instance?.timezone ?? "Europe/Paris")} → {dateLabel(current.ends_at, state.instance?.timezone ?? "Europe/Paris")}</span></p>
+                                  <p><strong>Frayeur</strong><span>{current.adaptable ? "Frissons adaptés" : "Niveau " + current.fear}</span></p>
+                                  <p><strong>Activités</strong><span><Badges activities={current.activities} /></span></p>
+                                </div>
+                                {current.rp && <p>{current.rp}</p>}
+                                {current.practical && <p>{current.practical}</p>}
+                                {has(user, "users.read") && (
+                                  <Button onClick={() => {
+                                    if (!confirmDraftNavigation()) return;
+                                    setPendingUserId(current.user_id);
+                                    setSelected(null);
+                                    setSection("users");
+                                  }}>Voir le propriétaire</Button>
+                                )}
+                                {selectedSeason && !seasonFinished(selectedSeason) &&
+                                  has(user, "participants.edit") && !edit && (
+                                    <Button onClick={() => setEdit(true)}>Modifier les informations et horaires</Button>
+                                  )}
+                                {edit && state.instance && (
+                                  <>
+                                    <Button type="button" onClick={() => {
+                                      if (!confirmDraftNavigation()) return;
+                                      setEdit(false);
+                                    }}>Annuler la modification</Button>
+                                    <HouseForm
+                                      key={current.updated_at}
+                                      house={current}
+                                      center={[state.instance.longitude, state.instance.latitude]}
+                                      zone={state.instance.timezone}
+                                      opens={current.season_opens_at}
+                                      closes={current.season_closes_at}
+                                      isTest={current.season_is_test}
+                                      styleUrl={mapStyle}
+                                      settings={state.participation}
+                                      onSave={async (payload) => {
+                                        await act("editHouse", payload);
+                                        setEdit(false);
+                                      }}
+                                    />
+                                  </>
+                                )}
+                              </section>
+                            ),
+                          },
+                          {
+                            id: "moderation",
+                            label: "Modération",
+                            content: (
+                              <section>
+                                <p>
+                                  <strong>Statut : </strong>{reviews[current.review_status ?? "VALIDATED"]}
+                                  {" · "}
+                                  Soumission : {current.submitted_at
+                                    ? dateLabel(current.submitted_at, state.instance?.timezone ?? "Europe/Paris")
+                                    : "Date non disponible"}
+                                </p>
+                                {current.refusal_reason && <p>Motif précédent : {current.refusal_reason}</p>}
+                                {selectedSeason && !seasonFinished(selectedSeason) &&
+                                  has(user, "participants.edit") && (
+                                    <>
+                                      {current.review_status === "VALIDATED" && (
+                                        <AsyncButton onClick={() => act("reviewHouse", {status:"PENDING"})}>
+                                          Remettre en attente
+                                        </AsyncButton>
+                                      )}
+                                      {current.review_status === "REFUSED" && !reexamining && (
+                                        <Button className="primary" onClick={() => setReexamining(true)}>
+                                          Réexaminer
+                                        </Button>
+                                      )}
+                                      {(current.review_status === "PENDING" ||
+                                        (current.review_status === "REFUSED" && reexamining)) && (
+                                        <div className="admin-detail-form">
+                                          <div className="beta-actions">
+                                            <AsyncButton onClick={() => act("reviewHouse", {status:"VALIDATED"})}>
+                                              Valider la maison
+                                            </AsyncButton>
+                                            <AsyncButton onClick={() => act("reviewHouse", {status:"PENDING"})}>
+                                              Laisser en attente
+                                            </AsyncButton>
+                                          </div>
+                                          <label className="field">
+                                            <span>Motif du refus</span>
+                                            <Select aria-label="Motif du refus" value={reasonCode}
+                                              onChange={(e) => {
+                                                setReasonCode(e.target.value as RefusalCode);
+                                                setReason("");
+                                              }}>
+                                              {Object.entries(refusalReasons).map(([code,label]) =>
+                                                <option key={code} value={code}>{label}</option>
+                                              )}
+                                            </Select>
+                                            <TextArea aria-label="Précisions du refus" maxLength={500}
+                                              value={reason} onChange={(e) => setReason(e.target.value)} />
+                                          </label>
+                                          <p className="small">Motif transmis : {refusalText(reasonCode,reason) || "Une explication est obligatoire."}</p>
+                                          <RefusalPreview id={current.id}
+                                            reason={refusalText(reasonCode, reason).slice(0,500)} />
+                                          <AsyncButton onClick={() => act("reviewHouse", {
+                                            status:"REFUSED",reason,reason_code:reasonCode
+                                          })}>Refuser avec motif</AsyncButton>
+                                        </div>
+                                      )}
+                                    </>
+                                  )}
+                                {!has(user, "participants.edit") || !selectedSeason || seasonFinished(selectedSeason)
+                                  ? <p className="small muted">Consultation en lecture seule.</p>
+                                  : null}
+                              </section>
+                            ),
+                          },
+                          {
+                            id: "management",
+                            label: "Gestion",
+                            content: (
+                              <section>
+                                <div className="admin-detail-facts">
+                                  <p><strong>Disponibilité</strong><span>{availabilityLabel(current)}</span></p>
+                                  <p><strong>Visibilité</strong><span>{current.status === "HIDDEN" ? "Masquée" : "Visible"}</span></p>
+                                  <p><strong>Bonbons</strong><span>{current.candy_available ? "Disponibles" : "Épuisés"}</span></p>
+                                </div>
+                                <p className="small muted">
+                                  Ouverture, distribution et visibilité sont indépendantes de la validation.
+                                </p>
+                                {selectedSeason && !seasonFinished(selectedSeason) &&
+                                  has(user, "participants.edit") ? (
+                                    <>
+                                      <div className="beta-actions">
+                                        <AsyncButton onClick={() => {
+                                          if (current.activity === "ACTIVE" &&
+                                            !window.confirm("Fermer l'accueil de cette maison ?")) return Promise.resolve();
+                                          return act("houseActivity", {
+                                            action: current.activity === "ACTIVE" ? "end" : "resume"
+                                          });
+                                        }}>
+                                          {current.activity === "ACTIVE" ? "Fermer la maison" : "Rouvrir la maison"}
+                                        </AsyncButton>
+                                        {current.candy_available && current.activities.includes("CANDY") ? (
+                                          <>
+                                            <AsyncButton onClick={() => act("houseActivity", {
+                                              action:"deplete",choice:"close"
+                                            })}>Plus de bonbons et fermer</AsyncButton>
+                                            {current.activities.includes("ACTING") && (
+                                              <AsyncButton onClick={() => act("houseActivity", {
+                                                action:"deplete",choice:"continue"
+                                              })}>Plus de bonbons, continuer la mise en scène</AsyncButton>
+                                            )}
+                                          </>
+                                        ) : (
+                                          <AsyncButton onClick={() => act("houseActivity", {
+                                            action:"candy",available:true
+                                          })}>Remettre les bonbons disponibles</AsyncButton>
+                                        )}
+                                        <AsyncButton onClick={() => {
+                                          if (current.status !== "HIDDEN" &&
+                                            !window.confirm("Masquer cette maison de la carte ?")) return Promise.resolve();
+                                          return act("visibility", current.status === "HIDDEN" ? "VISIBLE" : "HIDDEN");
+                                        }}>
+                                          {current.status === "HIDDEN" ? "Réafficher" : "Masquer"}
+                                        </AsyncButton>
+                                      </div>
+                                    </>
+                                  ) : <p className="small muted">Consultation en lecture seule.</p>}
+                                {selectedSeason && !seasonFinished(selectedSeason) &&
+                                  has(user, "participants.delete") && (
+                                    <details className="admin-advanced-actions">
+                                      <summary>Actions avancées</summary>
+                                      <AsyncButton danger onClick={async () => {
+                                        await act("deleteHouse", "SUPPRIMER LA MAISON");
+                                        setSelected(null);
+                                      }}>Supprimer la maison</AsyncButton>
+                                    </details>
+                                  )}
+                              </section>
+                            ),
+                          },
+                          {
+                            id: "history",
+                            label: "Historique",
+                            content: (
+                              <section>
+                                <p>Soumission : {current.submitted_at
+                                  ? dateLabel(current.submitted_at, state.instance?.timezone ?? "Europe/Paris")
+                                  : "Date non renseignée"}</p>
+                                <p>Dernière modification : {current.updated_at
+                                  ? dateLabel(current.updated_at, state.instance?.timezone ?? "Europe/Paris")
+                                  : "Date non renseignée"}</p>
+                                <p className="small muted">
+                                  Les autres interventions sont consultables dans Activité selon les
+                                  droits et la durée de conservation du journal.
+                                </p>
+                                {has(user, "audit.read") && (
+                                  <Button onClick={() => setSection("activity")}>
+                                    Consulter le journal d’activité
+                                  </Button>
+                                )}
+                              </section>
+                            ),
+                          },
+                        ]}
+                      />
+                    </td>
+                  </tr>
+                )}
+                </Fragment>
               ))}
           </tbody>
         </DataTable>
@@ -1169,363 +1419,6 @@ export default function Admin({
                   await refresh();
                 }}
               />
-            )}
-          </Dialog>
-        </div>
-      )}
-      {current && (
-        <div className="beta-overlay">
-          <Dialog
-            className="beta-panel"
-            role="dialog"
-            onClick={(event) => event.stopPropagation()}
-            aria-modal="true"
-            aria-label={current.name}
-            data-house-sheet="true"
-          >
-            <header>
-              <h2>{current.name}</h2>
-              <Button
-                className="close secondary"
-                aria-label="Fermer"
-                onClick={() => {
-                  if (confirmDraftNavigation()) setSelected(null);
-                }}
-              >
-                <X size={20} />
-              </Button>
-            </header>
-            <section className="house-information">
-              <h3>Informations</h3>
-              <p>
-                {current.owner_name} · {current.email}
-                {has(user, "users.read") && (
-                  <Button
-                    onClick={() => {
-                      setPendingUserId(current.user_id);
-                      setSelected(null);
-                      setSection("users");
-                    }}
-                  >
-                    Voir le propriétaire
-                  </Button>
-                )}
-              </p>
-              <p>{current.address}</p>
-              <p className="small muted">
-                Position : {current.latitude.toFixed(5)},{" "}
-                {current.longitude.toFixed(5)}
-              </p>
-              <p>
-                {reviews[current.review_status ?? "VALIDATED"]} ·{" "}
-                {current.status === "HIDDEN" ? "Masquée" : "Visible"} ·{" "}
-                {availabilityLabel(current)}{" "}
-                {current.season_is_test && (
-                  <span className="beta-badge">Test</span>
-                )}
-              </p>
-              <Badges activities={current.activities} />
-              <p>
-                Accueil :{" "}
-                {dateLabel(
-                  new Date(current.starts_at).toISOString(),
-                  state.instance?.timezone ?? "Europe/Paris",
-                )}{" "}
-                →{" "}
-                {dateLabel(
-                  new Date(current.ends_at).toISOString(),
-                  state.instance?.timezone ?? "Europe/Paris",
-                )}
-              </p>
-              <p>
-                {current.adaptable
-                  ? "Frissons adaptés"
-                  : "Niveau de frayeur : " + current.fear}{" "}
-                ·{" "}
-                {current.candy_available
-                  ? "Bonbons disponibles"
-                  : "Plus de bonbons"}
-              </p>
-              <p>{current.rp}</p>
-              <p>{current.practical}</p>
-            </section>
-            {selectedSeason &&
-              !seasonFinished(selectedSeason) &&
-              has(user, "participants.edit") &&
-              edit && (
-                <div className="beta-actions">
-                  <Button
-                    className="secondary"
-                    onClick={() => {
-                      if (!edit || confirmDraftNavigation()) setEdit(!edit);
-                    }}
-                  >
-                    {edit
-                      ? "Consulter / gérer"
-                      : "Modifier les informations et horaires"}
-                  </Button>
-                </div>
-              )}
-            {edit && state.instance ? (
-              <HouseForm
-                key={current.updated_at}
-                house={current}
-                center={[state.instance.longitude, state.instance.latitude]}
-                zone={state.instance.timezone}
-                opens={current.season_opens_at}
-                closes={current.season_closes_at}
-                isTest={current.season_is_test}
-                styleUrl={mapStyle}
-                settings={state.participation}
-                onSave={async (payload) => {
-                  await act("editHouse", payload);
-                  setEdit(false);
-                }}
-              />
-            ) : (
-              <>
-                {(!selectedSeason ||
-                  seasonFinished(selectedSeason) ||
-                  !has(user, "participants.edit")) && (
-                  <>
-                    <section className="house-moderation">
-                      <h3>Modération</h3>
-                      <p>
-                        {reviews[current.review_status ?? "VALIDATED"]} ·
-                        Soumission :{" "}
-                        {current.submitted_at
-                          ? dateLabel(
-                              current.submitted_at,
-                              state.instance?.timezone ?? "Europe/Paris",
-                            )
-                          : "Date non disponible"}
-                      </p>
-                      <p>{current.refusal_reason}</p>
-                    </section>
-                    <section>
-                      <h3>Gestion</h3>
-                      <p>
-                        {availabilityLabel(current)} ·{" "}
-                        {current.status === "HIDDEN" ? "Masquée" : "Visible"} ·{" "}
-                        {current.candy_available
-                          ? "Bonbons disponibles"
-                          : "Plus de bonbons"}
-                      </p>
-                      <p className="small muted">
-                        Consultation en lecture seule.
-                      </p>
-                    </section>
-                  </>
-                )}
-                {selectedSeason &&
-                  !seasonFinished(selectedSeason) &&
-                  has(user, "participants.edit") && (
-                    <>
-                      <section className="house-moderation">
-                        <h3>Modération</h3>
-                        <p>
-                          {reviews[current.review_status ?? "VALIDATED"]} ·
-                          Soumission :{" "}
-                          {current.submitted_at
-                            ? dateLabel(
-                                current.submitted_at,
-                                state.instance?.timezone ?? "Europe/Paris",
-                              )
-                            : "Date non disponible"}
-                        </p>
-                        {current.review_status === "VALIDATED" && (
-                          <AsyncButton
-                            onClick={() =>
-                              act("reviewHouse", { status: "PENDING" })
-                            }
-                          >
-                            Remettre en attente
-                          </AsyncButton>
-                        )}
-                        {current.review_status === "REFUSED" &&
-                          !reexamining && (
-                            <Button
-                              className="primary"
-                              onClick={() => setReexamining(true)}
-                            >
-                              Réexaminer
-                            </Button>
-                          )}
-                        {(current.review_status === "PENDING" ||
-                          (current.review_status === "REFUSED" &&
-                            reexamining)) && (
-                          <section>
-                            <div className="beta-actions">
-                              <AsyncButton
-                                onClick={() =>
-                                  act("reviewHouse", { status: "VALIDATED" })
-                                }
-                              >
-                                Valider
-                              </AsyncButton>
-                              <AsyncButton
-                                onClick={() =>
-                                  act("reviewHouse", { status: "PENDING" })
-                                }
-                              >
-                                Mettre en attente
-                              </AsyncButton>
-                            </div>
-                            <label>
-                              Motif du refus
-                              <Select
-                                aria-label="Motif du refus"
-                                value={reasonCode}
-                                onChange={(e) => {
-                                  setReasonCode(e.target.value as RefusalCode);
-                                  setReason("");
-                                }}
-                              >
-                                {Object.entries(refusalReasons).map(
-                                  ([code, label]) => (
-                                    <option key={code} value={code}>
-                                      {label}
-                                    </option>
-                                  ),
-                                )}
-                              </Select>
-                              <TextArea
-                                aria-label="Précisions du refus"
-                                maxLength={500}
-                                value={reason}
-                                onChange={(e) => setReason(e.target.value)}
-                              />
-                            </label>
-                            <AsyncButton
-                              onClick={() =>
-                                act("reviewHouse", {
-                                  status: "REFUSED",
-                                  reason,
-                                  reason_code: reasonCode,
-                                })
-                              }
-                            >
-                              Refuser avec motif
-                            </AsyncButton>
-                            <p className="small">
-                              Motif transmis au propriétaire :{" "}
-                              {refusalText(reasonCode, reason) ||
-                                "Une explication est obligatoire."}
-                            </p>
-                            <RefusalPreview
-                              id={current.id}
-                              reason={refusalText(reasonCode, reason).slice(
-                                0,
-                                500,
-                              )}
-                            />
-                          </section>
-                        )}
-                      </section>
-                      <section>
-                        <h3>Gestion</h3>
-                        <Button
-                          className="secondary"
-                          onClick={() => setEdit(true)}
-                        >
-                          Modifier les informations et horaires
-                        </Button>
-                        <p className="small muted">
-                          Disponibilité de l’accueil et bonbons, indépendants de
-                          la décision de modération.
-                        </p>
-                        <div className="beta-actions">
-                          <AsyncButton
-                            onClick={() =>
-                              act("houseActivity", {
-                                action:
-                                  current.activity === "ACTIVE"
-                                    ? "end"
-                                    : "resume",
-                              })
-                            }
-                          >
-                            {current.activity === "ACTIVE"
-                              ? "Fermer la maison"
-                              : "Rouvrir la maison"}
-                          </AsyncButton>
-                          {current.candy_available &&
-                          current.activities.includes("CANDY") ? (
-                            <>
-                              <AsyncButton
-                                onClick={() =>
-                                  act("houseActivity", {
-                                    action: "deplete",
-                                    choice: "close",
-                                  })
-                                }
-                              >
-                                Plus de bonbons et fermer
-                              </AsyncButton>
-                              {current.activities.includes("ACTING") && (
-                                <AsyncButton
-                                  onClick={() =>
-                                    act("houseActivity", {
-                                      action: "deplete",
-                                      choice: "continue",
-                                    })
-                                  }
-                                >
-                                  Plus de bonbons, continuer la mise en scène
-                                </AsyncButton>
-                              )}
-                            </>
-                          ) : (
-                            <AsyncButton
-                              onClick={() =>
-                                act("houseActivity", {
-                                  action: "candy",
-                                  available: true,
-                                })
-                              }
-                            >
-                              Remettre les bonbons disponibles
-                            </AsyncButton>
-                          )}
-                        </div>
-                      </section>
-                    </>
-                  )}
-                {selectedSeason &&
-                  !seasonFinished(selectedSeason) &&
-                  has(user, "participants.edit") && (
-                    <section>
-                      <h4>Visibilité administrative</h4>
-                      <p>La visibilité est indépendante de la modération.</p>
-                      <AsyncButton
-                        onClick={() =>
-                          act(
-                            "visibility",
-                            current.status === "HIDDEN" ? "VISIBLE" : "HIDDEN",
-                          )
-                        }
-                      >
-                        {current.status === "HIDDEN" ? "Réafficher" : "Masquer"}
-                      </AsyncButton>
-                    </section>
-                  )}
-                {selectedSeason &&
-                  !seasonFinished(selectedSeason) &&
-                  has(user, "participants.delete") && (
-                    <section>
-                      <h4>Suppression</h4>
-                      <AsyncButton
-                        danger
-                        onClick={async () => {
-                          await act("deleteHouse", "SUPPRIMER LA MAISON");
-                          setSelected(null);
-                        }}
-                      >
-                        Supprimer la maison
-                      </AsyncButton>
-                    </section>
-                  )}
-              </>
             )}
           </Dialog>
         </div>
