@@ -171,9 +171,13 @@ export async function campaignAction(user: User | null, input: unknown) {
     throw new HttpError(409, "Saison consultée différente");
   sanitizeContent(v.subject, mailVariables);
   sanitizeContent(v.body, mailVariables);
-  if (v.html_body?.trim()) renderEmailHtmlDocument(v.html_body, {
-    allowedVariables: mailVariables,
-  });
+  if (v.html_body?.trim()) {
+    try {
+      renderEmailHtmlDocument(v.html_body, { allowedVariables: mailVariables });
+    } catch (e) {
+      throw new HttpError(400, "HTML de la campagne : " + (e as Error).message);
+    }
+  }
   return transaction(async (c) => {
     const s = (
       await c.query(
