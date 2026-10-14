@@ -17,6 +17,8 @@ import {
   SunMoon,
   RefreshCw,
   ExternalLink,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from "lucide-react";
 import type { House, User, Season } from "../lib/domain";
 import {
@@ -126,6 +128,7 @@ export default function Admin({
     [theme, setTheme] = useState("system"),
     [menuOpen, setMenuOpen] = useState(false),
     [mobileView, setMobileView] = useState(false),
+    [sidebarCollapsed, setSidebarCollapsed] = useState(false),
     [loading, setLoading] = useState(true),
     [users, setUsers] = useState<ManagedUser[]>([]),
     [roles, setRoles] = useState<
@@ -339,6 +342,11 @@ export default function Admin({
     } catch {}
     if (stored && ["dark", "light", "system"].includes(stored))
       setTheme(stored);
+    try {
+      setSidebarCollapsed(
+        localStorage.getItem("halloween.admin.sidebar.collapsed") === "true",
+      );
+    } catch {}
   }, []);
   const current = (loadedView === viewKey ? houses : []).find(
     (h) => h.id === selected,
@@ -589,7 +597,10 @@ export default function Admin({
     );
   }
   return (
-    <div className="admin-beta" data-theme={theme}>
+    <div
+      className={"admin-beta" + (sidebarCollapsed ? " sidebar-collapsed" : "")}
+      data-theme={theme}
+    >
       {menuOpen && (
         <Button
           className="beta-menu-backdrop"
@@ -598,7 +609,11 @@ export default function Admin({
         />
       )}
       <aside
-        className={"beta-sidebar" + (menuOpen ? " is-open" : "")}
+        className={
+          "beta-sidebar" +
+          (menuOpen ? " is-open" : "") +
+          (sidebarCollapsed ? " is-collapsed" : "")
+        }
         id="admin-navigation"
       >
         <a
@@ -606,50 +621,89 @@ export default function Admin({
           href="https://github.com/Mick7784/halloween-map"
           target="_blank"
           rel="noreferrer"
+          title="Halloween Map sur GitHub"
         >
           <span className="admin-brand-mark">
             <PumpkinMark />
           </span>
-          <span>
+          <span className="beta-logo-title">
             Halloween Map<small>Administration</small>
           </span>
         </a>
+        <Button
+          type="button"
+          className="beta-sidebar-collapse"
+          title={sidebarCollapsed ? "Développer le menu" : "Réduire aux icônes"}
+          aria-label={sidebarCollapsed ? "Développer le menu" : "Réduire aux icônes"}
+          aria-expanded={!sidebarCollapsed}
+          onClick={() => {
+            const next = !sidebarCollapsed;
+            setSidebarCollapsed(next);
+            try {
+              localStorage.setItem("halloween.admin.sidebar.collapsed", String(next));
+            } catch {}
+          }}
+        >
+          {sidebarCollapsed ? <PanelLeftOpen size={19} /> : <PanelLeftClose size={19} />}
+          {!sidebarCollapsed && <span>Réduire le menu</span>}
+        </Button>
         <nav aria-label="Navigation administration">
           {(
             [
-              ["dashboard", "Tableau de bord", "stats.read", LayoutDashboard],
-              ["houses", "Maisons", "participants.read", HouseIcon],
-              ["users", "Utilisateurs", "users.read", Users],
-              ["statistics", "Statistiques", "stats.read", ChartColumn],
-              ["seasons", "Saison", "season.read", CalendarDays],
-              ["communications", "Communications", "communications.read", Mail],
-              ["activity", "Activité", "audit.read", Activity],
-              ["content", "Textes & documents", "content.manage", FileText],
-              ["settings", "Paramètres", "settings.read", Settings],
+              ["Accueil", [
+                ["dashboard", "Tableau de bord", "stats.read", LayoutDashboard],
+              ]],
+              ["Gestion", [
+                ["houses", "Maisons", "participants.read", HouseIcon],
+                ["users", "Utilisateurs", "users.read", Users],
+                ["seasons", "Saison", "season.read", CalendarDays],
+              ]],
+              ["Suivi & communication", [
+                ["statistics", "Statistiques", "stats.read", ChartColumn],
+                ["activity", "Activité", "audit.read", Activity],
+                ["communications", "Communications", "communications.read", Mail],
+              ]],
+              ["Configuration", [
+                ["content", "Contenus & documents", "content.manage", FileText],
+                ["settings", "Paramètres", "settings.read", Settings],
+              ]],
             ] as const
-          ).map(
-            ([id, title, permission, Icon]) =>
-              has(user, permission) && (
-                <Button
-                  key={id}
-                  className={section === id ? "is-current" : ""}
-                  aria-current={section === id ? "page" : undefined}
-                  onClick={() => {
-                    if (!confirmDraftNavigation()) return;
-                    setUserCreate(false);
-                    setSection(id);
-                    setMenuOpen(false);
-                  }}
-                >
-                  <Icon size={18} />
-                  {title}
-                </Button>
-              ),
-          )}
+          ).map(([group, links]) => {
+            const allowed = links.filter(([, , permission]) => has(user, permission));
+            if (!allowed.length) return null;
+            return (
+              <div className="beta-nav-group" key={group}>
+                <span className="beta-nav-heading">{group}</span>
+                {allowed.map(([id, title, , Icon]) => (
+                  <Button
+                    key={id}
+                    type="button"
+                    className={section === id ? "is-current" : ""}
+                    aria-label={title}
+                    title={sidebarCollapsed ? title : undefined}
+                    aria-current={section === id ? "page" : undefined}
+                    onClick={() => {
+                      if (!confirmDraftNavigation()) return;
+                      setUserCreate(false);
+                      setSection(id);
+                      setMenuOpen(false);
+                    }}
+                  >
+                    <Icon size={18} />
+                    <span className="beta-nav-label">{title}</span>
+                  </Button>
+                ))}
+              </div>
+            );
+          })}
         </nav>
-        <Link className="beta-public-link" href="/map">
+        <Link
+          className="beta-public-link"
+          href="/map"
+          title={sidebarCollapsed ? "Retour à la carte" : undefined}
+        >
           <ExternalLink size={17} />
-          Voir la carte
+          <span className="beta-public-label">Retour à Halloween Map</span>
         </Link>
       </aside>
       <main className="beta-content">
