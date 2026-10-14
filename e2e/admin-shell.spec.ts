@@ -95,6 +95,28 @@ async function arrange(page: Page, role = "SUPER_ADMIN") {
           : sid === testId
             ? { approved: 5, pending: 1, routes: 3, users: 7 }
             : { approved: 0, pending: 0, routes: 0, users: 0 };
+    else if (path === "/api/admin/statistics")
+      data = {
+        seasonId: sid,
+        snapshot: false,
+        stats: {
+          houses: 26,
+          approved: 24,
+          pending: 1,
+          refused: 1,
+          participants: 30,
+          routes: 18,
+          candy: 16,
+          decoration: 12,
+          acting: 3,
+          collections_started: 7,
+          collections_finished: 4,
+          visited: 11,
+          completion_sum: 2.5,
+          distance_meters: 10000,
+          duration_seconds: 7200,
+        },
+      };
     else if (path === "/api/admin/houses")
       data =
         sid === other ||
@@ -199,27 +221,28 @@ test("dashboard stays active while BO house browsing is independently persisted;
     await expect(page.locator(".beta-page-title h1")).toHaveText(name);
   }
 });
-test("mobile dashboard and ADMIN navigation respect permissions", async ({
+test("mobile administration exposes only read-only statistics in tabs", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await arrange(page, "ADMIN");
   await page.goto("/admin");
-  await expect(page.locator(".beta-kpis article")).toHaveCount(4);
+  await expect(page.getByRole("heading", { name: "Statistiques" })).toBeVisible();
+  await expect(page.getByRole("tab", { name: "Vue d’ensemble" })).toBeVisible();
+  await expect(page.getByRole("tab", { name: "Maisons" })).toBeVisible();
+  await expect(page.getByRole("tab", { name: "Collectes" })).toBeVisible();
+  await expect(page.getByRole("tab", { name: "Fréquentation" })).toBeVisible();
+  await expect(page.locator(".beta-sidebar")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Ouvrir la navigation" })).toHaveCount(0);
+  await expect(page.getByText("Consultation uniquement")).toBeVisible();
+  await page.getByRole("tab", { name: "Maisons" }).click();
+  await expect(page.getByText("Bonbons", { exact: true })).toBeVisible();
+  await page.getByRole("tab", { name: "Collectes" }).click();
+  await expect(page.getByText("Taux de collectes terminées")).toBeVisible();
+  await page.getByRole("tab", { name: "Fréquentation" }).click();
   expect(
     await page.evaluate(() => document.documentElement.scrollWidth),
   ).toBeLessThanOrEqual(390);
-  await page.getByRole("button", { name: "Ouvrir la navigation" }).click();
-  const nav = page.getByRole("navigation");
-  await expect(
-    nav.getByRole("button", { name: "Rôles & permissions", exact: true }),
-  ).toHaveCount(0);
-  await expect(
-    nav.getByRole("button", { name: "Paramètres", exact: true }),
-  ).toHaveCount(0);
-  await nav.getByRole("button", { name: "Maisons", exact: true }).click();
-  await expect(page.locator(".beta-sidebar")).not.toHaveClass(/is-open/);
-  await expect(page.getByLabel("Saison du back-office")).toHaveValue(real);
 });
 
 test("communications and activity follow the consulted season; TEST disables email actions", async ({
