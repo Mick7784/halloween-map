@@ -75,6 +75,22 @@ test("HTTPS UI upload, library, saved template and unauthenticated image access"
   const templates = await (await page.request.get("/api/admin/templates")).json();
   expect(JSON.stringify(templates)).toContain(asset.id);
 
+  // The admin editor can preview user-chosen remote HTTPS images, while the
+  // public application retains its narrower Content Security Policy.
+  const adminCsp = (await page.request.get("/admin")).headers()["content-security-policy"];
+  const publicCsp = (await page.request.get("/")).headers()["content-security-policy"];
+  expect(adminCsp).toContain("img-src 'self' data: blob: https:");
+  expect(publicCsp).not.toContain("img-src 'self' data: blob: https:;");
+  await page.route("https://assets.example.org/email-test.png", (route) =>
+    route.fulfill({ contentType: "image/png", body: png }),
+  );
+  const loaded = page.waitForRequest("https://assets.example.org/email-test.png");
+  const sourceEditor = page.getByLabel("Code source HTML de l'email");
+  await sourceEditor.fill((await sourceEditor.inputValue()).replace("</body>",
+    '<img src="https://assets.example.org/email-test.png" alt="Externe"></body>'));
+  await page.getByRole("button", { name: "Aperçu", exact: true }).click();
+  await loaded;
+
   // A recipient must be able to load the sent image with no session cookie.
   const anonymous = await apiRequest.newContext({ ignoreHTTPSErrors: true });
   try {
