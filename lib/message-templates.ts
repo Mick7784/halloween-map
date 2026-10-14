@@ -1,5 +1,5 @@
 import { mailLayout } from "./mail-layout";
-import { editorialText } from "./editorial-format";
+import { editorialText, escapeHtml } from "./editorial-format";
 import { renderEmailHtmlDocument, emailDocumentText } from "./email-html";
 export const messageKinds = [
   "VERIFY",
@@ -72,7 +72,7 @@ export const templateExamples: Record<string, string> = {
 export function renderMessage(
   template: MessageTemplate,
   variables: Record<string, string>,
-  cta?: { label: string; url: string },
+  cta?: { label: string; url: string; notice?: string },
 ) {
   const fill = (value: string) =>
     value.replace(/\{\{\s*(\w+)\s*\}\}/g, (_, key) => variables[key] ?? "");
@@ -84,7 +84,14 @@ export function renderMessage(
       requireSecureAction: !!cta,
       secureActionUrl: cta?.url,
     });
-    return { subject, html, text: emailDocumentText(html) };
+    // Unlike the legacy body, full HTML templates don't include the worker's
+    // appended account-safety notice. Preserve it as trusted server text.
+    const notice = cta?.notice
+      ? '<p style="font-size:12px;color:#aaa">' +
+        escapeHtml(cta.notice).replace(/\\n/g, "<br>") + "</p>"
+      : "";
+    const delivered = html.replace("</body>", notice + "</body>");
+    return { subject, html: delivered, text: emailDocumentText(delivered) };
   }
   return {
     subject,
