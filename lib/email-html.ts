@@ -16,7 +16,7 @@ type RenderOptions = {
 };
 const tags = new Set([
   "a", "b", "blockquote", "br", "center", "div", "em", "h1", "h2", "h3",
-  "h4", "hr", "i", "img", "li", "ol", "p", "s", "small", "span", "strong",
+  "h4", "hr", "i", "img", "li", "ol", "p", "s", "small", "span", "strong", "font",
   "table", "tbody", "td", "th", "thead", "tfoot", "tr", "u", "ul", "strike",
 ]);
 const voidTags = new Set(["br", "hr", "img"]);
@@ -28,7 +28,7 @@ const styleProperties = new Set([
   "height", "letter-spacing", "line-height", "margin", "margin-bottom",
   "margin-left", "margin-right", "margin-top", "max-width", "min-width",
   "padding", "padding-bottom", "padding-left", "padding-right", "padding-top",
-  "text-align", "text-decoration", "vertical-align", "white-space", "width",
+  "text-align", "text-decoration", "text-decoration-line", "vertical-align", "white-space", "width",
   "word-break",
 ]);
 const variablePattern = /\{\{\s*([\w.]+)\s*\}\}/g;
@@ -134,6 +134,24 @@ export function renderEmailHtmlDocument(
         safe = replaceVariables(val, options, false);
       } else if (name === "title") {
         safe = replaceVariables(val, options, false);
+      } else if (tag === "a" && name === "rel") {
+        if (!/^(?:(?:noopener|noreferrer|nofollow)\s*)+$/i.test(val))
+          throw new Error("Attribut rel invalide");
+        safe = val;
+      } else if (tag === "a" && name === "target") {
+        if (val !== "_blank") throw new Error("Cible de lien non autorisée");
+        safe = val;
+      } else if (tag === "font" && name === "size") {
+        if (!/^[1-7]$/.test(val)) throw new Error("Taille de police invalide");
+        safe = val;
+      } else if (tag === "font" && name === "color") {
+        if (!/^(?:#[0-9a-f]{3,8}|[a-z]{3,18}|rgba?\([\d\s,.%]+\))$/i.test(val))
+          throw new Error("Couleur de police invalide");
+        safe = val;
+      } else if (tag === "font" && name === "face") {
+        if (val.length > 100 || !/^[a-z\s,\-]+$/i.test(val))
+          throw new Error("Famille de police invalide");
+        safe = val;
       } else if (
         commonAttributes.has(name) ||
         (["table","td","th"].includes(tag) &&
