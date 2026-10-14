@@ -6,6 +6,7 @@ import {
   Table2, Minus, Code2, Eye, Pencil, Type, Palette,
 } from "lucide-react";
 import { Button, Select } from "./ui";
+import { renderEmailHtmlDocument } from "../lib/email-html";
 
 type Mode = "visual" | "html" | "preview";
 type ImageFields = { src: string; alt: string; width: string };
@@ -42,6 +43,7 @@ export default function EmailHtmlEditor({
   value, onChange, disabled = false, variables = [], requireSecureAction = false,
 }: Props) {
   const [mode, setMode] = useState<Mode>("visual");
+  const [sourceError, setSourceError] = useState("");
   const [source, setSource] = useState(value);
   const [imageForm, setImageForm] = useState(false);
   const [imageFields, setImageFields] = useState<ImageFields>(imageDefault);
@@ -58,18 +60,49 @@ export default function EmailHtmlEditor({
   const lastSent = useRef(value);
   const editing = useRef(false);
 
+  // Never assign untrusted source HTML directly to the admin DOM.
+  // Even unsaved drafts can contain executable event handlers or SVG payloads.
+  function validatedBody(html: string): string {
+    return htmlBody(renderEmailHtmlDocument(html, {
+      allowedVariables: variables,
+      requireSecureAction,
+    }));
+  }
+  function enterVisual() {
+    try {
+      validatedBody(source);
+      setSourceError("");
+      setMode("visual");
+    } catch (e) {
+      setSourceError((e as Error).message);
+    }
+  }
   useEffect(() => {
     if (value !== lastSent.current && !editing.current) {
       setSource(value);
-      if (surface.current && mode === "visual")
-        surface.current.innerHTML = htmlBody(value);
+      if (surface.current && mode === "visual") {
+        try {
+          surface.current.innerHTML = validatedBody(value);
+        } catch {
+          // Keep the admin DOM empty instead of injecting malformed HTML.
+          surface.current.replaceChildren();
+        }
+      }
     }
+  // Allowed variables and document type are fixed for each editor mount.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value, mode]);
 
   useEffect(() => {
-    if (mode === "visual" && surface.current)
-      surface.current.innerHTML = htmlBody(source);
-  }, [mode]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (mode === "visual" && surface.current) {
+      try {
+        surface.current.innerHTML = validatedBody(source);
+      } catch {
+        surface.current.replaceChildren();
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode]);
 
   function publish(next: string) {
     editing.current = true;
@@ -236,7 +269,7 @@ export default function EmailHtmlEditor({
     <section className="email-html-editor">
       <div className="email-html-editor-modes" role="group" aria-label="Mode de l'éditeur d'email">
         <Button type="button" aria-pressed={mode === "visual"}
-          onClick={() => setMode("visual")}><Pencil size={15} /> Visuel</Button>
+          onClick={enterVisual}><Pencil size={15} /> Visuel</Button>
         <Button type="button" aria-pressed={mode === "html"}
           onClick={() => setMode("html")}><Code2 size={15} /> HTML</Button>
         <Button type="button" aria-pressed={mode === "preview"}
@@ -376,11 +409,20 @@ export default function EmailHtmlEditor({
           {imageError && <p role="alert">{imageError}</p>}
         </div>
       )}
+      {sourceError && <p role="alert" className="notice error">{sourceError}</p>}
       {mode === "visual" && (
         <div className="email-html-paper-wrap">
           <div ref={surface} className="email-html-paper" contentEditable={!disabled}
             suppressContentEditableWarning role="textbox" aria-label="Document HTML d'email"
-            aria-multiline="true" onInput={snapshot} onClick={editImage}
+            aria-multiline="true" onInput={snapshot}
+            onPaste={(event) => {
+              // Rich HTML pasted from the clipboard must not execute in the
+              // authenticated back office before server-side validation.
+              event.preventDefault();
+              if (!disabled) exec("insertText", event.clipboardData.getData("text/plain"));
+            }}
+            onDrop={(event) => event.preventDefault()}
+            onClick={editImage}
             onKeyUp={rememberSelection} onMouseUp={rememberSelection}
           />
         </div>
