@@ -207,7 +207,9 @@ test("user profile edit is separate, cancels cleanly and confirms actual grade/g
   await expect(
     sheet.getByRole("button", { name: "Modifier l’utilisateur", exact: true }),
   ).toBeVisible();
-  await expect(sheet).toContainText("Admin");
+  // The compact detail deliberately omits the role shown in the parent
+  // table row; verify the updated role there, not in the duplicate-free panel.
+  await expect(row).toContainText("Admin");
   await sheet.getByRole("button", { name: "Refermer la fiche Camille" }).click();
   await expect(row).toContainText("Admin");
   const persisted = (
