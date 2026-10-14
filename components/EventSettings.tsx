@@ -26,12 +26,19 @@ export default function EventSettings({
     [success, setSuccess] = useState("");
   const [expanded, setExpanded] = useState(false),
     [dirty, setDirty] = useState(false);
+  const [impact, setImpact] = useState<{
+    changes: string[];
+    fingerprint: string;
+    houses: number;
+    payload: Record<string, unknown>;
+  } | null>(null);
   useDraftGuard(dirty);
   return (
     <section className="panel">
       <form
         onChange={() => {
           setDirty(true);
+          setImpact(null);
           setSuccess("");
         }}
         onSubmit={async (e) => {
@@ -40,7 +47,7 @@ export default function EventSettings({
           setBusy(true);
           setError("");
           try {
-            await save({
+            const payload = {
               ...v,
               latitude,
               longitude,
@@ -48,7 +55,17 @@ export default function EventSettings({
               zoom,
               defaultOpen: v.recurring_open.slice(5),
               defaultClose: v.recurring_close.slice(5),
-            });
+            };
+            const preview = await api<{
+              changes: string[];
+              fingerprint: string;
+              houses: number;
+            }>("admin/settings-impact", payload);
+            if (preview.changes.length) {
+              setImpact({ ...preview, payload });
+              return;
+            }
+            await save(payload);
             setSuccess("Paramètres enregistrés.");
             setDirty(false);
           } catch (e) {
@@ -95,6 +112,8 @@ export default function EventSettings({
               }>("geocode", {
                 query: [v.territory, v.postal_code, v.country].join(", "),
               });
+              setImpact(null);
+              setDirty(true);
               setLatitude(g.latitude);
               setLongitude(g.longitude);
               setZoom(g.zoom);
@@ -135,6 +154,7 @@ export default function EventSettings({
             onPoint={(lat, lon) => {
               setLatitude(lat);
               setLongitude(lon);
+              setImpact(null);
               setDirty(true);
             }}
           />
@@ -197,6 +217,61 @@ export default function EventSettings({
             </div>
           ))}
         </details>
+        {impact && (
+          <section className="beta-card" aria-label="Confirmation de localisation">
+            <h3>Confirmer la modification de localisation</h3>
+            <p>
+              Ces changements peuvent affecter les règles d’inscription et le
+              territoire de la carte. Les maisons existantes ne seront pas
+              déplacées automatiquement.
+            </p>
+            <ul>
+              {impact.changes.map((change) => (
+                <li key={change}>{change}</li>
+              ))}
+            </ul>
+            <p className="small muted">
+              {impact.houses} participation(s) existante(s) sur cette instance.
+              Vérifiez leur situation avant de confirmer.
+            </p>
+            <div className="actions">
+              <Button
+                type="button"
+                disabled={busy}
+                onClick={() => setImpact(null)}
+              >
+                Annuler
+              </Button>
+              <Button
+                type="button"
+                className="primary"
+                disabled={busy}
+                onClick={async () => {
+                  setBusy(true);
+                  setError("");
+                  try {
+                    await save({
+                      ...impact.payload,
+                      location_confirmed: true,
+                      location_fingerprint: impact.fingerprint,
+                    });
+                    setImpact(null);
+                    setSuccess("Paramètres enregistrés.");
+                    setDirty(false);
+                  } catch (e) {
+                    if (!(e instanceof ActionCancelled))
+                      setError((e as Error).message);
+                    setImpact(null);
+                  } finally {
+                    setBusy(false);
+                  }
+                }}
+              >
+                Confirmer et enregistrer
+              </Button>
+            </div>
+          </section>
+        )}
         <Notice error={error} />
         {success && (
           <p className="notice info" role="status">
