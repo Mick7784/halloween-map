@@ -678,12 +678,19 @@ test("V0.9.5 HTML emails preserve full source, safe CTA and reusable uploaded im
       },
     },
   });
-  expect(upload.status(), await upload.text()).toBe(200);
-  const image = await upload.json();
-  expect(image.url).toContain("/api/email-media/");
-  const file = await page.request.get(image.url);
-  expect(file.status()).toBe(200);
-  expect(file.headers()["content-type"]).toContain("image/webp");
+  // The CI browser uses HTTP localhost while delivered email images must
+  // remain publicly reachable over HTTPS. Do not bypass the production guard.
+  if (!origin.startsWith("https://")) {
+    expect(upload.status(), await upload.text()).toBe(503);
+    expect((await upload.json()).error).toContain("HTTPS");
+  } else {
+    expect(upload.status(), await upload.text()).toBe(200);
+    const image = await upload.json();
+    expect(image.url).toContain("/api/email-media/");
+    const file = await page.request.get(image.url);
+    expect(file.status()).toBe(200);
+    expect(file.headers()["content-type"]).toContain("image/webp");
+  }
 });
 
 for (const width of [1440])
