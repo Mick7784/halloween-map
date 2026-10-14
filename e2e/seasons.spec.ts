@@ -126,6 +126,24 @@ async function arrange(page: Page, role = "SUPER_ADMIN") {
         users: 30,
         season: active,
       };
+    else if (path === "/api/admin/statistics")
+      data = {
+        seasonId: sid,
+        snapshot: false,
+        stats: {
+          houses: 26,
+          approved: 24,
+          pending: 2,
+          refused: 0,
+          participants: 30,
+          routes: 18,
+          candy: 20,
+          decoration: 12,
+          acting: 4,
+          collections_started: 10,
+          collections_finished: 5,
+        },
+      };
     else if (
       path === "/api/admin/houses" ||
       path === "/api/admin/audit" ||
@@ -308,29 +326,25 @@ test("history reads anonymous snapshot and exposes no edit/reactivation", async 
   await expect(dialog).toContainText("lecture seule");
   expect(paths).not.toContain("/api/admin/stats");
 });
-test("mobile season list remains usable and ADMIN has no critical activation/deletion", async ({
+test("mobile administration is read-only statistics; season controls remain desktop-only", async ({
   page,
 }) => {
-  await arrange(page, "ADMIN");
+  const { mutations } = await arrange(page, "ADMIN");
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/admin");
-  await page.getByRole("button", { name: "Ouvrir la navigation" }).click();
-  await openSeasons(page);
-  await expect(page.locator(".season-table")).toBeVisible();
-  await expect(page.locator(".season-period").first()).toBeHidden();
-  await expect(
-    page.getByRole("button", { name: "Activer", exact: true }),
-  ).toHaveCount(0);
-  await expect(
-    page.getByRole("button", { name: "Désactiver", exact: true }),
-  ).toHaveCount(0);
-  await expect(
-    page.getByRole("button", { name: "Supprimer définitivement" }),
-  ).toHaveCount(0);
-  expect(
-    await page.evaluate(() => document.documentElement.scrollWidth),
-  ).toBeLessThanOrEqual(390);
-  await page.screenshot({ path: "test-results/seasons-mobile.png" });
+  await expect(page.getByRole("heading", { name: "Statistiques" })).toBeVisible();
+  await expect(page.getByRole("tab", { name: "Vue d’ensemble" })).toBeVisible();
+  await expect(page.getByRole("tab", { name: "Maisons" })).toBeVisible();
+  await expect(page.locator(".season-table")).toHaveCount(0);
+  await expect(page.locator(".beta-sidebar")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Activer", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Désactiver", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Supprimer définitivement" })).toHaveCount(0);
+  await page.getByRole("tab", { name: "Maisons" }).click();
+  await expect(page.locator(".admin-mobile-statistics")).toContainText("Bonbons");
+  expect(mutations).toHaveLength(0);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  await page.screenshot({ path: "test-results/seasons-mobile-statistics-only.png" });
 });
 test("normal USER cannot render the TEST map or a demo entry", async ({
   page,
