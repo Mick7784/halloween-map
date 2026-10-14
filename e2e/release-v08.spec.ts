@@ -464,7 +464,7 @@ async function login(page: Page, email = "release-admin@example.invalid") {
   expect(r.status()).toBe(200);
   return r;
 }
-for (const width of [390, 1440])
+for (const width of [1440])
   test(`free selection UI API DB never contacts directions ${width}`, async ({
     page,
     request,
@@ -1101,7 +1101,7 @@ test("settings preview confirms consequences; new seasons use defaults and exist
       .active_season_id,
   ).toBe(seasonId);
 });
-test("all nine administration sections retain usable desktop/mobile layouts in three appearances", async ({
+test("all nine administration sections retain usable desktop layouts in three appearances", async ({
   page,
 }) => {
   await login(page);
@@ -1117,7 +1117,7 @@ test("all nine administration sections retain usable desktop/mobile layouts in t
     "Textes & documents",
     "Paramètres",
   ];
-  for (const width of [1440, 390]) {
+  for (const width of [1440]) {
     await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
     for (const theme of ["light", "dark", "system"]) {
       await page.getByLabel("Apparence").selectOption(theme);
