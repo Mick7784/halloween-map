@@ -268,6 +268,7 @@ test("settings location change requires impact preview and deliberate confirmati
   expect(mutations.filter((m) => m.action === "settings")).toHaveLength(0);
   await page.getByRole("button", { name: "Enregistrer les paramètres" }).click();
   await preview.getByRole("button", { name: "Confirmer et enregistrer" }).click();
+  await expect.poll(() => mutations.filter((m) => m.action === "settings").length).toBe(1);
   const saved = mutations.filter((m) => m.action === "settings");
   expect(saved).toHaveLength(1);
   const payload = (saved[0] as { payload?: Record<string, unknown> }).payload;
@@ -379,13 +380,14 @@ test("reexamining a refused house opens moderation without implicitly validating
     .getByRole("button", { name: "Maisons", exact: true })
     .click();
   await page.getByRole("button", { name: "Gérer", exact: true }).click();
+  await page.getByRole("tab", { name: "Modération" }).click();
   await page.getByRole("button", { name: "Réexaminer", exact: true }).click();
   await expect(
-    page.getByRole("button", { name: "Valider", exact: true }),
+    page.getByRole("button", { name: "Valider la maison", exact: true }),
   ).toBeVisible();
   expect(mutations).toEqual([]);
   await page
-    .getByRole("button", { name: "Mettre en attente", exact: true })
+    .getByRole("button", { name: "Laisser en attente", exact: true })
     .click();
   await expect.poll(() => mutations.length).toBe(1);
   expect(mutations[0]).toMatchObject({
