@@ -8,7 +8,6 @@ self.addEventListener("install", (event) => {
       .then((cache) =>
         cache.addAll([
           FALLBACK,
-          "/favicon.svg",
           "/favicon-16.png",
           "/favicon-32.png",
           "/pwa/icon-192.png",
