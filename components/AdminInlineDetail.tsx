@@ -16,12 +16,14 @@ export default function AdminInlineDetail({
   tabs,
   onClose,
   initialTab,
+  compactHeader = false,
 }: {
   title: string;
   subtitle?: string;
   tabs: AdminDetailTab[];
   onClose: () => void;
   initialTab?: string;
+  compactHeader?: boolean;
 }) {
   const [active, setActive] = useState(initialTab ?? tabs[0]?.id ?? "");
   const current = tabs.find((tab) => tab.id === active) ?? tabs[0];
@@ -32,10 +34,12 @@ export default function AdminInlineDetail({
   return (
     <section className="admin-inline-detail" aria-label={"Fiche " + title}>
       <header className="admin-inline-detail-header">
-        <div>
-          <h3>{title}</h3>
-          {subtitle && <p className="small muted">{subtitle}</p>}
-        </div>
+        {!compactHeader && (
+          <div>
+            <h3>{title}</h3>
+            {subtitle && <p className="small muted">{subtitle}</p>}
+          </div>
+        )}
         <Button
           type="button"
           aria-label={"Refermer la fiche " + title}
