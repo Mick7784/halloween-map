@@ -33,7 +33,7 @@ export default function AdminInlineDetail({
   };
   return (
     <section className="admin-inline-detail" aria-label={"Fiche " + title}>
-      <header className="admin-inline-detail-header">
+      <header className={"admin-inline-detail-header" + (compactHeader ? " is-compact" : "")}>
         {!compactHeader && (
           <div>
             <h3>{title}</h3>
