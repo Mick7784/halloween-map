@@ -88,6 +88,28 @@ async function arrange(page: Page, role = "SUPER_ADMIN") {
         houses: [],
       };
     else if (path === "/api/admin/seasons") data = seasons;
+    else if (path === "/api/admin/settings")
+      data = {
+        id: "instance",
+        public_name: "Halloween Map",
+        territory: "Rennes",
+        postal_code: "35000",
+        country: "France",
+        timezone: "Europe/Paris",
+        latitude: 48.1,
+        longitude: -1.67,
+        zoom: 14,
+        config: {
+          defaultOpen: "10-31T18:00",
+          defaultClose: "11-01T01:00",
+        },
+      };
+    else if (path === "/api/admin/settings-impact")
+      data = {
+        changes: ["commune / territoire"],
+        fingerprint: "a".repeat(64),
+        houses: 3,
+      };
     else if (path === "/api/admin/dashboard")
       data =
         sid === real
@@ -227,6 +249,35 @@ test("dashboard stays active while BO house browsing is independently persisted;
     await expect(page.locator(".beta-page-title h1")).toHaveText(name);
   }
 });
+test("settings location change requires impact preview and deliberate confirmation", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  const { mutations } = await arrange(page);
+  await page.goto("/admin");
+  const nav = page.getByRole("navigation", { name: "Navigation administration" });
+  await nav.getByRole("button", { name: "Paramètres", exact: true }).click();
+  await page.getByLabel("Territoire / commune").fill("Nantes");
+  await page.getByRole("button", { name: "Enregistrer les paramètres" }).click();
+  const preview = page.getByLabel("Confirmation de localisation");
+  await expect(preview).toContainText("commune / territoire");
+  await expect(preview).toContainText("3 participation(s)");
+  expect(mutations.filter((m) => m.action === "settings")).toHaveLength(0);
+  await preview.getByRole("button", { name: "Annuler", exact: true }).click();
+  await expect(preview).toHaveCount(0);
+  expect(mutations.filter((m) => m.action === "settings")).toHaveLength(0);
+  await page.getByRole("button", { name: "Enregistrer les paramètres" }).click();
+  await preview.getByRole("button", { name: "Confirmer et enregistrer" }).click();
+  const saved = mutations.filter((m) => m.action === "settings");
+  expect(saved).toHaveLength(1);
+  const payload = (saved[0] as { payload?: Record<string, unknown> }).payload;
+  expect(payload).toMatchObject({
+    territory: "Nantes",
+    location_confirmed: true,
+    location_fingerprint: "a".repeat(64),
+  });
+});
+
 test("mobile administration exposes only read-only statistics in tabs", async ({
   page,
 }) => {
