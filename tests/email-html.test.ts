@@ -1,8 +1,37 @@
 import { describe, expect, it } from "vitest";
-import { renderEmailHtmlDocument } from "../lib/email-html";
+import { renderEmailHtmlDocument, emailDocumentText } from "../lib/email-html";
+import { renderMessage, messageDefaults } from "../lib/message-templates";
 
 const variables = ["name", "house_name"] as const;
 describe("V0.9.5 — safe full HTML email documents", () => {
+  it("turns validated tables and images into readable multipart text", () => {
+    const html = renderEmailHtmlDocument(
+      '<body><h1>Halloween</h1><p>Bonjour {{name}}</p>' +
+      '<table><tr><td>Première case</td><td>Seconde case</td></tr></table>' +
+      '<img src="https://example.org/logo.webp" alt="Logo Halloween Map"></body>',
+      { allowedVariables: variables, variables: { name: "Camille" } },
+    );
+    const plain = emailDocumentText(html);
+    expect(plain).toContain("Bonjour Camille");
+    expect(plain).toContain("Première case");
+    expect(plain).toContain("Logo Halloween Map");
+    expect(plain).not.toContain("<td>");
+  });
+  it("preserves legacy template email and switches to HTML only on opt-in", () => {
+    const legacy = renderMessage(messageDefaults.VERIFY, { name: "Camille" },
+      { label: "Vérifier mon email", url: "https://example.org/verify?t=1" });
+    expect(legacy.html).toContain("Halloween Map");
+    const modern = renderMessage({
+      ...messageDefaults.VERIFY,
+      html_body: '<body><p>Bonjour {{name}}</p>' +
+        '<a href="{{secure_action_url}}">Vérifier mon adresse</a></body>',
+    }, { name: "Camille" },
+    { label: "Vérifier mon email", url: "https://example.org/verify?t=1" });
+    expect(modern.html).toContain('href="https://example.org/verify?t=1"');
+    expect(modern.html).toContain("Bonjour Camille");
+    expect(modern.text).toContain("Vérifier mon adresse");
+    expect(legacy.html).not.toBe(modern.html);
+  });
   it("keeps nested email tables, inline styles and absolute images", () => {
     const html = renderEmailHtmlDocument(
       '<!doctype html><html><body style="background-color:#121021">' +
