@@ -110,10 +110,16 @@ export async function templateAction(
   const template = p.template ?? (await messageTemplate(u.instance_id, p.kind));
   sanitizeContent(template.subject, messageVariables);
   sanitizeContent(template.body, messageVariables);
-  if (template.html_body?.trim()) renderEmailHtmlDocument(template.html_body, {
-    allowedVariables: messageVariables,
-    requireSecureAction: ["VERIFY", "INVITE", "RESET"].includes(p.kind),
-  });
+  if (template.html_body?.trim()) {
+    try {
+      renderEmailHtmlDocument(template.html_body, {
+        allowedVariables: messageVariables,
+        requireSecureAction: ["VERIFY", "INVITE", "RESET"].includes(p.kind),
+      });
+    } catch (e) {
+      throw new HttpError(400, "HTML de l'email : " + (e as Error).message);
+    }
+  }
   if (p.action === "test") {
     if (u.role_name !== "SUPER_ADMIN")
       throw new HttpError(403, "Super Admin requis");
