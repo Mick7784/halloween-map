@@ -62,10 +62,11 @@ services:
           CMD,
           node,
           -e,
-          "const{Pool}=require('pg');const p=new Pool({connectionString:process.env.DATABASE_URL});p.query('SELECT 1').then(()=>p.end()).catch(()=>process.exit(1));",
+          "const{Pool}=require('pg');const p=new Pool({connectionString:process.env.DATABASE_URL,connectionTimeoutMillis:3000});p.query(\"SELECT last_success_at,consecutive_failures FROM worker_health WHERE worker_name=\u0027season_worker\u0027\").then(({rows})=>{const h=rows[0];const good=h&&h.last_success_at&&Date.now()-new Date(h.last_success_at).getTime()<180000&&Number(h.consecutive_failures)<3;return p.end().then(()=>process.exit(good?0:1));}).catch(()=>process.exit(1));",
         ]
       interval: 30s
       timeout: 5s
       retries: 3
+      start_period: 90s
 volumes:
   postgres_data:
