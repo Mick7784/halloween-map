@@ -32,6 +32,21 @@ describe("V0.9.5 — safe full HTML email documents", () => {
     expect(modern.text).toContain("Vérifier mon adresse");
     expect(legacy.html).not.toBe(modern.html);
   });
+  it("preserves mandatory account-safety notices in custom HTML and plain text", () => {
+    const notice = "Ce lien est valable pendant 1 heure.\nIgnorez ce message.";
+    const rendered = renderMessage({
+      ...messageDefaults.RESET,
+      html_body: '<body><p>Bonjour {{name}}</p>' +
+        '<a href="{{secure_action_url}}">Réinitialiser</a></body>',
+    }, { name: "Camille" }, {
+      label: "Réinitialiser", url: "https://example.org/reset?token=secret", notice,
+    });
+    expect(rendered.html).toContain("Ce lien est valable pendant 1 heure.");
+    expect(rendered.html).toContain("<br>Ignorez ce message.");
+    expect(rendered.text).toContain("Ignorez ce message.");
+    expect(rendered.text).toContain("https://example.org/reset?token=secret");
+  });
+
   it("keeps nested email tables, inline styles and absolute images", () => {
     const html = renderEmailHtmlDocument(
       '<!doctype html><html><body style="background-color:#121021">' +
