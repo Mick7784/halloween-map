@@ -320,6 +320,16 @@ export default function Admin({
       setEdit(false);
       setReexamining(false);
       setReason(house.refusal_reason ?? "");
+      setSearch("");
+      setReview("ALL");
+      setAvailability("ALL");
+      setHouseSort("name");
+      setHouseSortDirection("asc");
+      const sorted = houses.slice().sort((a, b) =>
+        a.name.localeCompare(b.name, "fr", { sensitivity: "base", numeric: true }),
+      );
+      const index = sorted.findIndex((h) => h.id === house.id);
+      if (index >= 0) setHousePage(Math.floor(index / housePageSize) + 1);
     }
     setPendingHouseId(null);
   }, [section, loadedView, viewKey, pendingHouseId, houses]);
