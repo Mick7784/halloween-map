@@ -720,8 +720,8 @@ test("V0.9.5 rich editor allows direct text and table editing without touching p
   await expect(newTable.locator("tr").first().locator("td")).toHaveCount(beforeCells + 1);
   await editor.getByRole("button", { name: "HTML", exact: true }).click();
   const source = editor.getByRole("textbox", { name: "Code source HTML de l'email" });
-  await expect(source).toContainText("Ajout depuis l’éditeur visuel");
-  await expect(source).toContainText("Colonne 1");
+  await expect(source).toHaveValue(/Ajout depuis l’éditeur visuel/);
+  await expect(source).toHaveValue(/Colonne 1/);
 });
 
 for (const width of [1440])
