@@ -2,8 +2,9 @@
 import { ActionCancelled } from "./AdminConfirmation";
 import { X } from "lucide-react";
 import Link from "next/link";
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import useDraftGuard, { confirmDraftNavigation } from "./useDraftGuard";
+import AdminInlineDetail from "./AdminInlineDetail";
 import { DateTime } from "luxon";
 import { type User, type House, defaultRoles } from "../lib/domain";
 import { permissionLabels } from "../lib/admin-presentation";
@@ -82,6 +83,13 @@ export default function AdminUsers({
   );
   const current = users.find((u) => u.id === selected);
   function showUser(id: string, edit = false) {
+    if (selected && !confirmDraftNavigation()) return;
+    if (id === selected && !edit) {
+      setSelected(null);
+      setEditing(false);
+      onClose?.();
+      return;
+    }
     setSelected(id);
     setEditing(edit);
   }
@@ -113,6 +121,7 @@ export default function AdminUsers({
     await api("admin/users", p);
     await reload();
     setCreate(false);
+    setEditing(false);
   }
   const date = (v: string | null) =>
     v
@@ -175,7 +184,23 @@ export default function AdminUsers({
                 Math.min(page, Math.max(1, Math.ceil(list.length / 25))) * 25,
               )
               .map((u) => (
-                <tr key={u.id}>
+                <Fragment key={u.id}>
+                <tr
+                  className="admin-clickable-row"
+                  tabIndex={0}
+                  aria-expanded={current?.id === u.id}
+                  onClick={(event) => {
+                    if ((event.target as HTMLElement).closest("button,a,summary,input,select,textarea")) return;
+                    showUser(u.id);
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.target !== event.currentTarget) return;
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      showUser(u.id);
+                    }
+                  }}
+                >
                   <td>
                     <Button onClick={() => showUser(u.id)}>
                       {u.display_name}
@@ -300,6 +325,185 @@ export default function AdminUsers({
                     </div>
                   </td>
                 </tr>
+                {current?.id === u.id && (
+                  <tr className="admin-detail-row">
+                    <td colSpan={7}>
+                      <AdminInlineDetail
+                        key={u.id}
+                        title={current.display_name}
+                        subtitle={current.email}
+                        onClose={() => {
+                          setSelected(null);
+                          setEditing(false);
+                          onClose?.();
+                        }}
+                        initialTab={editing ? "info" : undefined}
+                        tabs={[
+                          {
+                            id: "info",
+                            label: "Informations",
+                            content: (
+                              <section>
+                                <div className="admin-detail-facts">
+                                  <p><strong>Email</strong><span>{current.email} · {labels[current.email_status]}</span></p>
+                                  <p><strong>Compte</strong><span>{labels[current.account_status] ?? current.account_status}</span></p>
+                                  <p><strong>Grade</strong><span>{labels[current.role_name ?? "USER"]}</span></p>
+                                  <p><strong>Création</strong><span>{date(current.created_at)}</span></p>
+                                  <p><strong>Dernière connexion</strong><span>{date(current.last_login_at)}</span></p>
+                                </div>
+                                {current.id === user.id && <Link href="/account">Mon compte</Link>}
+                                {canEdit && !editing && (
+                                  <Button onClick={() => setEditing(true)}>Modifier l’utilisateur</Button>
+                                )}
+                                {canEdit && editing && (
+                                  <>
+                                    <Button type="button" onClick={() => {
+                                      if (!confirmDraftNavigation()) return;
+                                      setEditing(false);
+                                    }}>Annuler la modification</Button>
+                                    <UserEditor
+                                      key={current.id}
+                                      current={current}
+                                      roles={user.role_name === "SUPER_ADMIN" ? roles : roles.filter((r) => r.name === "USER")}
+                                      canChangeRole={user.role_name === "SUPER_ADMIN"}
+                                      allowDirect={false}
+                                      admins={users.filter((entry) => entry.role_name === "ADMIN")}
+                                      submit={act}
+                                    />
+                                  </>
+                                )}
+                              </section>
+                            ),
+                          },
+                          {
+                            id: "participation",
+                            label: "Participation",
+                            content: (
+                              <section>
+                                <h4>{current.participation_season ?? "Saison active"}</h4>
+                                {current.participation ? (
+                                  <>
+                                    <p>{current.participation.name}</p>
+                                    <Button onClick={() => onHouse(current.participation!.id)}>Ouvrir la fiche maison</Button>
+                                  </>
+                                ) : <p>Aucune participation sur cette saison.</p>}
+                              </section>
+                            ),
+                          },
+                          {
+                            id: "permissions",
+                            label: "Permissions",
+                            content: (
+                              <section>
+                                <p><strong>Grade : </strong>{labels[current.role_name ?? "USER"]}</p>
+                                {current.role_name === "ADMIN" ? (
+                                  <ul>
+                                    {current.permissions.filter((p) => p !== "admin.access").map((p) => (
+                                      <li key={p}>{permissionLabels[p] ?? p}</li>
+                                    ))}
+                                  </ul>
+                                ) : (
+                                  <p className="small muted">
+                                    {current.role_name === "SUPER_ADMIN"
+                                      ? "Tous les droits du Super Admin sont protégés."
+                                      : "Un compte utilisateur n’a pas de permissions administratives."}
+                                  </p>
+                                )}
+                                {canEdit && (
+                                  <>
+                                    {!editing && (
+                                      <Button onClick={() => setEditing(true)}>Modifier les autorisations</Button>
+                                    )}
+                                    {editing && (
+                                      <>
+                                        <Button type="button" onClick={() => {
+                                          if (!confirmDraftNavigation()) return;
+                                          setEditing(false);
+                                        }}>Annuler la modification</Button>
+                                        <UserEditor
+                                          key={current.id}
+                                          current={current}
+                                          roles={user.role_name === "SUPER_ADMIN" ? roles : roles.filter((r) => r.name === "USER")}
+                                          canChangeRole={user.role_name === "SUPER_ADMIN"}
+                                          allowDirect={false}
+                                          admins={users.filter((entry) => entry.role_name === "ADMIN")}
+                                          submit={act}
+                                        />
+                                      </>
+                                    )}
+                                  </>
+                                )}
+                              </section>
+                            ),
+                          },
+                          {
+                            id: "history",
+                            label: "Historique",
+                            content: (
+                              <section>
+                                <h4>Participations validées</h4>
+                                {current.participation_history?.length ? (
+                                  <ul>
+                                    {current.participation_history.map((p, n) => (
+                                      <li key={n}>Halloween {p.year} — Participation enregistrée</li>
+                                    ))}
+                                  </ul>
+                                ) : <p>Aucune participation validée conservée.</p>}
+                                <p className="small muted">Années uniquement, conservées cinq ans.</p>
+                                <h4>Messages et notifications</h4>
+                                {current.communications.length ? current.communications.map((m, n) => (
+                                  <p className="small" key={n}>
+                                    {({
+                                      VERIFY: "Vérification du compte",
+                                      INVITE: "Invitation",
+                                      RESET: "Récupération du compte",
+                                      HOUSE_SUBMITTED: "Maison reçue",
+                                      HOUSE_APPROVED: "Maison validée",
+                                      HOUSE_REFUSED: "Maison refusée",
+                                      CAMPAIGN: "Campagne",
+                                    } as Record<string, string>)[m.kind] ?? m.kind}
+                                    {" · "}
+                                    {m.season_id ? (m.season_name ?? current.participation_season ?? "Saison") : "Compte global"}
+                                    {" · "}{m.status}{" · "}{date(m.sent_at ?? m.scheduled_at)}
+                                    {m.last_error && " · " + m.last_error}
+                                  </p>
+                                )) : <p>Aucun envoi.</p>}
+                              </section>
+                            ),
+                          },
+                        ]}
+                      />
+                      {current && canEdit && (
+                        <details className="admin-advanced-actions">
+                          <summary>Actions avancées du compte</summary>
+                          <div className="actions">
+                            <AsyncButton onClick={() => act({
+                              action: current.account_status === "DISABLED" ? "enable" : "disable",
+                              id: current.id,
+                            })}>
+                              {current.account_status === "DISABLED" ? "Réactiver" : "Désactiver"}
+                            </AsyncButton>
+                            {current.account_status !== "DISABLED" &&
+                              !/^test-[a-f0-9]{32}@example[.]invalid$/.test(current.email) &&
+                              (current.email_status !== "VERIFIED" ||
+                                current.account_status === "PENDING_ACTIVATION") && (
+                                <AsyncButton onClick={() => act({ action: "resend", id: current.id })}>
+                                  Renvoyer la vérification
+                                </AsyncButton>
+                              )}
+                            {user.role_name === "SUPER_ADMIN" && (
+                              <AsyncButton danger onClick={async () => {
+                                await act({ action: "delete", id: current.id, confirm: "SUPPRIMER CE COMPTE" });
+                                setSelected(null);
+                              }}>Supprimer le compte</AsyncButton>
+                            )}
+                          </div>
+                        </details>
+                      )}
+                    </td>
+                  </tr>
+                )}
+                </Fragment>
               ))}
           </tbody>
         </DataTable>
@@ -309,181 +513,30 @@ export default function AdminUsers({
           onPage={setPage}
         />
       </div>
-      {(create || current) && (
+      {create && (
         <div className="modal-backdrop">
-          <Dialog
-            className="dialog panel user-sheet"
-            role="dialog"
-            onClick={(event) => event.stopPropagation()}
-            aria-modal="true"
-            aria-labelledby="user-title"
-          >
+          <Dialog className="dialog panel user-sheet" aria-labelledby="user-create-title">
             <Button
               className="close"
+              type="button"
               aria-label="Fermer"
               onClick={() => {
                 if (!confirmDraftNavigation()) return;
                 setCreate(false);
-                setSelected(null);
-                onClose?.();
               }}
             >
               <X />
             </Button>
-            <h2 id="user-title">
-              {current?.display_name ?? "Créer un utilisateur"}
-            </h2>
-            {current && (
-              <>
-                <h3>Identité</h3>
-                <p>
-                  {current.email} · {labels[current.email_status]} ·{" "}
-                  {labels[current.account_status] ?? current.account_status}
-                </p>
-                <h3>Accès</h3>
-                <p>{labels[current.role_name ?? "USER"]}</p>
-                {current.role_name === "ADMIN" && (
-                  <p className="small">
-                    {current.permissions
-                      .filter((p) => p !== "admin.access")
-                      .map((p) => permissionLabels[p] ?? p)
-                      .join(" · ") || "Aucune autorisation de rubrique."}
-                  </p>
-                )}
-                <p className="small">
-                  Création : {date(current.created_at)} · Dernière connexion :{" "}
-                  {date(current.last_login_at)}
-                </p>
-                <h3>
-                  Participation :{" "}
-                  {current.participation_season ?? "Aucune saison active"}
-                </h3>
-                {current.participation ? (
-                  <>
-                    <p>{current.participation.name}</p>
-                    <Button onClick={() => onHouse(current.participation!.id)}>
-                      Ouvrir la fiche maison
-                    </Button>
-                  </>
-                ) : (
-                  <p>Aucune participation.</p>
-                )}
-                <details>
-                  <summary>Historique des participations validées</summary>
-                  {current.participation_history?.length ? (
-                    <ul>
-                      {current.participation_history.map((p, n) => (
-                        <li key={n}>
-                          Halloween {p.year} — Participation enregistrée
-                        </li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p>Aucune participation validée conservée.</p>
-                  )}
-                  <p className="small muted">
-                    Inscription validée comme propriétaire, sans attestation de
-                    visite ou d’accueil. Années uniquement, conservées cinq ans.
-                  </p>
-                </details>
-                <h3>Messages du compte et notifications de saison</h3>
-                {current.communications.length ? (
-                  current.communications.map((m, n) => (
-                    <p className="small" key={n}>
-                      {(
-                        {
-                          VERIFY: "Vérification du compte",
-                          INVITE: "Invitation",
-                          RESET: "Récupération du compte",
-                          HOUSE_SUBMITTED: "Maison reçue",
-                          HOUSE_APPROVED: "Maison validée",
-                          HOUSE_REFUSED: "Maison refusée",
-                          CAMPAIGN: "Campagne",
-                        } as Record<string, string>
-                      )[m.kind] ?? m.kind}{" "}
-                      ·{" "}
-                      {m.season_id
-                        ? (m.season_name ??
-                          current.participation_season ??
-                          "Saison")
-                        : "Compte global"}{" "}
-                      · {m.status} · {date(m.sent_at ?? m.scheduled_at)}{" "}
-                      {m.last_error && "· " + m.last_error}
-                    </p>
-                  ))
-                ) : (
-                  <p>Aucun envoi.</p>
-                )}
-              </>
-            )}
-            {current?.id === user.id && <Link href="/account">Mon compte</Link>}
-            {canEdit && current && !editing && (
-              <Button onClick={() => setEditing(true)}>
-                Modifier l’utilisateur
-              </Button>
-            )}
-            {canEdit && (!current || editing) && (
+            <h2 id="user-create-title">Créer un utilisateur</h2>
+            {manageable && (
               <UserEditor
-                key={current?.id ?? "new"}
-                current={current}
-                roles={
-                  user.role_name === "SUPER_ADMIN"
-                    ? roles
-                    : roles.filter((r) => r.name === "USER")
-                }
-                canChangeRole={user.role_name === "SUPER_ADMIN" || !current}
-                allowDirect={!current && user.role_name === "SUPER_ADMIN"}
+                key="new"
+                roles={user.role_name === "SUPER_ADMIN" ? roles : roles.filter((r) => r.name === "USER")}
+                canChangeRole={true}
+                allowDirect={user.role_name === "SUPER_ADMIN"}
                 admins={users.filter((u) => u.role_name === "ADMIN")}
                 submit={act}
               />
-            )}
-            {current && canEdit && (
-              <div className="actions">
-                <AsyncButton
-                  onClick={() =>
-                    act({
-                      action:
-                        current.account_status === "DISABLED"
-                          ? "enable"
-                          : "disable",
-                      id: current.id,
-                    })
-                  }
-                >
-                  {current.account_status === "DISABLED"
-                    ? "Réactiver"
-                    : "Désactiver"}
-                </AsyncButton>
-                {current.account_status !== "DISABLED" &&
-                  !/^test-[a-f0-9]{32}@example[.]invalid$/.test(
-                    current.email,
-                  ) &&
-                  (current.email_status !== "VERIFIED" ||
-                    current.account_status === "PENDING_ACTIVATION") && (
-                    <AsyncButton
-                      onClick={() => act({ action: "resend", id: current.id })}
-                    >
-                      {current.account_status === "PENDING_ACTIVATION"
-                        ? "Renvoyer l’invitation"
-                        : "Renvoyer la vérification"}
-                    </AsyncButton>
-                  )}
-                {user.role_name === "SUPER_ADMIN" && (
-                  <AsyncButton
-                    danger
-                    onClick={async () => {
-                      await act({
-                        action: "delete",
-                        id: current.id,
-                        confirm: "SUPPRIMER CE COMPTE",
-                      });
-                      setSelected(null);
-                    }}
-                  >
-                    Supprimer le compte
-                  </AsyncButton>
-                )}
-              </div>
             )}
           </Dialog>
         </div>
