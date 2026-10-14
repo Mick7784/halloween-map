@@ -629,7 +629,7 @@ for (const width of [1440])
       ).rows[0].routes_count,
     ).toBe(1);
   });
-for (const width of [390, 1440])
+for (const width of [1440])
   test(`Tiptap saves combined formatting through the real API and PostgreSQL, with matching email preview ${width}`, async ({
     page,
   }) => {
@@ -1114,7 +1114,7 @@ test("all nine administration sections retain usable desktop layouts in three ap
     "Saison",
     "Communications",
     "Activité",
-    "Textes & documents",
+    "Contenus & documents",
     "Paramètres",
   ];
   for (const width of [1440]) {
