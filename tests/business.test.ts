@@ -185,6 +185,7 @@ beforeAll(async () => {
     "010_message_templates.sql",
     "011_email_html_editor.sql",
     "012_email_media.sql",
+    "013_worker_monitoring.sql",
   ]) {
     const sql = await readFile("migrations/" + file, "utf8");
     if (engine instanceof PGlite) await engine.exec(sql);
