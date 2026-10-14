@@ -1350,22 +1350,3 @@
 .email-html-editor > p.small {
   padding: 6px 14px 12px;
 }
-
-/* V0.9.5 — responsive email preview controls, admin-only. */
-.email-html-device-switch {
-  display: flex;
-  justify-content: center;
-  gap: 8px;
-  margin-bottom: 14px;
-}
-.email-html-device-switch button[aria-pressed="true"] {
-  border-color: var(--accent);
-  color: var(--accent);
-}
-.email-html-preview {
-  transition: max-width 180ms ease;
-}
-.email-html-preview.is-mobile {
-  max-width: 375px;
-  height: 667px;
-}
