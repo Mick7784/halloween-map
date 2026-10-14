@@ -22,16 +22,21 @@ function htmlBody(value: string) {
   if (typeof DOMParser === "undefined") return value;
   return new DOMParser().parseFromString(value, "text/html").body.innerHTML;
 }
-function wrapBody(body: string) {
-  return '<!doctype html><html lang="fr"><head><meta charset="utf-8"></head>' +
-    '<body style="margin:0;background-color:#17171e;color:#ffffff;font-family:Arial,sans-serif">' +
-    body + "</body></html>";
+function ToolbarButton({
+  label, icon: Icon, onClick, disabled,
+}: {
+  label: string;
+  icon: typeof Bold;
+  onClick: () => void;
+  disabled: boolean;
+}) {
+  return (
+    <Button type="button" title={label} aria-label={label}
+      disabled={disabled} onClick={onClick}>
+      <Icon size={17} />
+    </Button>
+  );
 }
-const tool = (label: string, Icon: typeof Bold, click: () => void, disabled: boolean) => (
-  <Button type="button" title={label} aria-label={label} disabled={disabled} onClick={click}>
-    <Icon size={17} />
-  </Button>
-);
 
 export default function EmailHtmlEditor({
   value, onChange, disabled = false, variables = [], requireSecureAction = false,
@@ -214,29 +219,29 @@ export default function EmailHtmlEditor({
           <option value="4">Grande</option>
           <option value="5">Très grande</option>
         </Select>
-        {tool("Gras", Bold, () => exec("bold"), editingTools)}
-        {tool("Italique", Italic, () => exec("italic"), editingTools)}
-        {tool("Souligné", Underline, () => exec("underline"), editingTools)}
-        {tool("Barré", Strikethrough, () => exec("strikeThrough"), editingTools)}
-        {tool("Aligner à gauche", AlignLeft, () => exec("justifyLeft"), editingTools)}
-        {tool("Centrer", AlignCenter, () => exec("justifyCenter"), editingTools)}
-        {tool("Aligner à droite", AlignRight, () => exec("justifyRight"), editingTools)}
-        {tool("Liste à puces", List, () => exec("insertUnorderedList"), editingTools)}
-        {tool("Liste numérotée", ListOrdered, () => exec("insertOrderedList"), editingTools)}
-        {tool("Lien", Link2, () => { rememberSelection(); setLinkForm(true); }, editingTools)}
-        {tool("Image", Image, () => {
+        <ToolbarButton label="Gras" icon={Bold} onClick={() => exec("bold")} disabled={editingTools} />
+        <ToolbarButton label="Italique" icon={Italic} onClick={() => exec("italic")} disabled={editingTools} />
+        <ToolbarButton label="Souligné" icon={Underline} onClick={() => exec("underline")} disabled={editingTools} />
+        <ToolbarButton label="Barré" icon={Strikethrough} onClick={() => exec("strikeThrough")} disabled={editingTools} />
+        <ToolbarButton label="Aligner à gauche" icon={AlignLeft} onClick={() => exec("justifyLeft")} disabled={editingTools} />
+        <ToolbarButton label="Centrer" icon={AlignCenter} onClick={() => exec("justifyCenter")} disabled={editingTools} />
+        <ToolbarButton label="Aligner à droite" icon={AlignRight} onClick={() => exec("justifyRight")} disabled={editingTools} />
+        <ToolbarButton label="Liste à puces" icon={List} onClick={() => exec("insertUnorderedList")} disabled={editingTools} />
+        <ToolbarButton label="Liste numérotée" icon={ListOrdered} onClick={() => exec("insertOrderedList")} disabled={editingTools} />
+        <ToolbarButton label="Lien" icon={Link2} onClick={() => { rememberSelection(); setLinkForm(true); }} disabled={editingTools} />
+        <ToolbarButton label="Image" icon={Image} onClick={() => {
           rememberSelection(); setSelectedImage(null); setImageFields(imageDefault);
           setImageForm(true); setImageError("");
           void loadLibrary();
-        }, editingTools)}
-        {tool("Tableau deux colonnes", Table2, () => insert(
+        }} disabled={editingTools} />
+        <ToolbarButton label="Tableau deux colonnes" icon={Table2} onClick={() => insert(
           '<table role="presentation" width="100%" cellpadding="8" cellspacing="0"><tbody><tr>' +
           '<td width="50%" style="vertical-align:top">Colonne 1</td>' +
           '<td width="50%" style="vertical-align:top">Colonne 2</td></tr></tbody></table><p></p>',
-        ), editingTools)}
-        {tool("Séparateur", Minus, () => insert('<hr style="border-top:1px solid #777777">'), editingTools)}
-        {tool("Annuler", Undo2, () => exec("undo"), editingTools)}
-        {tool("Rétablir", Redo2, () => exec("redo"), editingTools)}
+        )} disabled={editingTools} />
+        <ToolbarButton label="Séparateur" icon={Minus} onClick={() => insert('<hr style="border-top:1px solid #777777">')} disabled={editingTools} />
+        <ToolbarButton label="Annuler" icon={Undo2} onClick={() => exec("undo")} disabled={editingTools} />
+        <ToolbarButton label="Rétablir" icon={Redo2} onClick={() => exec("redo")} disabled={editingTools} />
         <label className="email-html-color" title="Couleur du texte">
           <Palette size={16} />
           <input aria-label="Couleur du texte" type="color" defaultValue="#ffffff"
