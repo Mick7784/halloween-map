@@ -85,9 +85,11 @@ function hiddenActionStyle(source: string): boolean {
         && value === "transparent");
   });
 }
-function textContent(node: EmailNode): string {
+function visibleTextContent(node: EmailNode, inheritedHidden = false): string {
+  const hidden = inheritedHidden || hiddenActionStyle(attribute(node, "style") ?? "");
+  if (hidden) return "";
   if (node.nodeName === "#text") return node.value ?? "";
-  return (node.childNodes ?? []).map(textContent).join("");
+  return (node.childNodes ?? []).map((child) => visibleTextContent(child, hidden)).join("");
 }
 function safeLink(url: string): boolean {
   if (url === "{{secure_action_url}}") return true;
@@ -132,7 +134,7 @@ export function renderEmailHtmlDocument(
     const currentStyle = attribute(node, "style") ?? "";
     const hidden = inheritedHidden || hiddenActionStyle(currentStyle);
     if (tag === "a" && attribute(node, "href") === "{{secure_action_url}}") {
-      if (hidden || !textContent(node).trim())
+      if (hidden || !visibleTextContent(node).trim())
         throw new Error("Le lien sécurisé doit être visible et porter un texte lisible");
     }
     for (const item of node.attrs ?? []) {
