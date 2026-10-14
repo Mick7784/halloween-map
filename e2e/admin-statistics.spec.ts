@@ -248,10 +248,13 @@ for (const isTest of [false, true])
         .filter({ hasText: "Visites déclarées" }),
     ).toContainText("Donnée non disponible");
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.getByLabel("Apparence", { exact: true }).selectOption("light");
     await expect(
-      page.getByRole("region", { name: "Activités des maisons" }),
+      page.getByRole("heading", { name: "Statistiques", exact: true }),
     ).toBeVisible();
+    await expect(page.getByRole("tab", { name: "Maisons" })).toBeVisible();
+    await expect(page.getByRole("tab", { name: "Collectes" })).toBeVisible();
+    await page.getByRole("tab", { name: "Maisons" }).click();
+    await expect(page.locator(".admin-mobile-statistics")).toContainText("Bonbons");
     if (!isTest)
       await page.screenshot({
         path: "test-results/statistics-mobile-light.png",
