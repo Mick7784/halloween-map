@@ -300,7 +300,7 @@ export default function EmailHtmlEditor({
                 {asset.filename}</option>)}
             </Select>
           </label>}
-          <label>Adresse HTTPS de l'image
+          <label>Adresse HTTPS de l’image
             <input aria-label="URL de l'image" value={imageFields.src}
               onChange={(e) => setImageFields({ ...imageFields, src: e.target.value })} />
           </label>
@@ -314,14 +314,14 @@ export default function EmailHtmlEditor({
               onChange={(e) => setImageFields({ ...imageFields, width: e.target.value })} />
           </label>
           <Button type="button" disabled={disabled || uploadBusy} onClick={saveImage}>
-            {selectedImage ? "Modifier l'image" : "Insérer l'image"}
+            {selectedImage ? "Modifier l’image" : "Insérer l’image"}
           </Button>
           <Button type="button" onClick={() => {
             setImageForm(false); setSelectedImage(null);
           }}>Annuler</Button>
           {selectedImage && <Button type="button" onClick={() => {
             selectedImage.remove(); snapshot(); setImageForm(false); setSelectedImage(null);
-          }}>Supprimer l'image</Button>}
+          }}>Supprimer l’image</Button>}
           {imageError && <p role="alert">{imageError}</p>}
         </div>
       )}
@@ -348,7 +348,7 @@ export default function EmailHtmlEditor({
       <p className="small muted">
         Les images doivent avoir une URL HTTPS accessible aux destinataires.
         Le HTML et les styles sont validés sur le serveur avant enregistrement.
-        L'aperçu ne contient jamais de vrai jeton d'activation.
+        L’aperçu ne contient jamais de vrai jeton d’activation.
       </p>
     </section>
   );
