@@ -466,13 +466,13 @@ test("dashboard moderation link switches to the active season and refreshes afte
     })
     .click();
   await expect(page.getByLabel("Saison du back-office")).toHaveValue(real);
-  await expect(page.locator(".beta-panel")).toContainText(
-    "Jardin des lanternes",
-  );
+  const detail = page.locator(".admin-inline-detail");
+  await expect(detail).toContainText("Jardin des lanternes");
+  await detail.getByRole("tab", { name: "Modération" }).click();
   const refreshed = page.waitForResponse(
     (response) => new URL(response.url()).pathname === "/api/admin/houses",
   );
-  await page.getByRole("button", { name: "Valider", exact: true }).click();
+  await detail.getByRole("button", { name: "Valider la maison", exact: true }).click();
   await refreshed;
   await expect(
     page.locator(".beta-table-scroll tbody tr").first(),
