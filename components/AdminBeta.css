@@ -965,3 +965,54 @@
     font-size: 18px;
   }
 }
+
+/* V0.9.4 — read-only mobile monitoring, no administrative navigation. */
+@media (max-width: 700px) {
+  .admin-beta:not(.admin-mobile-view) {
+    visibility: hidden;
+  }
+  .admin-beta.admin-mobile-view {
+    display: block;
+    padding: 20px 14px 28px;
+    min-height: 100dvh;
+    overflow-x: hidden;
+  }
+  .admin-mobile-statistics {
+    max-width: 660px;
+    margin: 0 auto;
+  }
+  .admin-mobile-heading h1 {
+    margin: 4px 0;
+    font-size: 24px;
+  }
+  .admin-mobile-heading p {
+    margin: 0;
+  }
+  .admin-mobile-tabs {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    margin: 18px 0;
+  }
+  .admin-mobile-tabs button {
+    font-size: 13px;
+    min-height: 44px;
+    white-space: normal;
+    padding: 10px 8px;
+    text-align: center;
+  }
+  .admin-mobile-tabs button.is-current {
+    color: var(--accent);
+    border-color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+  }
+  .admin-mobile-statistics .stats-kpis {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+  .admin-mobile-statistics .beta-card {
+    min-width: 0;
+    padding: 14px;
+  }
+}
