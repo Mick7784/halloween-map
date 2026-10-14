@@ -2,7 +2,7 @@
 import { ActionCancelled } from "./AdminConfirmation";
 import { X } from "lucide-react";
 import Link from "next/link";
-import { Fragment, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import useDraftGuard, { confirmDraftNavigation } from "./useDraftGuard";
 import AdminInlineDetail from "./AdminInlineDetail";
 import { DateTime } from "luxon";
@@ -72,7 +72,7 @@ export default function AdminUsers({
     [sortColumn, setSortColumn] = useState("name"),
     [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc"),
     [create, setCreate] = useState(initialCreate);
-  const list = users
+  const list = useMemo(() => users
     .filter(
       (u) =>
         (u.display_name + " " + u.email)
@@ -100,7 +100,12 @@ export default function AdminUsers({
         numeric: true,
       });
       return (sortDirection === "asc" ? 1 : -1) * result;
-    });
+    }), [users, search, filter, sortColumn, sortDirection]);
+  useEffect(() => {
+    if (!initialUserId) return;
+    const index = list.findIndex((u) => u.id === initialUserId);
+    if (index >= 0) setPage(Math.floor(index / pageSize) + 1);
+  }, [initialUserId, list, pageSize]);
   function toggleSort(column: string) {
     if (sortColumn === column)
       setSortDirection((v) => (v === "asc" ? "desc" : "asc"));
