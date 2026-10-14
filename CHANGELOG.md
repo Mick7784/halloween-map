@@ -6,7 +6,7 @@
 - Fiches Utilisateur et Maison harmonisées : ouverture directement sous la ligne du tableau, avec onglets internes et édition contextuelle, sans fenêtres de consultation concurrentes. Accès à la fiche propriétaire, consultation de l'historique disponible, permissions et actions de modération/gestion conservées.
 - Tableaux Utilisateurs et Maisons : tri des colonnes, 25/50/100 lignes par page, recherche et filtres conservés lors de l'ouverture des fiches ; navigation vers les enregistrements depuis les vues de suivi.
 - Administration mobile limitée à des statistiques en lecture seule dans quatre onglets : vue d'ensemble, maisons, collectes, fréquentation ; aucune commande de gestion en version mobile. Les fonctionnalités publiques mobiles restent inchangées.
-- Paramètres de localisation : prévisualisation des impacts et confirmation de l'empreinte serveur avant enregistrement sensible ; protection conservée. Journal d'activité : lien direct vers les comptes dans la limite des permissions existantes.
+- Paramètres de localisation : prévisualisation d'impact, validation d'empreinte côté serveur et confirmation sécurisée par mot de passe préexistantes conservées sans nouvelle mécanique concurrente. Journal d'activité : lien direct vers les comptes dans la limite des permissions existantes.
 - Moteur d'envoi email, six modèles transactionnels, éditeur TipTap historique, campagnes et sécurité des liens conservés sans migration dans cette version. **L'éditeur HTML avancé avec gestion d'images est réservé à un patch ultérieur, V0.9.4.1.**
 - Vérifications et recette à valider dans la CI avant publication de cette version.
 
