@@ -42,6 +42,7 @@ export default function EmailHtmlEditor({
   value, onChange, disabled = false, variables = [], requireSecureAction = false,
 }: Props) {
   const [mode, setMode] = useState<Mode>("visual");
+  const [previewDevice, setPreviewDevice] = useState<"desktop" | "mobile">("desktop");
   const [source, setSource] = useState(value);
   const [imageForm, setImageForm] = useState(false);
   const [imageFields, setImageFields] = useState<ImageFields>(imageDefault);
@@ -392,8 +393,15 @@ export default function EmailHtmlEditor({
       )}
       {mode === "preview" && (
         <div className="email-html-paper-wrap">
+          <div className="email-html-device-switch" role="group" aria-label="Format de l’aperçu">
+            <Button type="button" aria-pressed={previewDevice === "desktop"}
+              onClick={() => setPreviewDevice("desktop")}>Ordinateur</Button>
+            <Button type="button" aria-pressed={previewDevice === "mobile"}
+              onClick={() => setPreviewDevice("mobile")}>Mobile</Button>
+          </div>
           <iframe title="Aperçu du document HTML" sandbox="" referrerPolicy="no-referrer"
-            className="email-html-preview" srcDoc={source} />
+            className={"email-html-preview" + (previewDevice === "mobile" ? " is-mobile" : "")}
+            srcDoc={source} />
         </div>
       )}
       <p className="small muted">
