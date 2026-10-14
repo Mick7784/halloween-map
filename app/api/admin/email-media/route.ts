@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { randomUUID, createHash } from "node:crypto";
 import sharp from "sharp";
-import { db } from "../../../../lib/db";
+import { db, transaction } from "../../../../lib/db";
 import { getUser, HttpError, rateLimit, requirePermission } from "../../../../lib/auth";
 
 export const runtime = "nodejs";
@@ -25,7 +25,7 @@ export async function GET(req: NextRequest) {
     )).rows;
     const origin = process.env.APP_ORIGIN?.replace(/\/$/, "");
     if (!origin) throw new HttpError(503, "URL publique non configurée");
-    return NextResponse.json({ images: rows.map((row) => ({
+    return NextResponse.json({ capacity: { used: rows.length, limit: 60 }, images: rows.map((row) => ({
       id: row.id, filename: row.filename, size_bytes: row.size_bytes,
       created_at: row.created_at,
       url: origin + "/api/email-media/" + row.id,
@@ -66,28 +66,33 @@ export async function POST(req: NextRequest) {
     if (compressed.byteLength > 600000)
       throw new HttpError(413, "Image optimisée trop volumineuse");
     const hash = createHash("sha256").update(compressed).digest("hex");
-    const existing = (await db().query(
-      "SELECT id FROM email_media WHERE instance_id=$1 AND sha256=$2",
-      [user.instance_id, hash],
-    )).rows[0];
-    let id = existing?.id;
-    if (!id) {
-      const count = (await db().query(
-        "SELECT count(*)::int count FROM email_media WHERE instance_id=$1",
+    // Lock the parent instance so concurrent uploads cannot both pass the quota.
+    // Archiving only affects the editor library: previously sent URLs remain live.
+    const id = await transaction(async (client) => {
+      await client.query("SELECT id FROM instances WHERE id=$1 FOR UPDATE", [user.instance_id]);
+      const previous = (await client.query(
+        "SELECT id,hidden FROM email_media WHERE instance_id=$1 AND sha256=$2",
+        [user.instance_id, hash],
+      )).rows[0];
+      if (previous && !previous.hidden) return String(previous.id);
+      const count = (await client.query(
+        "SELECT count(*)::int count FROM email_media WHERE instance_id=$1 AND NOT hidden",
         [user.instance_id],
       )).rows[0];
       if (Number(count?.count ?? 0) >= 60)
-        throw new HttpError(409, "Bibliothèque pleine (60 images maximum)");
-      id = randomUUID();
-      await db().query(
-        "INSERT INTO email_media(id,instance_id,filename,mime_type,sha256,size_bytes,data) VALUES($1,$2,$3,'image/webp',$4,$5,$6) ON CONFLICT(instance_id,sha256) DO NOTHING",
-        [id, user.instance_id, file.name.slice(0, 180), hash, compressed.byteLength, compressed],
+        throw new HttpError(409, "Bibliothèque pleine (60 images actives maximum). Archivez une image inutilisée.");
+      if (previous) {
+        await client.query("UPDATE email_media SET hidden=false WHERE id=$1 AND instance_id=$2",
+          [previous.id, user.instance_id]);
+        return String(previous.id);
+      }
+      const nextId = randomUUID();
+      await client.query(
+        "INSERT INTO email_media(id,instance_id,filename,mime_type,sha256,size_bytes,data) VALUES($1,$2,$3,'image/webp',$4,$5,$6)",
+        [nextId, user.instance_id, file.name.slice(0, 180), hash, compressed.byteLength, compressed],
       );
-      id = (await db().query(
-        "SELECT id FROM email_media WHERE instance_id=$1 AND sha256=$2",
-        [user.instance_id, hash],
-      )).rows[0]?.id;
-    }
+      return nextId;
+    });
     if (!id) throw new HttpError(500, "Impossible de sauvegarder l'image");
     return NextResponse.json({
       url: origin.replace(/\/$/, "") + "/api/email-media/" + id,
@@ -98,5 +103,29 @@ export async function POST(req: NextRequest) {
     if (e instanceof Error && /Input|image|buffer|decode|pixel|sharp/i.test(e.message))
       return unavailable("Impossible de décoder cette image", 400);
     return unavailable("Import d’image indisponible", 500);
+  }
+}
+
+/** Remove an asset from the editor library, never from already-sent emails. */
+export async function PATCH(req: NextRequest) {
+  try {
+    const origin = process.env.APP_ORIGIN;
+    if (!origin || req.headers.get("origin") !== new URL(origin).origin)
+      throw new HttpError(403, "Origine interdite");
+    const user = await admin(req);
+    await rateLimit("email-image-archive:" + user.id, 25);
+    const payload = await req.json() as { id?: unknown };
+    if (typeof payload?.id !== "string" ||
+        !/^[a-f\\d]{8}-[a-f\\d]{4}-[1-8][a-f\\d]{3}-[89ab][a-f\\d]{3}-[a-f\\d]{12}$/i.test(payload.id))
+      throw new HttpError(400, "Identifiant d'image invalide");
+    const row = (await db().query(
+      "UPDATE email_media SET hidden=true WHERE id=$1 AND instance_id=$2 RETURNING id",
+      [payload.id, user.instance_id],
+    )).rows[0];
+    if (!row) throw new HttpError(404, "Image introuvable");
+    return NextResponse.json({ ok: true }, { headers: { "Cache-Control": "no-store" } });
+  } catch (e) {
+    if (e instanceof HttpError) return unavailable(e.message, e.status);
+    return unavailable("Archivage d'image indisponible", 500);
   }
 }
