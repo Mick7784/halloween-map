@@ -1043,7 +1043,7 @@ export default function Admin({
                   communications: "Communications",
                   activity: "Activité",
                   seasons: "Saison",
-                  content: "Textes & documents",
+                  content: "Contenus & documents",
                   settings: "Paramètres",
                   roles: "Rôles & permissions",
                 }[section]
