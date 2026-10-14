@@ -629,6 +629,63 @@ for (const width of [1440])
       ).rows[0].routes_count,
     ).toBe(1);
   });
+test("V0.9.5 HTML emails preserve full source, safe CTA and reusable uploaded images", async ({
+  page,
+}) => {
+  await login(page);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/admin");
+  await page.getByRole("navigation", { name: "Navigation administration" })
+    .getByRole("button", { name: "Communications", exact: true }).click();
+  const editorToggle = page.getByRole("button", { name: "Passer à l’éditeur HTML complet" });
+  await expect(editorToggle).toBeVisible();
+  await editorToggle.click();
+  const htmlEditor = page.locator(".email-html-editor").first();
+  await expect(htmlEditor.getByRole("textbox", { name: "Document HTML d'email" })).toBeVisible();
+  await htmlEditor.getByRole("button", { name: "HTML", exact: true }).click();
+  const source = htmlEditor.getByRole("textbox", { name: "Code source HTML de l'email" });
+  const html = '<!doctype html><html lang="fr"><body style="background-color:#17171e">' +
+    '<table role="presentation" width="100%" cellpadding="20"><tbody><tr><td>' +
+    '<h1>Bonjour {{name}}</h1><p>Votre carte est prête.</p>' +
+    '<img src="https://example.org/halloween.png" width="200" alt="Citrouille">' +
+    '<a href="{{secure_action_url}}" style="background-color:#ff922f;padding:12px">Vérifier</a>' +
+    '</td></tr></tbody></table></body></html>';
+  await source.fill(html);
+  await htmlEditor.getByRole("button", { name: "Aperçu", exact: true }).click();
+  await expect(page.frameLocator('iframe[title="Aperçu du modèle"]')
+    .locator("h1")).toContainText("Camille");
+  await page.getByRole("button", { name: "Enregistrer le modèle", exact: true }).click();
+  await expect(page.getByRole("status")).toContainText("Modèle enregistré");
+  const row = (await pool.query("SELECT html_body,body FROM message_templates WHERE kind='VERIFY'")).rows[0];
+  expect(row.html_body).toBe(html);
+  expect(row.body).toContain("Vérifiez");
+  await page.reload();
+  await page.getByRole("navigation", { name: "Navigation administration" })
+    .getByRole("button", { name: "Communications", exact: true }).click();
+  await expect(page.locator(".email-html-editor")).toBeVisible();
+  await page.locator(".email-html-editor")
+    .getByRole("button", { name: "HTML", exact: true }).click();
+  await expect(page.getByRole("textbox", { name: "Code source HTML de l'email" }))
+    .toHaveValue(html);
+
+  const upload = await page.request.post(origin + "/api/admin/email-media", {
+    headers: { origin: new URL(origin).origin },
+    multipart: {
+      image: {
+        name: "favicon.png",
+        mimeType: "image/png",
+        buffer: await import("node:fs/promises").then((m) => m.readFile("public/favicon-16.png")),
+      },
+    },
+  });
+  expect(upload.status(), await upload.text()).toBe(200);
+  const image = await upload.json();
+  expect(image.url).toContain("/api/email-media/");
+  const file = await page.request.get(image.url);
+  expect(file.status()).toBe(200);
+  expect(file.headers()["content-type"]).toContain("image/webp");
+});
+
 for (const width of [1440])
   test(`Tiptap saves combined formatting through the real API and PostgreSQL, with matching email preview ${width}`, async ({
     page,
