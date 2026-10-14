@@ -1129,6 +1129,12 @@
   justify-content: space-between;
   gap: 14px;
 }
+.admin-inline-detail-header.is-compact {
+  justify-content: flex-end;
+}
+.admin-inline-detail-header.is-compact + .admin-inline-detail-tabs {
+  margin-top: 6px;
+}
 .admin-inline-detail-header h3 {
   margin: 0;
 }
