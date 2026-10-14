@@ -118,6 +118,7 @@ describe("V0.9.5 — safe full HTML email documents", () => {
       '<div style="display:none"><a href="{{secure_action_url}}">Activer</a></div>',
       '<table><tr><td style="font-size:0px"><a href="{{secure_action_url}}">Activer</a></td></tr></table>',
       '<a href="{{secure_action_url}}">    </a>',
+      '<a href="{{secure_action_url}}"><span style="display:none">Activer</span></a>',
       '<body style="display:none"><a href="{{secure_action_url}}">Activer</a></body>',
     ]) expect(() => renderEmailHtmlDocument(html, {
       allowedVariables: variables, requireSecureAction: true,
