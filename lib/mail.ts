@@ -447,7 +447,7 @@ async function claimJob(now: Date) {
       const rendered = renderMessage(
         {
           ...template,
-          body: template.body + "\\n\\n" + safetyNotice,
+          body: template.body + "\n\n" + safetyNotice,
         },
         {
           name: String(u.display_name),
