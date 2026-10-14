@@ -442,12 +442,12 @@ async function claimJob(now: Date) {
               .setLocale("fr")
               .toFormat("dd LLL yyyy à HH:mm")
           : "Date non définie";
+      const safetyNotice =
+        `Ce lien est valable pendant ${job.kind === "RESET" ? "1 heure" : "48 heures"}.\nIgnorez ce message si vous n’êtes pas à l’origine de cette demande.`;
       const rendered = renderMessage(
         {
           ...template,
-          body:
-            template.body +
-            `\n\nCe lien est valable pendant ${job.kind === "RESET" ? "1 heure" : "48 heures"}.\nIgnorez ce message si vous n’êtes pas à l’origine de cette demande.`,
+          body: template.body + "\\n\\n" + safetyNotice,
         },
         {
           name: String(u.display_name),
@@ -458,7 +458,7 @@ async function claimJob(now: Date) {
           map_close_date: identityDate(identity.closes_at),
           registration_date: identityDate(identity.registrations_open_at),
         },
-        { label, url: base.href },
+        { label, url: base.href, notice: safetyNotice },
       );
       ({ subject, text, html } = rendered);
     } else if (campaign) {
