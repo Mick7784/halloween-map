@@ -435,6 +435,9 @@ test("own account and protected administrators expose no rejected user-managemen
     .click();
   await page.getByRole("button", { name: "Mon profil", exact: true }).click();
   let detail = page.locator(".admin-inline-detail");
+  await expect(detail).not.toContainText("Camille");
+  await expect(detail).not.toContainText("camille@example.invalid");
+  await expect(detail).toContainText("Date de création du compte");
   await expect(
     detail.getByRole("link", { name: "Mon compte", exact: true }),
   ).toBeVisible();
@@ -522,7 +525,9 @@ test("dashboard moderation link switches to the active season and refreshes afte
     .click();
   await expect(page.getByLabel("Saison du back-office")).toHaveValue(real);
   const detail = page.locator(".admin-inline-detail");
-  await expect(detail).toContainText("Jardin des lanternes");
+  await expect(detail).not.toContainText("Jardin des lanternes");
+  await expect(detail).not.toContainText("12 rue de Paris, Rennes");
+  await expect(detail).toContainText("Coordonnées GPS");
   await detail.getByRole("tab", { name: "Modération" }).click();
   const refreshed = page.waitForResponse(
     (response) => new URL(response.url()).pathname === "/api/admin/houses",
