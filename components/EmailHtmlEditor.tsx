@@ -43,6 +43,8 @@ export default function EmailHtmlEditor({
   const [selectedImage, setSelectedImage] = useState<HTMLImageElement | null>(null);
   const [imageError, setImageError] = useState("");
   const [linkForm, setLinkForm] = useState(false);
+  const [library, setLibrary] = useState<{ id: string; filename: string; url: string }[]>([]);
+  const [uploadBusy, setUploadBusy] = useState(false);
   const [linkUrl, setLinkUrl] = useState("https://");
   const surface = useRef<HTMLDivElement | null>(null);
   const selection = useRef<Range | null>(null);
@@ -92,6 +94,7 @@ export default function EmailHtmlEditor({
   function exec(command: string, argument?: string) {
     if (disabled || !surface.current) return;
     restoreSelection();
+    document.execCommand("styleWithCSS", false, "true");
     document.execCommand(command, false, argument);
     rememberSelection();
     snapshot();
@@ -113,8 +116,45 @@ export default function EmailHtmlEditor({
         width: target.getAttribute("width") ?? "240",
       });
       setImageForm(true);
+      void loadLibrary();
     }
     rememberSelection();
+  }
+  async function loadLibrary() {
+    try {
+      const response = await fetch("/api/admin/email-media", { credentials: "same-origin" });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error ?? "Bibliothèque inaccessible");
+      setLibrary(data.images ?? []);
+    } catch (e) {
+      setImageError((e as Error).message);
+    }
+  }
+  async function uploadImage(file?: File) {
+    if (!file || disabled) return;
+    setImageError("");
+    setUploadBusy(true);
+    try {
+      const form = new FormData();
+      form.set("image", file);
+      const response = await fetch("/api/admin/email-media", {
+        method: "POST",
+        credentials: "same-origin",
+        body: form,
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error ?? "Import impossible");
+      setImageFields((previous) => ({
+        ...previous,
+        src: data.url,
+        alt: previous.alt || file.name.replace(/\\.[^.]+$/, ""),
+      }));
+      await loadLibrary();
+    } catch (e) {
+      setImageError((e as Error).message);
+    } finally {
+      setUploadBusy(false);
+    }
   }
   function saveImage() {
     setImageError("");
@@ -187,6 +227,7 @@ export default function EmailHtmlEditor({
         {tool("Image", Image, () => {
           rememberSelection(); setSelectedImage(null); setImageFields(imageDefault);
           setImageForm(true); setImageError("");
+          void loadLibrary();
         }, editingTools)}
         {tool("Tableau deux colonnes", Table2, () => insert(
           '<table role="presentation" width="100%" cellpadding="8" cellspacing="0"><tbody><tr>' +
@@ -237,6 +278,23 @@ export default function EmailHtmlEditor({
       )}
       {imageForm && (
         <div className="email-html-insert-panel" role="group" aria-label="Éditer l'image">
+          <label>Importer une image (PNG/JPEG/WebP, 2 Mo max)
+            <input aria-label="Importer une image" type="file" accept="image/png,image/jpeg,image/webp"
+              disabled={disabled || uploadBusy} onChange={(e) => {
+                void uploadImage(e.target.files?.[0]);
+                e.target.value = "";
+              }} />
+          </label>
+          {library.length > 0 && <label>Bibliothèque
+            <Select aria-label="Choisir une image de la bibliothèque" value=""
+              onChange={(e) => {
+                setImageFields((previous) => ({ ...previous, src: e.target.value }));
+              }}>
+              <option value="">Choisir une image…</option>
+              {library.map((asset) => <option key={asset.id} value={asset.url}>
+                {asset.filename}</option>)}
+            </Select>
+          </label>}
           <label>Adresse HTTPS de l'image
             <input aria-label="URL de l'image" value={imageFields.src}
               onChange={(e) => setImageFields({ ...imageFields, src: e.target.value })} />
@@ -250,7 +308,7 @@ export default function EmailHtmlEditor({
               value={imageFields.width}
               onChange={(e) => setImageFields({ ...imageFields, width: e.target.value })} />
           </label>
-          <Button type="button" disabled={disabled} onClick={saveImage}>
+          <Button type="button" disabled={disabled || uploadBusy} onClick={saveImage}>
             {selectedImage ? "Modifier l'image" : "Insérer l'image"}
           </Button>
           <Button type="button" onClick={() => {
