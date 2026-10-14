@@ -88,7 +88,7 @@ export function renderMessage(
     // appended account-safety notice. Preserve it as trusted server text.
     const notice = cta?.notice
       ? '<p style="font-size:12px;color:#aaa">' +
-        escapeHtml(cta.notice).replace(/\\n/g, "<br>") + "</p>"
+        escapeHtml(cta.notice).replace(/\n/g, "<br>") + "</p>"
       : "";
     const delivered = html.replace("</body>", notice + "</body>");
     return { subject, html: delivered, text: emailDocumentText(delivered) };
