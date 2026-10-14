@@ -106,7 +106,7 @@ describe("V0.9.5 — safe full HTML email documents", () => {
   it("escapes interpolated alt and title exactly once", () => {
     const html = renderEmailHtmlDocument(
       '<body><p>{{name}}</p><img src="https://example.org/a.png" alt="{{name}}" title="{{name}}"></body>',
-      { allowedVariables: variables, variables: { name: "Camille & Co <Alice> \\"test\\"" } },
+      { allowedVariables: variables, variables: { name: 'Camille & Co <Alice> "test"' } },
     );
     expect(html).toContain("Camille &amp; Co &lt;Alice&gt; &quot;test&quot;");
     expect(html).not.toContain("&amp;amp;");
