@@ -824,6 +824,14 @@ export default function Admin({
               setPendingHouseId(id);
               setSection("houses");
             }}
+            onUser={
+              has(user, "users.read")
+                ? (id) => {
+                    setPendingUserId(id);
+                    setSection("users");
+                  }
+                : undefined
+            }
             audit={loadedView === viewKey ? audit : []}
             scope={auditScope}
             onScope={setAuditScope}
