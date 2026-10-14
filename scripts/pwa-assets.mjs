@@ -1,18 +1,11 @@
 import { readFile, mkdir, writeFile } from "node:fs/promises";
-import { existsSync } from "node:fs";
 import sharp from "sharp";
 
-// Sources intentionally independent in V0.9.5:
-// - App icon: full Halloween Map artwork supplied by the owner
-// - Mini favicon: approved simplified pumpkin / map pin artwork
-// Until the two source files are committed, legacy assets remain the fallback.
-const legacy = await readFile("public/favicon.svg");
-const appIcon = existsSync("public/pwa/app-icon-source.png")
-  ? await readFile("public/pwa/app-icon-source.png")
-  : legacy;
-const favicon = existsSync("public/favicon-mini-source.png")
-  ? await readFile("public/favicon-mini-source.png")
-  : legacy;
+// Two approved illustrations, deliberately separate so the favicon remains
+// legible at 16/32px. Fail the build if either required source is missing:
+// never silently ship an old icon under the new release number.
+const appIcon = await readFile("public/pwa/app-icon-source.webp");
+const favicon = await readFile("public/favicon-mini-source.webp");
 const background = "#080b18";
 await mkdir("public/pwa", { recursive: true });
 
