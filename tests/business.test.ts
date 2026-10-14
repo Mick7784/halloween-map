@@ -183,6 +183,8 @@ beforeAll(async () => {
   for (const file of [
     "009_release_foundations.sql",
     "010_message_templates.sql",
+    "011_email_html_editor.sql",
+    "012_email_media.sql",
   ]) {
     const sql = await readFile("migrations/" + file, "utf8");
     if (engine instanceof PGlite) await engine.exec(sql);
