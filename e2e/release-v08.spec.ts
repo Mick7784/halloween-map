@@ -693,6 +693,37 @@ test("V0.9.5 HTML emails preserve full source, safe CTA and reusable uploaded im
   }
 });
 
+test("V0.9.5 rich editor allows direct text and table editing without touching public pages", async ({
+  page,
+}) => {
+  await login(page);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/admin");
+  await page.getByRole("navigation", { name: "Navigation administration" })
+    .getByRole("button", { name: "Communications", exact: true }).click();
+  await page.getByRole("button", { name: "Passer à l’éditeur HTML complet" }).click();
+  const editor = page.locator(".email-html-editor").first();
+  const paper = editor.getByRole("textbox", { name: "Document HTML d'email" });
+  await expect(paper).toHaveAttribute("contenteditable", "true");
+  const paragraph = paper.locator("p").first();
+  await paragraph.click();
+  await page.keyboard.press("End");
+  await page.keyboard.type(" Ajout depuis l’éditeur visuel");
+  await expect(paper).toContainText("Ajout depuis l’éditeur visuel");
+  const beforeTables = await paper.locator("table").count();
+  await editor.getByRole("button", { name: "Tableau deux colonnes" }).click();
+  await expect(paper.locator("table")).toHaveCount(beforeTables + 1);
+  const newTable = paper.locator("table").last();
+  await newTable.locator("td").first().click();
+  const beforeCells = await newTable.locator("tr").first().locator("td").count();
+  await editor.getByRole("button", { name: "Ajouter une colonne au tableau" }).click();
+  await expect(newTable.locator("tr").first().locator("td")).toHaveCount(beforeCells + 1);
+  await editor.getByRole("button", { name: "HTML", exact: true }).click();
+  const source = editor.getByRole("textbox", { name: "Code source HTML de l'email" });
+  await expect(source).toContainText("Ajout depuis l’éditeur visuel");
+  await expect(source).toContainText("Colonne 1");
+});
+
 for (const width of [1440])
   test(`Tiptap saves combined formatting through the real API and PostgreSQL, with matching email preview ${width}`, async ({
     page,
