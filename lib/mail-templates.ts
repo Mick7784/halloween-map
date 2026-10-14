@@ -3,6 +3,7 @@ import { z } from "zod";
 import { HttpError, rateLimit, requirePermission } from "./auth";
 import type { User } from "./domain";
 import { sanitizeContent } from "./content";
+import { renderEmailHtmlDocument } from "./email-html";
 import {
   messageKinds,
   messageDefaults,
@@ -19,12 +20,12 @@ export async function messageTemplate(
 ): Promise<MessageTemplate> {
   const row = (
     await c.query(
-      "SELECT subject,body FROM message_templates WHERE instance_id=$1 AND kind=$2",
+      "SELECT subject,body,html_body FROM message_templates WHERE instance_id=$1 AND kind=$2",
       [instanceId, kind],
     )
   ).rows[0];
   return row
-    ? { subject: String(row.subject), body: String(row.body) }
+    ? { subject: String(row.subject), body: String(row.body), html_body: row.html_body ? String(row.html_body) : null }
     : messageDefaults[kind];
 }
 export async function refusalPreview(
@@ -101,6 +102,7 @@ export async function templateAction(
             .max(150)
             .refine((v) => !/[\r\n]/.test(v)),
           body: z.string().trim().min(1).max(5000),
+          html_body: z.string().trim().max(100000).nullable().optional(),
         })
         .optional(),
     })
@@ -108,6 +110,10 @@ export async function templateAction(
   const template = p.template ?? (await messageTemplate(u.instance_id, p.kind));
   sanitizeContent(template.subject, messageVariables);
   sanitizeContent(template.body, messageVariables);
+  if (template.html_body?.trim()) renderEmailHtmlDocument(template.html_body, {
+    allowedVariables: messageVariables,
+    requireSecureAction: ["VERIFY", "INVITE", "RESET"].includes(p.kind),
+  });
   if (p.action === "test") {
     if (u.role_name !== "SUPER_ADMIN")
       throw new HttpError(403, "Super Admin requis");
@@ -156,8 +162,8 @@ export async function templateAction(
     else {
       if (!p.template) throw new HttpError(400, "Modèle requis");
       await c.query(
-        "INSERT INTO message_templates(instance_id,kind,subject,body) VALUES($1,$2,$3,$4) ON CONFLICT(instance_id,kind) DO UPDATE SET subject=excluded.subject,body=excluded.body,updated_at=now()",
-        [u.instance_id, p.kind, template.subject, template.body],
+        "INSERT INTO message_templates(instance_id,kind,subject,body,html_body) VALUES($1,$2,$3,$4,$5) ON CONFLICT(instance_id,kind) DO UPDATE SET subject=excluded.subject,body=excluded.body,html_body=excluded.html_body,updated_at=now()",
+        [u.instance_id, p.kind, template.subject, template.body, template.html_body ?? null],
       );
     }
     await c.query(
