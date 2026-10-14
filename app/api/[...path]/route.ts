@@ -176,10 +176,14 @@ async function handle(
       origin !== new URL(process.env.APP_ORIGIN).origin
     )
       throw new HttpError(403, "Origine de requête interdite");
-    if (Number(req.headers.get("content-length") ?? 0) > 20000)
+    // Rich email documents can contain up to 100 KB of validated markup;
+    // all other endpoints retain the existing small request limit.
+    const maxBody = ["admin/templates", "admin/communications"].includes(path)
+      ? 140000 : 20000;
+    if (Number(req.headers.get("content-length") ?? 0) > maxBody)
       throw new HttpError(413, "Requête trop volumineuse");
     const raw = await req.text();
-    if (raw.length > 20000)
+    if (raw.length > maxBody)
       throw new HttpError(413, "Requête trop volumineuse");
     const input = JSON.parse(raw);
     // Persistent limits are scoped to accounts/tokens in the service layer.

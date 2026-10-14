@@ -634,7 +634,7 @@ export default function Admin({
                       <AdminInlineDetail
                         key={h.id}
                         title={current.name}
-                        subtitle={current.owner_name + " · " + current.address}
+                        compactHeader
                         initialTab="info"
                         onClose={() => {
                           setSelected(null);
@@ -647,15 +647,12 @@ export default function Admin({
                             content: (
                               <section>
                                 <div className="admin-detail-facts">
-                                  <p><strong>Propriétaire</strong><span>{current.owner_name} · {current.email}</span></p>
-                                  <p><strong>Adresse</strong><span>{current.address}</span></p>
-                                  <p><strong>Position</strong><span>{current.latitude.toFixed(5)}, {current.longitude.toFixed(5)}</span></p>
-                                  <p><strong>Accueil</strong><span>{dateLabel(current.starts_at, state.instance?.timezone ?? "Europe/Paris")} → {dateLabel(current.ends_at, state.instance?.timezone ?? "Europe/Paris")}</span></p>
+                                  <p><strong>Coordonnées GPS</strong><span>{current.latitude.toFixed(5)}, {current.longitude.toFixed(5)}</span></p>
+                                  <p><strong>Horaires d’accueil</strong><span>{dateLabel(current.starts_at, state.instance?.timezone ?? "Europe/Paris")} → {dateLabel(current.ends_at, state.instance?.timezone ?? "Europe/Paris")}</span></p>
                                   <p><strong>Frayeur</strong><span>{current.adaptable ? "Frissons adaptés" : "Niveau " + current.fear}</span></p>
-                                  <p><strong>Activités</strong><span><Badges activities={current.activities} /></span></p>
                                 </div>
-                                {current.rp && <p>{current.rp}</p>}
-                                {current.practical && <p>{current.practical}</p>}
+                                {current.rp && <p><strong>Description : </strong>{current.rp}</p>}
+                                {current.practical && <p><strong>Informations pratiques : </strong>{current.practical}</p>}
                                 {has(user, "users.read") && (
                                   <Button onClick={() => {
                                     if (!confirmDraftNavigation()) return;

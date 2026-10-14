@@ -8,7 +8,7 @@ self.addEventListener("install", (event) => {
       .then((cache) =>
         cache.addAll([
           FALLBACK,
-          "/favicon.svg",
+          "/favicon.ico",
           "/favicon-16.png",
           "/favicon-32.png",
           "/pwa/icon-192.png",
@@ -44,6 +44,7 @@ self.addEventListener("fetch", (event) => {
     url.pathname.startsWith("/_next/static/") ||
     /^\/pwa\/[a-z0-9-]+\.png$/.test(url.pathname) ||
     url.pathname === "/favicon.svg" ||
+    url.pathname === "/favicon.ico" ||
     url.pathname === "/favicon-16.png" ||
     url.pathname === "/favicon-32.png" ||
     url.pathname === FALLBACK;

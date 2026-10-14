@@ -4,6 +4,7 @@
   "scripts": {
     "predev": "node scripts/map-assets.mjs && node scripts/pwa-assets.mjs",
     "prebuild": "node scripts/map-assets.mjs && node scripts/pwa-assets.mjs",
+    "pretest": "node scripts/pwa-assets.mjs",
     "dev": "next dev --hostname 0.0.0.0",
     "build": "next build",
     "start": "next start --hostname 0.0.0.0",
@@ -26,6 +27,7 @@
     "maplibre-gl": "^6.12.0",
     "next": "^16.3.8",
     "nodemailer": "^10.0.14",
+    "parse5": "8.0.1",
     "pg": "^8.23.1",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",

@@ -376,7 +376,7 @@ export default function AdminUsers({
                       <AdminInlineDetail
                         key={u.id}
                         title={current.display_name}
-                        subtitle={current.email}
+                        compactHeader
                         onClose={() => {
                           setSelected(null);
                           setEditing(false);
@@ -390,11 +390,7 @@ export default function AdminUsers({
                             content: (
                               <section>
                                 <div className="admin-detail-facts">
-                                  <p><strong>Email</strong><span>{current.email} · {labels[current.email_status]}</span></p>
-                                  <p><strong>Compte</strong><span>{labels[current.account_status] ?? current.account_status}</span></p>
-                                  <p><strong>Grade</strong><span>{labels[current.role_name ?? "USER"]}</span></p>
-                                  <p><strong>Création</strong><span>{date(current.created_at)}</span></p>
-                                  <p><strong>Dernière connexion</strong><span>{date(current.last_login_at)}</span></p>
+                                  <p><strong>Date de création du compte</strong><span>{date(current.created_at)}</span></p>
                                 </div>
                                 {current.id === user.id && <Link href="/account">Mon compte</Link>}
                                 {canEdit && !editing && (
@@ -425,13 +421,11 @@ export default function AdminUsers({
                             label: "Participation",
                             content: (
                               <section>
-                                <h4>{current.participation_season ?? "Saison active"}</h4>
                                 {current.participation ? (
-                                  <>
-                                    <p>{current.participation.name}</p>
-                                    <Button onClick={() => onHouse(current.participation!.id)}>Ouvrir la fiche maison</Button>
-                                  </>
-                                ) : <p>Aucune participation sur cette saison.</p>}
+                                  <Button onClick={() => onHouse(current.participation!.id)}>
+                                    Ouvrir la fiche de sa maison
+                                  </Button>
+                                ) : <p>Aucune maison enregistrée pour la saison active.</p>}
                               </section>
                             ),
                           },
@@ -440,7 +434,6 @@ export default function AdminUsers({
                             label: "Permissions",
                             content: (
                               <section>
-                                <p><strong>Grade : </strong>{labels[current.role_name ?? "USER"]}</p>
                                 {current.role_name === "ADMIN" ? (
                                   <ul>
                                     {current.permissions.filter((p) => p !== "admin.access").map((p) => (

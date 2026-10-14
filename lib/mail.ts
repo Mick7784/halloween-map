@@ -11,6 +11,7 @@ import { interpolate, sanitizeContent } from "./content";
 import { messageTemplate } from "./mail-templates";
 import { renderMessage, type MessageKind } from "./message-templates";
 import { editorialText } from "./editorial-format";
+import { renderEmailHtmlDocument, emailDocumentText } from "./email-html";
 export const mailVariables = [
   "name",
   "territory",
@@ -97,6 +98,7 @@ export async function campaignAction(user: User | null, input: unknown) {
             .max(150)
             .refine((v) => !/[\r\n]/.test(v)),
           body: z.string().trim().min(1).max(5000),
+          html_body: z.string().trim().max(100000).nullable().optional(),
           audience: z.enum(["ALL", "VISIBLE", "ACTIVE"]),
           active: z.boolean(),
           schedule_mode: z.enum(["ABSOLUTE", "RELATIVE"]),
@@ -169,6 +171,13 @@ export async function campaignAction(user: User | null, input: unknown) {
     throw new HttpError(409, "Saison consultée différente");
   sanitizeContent(v.subject, mailVariables);
   sanitizeContent(v.body, mailVariables);
+  if (v.html_body?.trim()) {
+    try {
+      renderEmailHtmlDocument(v.html_body, { allowedVariables: mailVariables });
+    } catch (e) {
+      throw new HttpError(400, "HTML de la campagne : " + (e as Error).message);
+    }
+  }
   return transaction(async (c) => {
     const s = (
       await c.query(
@@ -210,6 +219,7 @@ export async function campaignAction(user: User | null, input: unknown) {
       v.offset_days,
       at,
       v.active ? "SCHEDULED" : "DRAFT",
+      v.html_body ?? null,
     ];
     if (p.id) {
       const old = (
@@ -223,12 +233,12 @@ export async function campaignAction(user: User | null, input: unknown) {
       if (old.season_id !== v.season_id)
         throw new HttpError(400, "Saison de la campagne immuable");
       await c.query(
-        "UPDATE email_campaigns SET name=$1,subject=$2,body=$3,audience=$4,active=$5,schedule_mode=$6,anchor=$7,offset_days=$8,scheduled_at=$9,status=$10 WHERE id=$11",
+        "UPDATE email_campaigns SET name=$1,subject=$2,body=$3,audience=$4,active=$5,schedule_mode=$6,anchor=$7,offset_days=$8,scheduled_at=$9,status=$10,html_body=$11 WHERE id=$12",
         [...args, p.id],
       );
     } else
       await c.query(
-        "INSERT INTO email_campaigns(name,subject,body,audience,active,schedule_mode,anchor,offset_days,scheduled_at,status,instance_id,season_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)",
+        "INSERT INTO email_campaigns(name,subject,body,audience,active,schedule_mode,anchor,offset_days,scheduled_at,status,html_body,instance_id,season_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)",
         [...args, u.instance_id, v.season_id],
       );
     await c.query(
@@ -432,12 +442,12 @@ async function claimJob(now: Date) {
               .setLocale("fr")
               .toFormat("dd LLL yyyy à HH:mm")
           : "Date non définie";
+      const safetyNotice =
+        `Ce lien est valable pendant ${job.kind === "RESET" ? "1 heure" : "48 heures"}.\nIgnorez ce message si vous n’êtes pas à l’origine de cette demande.`;
       const rendered = renderMessage(
         {
           ...template,
-          body:
-            template.body +
-            `\n\nCe lien est valable pendant ${job.kind === "RESET" ? "1 heure" : "48 heures"}.\nIgnorez ce message si vous n’êtes pas à l’origine de cette demande.`,
+          body: template.body + "\n\n" + safetyNotice,
         },
         {
           name: String(u.display_name),
@@ -448,7 +458,7 @@ async function claimJob(now: Date) {
           map_close_date: identityDate(identity.closes_at),
           registration_date: identityDate(identity.registrations_open_at),
         },
-        { label, url: base.href },
+        { label, url: base.href, notice: safetyNotice },
       );
       ({ subject, text, html } = rendered);
     } else if (campaign) {
@@ -488,6 +498,13 @@ async function claimJob(now: Date) {
       text = interpolate(String(campaign.body), vars);
       html = mailLayout(subject, String(campaign.body), undefined, vars);
       text = interpolate(editorialText(String(campaign.body)), vars);
+      if (campaign.html_body) {
+        html = renderEmailHtmlDocument(String(campaign.html_body), {
+          allowedVariables: mailVariables,
+          variables: vars,
+        });
+        text = emailDocumentText(html);
+      }
     }
     return {
       skip: false,
