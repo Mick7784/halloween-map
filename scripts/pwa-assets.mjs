@@ -9,8 +9,32 @@ const favicon = await readFile("public/favicon-mini-source.webp");
 const background = "#080b18";
 await mkdir("public/pwa", { recursive: true });
 
-for (const size of [16, 32])
-  await sharp(favicon).resize(size, size).png().toFile(`public/favicon-${size}.png`);
+// PNG favicon variants are also packed into a standards-compliant ICO
+// (without a new runtime dependency) for older desktop/browser shortcuts.
+const favicons = [];
+for (const size of [16, 32]) {
+  const png = await sharp(favicon).resize(size, size).png().toBuffer();
+  await writeFile(`public/favicon-${size}.png`, png);
+  favicons.push({ size, png });
+}
+const header = Buffer.alloc(6);
+header.writeUInt16LE(1, 2); // ICO format
+header.writeUInt16LE(favicons.length, 4);
+let offset = 6 + favicons.length * 16;
+const directory = favicons.map(({ size, png }) => {
+  const entry = Buffer.alloc(16);
+  entry.writeUInt8(size, 0);
+  entry.writeUInt8(size, 1);
+  entry.writeUInt16LE(1, 4); // one image plane
+  entry.writeUInt16LE(32, 6); // 32-bit color
+  entry.writeUInt32LE(png.length, 8);
+  entry.writeUInt32LE(offset, 12);
+  offset += png.length;
+  return entry;
+});
+await writeFile("public/favicon.ico", Buffer.concat([
+  header, ...directory, ...favicons.map(({ png }) => png),
+]));
 
 for (const size of [192, 512])
   await sharp(appIcon).resize(size, size).png().toFile(`public/pwa/icon-${size}.png`);
