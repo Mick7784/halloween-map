@@ -332,7 +332,7 @@ export default function Admin({
       if (index >= 0) setHousePage(Math.floor(index / housePageSize) + 1);
     }
     setPendingHouseId(null);
-  }, [section, loadedView, viewKey, pendingHouseId, houses]);
+  }, [section, loadedView, viewKey, pendingHouseId, houses, housePageSize]);
   async function seasonAction(action: string, payload: unknown, id?: string) {
     await api("admin", { action, payload, id });
     await reloadSeasons();
