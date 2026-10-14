@@ -4,6 +4,7 @@
   "scripts": {
     "predev": "node scripts/map-assets.mjs && node scripts/pwa-assets.mjs",
     "prebuild": "node scripts/map-assets.mjs && node scripts/pwa-assets.mjs",
+    "pretest": "node scripts/pwa-assets.mjs",
     "dev": "next dev --hostname 0.0.0.0",
     "build": "next build",
     "start": "next start --hostname 0.0.0.0",
