@@ -13,6 +13,8 @@ const testMail = {
 Object.assign(process.env, testMail);
 export default defineConfig({
   testDir: "./e2e",
+  // The HTTPS media flow runs separately with its own TLS proxy and APP_ORIGIN.
+  testIgnore: ["**/email-media-https.spec.ts"],
   fullyParallel: false,
   workers: 1,
   timeout: 60000,

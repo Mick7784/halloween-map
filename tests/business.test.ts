@@ -185,6 +185,7 @@ beforeAll(async () => {
     "010_message_templates.sql",
     "011_email_html_editor.sql",
     "012_email_media.sql",
+    "013_worker_monitoring.sql",
   ]) {
     const sql = await readFile("migrations/" + file, "utf8");
     if (engine instanceof PGlite) await engine.exec(sql);
@@ -1179,11 +1180,11 @@ describe("Routing, demo and canonical versions", () => {
     expect(() => nextVersion("latest")).toThrow();
     expect(() => nextVersion("V0.1", "V0.1")).toThrow();
   });
-  it("release is gated by verification and Docker; version is read from VERSION", async () => {
+  it("release requires verification, Docker and HTTPS media; version is read from VERSION", async () => {
     const version = (await readFile("VERSION", "utf8")).trim();
     expect(await readFile("CHANGELOG.md", "utf8")).toContain("## " + version);
     const workflow = await readFile(".github/workflows/ci.yml", "utf8");
-    expect(workflow).toContain("needs: [verify, docker]");
+    expect(workflow).toContain("needs: [verify, docker, https-media]");
     expect(workflow).toContain("steps.version.outputs.value");
     expect(workflow).toContain('git rev-parse "$version"');
     expect(workflow).toContain("< VERSION");

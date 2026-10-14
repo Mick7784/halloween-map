@@ -52,6 +52,8 @@ export default function EmailHtmlEditor({
   const [linkForm, setLinkForm] = useState(false);
   const [library, setLibrary] = useState<{ id: string; filename: string; url: string }[]>([]);
   const [uploadBusy, setUploadBusy] = useState(false);
+  const [selectedLibraryId, setSelectedLibraryId] = useState("");
+  const [libraryCapacity, setLibraryCapacity] = useState({ used: 0, limit: 60 });
   const [linkUrl, setLinkUrl] = useState("https://");
   const surface = useRef<HTMLDivElement | null>(null);
   const selection = useRef<Range | null>(null);
@@ -169,6 +171,7 @@ export default function EmailHtmlEditor({
       const data = await response.json();
       if (!response.ok) throw new Error(data.error ?? "Bibliothèque inaccessible");
       setLibrary(data.images ?? []);
+      setLibraryCapacity(data.capacity ?? { used: (data.images ?? []).length, limit: 60 });
     } catch (e) {
       setImageError((e as Error).message);
     }
@@ -192,6 +195,27 @@ export default function EmailHtmlEditor({
         src: data.url,
         alt: previous.alt || file.name.replace(/\\.[^.]+$/, ""),
       }));
+      await loadLibrary();
+    } catch (e) {
+      setImageError((e as Error).message);
+    } finally {
+      setUploadBusy(false);
+    }
+  }
+  async function archiveImage() {
+    if (!selectedLibraryId || disabled || uploadBusy ||
+        !window.confirm("Archiver cette image ? Elle restera visible dans les emails déjà envoyés.")) return;
+    setImageError("");
+    setUploadBusy(true);
+    try {
+      const response = await fetch("/api/admin/email-media", {
+        method: "PATCH", credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: selectedLibraryId }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error ?? "Archivage impossible");
+      setSelectedLibraryId("");
       await loadLibrary();
     } catch (e) {
       setImageError((e as Error).message);
@@ -374,16 +398,21 @@ export default function EmailHtmlEditor({
                 e.target.value = "";
               }} />
           </label>
+          <p className="small muted">Bibliothèque : {libraryCapacity.used}/{libraryCapacity.limit} images actives. Les images archivées restent accessibles dans les emails déjà envoyés.</p>
           {library.length > 0 && <label>Bibliothèque
-            <Select aria-label="Choisir une image de la bibliothèque" value=""
+            <Select aria-label="Choisir une image de la bibliothèque" value={selectedLibraryId}
               onChange={(e) => {
-                setImageFields((previous) => ({ ...previous, src: e.target.value }));
+                setSelectedLibraryId(e.target.value);
+                const asset = library.find((item) => item.id === e.target.value);
+                if (asset) setImageFields((previous) => ({ ...previous, src: asset.url }));
               }}>
               <option value="">Choisir une image…</option>
-              {library.map((asset) => <option key={asset.id} value={asset.url}>
+              {library.map((asset) => <option key={asset.id} value={asset.id}>
                 {asset.filename}</option>)}
             </Select>
           </label>}
+          {selectedLibraryId && <Button type="button" disabled={disabled || uploadBusy}
+            onClick={() => void archiveImage()}>Archiver l’image sélectionnée</Button>}
           <label>Adresse HTTPS de l’image
             <input aria-label="URL de l'image" value={imageFields.src}
               onChange={(e) => setImageFields({ ...imageFields, src: e.target.value })} />

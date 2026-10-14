@@ -1,5 +1,18 @@
 # Changelog
 
+## V0.9.6
+
+- **Stabilisation des emails HTML** : correction des attributs `alt`/`title` échappés deux fois ; refus des liens sécurisés invisibles dans un conteneur masqué ; tests anti-régression.
+- **Images externes dans l'éditeur** : chargement HTTPS permis uniquement sur la page d'administration pour harmoniser l'aperçu et le HTML autorisé, sans ouvrir cette permission aux visiteurs.
+- **Bibliothèque de médias** : 60 images actives maximum avec quota protégé par transaction, compteur visible et archivage en interface. Les URL des emails déjà envoyés restent pérennes ; une image archivée identique peut être réactivée.
+- **Parcours HTTPS intégré** : nouveau test navigateur dédié avec connexion administrateur réelle, import, bibliothèque, sauvegarde de modèle et chargement public de l'image ; la publication dépend de sa réussite.
+- **Supervision worker** : migration additive `013_worker_monitoring.sql`, horodatage des cycles réussis/échoués, nombre de messages en retard et healthcheck Docker fondé sur le dernier cycle réellement terminé.
+- **Sécurité des dépendances** : `npm audit --omit=dev --audit-level=high` en CI ; surveillance documentée de l'avis `braces` côté développement, pour lequel aucun patch n'est publié au 14 octobre 2026.
+- **Documentation** : README illustré avec l'icône officielle, guide technique séparé et checklist d'ouverture (mentions légales, clients mails, GPS physique, restauration de sauvegarde).
+- **Périmètre préservé** : aucune modification du design public, des droits de l'administration mobile, des collectes ou des règles de saison.
+- **Avant ouverture réelle** : les coordonnées de l'exploitant, les tests de messagerie réelle, les smartphones physiques et la restauration isolée doivent être confirmés sur l'instance hébergée.
+
+
 ## V0.9.5
 
 - **Éditeur d’emails HTML complet** dans le back-office pour les six modèles automatiques et les campagnes : barre d’outils de traitement de texte, mise en forme, tableaux éditables, liens, images, mode source HTML et aperçu. Ancien éditeur conservé en option et modèles historiques non modifiés tant qu’un passage au HTML n’est pas demandé.

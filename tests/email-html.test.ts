@@ -103,6 +103,27 @@ describe("V0.9.5 — safe full HTML email documents", () => {
       allowedVariables: variables,
     })).toThrow(error);
   });
+  it("escapes interpolated alt and title exactly once", () => {
+    const html = renderEmailHtmlDocument(
+      '<body><p>{{name}}</p><img src="https://example.org/a.png" alt="{{name}}" title="{{name}}"></body>',
+      { allowedVariables: variables, variables: { name: 'Camille & Co <Alice> "test"' } },
+    );
+    expect(html).toContain("Camille &amp; Co &lt;Alice&gt; &quot;test&quot;");
+    expect(html).not.toContain("&amp;amp;");
+    expect(emailDocumentText(html)).toContain('Camille & Co <Alice> "test"');
+  });
+  it("rejects account actions hidden directly or in a parent container", () => {
+    for (const html of [
+      '<a href="{{secure_action_url}}" style="display:none">Activer</a>',
+      '<div style="display:none"><a href="{{secure_action_url}}">Activer</a></div>',
+      '<table><tr><td style="font-size:0px"><a href="{{secure_action_url}}">Activer</a></td></tr></table>',
+      '<a href="{{secure_action_url}}">    </a>',
+      '<a href="{{secure_action_url}}"><span style="display:none">Activer</span></a>',
+      '<body style="display:none"><a href="{{secure_action_url}}">Activer</a></body>',
+    ]) expect(() => renderEmailHtmlDocument(html, {
+      allowedVariables: variables, requireSecureAction: true,
+    })).toThrow(/visible|lisible/);
+  });
   it("rejects lossy HTML constructs instead of silently stripping them", () => {
     expect(() => renderEmailHtmlDocument("<p style='position:absolute'>Contenu</p>", {
       allowedVariables: variables,

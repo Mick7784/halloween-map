@@ -38,7 +38,8 @@ function replaceVariables(text: string, options: RenderOptions, inText: boolean)
       throw new Error("Variable d’email non autorisée : " + key);
     if (!options.variables) return "{{" + key + "}}";
     const value = options.variables[key] ?? "";
-    return inText ? escapeHtml(value).replace(/\n/g, "<br>") : escapeHtml(value);
+    // Attributes are escaped exactly once by the HTML serializer below.
+    return inText ? escapeHtml(value).replace(/\n/g, "<br>") : value;
   });
 }
 function cssValue(value: string): string {
@@ -68,6 +69,27 @@ function find(node: EmailNode, name: string): EmailNode | undefined {
     const match = find(child, name);
     if (match) return match;
   }
+}
+function hiddenActionStyle(source: string): boolean {
+  // A security link cannot be invisible, including through one of its ancestors.
+  // This is intentionally narrower than the general CSS allowlist.
+  return source.split(";").some((declaration) => {
+    const [name, ...parts] = declaration.split(":");
+    const property = name?.trim().toLowerCase();
+    const value = parts.join(":").trim().toLowerCase();
+    return (property === "display" && value === "none")
+      || (property === "font-size" && /^0(?:px|pt|em|rem|%)?$/.test(value))
+      || (["width", "height", "max-width", "min-width", "max-height", "min-height"].includes(property ?? "")
+        && /^0(?:px|pt|em|rem|%)?$/.test(value))
+      || (["color", "background", "background-color"].includes(property ?? "")
+        && value === "transparent");
+  });
+}
+function visibleTextContent(node: EmailNode, inheritedHidden = false): string {
+  const hidden = inheritedHidden || hiddenActionStyle(attribute(node, "style") ?? "");
+  if (hidden) return "";
+  if (node.nodeName === "#text") return node.value ?? "";
+  return (node.childNodes ?? []).map((child) => visibleTextContent(child, hidden)).join("");
 }
 function safeLink(url: string): boolean {
   if (url === "{{secure_action_url}}") return true;
@@ -102,13 +124,19 @@ export function renderEmailHtmlDocument(
   const body = find(parsed, "body");
   if (!body) throw new Error("Corps HTML manquant");
   let actionLinks = 0;
-  function walk(node: EmailNode): string {
+  function walk(node: EmailNode, inheritedHidden = false): string {
     if (node.nodeName === "#comment") return "";
     if (node.nodeName === "#text")
       return replaceVariables(escapeHtml(node.value ?? ""), options, true);
     const tag = node.tagName ?? node.nodeName;
     if (!tags.has(tag)) throw new Error("Balise HTML non autorisée : " + tag);
     const attr: string[] = [];
+    const currentStyle = attribute(node, "style") ?? "";
+    const hidden = inheritedHidden || hiddenActionStyle(currentStyle);
+    if (tag === "a" && attribute(node, "href") === "{{secure_action_url}}") {
+      if (hidden || !visibleTextContent(node).trim())
+        throw new Error("Le lien sécurisé doit être visible et porter un texte lisible");
+    }
     for (const item of node.attrs ?? []) {
       const name = item.name.toLowerCase();
       const val = item.value;
@@ -174,9 +202,11 @@ export function renderEmailHtmlDocument(
     const opening = "<" + tag + attr.join("") + ">";
     return voidTags.has(tag)
       ? opening
-      : opening + (node.childNodes ?? []).map(walk).join("") + "</" + tag + ">";
+      : opening + (node.childNodes ?? []).map((child) => walk(child, hidden)).join("") + "</" + tag + ">";
   }
-  const content = (body.childNodes ?? []).map(walk).join("");
+  const content = (body.childNodes ?? []).map((node) =>
+    walk(node, hiddenActionStyle(attribute(body, "style") ?? "")),
+  ).join("");
   if (!content.trim()) throw new Error("Email vide");
   if (options.requireSecureAction && actionLinks !== 1)
     throw new Error("L’email de compte doit inclure exactement un lien sécurisé");
