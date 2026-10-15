@@ -177,8 +177,7 @@ function SeasonEditor({
             ))}
           </>
       </div>
-        <>
-          <Check
+      <Check
             name="registrations_open"
             label="Autoriser les inscriptions"
             checked={season?.registrations_open ?? true}
