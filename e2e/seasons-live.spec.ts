@@ -233,11 +233,14 @@ test("live APIs: active real season, phone session, reusable accounts, post-clos
         "UPDATE seasons SET opens_at=now()-interval '2 hours',closes_at=now()-interval '1 hour',registrations_open_at=now()-interval '3 hours',purge_at=now()+interval '1 hour' WHERE id=$1",
         [real.id],
       );
+      await pool.query("UPDATE participations p SET starts_at=s.opens_at,ends_at=s.closes_at FROM seasons s WHERE p.season_id=s.id AND s.id=$1", [real.id]);
       const after=await (await page.request.get('/api/public')).json();
       expect(after.mapAccessible).toBe(true);expect(after.earlyAccess).toBe(true);
       expect((await (await visitor.request.get('/api/public')).json()).mapAccessible).toBe(false);
       const closedSeason=(await pool.query('SELECT opens_at,closes_at FROM seasons WHERE id=$1',[real.id])).rows[0];
-      expect((await post('route',{...input,start:new Date(closedSeason.opens_at).toISOString(),end:new Date(closedSeason.closes_at).toISOString()})).ok()).toBe(true);
+      const postCloseRoute = await post('route',{...input,start:new Date(closedSeason.opens_at).toISOString(),end:new Date(closedSeason.closes_at).toISOString()});
+      expect(postCloseRoute.ok(), await postCloseRoute.text()).toBe(true);
+      expect((await postCloseRoute.json()).stops).toHaveLength(1);
       const lateReview=await post('admin',{action:'reviewHouse',seasonId:real.id,id:h.id,payload:{status:'REFUSED',reason_code:'ADDRESS'}});
       expect(lateReview.ok(),await lateReview.text()).toBe(true);
       await pool.query(
