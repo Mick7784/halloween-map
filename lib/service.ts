@@ -1333,7 +1333,7 @@ export async function adminRead(
           )
         ).rows[0] as unknown as Season | undefined;
         if (!s) throw new HttpError(404, "Saison introuvable");
-        const snapshot = !!(s.stats_snapshot_at || s.purged_at || s.archived);
+        const snapshot = !!(s.purged_at || s.archived);
         return {
           seasonId: s.id,
           snapshot,
