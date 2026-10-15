@@ -56,6 +56,7 @@ export default function MapExperience({
     instanceId: state.instance!.id,
     seasonId: state.season?.id ?? "",
     closesAt: state.season?.closes_at ?? new Date(0).toISOString(),
+    previewMode: state.earlyAccess === true,
   });
   const [preparing, setPreparing] = useState(false),
     [preparationHouses, setPreparationHouses] = useState<
