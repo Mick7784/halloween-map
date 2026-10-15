@@ -268,10 +268,8 @@ async function finishSeason(seasonId: string, instanceId: string, now: Date) {
         [JSON.stringify(stats), now, s.id],
       );
     }
-    await c.query(
-      "UPDATE instances SET active_season_id=NULL WHERE id=$1 AND active_season_id=$2",
-      [instanceId, s.id],
-    );
+    // Public closing does not revoke the Super Admin's access. Only a
+    // deliberate deactivation or the scheduled privacy purge removes the pointer.
   });
 }
 export async function purgeSeason(
@@ -310,9 +308,9 @@ export async function purgeSeason(
       return { purged: false };
     if (!seasonFinished(s, now))
       throw new HttpError(409, "La saison n’est pas terminée");
-    const stats = s.stats_snapshot_at
-      ? s.stats
-      : await statisticalSnapshot(c, s);
+    // An active season remains administrable after public closing.
+    // Recompute the final figures at purge so late administrative edits count.
+    const stats = await statisticalSnapshot(c, s);
     await c.query(
       "DELETE FROM audit_logs WHERE instance_id=$1 AND (season_id=$2 OR target_id IN(SELECT id FROM participations WHERE season_id=$2) OR target_id IN(SELECT id FROM email_campaigns WHERE season_id=$2))",
       [instanceId, s.id],
@@ -452,9 +450,9 @@ export async function publicState(
       [i.id, s.id, "VISIBLE"],
     );
     count = Number(rows[0].n);
-    if (canSeeMap && user) {
+    if (canSeeMap) {
       const { rows } = await db().query(
-        "SELECT * FROM participations WHERE instance_id=$1 AND season_id=$2 AND status='VISIBLE' AND review_status='VALIDATED' AND activity='ACTIVE' AND EXISTS(SELECT 1 FROM users u WHERE u.id=participations.user_id AND u.account_status='ACTIVE' AND (u.email_status='VERIFIED' OR participations.legacy_imported)) AND NOT EXISTS(SELECT 1 FROM legal_documents d WHERE d.instance_id=participations.instance_id AND d.active AND d.requires_reaccept AND ((d.kind='TERMS' AND participations.terms_version IS DISTINCT FROM d.version) OR (d.kind='GUIDELINES' AND participations.guidelines_version IS DISTINCT FROM d.version))) AND (activity='ACTIVE' OR ($4::boolean AND activity IN ('ENDED','PAUSED'))) AND (($4::boolean AND starts_at<$5 AND ends_at>$6) OR (NOT $4::boolean AND starts_at<=$3 AND ends_at>$3))",
+        "SELECT * FROM participations WHERE instance_id=$1 AND season_id=$2 AND status='VISIBLE' AND review_status='VALIDATED' AND EXISTS(SELECT 1 FROM users u WHERE u.id=participations.user_id AND u.account_status='ACTIVE' AND (u.email_status='VERIFIED' OR participations.legacy_imported)) AND NOT EXISTS(SELECT 1 FROM legal_documents d WHERE d.instance_id=participations.instance_id AND d.active AND d.requires_reaccept AND ((d.kind='TERMS' AND participations.terms_version IS DISTINCT FROM d.version) OR (d.kind='GUIDELINES' AND participations.guidelines_version IS DISTINCT FROM d.version))) AND ((($4::boolean) AND starts_at<$5 AND ends_at>$6) OR (NOT $4::boolean AND activity='ACTIVE' AND starts_at<=$3 AND ends_at>$3))",
         [i.id, s.id, now, earlyAccess, s.closes_at, s.opens_at],
       );
       houses = (rows as unknown as House[])
@@ -465,13 +463,15 @@ export async function publicState(
     }
   }
   if (s && canCollect && user)
-    upcoming = (await routeCandidates(db(), i, s, now, s.closes_at))
+    upcoming = (await routeCandidates(
+      db(), i, s, earlyAccess ? s.opens_at : now, s.closes_at,
+    ))
       .filter(
         (h) =>
           h.status === "VISIBLE" &&
           h.activity === "ACTIVE" &&
           effectiveActivities(h).length &&
-          +new Date(h.ends_at) > +now,
+          (earlyAccess || +new Date(h.ends_at) > +now),
       )
       .map(publicHouse);
   if (s && canCollect && user) {
@@ -543,6 +543,7 @@ export async function publicState(
           opens_at: s.opens_at,
           closes_at: s.closes_at,
           registrations_open:
+            !!s.active &&
             !s.is_test &&
             s.registrations_open &&
             !s.purged_at &&
@@ -717,6 +718,7 @@ export async function createParticipation(
       throw new HttpError(403, "Créez une saison avant d’inscrire une maison.");
     if (
       ss.purged_at ||
+      (!management && i.active_season_id !== ss.id) ||
       (!management &&
         !ss.is_test &&
         (!ss.registrations_open ||
@@ -731,7 +733,7 @@ export async function createParticipation(
         403,
         "Les maisons TEST se créent depuis le back-office",
       );
-    if (ss.archived || seasonFinished(ss))
+    if (ss.archived || ss.purged_at || (!management && seasonFinished(ss)))
       throw new HttpError(403, "Saison terminée");
     const a = await validateAcceptance(c, i.id, raw.acceptance);
     const h = raw.house;
@@ -850,8 +852,7 @@ export async function updateHouse(
       !s ||
       s.purged_at ||
       s.archived ||
-      seasonFinished(s) ||
-      (!admin && (s.is_test || s.id !== old.season_id))
+      (!admin && (seasonFinished(s) || s.is_test || s.id !== old.season_id))
     )
       throw new HttpError(403, "Saison fermée");
     if (!admin) {
@@ -988,7 +989,7 @@ export async function participantAction(
     if (
       h.purged_at ||
       h.archived ||
-      (!h.season_is_test && Date.now() >= +new Date(h.closes_at))
+      (!managedId && Date.now() >= +new Date(h.closes_at))
     )
       throw new HttpError(403, "Saison terminée");
     if (data.action === "delete") {
@@ -1014,7 +1015,7 @@ export async function participantAction(
     }
     if (
       h.purged_at ||
-      (!h.season_is_test && +new Date() >= +new Date(h.closes_at))
+      (!managedId && +new Date() >= +new Date(h.closes_at))
     )
       throw new HttpError(403, "Saison fermée");
     if (data.action === "deplete") {
@@ -1360,7 +1361,7 @@ export async function adminRead(
     case "stats":
       return (
         await db().query(
-          "SELECT s.*,COALESCE(s.id=(SELECT active_season_id FROM instances WHERE id=s.instance_id),false) active,(SELECT count(*)::int FROM email_campaigns ec WHERE ec.season_id=s.id AND ec.schedule_mode='RELATIVE' AND ec.active AND ec.status='SCHEDULED') relative_campaign_count,(SELECT count(DISTINCT u.id)::int FROM participations h JOIN users u ON u.id=h.user_id WHERE h.season_id=s.id AND u.account_status='ACTIVE' AND u.email_status='VERIFIED') reminder_recipient_estimate FROM seasons s WHERE s.instance_id=$1 ORDER BY s.year DESC",
+          "SELECT s.*,COALESCE(s.id=(SELECT active_season_id FROM instances WHERE id=s.instance_id),false) active,(SELECT count(*)::int FROM email_campaigns ec WHERE ec.season_id=s.id AND ec.schedule_mode='RELATIVE' AND ec.active AND ec.status='SCHEDULED') relative_campaign_count,(SELECT count(DISTINCT u.id)::int FROM participations h JOIN users u ON u.id=h.user_id WHERE h.season_id=s.id AND u.account_status='ACTIVE' AND u.email_status='VERIFIED') reminder_recipient_estimate FROM seasons s WHERE s.instance_id=$1 AND NOT s.is_test ORDER BY s.year DESC",
           [u.instance_id],
         )
       ).rows
@@ -1473,7 +1474,6 @@ export async function adminAction(user: User | null, input: unknown) {
     const context = await selectedSeason(u, data.seasonId);
     if (
       !context ||
-      seasonFinished(context) ||
       context.purged_at ||
       context.archived
     )
@@ -1531,7 +1531,7 @@ export async function adminAction(user: User | null, input: unknown) {
       if (!target) throw new HttpError(404, "Saison introuvable");
       if (
         data.action === "activateSeason" &&
-        (target.archived || target.purged_at || seasonFinished(target))
+        (target.archived || target.purged_at || target.is_test)
       )
         throw new HttpError(
           400,
@@ -1725,7 +1725,7 @@ export async function adminAction(user: User | null, input: unknown) {
           [data.id, i.id],
         );
         s = rows[0] as unknown as Season;
-        if (!s || s.purged_at || s.archived || seasonFinished(s))
+        if (!s || s.purged_at || s.archived || s.is_test)
           throw new HttpError(
             400,
             "Une saison purgée ne peut pas être réouverte",
