@@ -48,12 +48,15 @@ export default function HomeAtmosphere({ motionAllowed = true }: { motionAllowed
     let disposed = false;
     let depthReady = false;
     let loadStarted = false;
+    let depthLoading = false;
+    let pageActive = true;
 
     const enabled = () =>
       motionAllowed &&
       sensorAvailable &&
       mobile.matches &&
       !reducedMotion.matches &&
+      pageActive &&
       document.visibilityState === "visible";
 
     const setOffsets = (x: number, y: number) => {
@@ -124,16 +127,19 @@ export default function HomeAtmosphere({ motionAllowed = true }: { motionAllowed
       if (depthReady) { activate(); return; }
       if (loadStarted) return;
       loadStarted = true;
+      depthLoading = true;
       void Promise.all(DEPTH_ASSETS.map(async (src) => {
         const plane = new Image();
         plane.src = src;
         await plane.decode();
       })).then(() => {
+        depthLoading = false;
         depthReady = true;
         activate();
       }).catch(() => {
+        depthLoading = false;
         // Failed or unavailable optional assets leave the static master.
-        // No repeated requests, permission prompts, or broken moving layers.
+        // Retry only after a resume or network recovery, never on every sample.
       });
     };
 
@@ -186,9 +192,36 @@ export default function HomeAtmosphere({ motionAllowed = true }: { motionAllowed
       }
     };
 
+    const pause = () => {
+      pageActive = false;
+      reconcile();
+    };
+    const resume = () => {
+      pageActive = true;
+      // Installed apps can resume an existing window without remounting React
+      // or changing visibility. Re-arm the listener and use a fresh posture.
+      if (subscribed) window.removeEventListener("deviceorientation", onOrientation);
+      subscribed = false;
+      art.removeAttribute("data-home-sensor");
+      reset();
+      if (!depthReady && !depthLoading) loadStarted = false;
+      reconcile();
+    };
+    const recoverImages = () => {
+      if (!depthReady && !depthLoading && enabled()) {
+        loadStarted = false;
+        // The next valid measurement re-anchors and retries optional images.
+        baseline = null;
+      }
+    };
+
     mobile.addEventListener("change", reconcile);
     reducedMotion.addEventListener("change", reconcile);
     document.addEventListener("visibilitychange", reconcile);
+    window.addEventListener("pagehide", pause);
+    window.addEventListener("pageshow", resume);
+    window.addEventListener("focus", resume);
+    window.addEventListener("online", recoverImages);
     reconcile();
 
     return () => {
@@ -196,6 +229,10 @@ export default function HomeAtmosphere({ motionAllowed = true }: { motionAllowed
       mobile.removeEventListener("change", reconcile);
       reducedMotion.removeEventListener("change", reconcile);
       document.removeEventListener("visibilitychange", reconcile);
+      window.removeEventListener("pagehide", pause);
+      window.removeEventListener("pageshow", resume);
+      window.removeEventListener("focus", resume);
+      window.removeEventListener("online", recoverImages);
       if (subscribed) window.removeEventListener("deviceorientation", onOrientation);
       art.removeAttribute("data-home-sensor");
       reset();

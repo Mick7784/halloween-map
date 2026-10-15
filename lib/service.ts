@@ -1759,15 +1759,9 @@ export async function adminAction(user: User | null, input: unknown) {
           +new Date(purge) !== +new Date(s.purge_at)
         )
           throw new HttpError(403, "Super Admin requis pour modifier la purge");
-        if (
-          (
-            await c.query(
-              "SELECT id FROM seasons WHERE id=$1 AND reminder_enabled=true AND reminder_at>=$2",
-              [s.id, purge],
-            )
-          ).rows.length
-        )
-          throw new HttpError(400, "La purge doit suivre le rappel programmé");
+        // V0.2 reminders were migrated into email_campaigns by migration 003.
+        // Validate the actual campaigns below, after recomputing their dates;
+        // stale reminder_* columns must not veto a valid season update.
         const { rows: invalid } = await c.query(
           "SELECT id FROM participations WHERE season_id=$1 AND (starts_at<$2 OR ends_at>$3) LIMIT 1",
           [s.id, opens, closes],

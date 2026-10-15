@@ -51,9 +51,9 @@ La purge transactionnelle/idempotente supprime réellement participations, adres
 
 Politique de comptes inactifs : aucun nettoyage automatique implicite. L’exploitant doit définir/publier un délai justifié, informer les utilisateurs avant suppression puis utiliser la suppression de compte, avec rétention limitée des sauvegardes. Les jetons expirés sont supprimés ; les états d’emails d’identité terminés sont effacés après 30 jours.
 
-**Saisons TEST** : une seule saison active, REAL ou TEST, désignée exclusivement par `active_season_id`. TEST active ouvre la vraie carte à ADMIN/SUPER_ADMIN uniquement. Comptes globaux ; maisons liées à la saison active lors de leur création et horaires saisis respectés. L’activation est manuelle, création et sélection BO ne l’activent pas. Historique REAL en lecture seule, statistiques anonymes après purge. Aucun email réel pour une saison TEST. Voir [le modèle Saison](docs/seasons.md).
+**Saisons TEST** : une seule saison active, REAL ou TEST, désignée exclusivement par `active_season_id`. TEST active ouvre la vraie carte à ADMIN/SUPER_ADMIN uniquement. Comptes globaux ; maisons liées à la saison active lors de leur création et horaires saisis respectés. L’activation est manuelle, création et sélection BO ne l’activent pas. Historique REAL en lecture seule, statistiques anonymes après purge. Aucun email réel pour une saison TEST. Voir [le modèle Saison](seasons.md).
 
-Voir [les règles d’exploitation, la migration 008 et les statistiques](docs/seasons.md).
+Voir [les règles d’exploitation, la migration 008 et les statistiques](seasons.md).
 
 ## SMTP et communications
 
@@ -129,9 +129,9 @@ Métier : PGlite local, PostgreSQL 17 en CI (`TEST_DATABASE_URL`). Migrations fr
 
 Production : `npm audit --omit=dev`. L’avis GHSA-vfj7-8cjw-p6xm concerne le transitif de développement `braces`, exclu du runtime ; ne pas forcer une rétrogradation du lint.
 
-La CI publie après verify et Docker verts seulement : tag et release selon `VERSION`, `ghcr.io/mick7784/halloween-map:<VERSION>` et `:latest`, labels OCI version/commit. Aucun numéro parallèle dans package.json, aucun déploiement externe. L’accueil premium et ses sources/fallbacks sont documentés dans [docs/home-reference.md](docs/home-reference.md).
+La CI publie après verify et Docker verts seulement : tag et release selon `VERSION`, `ghcr.io/mick7784/halloween-map:<VERSION>` et `:latest`, labels OCI version/commit. Aucun numéro parallèle dans package.json, aucun déploiement externe. L’accueil premium et ses sources/fallbacks sont documentés dans [docs/home-reference.md](home-reference.md).
 
-La collecte libre permet de visiter les maisons dans n’importe quel ordre. Le GPS temps réel mesure progression et distance réelle, avec validation des visites, arrêt manuel ou fin automatique, bilan et sauvegarde/reprise locale. Le départ reste fixe, le recentrage est volontaire. Les rapports de fin hors ligne persistent dans une file d’agrégats idempotents, indépendante du parcours, sans trace GPS complète. ORS conserve uniquement l’estimation théorique piétonne. Pas de navigation vocale. Les indisponibilités sont signalées et l’estimation peut être recalculée. Provenance du décor : [docs/visual-assets.md](docs/visual-assets.md). Dette DB conservée : [docs/technical-debt.md](docs/technical-debt.md).
+La collecte libre permet de visiter les maisons dans n’importe quel ordre. Le GPS temps réel mesure progression et distance réelle, avec validation des visites, arrêt manuel ou fin automatique, bilan et sauvegarde/reprise locale. Le départ reste fixe, le recentrage est volontaire. Les rapports de fin hors ligne persistent dans une file d’agrégats idempotents, indépendante du parcours, sans trace GPS complète. ORS conserve uniquement l’estimation théorique piétonne. Pas de navigation vocale. Les indisponibilités sont signalées et l’estimation peut être recalculée. Provenance du décor : [docs/visual-assets.md](visual-assets.md). Dette DB conservée : [docs/technical-debt.md](technical-debt.md).
 
 ### V0.4 Beta
 
@@ -161,4 +161,4 @@ La requête Directions ne désactive plus les instructions : ORS retourne ainsi 
 
 ### Saisons de test
 
-Les migrations historiques sont conservées. Le fonctionnement courant suit [le modèle unique](docs/seasons.md) : activer une TEST désactive la REAL, seuls les admins accèdent à sa vraie carte. Les comptes globaux survivent à la suppression TEST ; l’historique REAL conserve les snapshots anonymes.
+Les migrations historiques sont conservées. Le fonctionnement courant suit [le modèle unique](seasons.md) : activer une TEST désactive la REAL, seuls les admins accèdent à sa vraie carte. Les comptes globaux survivent à la suppression TEST ; l’historique REAL conserve les snapshots anonymes.

@@ -177,6 +177,40 @@ afterAll(async () => {
   else await engine.close();
 });
 
+it("ignores migrated reminder columns when updating a season without a current campaign", async () => {
+  await db().query(
+    "UPDATE seasons SET reminder_enabled=true,reminder_at='2026-11-04T12:00Z' WHERE id=$1",
+    [real.id],
+  );
+  await service.adminAction(admin, {
+    action: "season",
+    id: real.id,
+    payload: { ...realDefinition, name: "Saison corrigée", purge_at: "2026-11-03T12:00Z" },
+  });
+  const row = (await db().query("SELECT name,purge_at FROM seasons WHERE id=$1", [real.id])).rows[0];
+  expect(row.name).toBe("Saison corrigée");
+  expect(new Date(String(row.purge_at)).toISOString()).toBe("2026-11-03T12:00:00.000Z");
+});
+
+for (const mode of ["ABSOLUTE", "RELATIVE"] as const) {
+  it(`preserves the ${mode} campaign purge guard and rolls back rejected calendar changes`, async () => {
+    const campaign = (await db().query(
+      "INSERT INTO email_campaigns(instance_id,season_id,name,subject,body,audience,active,schedule_mode,anchor,offset_days,scheduled_at,status) VALUES($1,$2,'Rappel actuel','Hello','Body','ALL',true,$3,'closes_at',2,'2026-11-02T23:00Z','SCHEDULED') RETURNING id",
+      [admin.instance_id, real.id, mode],
+    )).rows[0];
+    await expect(service.adminAction(admin, {
+      action: "season",
+      id: real.id,
+      payload: { ...realDefinition, closes_at: "2026-11-01T00:00Z", purge_at: "2026-11-01T12:00Z" },
+    })).rejects.toThrow("La purge doit suivre toutes les communications programmées");
+    const row = (await db().query("SELECT closes_at,purge_at FROM seasons WHERE id=$1", [real.id])).rows[0];
+    expect(new Date(String(row.closes_at)).toISOString()).toBe("2026-10-31T23:00:00.000Z");
+    expect(new Date(String(row.purge_at)).toISOString()).toBe("2026-11-02T12:00:00.000Z");
+    const savedCampaign = (await db().query("SELECT scheduled_at FROM email_campaigns WHERE id=$1", [campaign.id])).rows[0];
+    expect(new Date(String(savedCampaign.scheduled_at)).toISOString()).toBe("2026-11-02T23:00:00.000Z");
+  });
+}
+
 it("rejects new TEST through creation, setup or conversion while preserving historical TEST", async () => {
   const historical = await testSeason("Historique à conserver");
   await expect(

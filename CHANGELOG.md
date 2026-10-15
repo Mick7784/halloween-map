@@ -1,5 +1,12 @@
 # Changelog
 
+## V0.9.8
+
+- **Décor mobile / PWA** : réarmement de l'écoute des capteurs au retour dans la fenêtre et lors de la restauration de page, nouvelle posture de référence et arrêt explicite à la suspension. Un échec des images facultatives peut être retenté au retour du réseau ou à la reprise, sans requêtes répétées à chaque mesure. Aucun nouvel effet ni demande d'autorisation ; mouvement réduit et fond statique préservés. Le signalement S26 Ultra / Chrome installé reste à confirmer sur l'appareil réel.
+- **Saisons historiques** : les anciennes colonnes de rappel V0.2 ne bloquent plus un changement de calendrier. Les campagnes actuelles restent contrôlées après recalcul, avec annulation transactionnelle si elles dépassent la purge.
+- **Nettoyage** : fichiers PWA générés retirés du suivi Git pour éviter les versions périmées (sources officielles conservées, génération avant dev/build/tests), présentation compacte du README rétablie, liens de documentation réparés, état de la dette et des anciens travaux clarifié dans `docs/cleanup-v098.md`. Aucun composant orphelin identifié dans les imports des composants et bibliothèques ; pas de suppression de données, de migration historique ni de route de compatibilité.
+- **Contrôles ajoutés** : reprise/focus en navigateur et mode installé simulé, échec d'image puis retour réseau, rappels migrés et protection des campagnes absolues/relatives. La simulation PWA ne vaut pas une recette sur smartphone.
+
 ## V0.9.7
 
 - **Accueil mobile — parallaxe adoucie** : filtrage des petites variations des capteurs, inertie fondée sur le temps écoulé entre images (comportement cohérent selon le taux de rafraîchissement), et retour progressif au neutre quand les mesures s'arrêtent. Aucune demande de permission supplémentaire ; l'effet reste facultatif et le fond statique demeure le repli.

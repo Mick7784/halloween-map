@@ -182,6 +182,87 @@ test("V0.9.7 mobile artwork filters sensor noise and returns smoothly to neutral
   await expect(page.getByRole("button", { name: "Se connecter", exact: true })).toBeVisible();
 });
 
+for (const installed of [false, true]) {
+  test(`V0.9.8 home motion survives page lifecycle and focus recovery; installed=${installed}`, async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.emulateMedia({ reducedMotion: "no-preference" });
+    await passiveSensor(page, true);
+    await page.addInitScript((installed) => {
+      const nativeMatchMedia = window.matchMedia.bind(window);
+      window.matchMedia = (query) => {
+        const media = nativeMatchMedia(query);
+        if (query === "(display-mode: standalone)")
+          Object.defineProperty(media, "matches", { value: installed });
+        return media;
+      };
+      Object.defineProperty(navigator, "standalone", { value: installed });
+    }, installed);
+    const errors: string[] = [];
+    page.on("pageerror", (error) => errors.push(error.message));
+    await enter(page);
+    const art = page.locator(".home-art");
+    await expect(art).toHaveAttribute("data-home-sensor", "listening");
+    await emit(page, 35, 10);
+    await expect(art).toHaveAttribute("data-home-motion", "active");
+    await emit(page, 55, 40);
+    await page.clock.runFor(420);
+    const title = await page.locator(".home-center h1").boundingBox();
+
+    // Installed windows may be suspended/restored while visibility stays visible.
+    await page.evaluate(() => window.dispatchEvent(new PageTransitionEvent("pagehide", { persisted: true })));
+    await expect(art).not.toHaveAttribute("data-home-sensor", "listening");
+    await expect(art).not.toHaveAttribute("data-home-motion", "active");
+    await emit(page, 80, 80);
+    await page.evaluate(() => window.dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true })));
+    await expect(art).toHaveAttribute("data-home-sensor", "listening");
+    await emit(page, 80, 80);
+    await expect(art).toHaveCSS("--depth-near-x", "0.00px");
+    await emit(page, 90, 100);
+    await page.clock.runFor(420);
+    expect(await art.evaluate((node) => parseFloat(node.style.getPropertyValue("--depth-near-x")))).toBeGreaterThan(0.5);
+
+    await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+    await expect(art).toHaveCSS("--depth-near-x", "0.00px");
+    await emit(page, 90, 100);
+    await expect(art).toHaveAttribute("data-home-motion", "active");
+    expect(await page.locator(".home-center h1").boundingBox()).toEqual(title);
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+    await expect(art).not.toHaveAttribute("data-home-sensor", "listening");
+    await expect(art).not.toHaveAttribute("data-home-motion", "active");
+    expect(errors).toEqual([]); // The throwing permission API was never called.
+  });
+}
+
+test("V0.9.8 failed depth images retry on network recovery, never on every sensor event", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  await passiveSensor(page);
+  let offline = true;
+  let attempts = 0;
+  await page.route("**/art/home-v091-mid.webp", (route) => {
+    attempts++;
+    return offline ? route.abort() : route.continue();
+  });
+  await enter(page);
+  const art = page.locator(".home-art");
+  await expect(art).toHaveAttribute("data-home-sensor", "listening");
+  await emit(page, 35, 10);
+  await expect.poll(() => attempts).toBe(1);
+  for (let i = 0; i < 10; i++) await emit(page, 55, 40);
+  await page.clock.runFor(420);
+  expect(attempts).toBe(1);
+  await expect(art).not.toHaveAttribute("data-home-motion", "active");
+  offline = false;
+  await page.evaluate(() => window.dispatchEvent(new Event("online")));
+  await emit(page, 35, 10);
+  await expect(art).toHaveAttribute("data-home-motion", "active");
+  await emit(page, 55, 40);
+  await page.clock.runFor(420);
+  expect(attempts).toBe(2);
+  expect(await art.evaluate((node) => parseFloat(node.style.getPropertyValue("--depth-near-x")))).toBeGreaterThan(0.5);
+});
+
 test("V0.9.1 desktop and mobile landscape always remain still", async ({ page }) => {
   await passiveSensor(page);
   const depthRequests: string[] = [];

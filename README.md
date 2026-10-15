@@ -46,13 +46,7 @@ Le logo **Halloween Map** reprend la signature des applications **DomotiK Studio
 
 Ici, le **O de Halloween** reprend la **citrouille en forme de repère GPS** de l'icône officielle. Le mot **Map** adopte un dégradé orange-violet, tandis que l'icône conserve son village nocturne, sa lune et sa carte.
 
-Le logo de présentation et l’icône ont chacun leur rôle : le premier signe le projet, la seconde identifie l’application. Les deux visuels montrés dans ce README sont des **extraits des créations validées**, sans nouvelle interprétation graphique. Les fichiers PWA réellement déployés ne sont pas modifiés par cette mise à jour documentaire.
-
-<div align="center">
-
-<img src="artwork/branding/halloween-map-app-icon-official.webp" alt="Icône validée de Halloween Map : citrouille-repère orange sur une carte nocturne violette" width="150" />
-
-</div>
+Le logo de présentation et l’icône ont chacun leur rôle : le premier signe le projet, la seconde identifie l’application. Le logo présenté est un **extrait de la création validée**, sans nouvelle interprétation graphique. L’icône officielle reste disponible dans les assets du projet et dans l’application installée.
 
 ## Respect de la vie privée
 
