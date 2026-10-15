@@ -43,7 +43,6 @@ import AdminInlineDetail from "./AdminInlineDetail";
 import Campaigns from "./Campaigns";
 import AdminActivity from "./AdminActivity";
 import AdminExistingPage from "./AdminExistingPage";
-import { seasonFinished } from "../lib/domain";
 import { houseAvailability } from "../lib/house-availability";
 import "./AdminBeta.css";
 import { PumpkinMark } from "./PublicBrand";
@@ -217,6 +216,8 @@ export default function Admin({
       rows.some((s) => s.id === id)
         ? id
         : (rows.find((s) => s.active)?.id ??
+          rows.filter((s) => !s.archived && !s.purged_at)
+            .sort((a, b) => +new Date(a.opens_at) - +new Date(b.opens_at))[0]?.id ??
           rows.find((s) => s.id === stored)?.id ??
           rows[0]?.id ??
           ""),
@@ -502,9 +503,6 @@ export default function Admin({
                 >
                   <td data-label="Maison">
                     <strong>{h.name}</strong>
-                    {h.season_is_test && (
-                      <span className="beta-badge">Test</span>
-                    )}
                     <small>
                       {h.owner_name} · {h.email}
                     </small>
@@ -594,7 +592,7 @@ export default function Admin({
                         )}
                         {has(user, "participants.edit") &&
                           selectedSeason &&
-                          !seasonFinished(selectedSeason) && (
+                          !selectedSeason.archived && !selectedSeason.purged_at && (
                             <>
                               <Button onClick={() => select(h, true)}>
                                 Modifier la maison
@@ -641,7 +639,7 @@ export default function Admin({
                           )}
                         {has(user, "participants.delete") &&
                           selectedSeason &&
-                          !seasonFinished(selectedSeason) && (
+                          !selectedSeason.archived && !selectedSeason.purged_at && (
                             <AsyncButton
                               danger
                               onClick={async () => {
@@ -694,7 +692,7 @@ export default function Admin({
                                     setSection("users");
                                   }}>Voir le propriétaire</Button>
                                 )}
-                                {selectedSeason && !seasonFinished(selectedSeason) &&
+                                {selectedSeason && !selectedSeason.archived && !selectedSeason.purged_at &&
                                   has(user, "participants.edit") && !edit && (
                                     <Button onClick={() => setEdit(true)}>Modifier les informations et horaires</Button>
                                   )}
@@ -737,7 +735,7 @@ export default function Admin({
                                     : "Date non disponible"}
                                 </p>
                                 {current.refusal_reason && <p>Motif précédent : {current.refusal_reason}</p>}
-                                {selectedSeason && !seasonFinished(selectedSeason) &&
+                                {selectedSeason && !selectedSeason.archived && !selectedSeason.purged_at &&
                                   has(user, "participants.edit") && (
                                     <>
                                       {current.review_status === "VALIDATED" && (
@@ -785,7 +783,7 @@ export default function Admin({
                                       )}
                                     </>
                                   )}
-                                {!has(user, "participants.edit") || !selectedSeason || seasonFinished(selectedSeason)
+                                {!has(user, "participants.edit") || !selectedSeason || (selectedSeason.archived || !!selectedSeason.purged_at)
                                   ? <p className="small muted">Consultation en lecture seule.</p>
                                   : null}
                               </section>
@@ -804,7 +802,7 @@ export default function Admin({
                                 <p className="small muted">
                                   Ouverture, distribution et visibilité sont indépendantes de la validation.
                                 </p>
-                                {selectedSeason && !seasonFinished(selectedSeason) &&
+                                {selectedSeason && !selectedSeason.archived && !selectedSeason.purged_at &&
                                   has(user, "participants.edit") ? (
                                     <>
                                       <div className="beta-actions">
@@ -843,7 +841,7 @@ export default function Admin({
                                       </div>
                                     </>
                                   ) : <p className="small muted">Consultation en lecture seule.</p>}
-                                {selectedSeason && !seasonFinished(selectedSeason) &&
+                                {selectedSeason && !selectedSeason.archived && !selectedSeason.purged_at &&
                                   has(user, "participants.delete") && (
                                     <details className="admin-advanced-actions">
                                       <summary>Actions avancées</summary>
@@ -1110,7 +1108,7 @@ export default function Admin({
                   {seasons.map((s) => (
                     <option key={s.id} value={s.id}>
                       {s.name ?? "Halloween " + s.year}
-                      {s.is_test ? " · TEST" : " · REAL"}
+                      {s.active ? " · ACTIVE" : ""}
                       {s.active ? " · ACTIVE" : ""}
                     </option>
                   ))}
@@ -1157,7 +1155,7 @@ export default function Admin({
             </strong>
             {seasons.some((s) => s.active) && (
               <span className="beta-status">
-                {seasons.find((s) => s.active)?.is_test ? "TEST" : "REAL"}
+                Active
               </span>
             )}
           </div>
@@ -1311,7 +1309,7 @@ export default function Admin({
                 <Button
                   className="primary"
                   disabled={
-                    !selectedSeason || seasonFinished(selectedSeason)
+                    !selectedSeason || (selectedSeason.archived || !!selectedSeason.purged_at)
                   }
                   onClick={() =>
                     void startCreate().catch((e) => setError(e.message))
@@ -1321,7 +1319,7 @@ export default function Admin({
                 </Button>
                 {!selectedSeason ? (
                   <p>Créez une saison avant de créer une maison.</p>
-                ) : seasonFinished(selectedSeason) ? (
+                ) : (selectedSeason.archived || !!selectedSeason.purged_at) ? (
                     <p>
                       Cette saison est terminée : lecture seule.{" "}
                       {seasons.some((s) => s.active) && (
