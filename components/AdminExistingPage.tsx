@@ -10,11 +10,13 @@ export default function AdminExistingPage({
   section,
   mapStyle,
   refresh,
+  onSeason,
 }: {
   section: string;
   mapStyle: string;
   user: User;
   refresh: () => Promise<void>;
+  onSeason?: () => void;
 }) {
   const [content, setContent] = useState<Content | null>(null),
     [settings, setSettings] = useState<Instance | null>(null),
@@ -52,6 +54,7 @@ export default function AdminExistingPage({
         <EventSettings
           instance={settings}
           mapStyle={mapStyle}
+          onSeason={onSeason}
           save={async (payload) => {
             await api("admin", { action: "settings", payload });
             setSettings(await api<Instance>("admin/settings"));
