@@ -1198,7 +1198,8 @@ export async function route(
         409,
         "Les maisons ont changé. Vérifiez la sélection.",
       );
-    if (result.stops.length)
+    // Super Admin simulations outside public hours must not inflate event statistics.
+    if (result.stops.length && !earlyMapAccess({ ...current, active: true }, user, context.now))
       await c.query(
         "UPDATE seasons SET routes_count=routes_count+1 WHERE id=$1",
         [s.id],
@@ -1235,6 +1236,7 @@ export async function routeAvailability(
       })),
     };
   // Missing, hidden, deleted and ineligible owners deliberately share one generic result.
+  const preview = earlyMapAccess(s, user, context.now);
   const houses = (
     await db().query(
       "SELECT p.* FROM participations p WHERE p.instance_id=$1 AND p.season_id=$2 AND p.id=ANY($3::uuid[]) AND p.status='VISIBLE' AND p.review_status='VALIDATED' AND EXISTS(SELECT 1 FROM users u WHERE u.id=p.user_id AND u.account_status='ACTIVE' AND (u.email_status='VERIFIED' OR p.legacy_imported)) AND NOT EXISTS(SELECT 1 FROM legal_documents d WHERE d.instance_id=p.instance_id AND d.active AND d.requires_reaccept AND ((d.kind='TERMS' AND p.terms_version IS DISTINCT FROM d.version) OR (d.kind='GUIDELINES' AND p.guidelines_version IS DISTINCT FROM d.version)))",
@@ -1255,7 +1257,7 @@ export async function routeAvailability(
       const activities = effectiveActivities(h);
       let reason: RouteAvailability["steps"][number]["reason"];
       const arrival = Math.max(
-        +context.now,
+        preview ? -Infinity : +context.now,
         +new Date(step.arrival),
         +new Date(h.starts_at),
       );
@@ -1266,7 +1268,7 @@ export async function routeAvailability(
         (input.mode === "COLLECTION" &&
           input.end !== undefined &&
           +new Date(h.starts_at) >= +new Date(input.end)) ||
-        +context.now >= +new Date(h.ends_at)
+        (!preview && +context.now >= +new Date(h.ends_at))
       )
         reason = "expired";
       else if (
