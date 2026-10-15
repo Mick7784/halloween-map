@@ -7,7 +7,7 @@ test.skip(
   !process.env.SEASON_E2E_DATABASE_URL,
   "Set SEASON_E2E_DATABASE_URL to a disposable database",
 );
-test("live APIs: REAL/TEST isolation, phone session, reusable accounts, purge and historical deletion", async ({
+test("live APIs: active real season, phone session, reusable accounts, post-close preview, purge and historical deletion", async ({
   page,
   browser,
 }) => {
@@ -51,7 +51,7 @@ test("live APIs: REAL/TEST isolation, phone session, reusable accounts, purge an
         year: new Date().getFullYear(),
         is_test: false,
         registrations_open: true,
-        registrations_open_at: new Date(now - 86400000).toISOString(),
+        registrations_open_at: new Date(now + 3600000).toISOString(),
         opens_at: opens,
         closes_at: closes,
         purge_at: new Date(now + 3 * 86400000).toISOString(),
@@ -62,8 +62,8 @@ test("live APIs: REAL/TEST isolation, phone session, reusable accounts, purge an
     const real = seasons[0];
     expect(real.active).toBe(false);
     const preview = await (await page.request.get("/api/public")).json();
-    expect(preview.mapAccessible).toBe(true);
-    expect(preview.earlyAccess).toBe(true);
+    expect(preview.mapAccessible).toBe(false);
+    expect(preview.earlyAccess).toBe(false);
     expect(preview.publicMapOpen).toBe(false);
     expect(preview.state).toBe("PREPARATION");
     expect(
@@ -100,16 +100,10 @@ test("live APIs: REAL/TEST isolation, phone session, reusable accounts, purge an
     // Retain coverage for legacy TEST seasons without creating one through the API.
     await pool.query("INSERT INTO seasons(instance_id,year,name,is_test,registrations_open,registrations_open_at,opens_at,closes_at,purge_at) SELECT id,2026,'TEST live',true,true,'2000-01-01T00:00Z','2000-01-01T00:00Z','2201-01-01T00:00Z','2201-01-02T00:00Z' FROM instances");
     seasons = await (await page.request.get("/api/admin/seasons")).json();
-    const testSeason = seasons.find((s: { is_test: boolean }) => s.is_test);
-    expect(
-      (
-        await post("admin", {
-          action: "activateSeason",
-          id: testSeason.id,
-          payload: "ACTIVER",
-        })
-      ).ok(),
-    ).toBe(true);
+    expect(seasons.some((s:{is_test:boolean})=>s.is_test)).toBe(false);
+    const historical=(await pool.query('SELECT id FROM seasons WHERE is_test')).rows[0];
+    expect((await post('admin',{action:'activateSeason',id:historical.id,payload:'ACTIVER'})).status()).toBe(400);
+    const testSeason=real;
     seasons = await (await page.request.get("/api/admin/seasons")).json();
     expect(seasons.filter((s: { active: boolean }) => s.active)).toHaveLength(
       1,
@@ -153,8 +147,8 @@ test("live APIs: REAL/TEST isolation, phone session, reusable accounts, purge an
               ...participation,
               house: {
                 ...participation.house,
-                starts_at: new Date(now - 3600000).toISOString(),
-                ends_at: new Date(now + 3600000).toISOString(),
+                starts_at: opens,
+                ends_at: closes,
               },
             },
           },
@@ -187,7 +181,7 @@ test("live APIs: REAL/TEST isolation, phone session, reusable accounts, purge an
         (await (await phone.request.get("/api/public")).json()).houses,
       ).toHaveLength(1);
       const blocked = await (await visitor.request.get("/api/public")).json();
-      expect(blocked.season).toBeNull();
+      expect(blocked.season.id).toBe(real.id);
       expect(blocked.houses).toEqual([]);
       expect(blocked.mapAccessible).toBe(false);
       expect(
@@ -210,8 +204,8 @@ test("live APIs: REAL/TEST isolation, phone session, reusable accounts, purge an
       ).toEqual(["DECORATION"]);
       const input = {
         acceptance: participation.acceptance,
-        start: new Date().toISOString(),
-        end: new Date(Date.now() + 3600000).toISOString(),
+        start: opens,
+        end: closes,
         origin: { latitude: 48.1, longitude: -1.67 },
         activities: [],
       };
@@ -222,7 +216,7 @@ test("live APIs: REAL/TEST isolation, phone session, reusable accounts, purge an
         .getByRole("navigation")
         .getByRole("button", { name: "Saison", exact: true })
         .click();
-      await expect(page.locator(".season-active")).toContainText("TEST live");
+      await expect(page.locator(".season-active")).toContainText("REAL live");
       expect(
         (
           await post("admin", {
@@ -232,29 +226,6 @@ test("live APIs: REAL/TEST isolation, phone session, reusable accounts, purge an
           })
         ).status(),
       ).toBe(409);
-      await post("admin", {
-        action: "activateSeason",
-        id: real.id,
-        payload: "ACTIVER",
-      });
-      await post("admin", {
-        action: "createHouse",
-        seasonId: real.id,
-        payload: { userId: account.id, participation },
-      });
-      const realHouse = (
-        await (await page.request.get("/api/admin/houses")).json()
-      )[0];
-      expect(realHouse.review_status).toBe("VALIDATED");
-      expect(
-        (
-          await post("admin", {
-            action: "deleteSeason",
-            id: testSeason.id,
-            payload: testSeason.name,
-          })
-        ).ok(),
-      ).toBe(true);
       expect((await (await visitor.request.get("/api/me")).json()).id).toBe(
         account.id,
       );
@@ -262,17 +233,32 @@ test("live APIs: REAL/TEST isolation, phone session, reusable accounts, purge an
         "UPDATE seasons SET opens_at=now()-interval '2 hours',closes_at=now()-interval '1 hour',registrations_open_at=now()-interval '3 hours',purge_at=now()+interval '1 hour' WHERE id=$1",
         [real.id],
       );
-      await page.request.get("/api/public");
+      await pool.query("UPDATE participations p SET starts_at=s.opens_at,ends_at=s.closes_at FROM seasons s WHERE p.season_id=s.id AND s.id=$1", [real.id]);
+      const after=await (await page.request.get('/api/public')).json();
+      expect(after.mapAccessible).toBe(true);expect(after.earlyAccess).toBe(true);
+      expect((await (await visitor.request.get('/api/public')).json()).mapAccessible).toBe(false);
+      const closedSeason=(await pool.query('SELECT opens_at,closes_at FROM seasons WHERE id=$1',[real.id])).rows[0];
+      const postCloseRoute = await post('route',{...input,start:new Date(closedSeason.opens_at).toISOString(),end:new Date(closedSeason.closes_at).toISOString()});
+      expect(postCloseRoute.ok(), await postCloseRoute.text()).toBe(true);
+      expect((await postCloseRoute.json()).stops).toHaveLength(1);
+      const lateReview=await post('admin',{action:'reviewHouse',seasonId:real.id,id:h.id,payload:{status:'REFUSED',reason_code:'ADDRESS'}});
+      expect(lateReview.ok(),await lateReview.text()).toBe(true);
       await pool.query(
         "UPDATE seasons SET purge_at=now()-interval '1 second' WHERE id=$1",
         [real.id],
       );
-      await page.request.get("/api/public");
+      const [lateVisibility] = await Promise.all([
+        post("admin", {action:"visibility",seasonId:real.id,id:h.id,payload:"HIDDEN"}),
+        page.request.get("/api/public"),
+      ]);
+      expect([200,403,404]).toContain(lateVisibility.status());
+      expect((await pool.query("SELECT id FROM audit_logs WHERE season_id=$1 OR target_id=ANY($2::uuid[])", [real.id,[real.id,h.id]])).rows).toEqual([]);
       const historical = (
         await (await page.request.get("/api/admin/seasons")).json()
       ).find((s: { id: string }) => s.id === real.id);
       expect(historical.stats.houses).toBe(1);
-      expect(historical.stats.approved).toBe(1);
+      expect(historical.stats.refused).toBe(1);
+      expect(historical.stats.routes).toBe(0);
       expect(historical.purged_at).toBeTruthy();
       expect(
         (

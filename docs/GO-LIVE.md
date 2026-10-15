@@ -32,7 +32,7 @@ Checklist d'exploitation pour Halloween Map. À réaliser sur **l'instance réel
 ## 4. Hébergement et exploitation
 
 - [ ] Sauvegarder la base et le volume PostgreSQL, puis tester une **restauration dans un environnement isolé** ; ne jamais faire `docker compose down -v` sur la production.
-- [ ] Confirmer que `app`, `worker` et `migrate` exécutent le même digest de la release, et que les migrations **011, 012 et 013** figurent dans `schema_migrations`.
+- [ ] Confirmer que `app`, `worker` et `migrate` exécutent le même digest de la release, et que les migrations **011, 012, 013 et 014** figurent dans `schema_migrations`.
 - [ ] Vérifier la santé du worker : elle requiert maintenant un cycle réussi récent (moins de 3 minutes) et moins de 3 échecs consécutifs.
 - [ ] Consulter la supervision PostgreSQL avec les requêtes suivantes, sans enregistrer de noms ou adresses dans la surveillance.
 - [ ] Mettre en place une alerte sur `consecutive_failures >= 3` et sur les messages `overdue_outbox > 0` persistant plusieurs cycles (l'envoi SMTP peut aussi être volontairement désactivé).

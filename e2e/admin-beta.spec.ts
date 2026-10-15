@@ -15,7 +15,7 @@ test("beta desktop exposes only useful navigation, pending moderation and normal
     address: "12 rue des Tests, Rennes",
     latitude: 48.1,
     longitude: -1.67,
-    season_is_test: true,
+    season_is_test: false,
     review_status: n === 0 ? "PENDING" : "VALIDATED",
     status: "VISIBLE",
     activity: "ACTIVE",
@@ -71,8 +71,8 @@ test("beta desktop exposes only useful navigation, pending moderation and normal
       data = [
         {
           ...state.season,
-          name: "Tests octobre",
-          is_test: true,
+          name: "Édition préparée",
+          is_test: false,
           active: true,
         },
         {
@@ -99,6 +99,7 @@ test("beta desktop exposes only useful navigation, pending moderation and normal
         h.activity = body.payload.action === "end" ? "ENDED" : "ACTIVE";
       else if (body.action === "reviewHouse")
         h.review_status = body.payload.status;
+      else if(body.action==='visibility') h.status=body.payload;
       data = { ok: true };
     }
     await r.fulfill({ json: data });
@@ -116,11 +117,37 @@ test("beta desktop exposes only useful navigation, pending moderation and normal
     .click();
   await expect(page.locator("tbody tr")).toHaveCount(5);
   await expect(page.getByLabel("Saison du back-office")).toHaveValue(sid);
+  const pending=page.getByRole('row').filter({hasText:'Mr Test 1'}).first();
+  await expect(pending.locator('.house-review-status')).toHaveText('En attente');
+  await pending.getByRole('button',{name:'Refuser',exact:true}).click();
+  await expect(page.getByRole('tab',{name:'Modération',selected:true})).toBeVisible();
+  await page.getByLabel('Motif du refus').selectOption('ADDRESS');
+  await page.locator('.admin-inline-detail').getByRole('button',{name:'Refuser avec motif',exact:true}).click();
+  await expect(pending.locator('.house-review-status')).toHaveText('Refusée');
+  await page.getByRole('button',{name:/Refermer la fiche/}).click();
+  await pending.getByRole('button',{name:'Réexaminer',exact:true}).click();
+  await page.locator('.admin-inline-detail').getByRole('button',{name:'Valider la maison',exact:true}).click();
+  await expect(pending.locator('.house-review-status')).toHaveText('Validée');
+  await page.getByRole('button',{name:/Refermer la fiche/}).click();
+  page.once('dialog',d=>d.accept());
+  await pending.getByRole('button',{name:'Masquer',exact:true}).click();
+  await expect(pending.getByRole('button',{name:'Réafficher',exact:true})).toBeVisible();
+  await pending.getByRole('button',{name:'Réafficher',exact:true}).click();
+  await expect(pending.getByRole('button',{name:'Masquer',exact:true})).toBeVisible();
+  await pending.getByLabel('Actions pour Mr Test 1').click();
+  await page.getByRole('button',{name:'Voir la fiche',exact:true}).click();
+  await page.getByRole('tab',{name:'Modération'}).click();
+  await page.getByRole('button',{name:'Remettre en attente',exact:true}).click();
+  await page.getByRole('button',{name:/Refermer la fiche/}).click();
+  await pending.getByRole('button',{name:'Valider',exact:true}).click();
+  await expect(pending.locator('.house-review-status')).toHaveText('Validée');
+
   await page
     .getByRole("row")
     .filter({ hasText: "Mr Test 4" })
-    .getByRole("button", { name: "Gérer" })
+    .getByLabel('Actions pour Mr Test 4')
     .click();
+  await page.getByRole('button',{name:'Voir la fiche',exact:true}).click();
   await page.getByRole("tab", { name: "Gestion" }).click();
   page.once("dialog", (dialog) => dialog.accept());
   await page
@@ -141,6 +168,11 @@ test("beta desktop exposes only useful navigation, pending moderation and normal
     "data-theme",
     "light",
   );
+  await page.setViewportSize({width:390,height:844});
+  await page.getByRole('button',{name:'Gérer les maisons',exact:true}).click();
+  await page.getByLabel('Saison du back-office').selectOption(sid);
+  await page.getByRole('row').filter({hasText:'Mr Test 1'}).getByLabel('Actions pour Mr Test 1').click();
+  await expect(page.getByRole('button',{name:'Masquer',exact:true})).toBeVisible();
 });
 
 test("global direct accounts need neither a TEST season nor an email", async ({
@@ -168,8 +200,8 @@ test("global direct accounts need neither a TEST season nor an email", async ({
     {
       ...dates,
       id: testId,
-      name: "Tests octobre",
-      is_test: true,
+      name: "Édition préparée",
+      is_test: false,
     },
   ];
   const user = {
@@ -268,7 +300,7 @@ test("global direct accounts need neither a TEST season nor an email", async ({
   await expect(
     page.getByRole("button", { name: "Utilisée pour les tests" }),
   ).toHaveCount(0);
-  await page.getByRole("button", { name: "Réglages de Tests octobre" }).click();
+  await page.getByRole("button", { name: "Réglages de Édition préparée" }).click();
   await expect(
     page.locator(".season-editor").getByLabel("Nom de la saison"),
   ).toBeVisible();

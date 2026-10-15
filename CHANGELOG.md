@@ -1,5 +1,15 @@
 # Changelog
 
+## V0.9.9
+
+- **Saisons** : une seule saison réelle activée manuellement ; retrait du fonctionnement TEST, avec conservation des données historiques et migration compatible V0.9.8. Comptes et connexion disponibles sans saison. Les inscriptions publiques exigent une saison active et leur fenêtre autorisée ; carte publique uniquement aux horaires officiels.
+- **Super Admin** : accès à la vraie carte et préparation des parcours avant et après Halloween tant que la saison reste active. La clôture publique ne désactive plus la saison ; sans saison active, aucune carte ni parcours ne sont accessibles. Les simulations hors horaires ne gonflent pas les statistiques de collecte. Les préparations peuvent être restaurées après clôture.
+- **Administration des maisons** : création, modification, modération, visibilité et fermeture indépendantes des dates publiques selon les permissions. La création BO utilise la saison active ou le contexte d'une saison en attente sans activation ; absence de saison et contexte ambigu refusés.
+- **Actions rapides** : pastilles compactes de modération orange, verte et rouge avec libellés accessibles ; Valider/Refuser, Modifier/Masquer/Réafficher, Réexaminer selon l'état. Les actions secondaires restent dans « … » ; fiches, formulaires, recherche, filtres, tri et pagination conservés. Les actions Maisons sont aussi accessibles dans le BO mobile selon les droits.
+- **Archives et confidentialité** : statistiques agrégées conservées, recalcul final à la purge tenant compte des opérations BO après clôture ; lecture vivante avant purge et archives en lecture seule ensuite. Les détails saisonniers sont supprimés, les comptes et années de participation validée conservés selon la politique existante. Purge et suppression définitive restent distinctes.
+- **Vérifications** : tests de rôles et frontières horaires, refus API, migration et rejeu avec données historiques, création BO, modération/visibilité, itinéraires après clôture, statistiques, comptes permanents et transitions automatiques sans rechargement. Matrice de recette : [docs/V099-acceptance.md](docs/V099-acceptance.md). Aucun changement esthétique de l'accueil ni de la carte publique.
+- **Essais réels** : la recette sur l'installation de l'organisateur et sur appareils physiques reste à effectuer ; les simulations PWA/GPS et le SMTP de test ne prouvent pas le comportement du matériel ni la délivrabilité Gmail/Outlook.
+
 ## V0.9.8
 
 - **Décor mobile / PWA** : réarmement de l'écoute des capteurs au retour dans la fenêtre et lors de la restauration de page, nouvelle posture de référence et arrêt explicite à la suspension. Un échec des images facultatives peut être retenté au retour du réseau ou à la reprise, sans requêtes répétées à chaque mesure. Aucun nouvel effet ni demande d'autorisation ; mouvement réduit et fond statique préservés. Le signalement S26 Ultra / Chrome installé reste à confirmer sur l'appareil réel.

@@ -93,11 +93,13 @@ export default function useActiveRoute({
   instanceId,
   seasonId,
   closesAt,
+  previewMode = false,
 }: {
   ownerId: string;
   instanceId: string;
   seasonId: string;
   closesAt: string;
+  previewMode?: boolean;
 }) {
   const [state, setState] = useState(initial),
     current = useRef(state),
@@ -147,7 +149,7 @@ export default function useActiveRoute({
       storageError = "";
     try {
       const raw = localStorage.getItem(ACTIVE_ROUTE_KEY);
-      saved = restoreRoute(raw, { ownerId, instanceId, seasonId }, Date.now());
+      saved = restoreRoute(raw, { ownerId, instanceId, seasonId }, Date.now(), previewMode);
       if (raw && !saved) clearStoredRoute();
     } catch {
       storageError = "La sauvegarde locale est indisponible sur cet appareil.";
@@ -171,7 +173,7 @@ export default function useActiveRoute({
         : {}),
     });
     return bumpRevision;
-  }, [ownerId, instanceId, seasonId, identityKey, bumpRevision]);
+  }, [ownerId, instanceId, seasonId, identityKey, bumpRevision, previewMode]);
   useEffect(() => {
     if (!state.ready || state.identityKey !== identityKey) return;
     if (state.phase === "preparation" || !state.parameters || !state.result) {
@@ -190,8 +192,9 @@ export default function useActiveRoute({
       result: { ...state.result, geometry: [] },
       createdAt: state.createdAt,
       updatedAt: new Date().toISOString(),
-      expiresAt: new Date(
-        Math.min(+new Date(state.parameters.end), +new Date(closesAt)),
+      expiresAt: new Date(previewMode
+        ? Date.now() + 6 * 3600000
+        : Math.min(+new Date(state.parameters.end), +new Date(closesAt))
       ).toISOString(),
       sheet: state.sheet,
       camera: state.camera,
@@ -225,6 +228,7 @@ export default function useActiveRoute({
     instanceId,
     seasonId,
     closesAt,
+    previewMode,
   ]);
   useEffect(() => {
     if (
@@ -289,7 +293,7 @@ export default function useActiveRoute({
     )
       return;
     if (
-      Date.now() >=
+      !previewMode && Date.now() >=
       Math.min(+new Date(snapshot.parameters.end), +new Date(closesAt))
     ) {
       if (snapshot.phase !== "active") reset();
@@ -381,7 +385,7 @@ export default function useActiveRoute({
         s.identityKey === identityKey ? { ...s, checking: false } : s,
       );
     }
-  }, [instanceId, seasonId, closesAt, identityKey, reset]);
+  }, [instanceId, seasonId, closesAt, identityKey, previewMode, reset]);
   useEffect(() => {
     checkCallback.current = checkAvailability;
   }, [checkAvailability]);
@@ -543,7 +547,7 @@ export default function useActiveRoute({
       return;
     const timer = setInterval(() => {
       if (
-        Date.now() >=
+        !previewMode && Date.now() >=
         Math.min(+new Date(state.parameters!.end), +new Date(closesAt))
       ) {
         if (state.phase !== "active") reset();
@@ -551,7 +555,7 @@ export default function useActiveRoute({
       }
     }, 1000);
     return () => clearInterval(timer);
-  }, [state.phase, state.parameters, closesAt, reset]);
+  }, [state.phase, state.parameters, closesAt, previewMode, reset]);
   const removeHouse = useCallback((id: string) => {
     revision.current++;
     setState((s) =>
@@ -600,7 +604,7 @@ export default function useActiveRoute({
         !checked.valid ||
         !candidate?.available ||
         !candidate.house ||
-        +new Date(snapshot.parameters.end) <= Date.now()
+        (!previewMode && +new Date(snapshot.parameters.end) <= Date.now())
       )
         throw new Error(
           "Cette maison n’est plus disponible pour votre collecte.",
@@ -632,7 +636,7 @@ export default function useActiveRoute({
             },
       );
     },
-    [instanceId, seasonId],
+    [instanceId, seasonId, previewMode],
   );
   const invalidate = useCallback(() => {
     inputRevision.current++;
@@ -774,8 +778,8 @@ export default function useActiveRoute({
       : "",
     finishSuggested:
       state.phase === "active" &&
-      (Date.now() >=
-        Math.min(+new Date(state.parameters?.end ?? 0), +new Date(closesAt)) ||
+      ((!previewMode && Date.now() >=
+        Math.min(+new Date(state.parameters?.end ?? 0), +new Date(closesAt))) ||
         (state.verified &&
           !remainingHouses(
             state.result?.stops ?? [],

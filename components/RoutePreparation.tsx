@@ -57,17 +57,16 @@ export default function RoutePreparation({
       const zone = state.instance!.timezone;
       const now = DateTime.now().setZone(zone).plus({ minutes: 2 });
       const opens = DateTime.fromISO(state.season!.opens_at).setZone(zone);
-      return (!state.season!.is_test && now < opens ? opens : now)
+      const closes = DateTime.fromISO(state.season!.closes_at).setZone(zone);
+      return (now < opens || now >= closes ? opens.plus({ minutes: 2 }) : now)
         .toFormat("yyyy-MM-dd'T'HH:mm");
     }),
     [windowEnd, setWindowEnd] = useState(() => {
       const zone = state.instance!.timezone;
       const now = DateTime.now().setZone(zone).plus({ minutes: 2 });
       const opens = DateTime.fromISO(state.season!.opens_at).setZone(zone);
-      const start = !state.season!.is_test && now < opens ? opens : now;
-      const limit = DateTime.fromISO(
-        state.season!.route_end_at ?? state.season!.closes_at,
-      ).setZone(zone);
+      const limit = DateTime.fromISO(state.season!.closes_at).setZone(zone);
+      const start = now < opens || now >= limit ? opens.plus({ minutes: 2 }) : now;
       return (start.plus({ hours: 2 }) < limit ? start.plus({ hours: 2 }) : limit)
         .toFormat("yyyy-MM-dd'T'HH:mm");
     }),
@@ -231,9 +230,7 @@ export default function RoutePreparation({
               <p className="route-times-day">
                 <Clock3 size={16} /> Horaires de collecte
                 <span>
-                  {state.season!.is_test
-                    ? "Saison TEST"
-                    : "31 octobre " + state.season!.year}
+                  {"31 octobre " + state.season!.year}
                 </span>
               </p>
               <div className="route-times-fields">

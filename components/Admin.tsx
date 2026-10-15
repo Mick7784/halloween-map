@@ -43,7 +43,6 @@ import AdminInlineDetail from "./AdminInlineDetail";
 import Campaigns from "./Campaigns";
 import AdminActivity from "./AdminActivity";
 import AdminExistingPage from "./AdminExistingPage";
-import { seasonFinished } from "../lib/domain";
 import { houseAvailability } from "../lib/house-availability";
 import "./AdminBeta.css";
 import { PumpkinMark } from "./PublicBrand";
@@ -120,6 +119,7 @@ export default function Admin({
     [error, setError] = useState(""),
     [selected, setSelected] = useState<string | null>(null),
     [edit, setEdit] = useState(false),
+    [detailTab, setDetailTab] = useState<"info" | "moderation">("info"),
     [reason, setReason] = useState(""),
     [reasonCode, setReasonCode] = useState<RefusalCode>("OTHER"),
     [search, setSearch] = useState(""),
@@ -183,7 +183,10 @@ export default function Admin({
     return () => media.removeEventListener("change", update);
   }, []);
   useEffect(() => {
-    if (mobileView && has(user, "stats.read")) setSection("statistics");
+    if (mobileView) {
+      if (has(user, "stats.read")) setSection("statistics");
+      else if (has(user, "participants.read")) setSection("houses");
+    }
   }, [mobileView, user]);
   const seasonStorageKey =
     "halloween.admin.season." + state.instance?.id + "." + user.id;
@@ -216,6 +219,8 @@ export default function Admin({
       rows.some((s) => s.id === id)
         ? id
         : (rows.find((s) => s.active)?.id ??
+          rows.filter((s) => !s.archived && !s.purged_at)
+            .sort((a, b) => +new Date(a.opens_at) - +new Date(b.opens_at))[0]?.id ??
           rows.find((s) => s.id === stored)?.id ??
           rows[0]?.id ??
           ""),
@@ -340,10 +345,13 @@ export default function Admin({
     await refresh();
   }
   async function startCreate() {
+    const targetSeasonId = activeSeasonId || seasonId;
+    currentSeason.current = targetSeasonId;
+    setSeasonId(targetSeasonId);
     const available = await api<ManagedUser[]>(
-      "admin/eligibleOwners?seasonId=" + seasonId,
+      "admin/eligibleOwners?seasonId=" + targetSeasonId,
     );
-    if (currentSeason.current !== seasonId) return;
+    if (currentSeason.current !== targetSeasonId) return;
     setOwners(available);
     setOwnerId("");
     setOwnerSearch("");
@@ -383,17 +391,34 @@ export default function Admin({
           : h.review_status === review)) &&
       (availability === "ALL" || open(h) === (availability === "OPEN")),
   );
-  function select(h: ManagedHouse, editing = false) {
+  function select(h: ManagedHouse, editing = false, tab: "info" | "moderation" = "info") {
     if (selected && !confirmDraftNavigation()) return;
-    if (selected === h.id && !editing) {
+    if (selected === h.id && !editing && tab === "info") {
       setSelected(null);
       setEdit(false);
       return;
     }
     setSelected(h.id);
     setEdit(editing);
-    setReexamining(false);
-    setReason(h.refusal_reason ?? "");
+    setDetailTab(tab);
+    setReexamining(tab === "moderation" && h.review_status === "REFUSED");
+    setReasonCode("OTHER");
+    setReason(tab === "moderation" ? "" : h.refusal_reason ?? "");
+  }
+  async function moderateNow(h: ManagedHouse) {
+    await api("admin", {
+      action: "reviewHouse", id: h.id, seasonId,
+      payload: { status: "VALIDATED" },
+    });
+    await reload();
+  }
+  async function toggleHouseVisibility(h: ManagedHouse) {
+    if (h.status !== "HIDDEN" && !window.confirm("Masquer cette maison de la carte ?")) return;
+    await api("admin", {
+      action: "visibility", id: h.id, seasonId,
+      payload: h.status === "HIDDEN" ? "VISIBLE" : "HIDDEN",
+    });
+    await reload();
   }
   function table(items: ManagedHouse[], moderation = false) {
     const sortedItems = items.slice().sort((a, b) => {
@@ -484,16 +509,15 @@ export default function Admin({
                 >
                   <td data-label="Maison">
                     <strong>{h.name}</strong>
-                    {h.season_is_test && (
-                      <span className="beta-badge">Test</span>
-                    )}
                     <small>
                       {h.owner_name} · {h.email}
                     </small>
                   </td>
                   <td data-label="Adresse">{h.address}</td>
                   <td data-label="Modération">
-                    {reviews[h.review_status ?? "VALIDATED"]}
+                    <span className={"house-review-status " + (h.review_status ?? "VALIDATED").toLowerCase()}>
+                      {reviews[h.review_status ?? "VALIDATED"]}
+                    </span>
                     {h.status === "HIDDEN" && <small>Masquée</small>}
                   </td>
                   {moderation ? (
@@ -530,25 +554,38 @@ export default function Admin({
                   )}
                   <td data-label="Actions">
                     <div className="row-actions house-row-actions">
-                      <Button
-                        className="secondary desktop-row-action"
-                        onClick={() => select(h)}
-                      >
-                        {moderation ? "Voir / Modérer" : "Gérer"}
-                      </Button>
-                      {has(user, "participants.edit") &&
-                        selectedSeason &&
-                        !seasonFinished(selectedSeason) && (
-                          <Button
-                            className="desktop-row-action"
-                            aria-label={"Modifier " + h.name}
-                            onClick={() => select(h, true)}
-                          >
-                            Modifier
-                          </Button>
-                        )}
+                      {has(user, "participants.edit") && selectedSeason && !selectedSeason.archived && !selectedSeason.purged_at && (
+                        <>
+                          {h.review_status === "PENDING" && (
+                            <>
+                              <AsyncButton className="desktop-row-action" onClick={() => moderateNow(h)}>Valider</AsyncButton>
+                              <Button className="desktop-row-action" onClick={() => select(h, false, "moderation")}>Refuser</Button>
+                            </>
+                          )}
+                          {h.review_status === "REFUSED" && (
+                            <Button className="desktop-row-action" onClick={() => select(h, false, "moderation")}>Réexaminer</Button>
+                          )}
+                          {h.review_status === "VALIDATED" && (
+                            <>
+                              <Button className="desktop-row-action" aria-label={"Modifier " + h.name} onClick={() => select(h, true)}>Modifier</Button>
+                              <AsyncButton className="desktop-row-action" onClick={() => toggleHouseVisibility(h)}>
+                                {h.status === "HIDDEN" ? "Réafficher" : "Masquer"}
+                              </AsyncButton>
+                            </>
+                          )}
+                        </>
+                      )}
                       <ActionMenu label={"Actions pour " + h.name}>
                         <Button onClick={() => select(h)}>Voir la fiche</Button>
+                        {has(user, "participants.edit") && selectedSeason && !selectedSeason.archived && !selectedSeason.purged_at && h.review_status === "PENDING" && (
+                          <>
+                            <AsyncButton onClick={() => moderateNow(h)}>Valider</AsyncButton>
+                            <Button onClick={() => select(h, false, "moderation")}>Refuser avec motif</Button>
+                          </>
+                        )}
+                        {has(user, "participants.edit") && selectedSeason && !selectedSeason.archived && !selectedSeason.purged_at && h.review_status === "REFUSED" && (
+                          <Button onClick={() => select(h, false, "moderation")}>Réexaminer</Button>
+                        )}
                         {has(user, "users.read") && (
                           <Button
                             onClick={() => {
@@ -561,7 +598,7 @@ export default function Admin({
                         )}
                         {has(user, "participants.edit") &&
                           selectedSeason &&
-                          !seasonFinished(selectedSeason) && (
+                          !selectedSeason.archived && !selectedSeason.purged_at && (
                             <>
                               <Button onClick={() => select(h, true)}>
                                 Modifier la maison
@@ -608,7 +645,7 @@ export default function Admin({
                           )}
                         {has(user, "participants.delete") &&
                           selectedSeason &&
-                          !seasonFinished(selectedSeason) && (
+                          !selectedSeason.archived && !selectedSeason.purged_at && (
                             <AsyncButton
                               danger
                               onClick={async () => {
@@ -632,10 +669,10 @@ export default function Admin({
                   <tr className="admin-detail-row">
                     <td colSpan={moderation ? 5 : 7}>
                       <AdminInlineDetail
-                        key={h.id}
+                        key={h.id + ":" + detailTab}
                         title={current.name}
                         compactHeader
-                        initialTab="info"
+                        initialTab={detailTab}
                         onClose={() => {
                           setSelected(null);
                           setEdit(false);
@@ -661,7 +698,7 @@ export default function Admin({
                                     setSection("users");
                                   }}>Voir le propriétaire</Button>
                                 )}
-                                {selectedSeason && !seasonFinished(selectedSeason) &&
+                                {selectedSeason && !selectedSeason.archived && !selectedSeason.purged_at &&
                                   has(user, "participants.edit") && !edit && (
                                     <Button onClick={() => setEdit(true)}>Modifier les informations et horaires</Button>
                                   )}
@@ -704,7 +741,7 @@ export default function Admin({
                                     : "Date non disponible"}
                                 </p>
                                 {current.refusal_reason && <p>Motif précédent : {current.refusal_reason}</p>}
-                                {selectedSeason && !seasonFinished(selectedSeason) &&
+                                {selectedSeason && !selectedSeason.archived && !selectedSeason.purged_at &&
                                   has(user, "participants.edit") && (
                                     <>
                                       {current.review_status === "VALIDATED" && (
@@ -752,7 +789,7 @@ export default function Admin({
                                       )}
                                     </>
                                   )}
-                                {!has(user, "participants.edit") || !selectedSeason || seasonFinished(selectedSeason)
+                                {!has(user, "participants.edit") || !selectedSeason || (selectedSeason.archived || !!selectedSeason.purged_at)
                                   ? <p className="small muted">Consultation en lecture seule.</p>
                                   : null}
                               </section>
@@ -771,7 +808,7 @@ export default function Admin({
                                 <p className="small muted">
                                   Ouverture, distribution et visibilité sont indépendantes de la validation.
                                 </p>
-                                {selectedSeason && !seasonFinished(selectedSeason) &&
+                                {selectedSeason && !selectedSeason.archived && !selectedSeason.purged_at &&
                                   has(user, "participants.edit") ? (
                                     <>
                                       <div className="beta-actions">
@@ -810,7 +847,7 @@ export default function Admin({
                                       </div>
                                     </>
                                   ) : <p className="small muted">Consultation en lecture seule.</p>}
-                                {selectedSeason && !seasonFinished(selectedSeason) &&
+                                {selectedSeason && !selectedSeason.archived && !selectedSeason.purged_at &&
                                   has(user, "participants.delete") && (
                                     <details className="admin-advanced-actions">
                                       <summary>Actions avancées</summary>
@@ -889,7 +926,22 @@ export default function Admin({
   if (mobileView) {
     return (
       <main className="admin-beta admin-mobile-view" data-theme={theme}>
-        {has(user, "stats.read") ? (
+        <nav aria-label="Administration mobile">
+          {has(user, "stats.read") && <Button onClick={() => setSection("statistics")}>Statistiques</Button>}
+          {has(user, "participants.read") && <Button onClick={() => setSection("houses")}>Gérer les maisons</Button>}
+        </nav>
+        {section === "houses" && has(user, "participants.read") ? (
+          <section className="beta-card">
+            <h1>Maisons</h1>
+            <label>Saison du back-office
+              <Select value={seasonId} onChange={(event) => setSeasonId(event.target.value)}>
+                {seasons.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </Select>
+            </label>
+            {error && <Notice error={error} />}
+            {table(list)}
+          </section>
+        ) : has(user, "stats.read") ? (
           <>
             <AdminMobileStats
               data={loadedView === viewKey ? statistics : null}
@@ -1077,7 +1129,6 @@ export default function Admin({
                   {seasons.map((s) => (
                     <option key={s.id} value={s.id}>
                       {s.name ?? "Halloween " + s.year}
-                      {s.is_test ? " · TEST" : " · REAL"}
                       {s.active ? " · ACTIVE" : ""}
                     </option>
                   ))}
@@ -1124,7 +1175,7 @@ export default function Admin({
             </strong>
             {seasons.some((s) => s.active) && (
               <span className="beta-status">
-                {seasons.find((s) => s.active)?.is_test ? "TEST" : "REAL"}
+                Active
               </span>
             )}
           </div>
@@ -1278,7 +1329,7 @@ export default function Admin({
                 <Button
                   className="primary"
                   disabled={
-                    !selectedSeason || seasonFinished(selectedSeason)
+                    !selectedSeason || (selectedSeason.archived || !!selectedSeason.purged_at)
                   }
                   onClick={() =>
                     void startCreate().catch((e) => setError(e.message))
@@ -1288,7 +1339,7 @@ export default function Admin({
                 </Button>
                 {!selectedSeason ? (
                   <p>Créez une saison avant de créer une maison.</p>
-                ) : seasonFinished(selectedSeason) ? (
+                ) : (selectedSeason.archived || !!selectedSeason.purged_at) ? (
                     <p>
                       Cette saison est terminée : lecture seule.{" "}
                       {seasons.some((s) => s.active) && (

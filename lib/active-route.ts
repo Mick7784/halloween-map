@@ -115,6 +115,7 @@ export function restoreRoute(
   raw: string | null,
   identity: { ownerId: string; instanceId: string; seasonId: string },
   now: number,
+  previewMode = false,
 ): StoredRoute | null {
   try {
     if (!raw || raw.length > 5000000) return null;
@@ -131,7 +132,7 @@ export function restoreRoute(
       value.seasonId !== identity.seasonId ||
       (value.phase === "calculated" &&
         (+new Date(value.expiresAt) <= now ||
-          +new Date(value.parameters.end) <= now)) ||
+          (!previewMode && +new Date(value.parameters.end) <= now))) ||
       value.collection.visitedIds.some(
         (id) => !value.result.stops.some((s) => s.house.id === id),
       ) ||

@@ -110,21 +110,18 @@ export function can(user: User | null, permission: string) {
 }
 export function seasonFinished(s: Season, now = new Date()) {
   return (
-    !s.is_test &&
     (!!s.archived || !!s.purged_at || +now >= +new Date(s.closes_at))
   );
 }
 export function seasonLabel(s: Season, now = new Date()) {
+  if (s.active && !s.archived && !s.purged_at) return "ACTIVE";
   if (seasonFinished(s, now)) return "TERMINÉE";
-  if (s.active) return "ACTIVE";
-  if (s.is_test) return "DÉSACTIVÉE";
   return +now < +new Date(s.opens_at) ? "PLANIFIÉE" : "DÉSACTIVÉE";
 }
 export function seasonState(s: Season | null, now = new Date()) {
   if (!s) return "PREPARATION";
   if (s.purged_at || s.archived || seasonFinished(s, now)) return "CLOSED";
-  if (!s.active) return "PREPARATION";
-  if (s.is_test) return "MAP_OPEN";
+  if (!s.active || s.is_test) return "PREPARATION";
   if (+now < +new Date(s.opens_at)) return "COUNTDOWN";
   return "MAP_OPEN";
 }
@@ -146,22 +143,23 @@ export function mapAccessible(s: Season | null, now = new Date()) {
     +now < +new Date(s.closes_at)
   );
 }
-/** Administrators may inspect any existing season, including an inactive or closed one.
- * A closed/purged season is strictly read-only; no purged data may be restored.
+/** Only the Super Admin may access the real map outside public hours.
+ * This exception requires an active, non-purged season; it is not a TEST mode.
  */
 export function earlyMapAccess(
   s: Season | null,
   user: User | null,
   now = new Date(),
 ) {
-  return !!s && can(user, "admin.access") && !mapAccessible(s, now);
+  return !!s && !s.is_test && !!s.active && !s.archived && !s.purged_at &&
+    user?.role_name === "SUPER_ADMIN" && !mapAccessible(s, now);
 }
 export function memberMapAccessible(
   s: Season | null,
   user: User | null,
   now = new Date(),
 ) {
-  return !!user && (mapAccessible(s, now) || earlyMapAccess(s, user, now));
+  return mapAccessible(s, now) || earlyMapAccess(s, user, now);
 }
 export function collectionAccessible(
   s: Season | null,
@@ -172,8 +170,9 @@ export function collectionAccessible(
     !!s &&
     !s.archived &&
     !s.purged_at &&
-    +now < +new Date(s.closes_at) &&
-    memberMapAccessible(s, user, now)
+    !!s.active &&
+    !!user &&
+    (mapAccessible(s, now) || earlyMapAccess(s, user, now))
   );
 }
 export function visible(h: House, s: Season, now = new Date()) {

@@ -400,47 +400,12 @@ it("queues one notification per actual transition, cancels stale decisions and n
     ).rows[0].status,
   ).toBe("CANCELLED");
 });
-it("never queues or sends real house notifications for TEST seasons", async () => {
-  await legacyTestSeason(admin.instance_id, "Exemples");
-  await adminAction(admin, {
-    action: "deactivateSeason",
-    id: season.id,
-    payload: "DÉSACTIVER",
-    current_password: password,
-  });
-  season = (await db().query("SELECT * FROM seasons WHERE is_test"))
-    .rows[0] as unknown as Season;
-  await adminAction(admin, {
-    action: "activateSeason",
-    id: season.id,
-    payload: "ACTIVER",
-    current_password: password,
-  });
-  await expect(submit()).rejects.toMatchObject({ status: 403 });
-  await createParticipation(
-    owner,
-    {
-      house,
-      acceptance: {
-        mode: "GUIDELINES_ONLY",
-        guidelines: true,
-        guidelines_version: "2026.1",
-      },
-    },
-    { actor: admin, seasonId: season.id },
-  );
-  const h = (
-    await db().query("SELECT * FROM participations WHERE user_id=$1", [
-      owner.id,
-    ])
-  ).rows[0];
-  await review(String(h.id), "REFUSED", { reason: "Exemple uniquement" });
-  expect((await db().query("SELECT * FROM email_outbox")).rows).toHaveLength(0);
-  const mails: string[] = [];
-  await dispatchEmails(undefined, async (mail) => {
-    mails.push(mail.subject);
-  });
-  expect(mails).toEqual([]);
+it("rejects activation and public participation in historical TEST seasons without sending notifications",async()=>{
+ const legacy=await legacyTestSeason(admin.instance_id,'Historique');
+ await expect(adminAction(admin,{action:'activateSeason',id:legacy.id,payload:'ACTIVER',current_password:password})).rejects.toMatchObject({status:400});
+ await adminAction(admin,{action:'deactivateSeason',id:season.id,payload:'DÉSACTIVER',current_password:password});
+ await expect(submit()).rejects.toMatchObject({status:403});
+ const send=vi.fn(async()=>{});await dispatchEmails(undefined,send);expect(send).not.toHaveBeenCalled();
 });
 it("tests templates only to the verified Super Admin address with inert links and no identity tokens", async () => {
   const sent: Record<string, unknown>[] = [];
@@ -707,27 +672,10 @@ it("omits disabled or unusable support/contact links and never borrows the bug d
     ),
   ).toBe("https://example.invalid/support");
 });
-it("excludes ordinary accounts from TEST attendance and switches current attendance without moving old samples", async () => {
-  await presence(owner);
-  await legacyTestSeason(admin.instance_id, "Présence TEST");
-  const testSeason = (await db().query("SELECT id FROM seasons WHERE is_test"))
-    .rows[0];
-  await adminAction(admin, {
-    action: "activateSeason",
-    id: testSeason.id,
-    payload: "ACTIVER",
-    current_password: password,
-  });
-  await presence(owner);
-  await presence(admin);
-  expect((await attendance(season.id)).activeNow).toBe(0);
-  expect((await attendance(String(testSeason.id))).activeNow).toBe(1);
-  await db().query("UPDATE active_presence SET season_id=$1 WHERE user_id=$2", [
-    testSeason.id,
-    owner.id,
-  ]);
-  await measureAttendance(new Date("2026-10-09T12:00Z"));
-  const measured = await attendance(String(testSeason.id));
-  expect(measured.activeNow).toBe(1);
-  expect(measured.peak?.active_count).toBe(1);
+it("ignores historical TEST attendance and preserves samples from real editions",async()=>{
+ await presence(owner);
+ const legacy=await legacyTestSeason(admin.instance_id,'Historique');
+ await expect(adminAction(admin,{action:'activateSeason',id:legacy.id,payload:'ACTIVER',current_password:password})).rejects.toMatchObject({status:400});
+ expect((await attendance(String(legacy.id))).activeNow).toBe(0);
+ expect((await attendance(season.id)).activeNow).toBe(1);
 });

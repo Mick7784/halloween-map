@@ -2,7 +2,7 @@ import { reportSchema } from "./collection-reports";
 import { transaction } from "./db";
 import { HttpError } from "./auth";
 import {
-  adminAccount,
+  earlyMapAccess,
   mapAccessible,
   type User,
   type Instance,
@@ -35,11 +35,11 @@ export async function reportCollection(
         p.id,
       ])
     ).rows[0];
-    if (!s || s.purged_at || s.archived || (s.is_test && !adminAccount(user)))
+    if (!s || s.is_test || s.purged_at || s.archived)
       throw new HttpError(409, "La saison n’est plus accessible");
     const accessible =
       i?.active_season_id === s.id &&
-      (mapAccessible({ ...s, active: true }) || (s.is_test && adminAccount(user)));
+      (mapAccessible({ ...s, active: true }) || earlyMapAccess({ ...s, active: true }, user));
     // A collection already started may finish after closing, until the privacy purge.
     // Only its numerical totals can change; house/configuration snapshots stay read-only.
     if (
@@ -51,6 +51,10 @@ export async function reportCollection(
       )
     )
       throw new HttpError(409, "La saison n’est plus accessible");
+    // Simulated Super Admin collections outside public hours never count
+    // as real visits, but a real collection already started may still finish.
+    if (earlyMapAccess({ ...s, active: true }, user) && !previous?.started)
+      return { ok: true };
     await c.query(
       "INSERT INTO collection_reports(id,season_id) VALUES($1,$2) ON CONFLICT DO NOTHING",
       [p.id, s.id],

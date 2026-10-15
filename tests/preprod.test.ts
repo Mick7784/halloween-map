@@ -98,7 +98,7 @@ it("uses existing setup/accounts/season/house rules and creates independent func
   ).toBe(true);
   expect((await db().query("SELECT * FROM email_outbox")).rows).toHaveLength(0);
   expect((await db().query("SELECT * FROM participations")).rows).toHaveLength(
-    18,
+    9,
   );
   expect(
     (
@@ -127,7 +127,7 @@ it("uses existing setup/accounts/season/house rules and creates independent func
   ).toBe(true);
   expect(await seedPreproduction(env)).toEqual({ initialized: false });
   expect((await db().query("SELECT * FROM participations")).rows).toHaveLength(
-    18,
+    9,
   );
   const admin = (await getUser(
     await createSession(
@@ -136,28 +136,14 @@ it("uses existing setup/accounts/season/house rules and creates independent func
       ),
     ),
   ))!;
-  const test = (await db().query("SELECT id FROM seasons WHERE is_test"))
-    .rows[0];
-  await adminAction(admin, {
-    current_password: env.PREPROD_ADMIN_PASSWORD,
-    action: "deactivateSeason",
-    id: publicMap.season!.id,
-    payload: "DÉSACTIVER",
-  });
-  await adminAction(admin, {
-    current_password: env.PREPROD_ADMIN_PASSWORD,
-    action: "activateSeason",
-    id: test.id,
-    payload: "ACTIVER",
-  });
-  expect((await publicState(undefined, visitor)).mapAccessible).toBe(false);
-  expect((await publicState(undefined, admin)).houses).toHaveLength(7);
-  expect((await publicState(undefined, admin)).season?.is_test).toBe(true);
+  await adminAction(admin, {current_password:env.PREPROD_ADMIN_PASSWORD,action:'deactivateSeason',id:publicMap.season!.id,payload:'DÉSACTIVER'});
+  expect((await publicState(undefined,visitor)).mapAccessible).toBe(false);
+  expect((await publicState(undefined,admin)).mapAccessible).toBe(false);
 });
 it("refuses to overwrite an unmarked existing instance", async () => {
   await db().query("UPDATE instances SET config=config-'preprodFixture'");
   await expect(seedPreproduction(env)).rejects.toThrow("Base non vide");
   expect((await db().query("SELECT * FROM participations")).rows).toHaveLength(
-    18,
+    9,
   );
 });

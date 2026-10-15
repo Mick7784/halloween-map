@@ -65,10 +65,7 @@ export default function PremiumHome({
   }, [user]);
 
   const zone = state.instance?.timezone ?? "Europe/Paris";
-  // Historic TEST seasons cannot invent a public opening date.
-  const openingISO = state.season?.is_test
-    ? state.nextOpening
-    : (state.season?.opens_at ?? state.nextOpening);
+  const openingISO = state.season?.opens_at ?? state.nextOpening;
   const candidate = openingISO
     ? DateTime.fromISO(openingISO).setZone(zone)
     : null;
@@ -160,12 +157,6 @@ export default function PremiumHome({
               {" "}et votre outil personnel pour la collecte des bonbons.
             </p>
 
-            {state.season?.is_test && (
-              <div className="home-preview-label" role="status">
-                Prévisualisation TEST
-              </div>
-            )}
-
             {countdownVisible && opening ? (
               <section className="home-countdown" aria-label="Décompte avant l’ouverture">
                 <p className="home-countdown-heading">Ouverture dans</p>
@@ -197,23 +188,27 @@ export default function PremiumHome({
                 <House size={16} aria-hidden="true" />
                 <span>
                   <strong>{count} {count > 1 ? "maisons" : "maison"}</strong>
-                  {" "}{state.season?.is_test
-                    ? "de test · aperçu administrateur"
-                    : count > 1 ? "référencées" : "référencée"}
+                  {" "}{count > 1 ? "référencées" : "référencée"}
                 </span>
               </p>
             )}
 
             {!user ? (
-              <div className="home-actions" aria-label="Accéder à votre compte">
-                <button
-                  type="button"
-                  className="home-cta"
-                  onClick={() => setLoginOpen(true)}
-                  aria-haspopup="dialog"
-                >
-                  Se connecter <ArrowRight size={20} aria-hidden="true" />
-                </button>
+              <div className="home-actions" aria-label="Accéder à Halloween Map">
+                {open ? (
+                  <Link className="home-cta" href="/map">
+                    Découvrir la carte <ArrowRight size={20} aria-hidden="true" />
+                  </Link>
+                ) : (
+                  <button
+                    type="button"
+                    className="home-cta"
+                    onClick={() => setLoginOpen(true)}
+                    aria-haspopup="dialog"
+                  >
+                    Se connecter <ArrowRight size={20} aria-hidden="true" />
+                  </button>
+                )}
                 <Link className="home-cta-secondary" href="/register">
                   Créer un compte
                 </Link>

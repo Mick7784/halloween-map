@@ -2,9 +2,9 @@
 import { ActionCancelled } from "./AdminConfirmation";
 import { Dialog, Button, DataTable, Input } from "./ui";
 import useDraftGuard, { confirmDraftNavigation } from "./useDraftGuard";
-import AdminStatistics from "./AdminStatistics";
+import AdminStatistics, { type SeasonStatistics } from "./AdminStatistics";
 import { DateTime } from "luxon";
-import { Fragment, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { ChevronDown, ChevronUp, CircleCheck, Plus, X } from "lucide-react";
 import {
   seasonFinished,
@@ -20,6 +20,7 @@ import {
   localDate,
   values,
   has,
+  api,
 } from "./common";
 
 type Action = (action: string, payload: unknown, id?: string) => Promise<void>;
@@ -30,6 +31,19 @@ function Statistics({
   season: Season;
   onClose: () => void;
 }) {
+  const frozen = !!(season.purged_at || season.archived);
+  const [data, setData] = useState<SeasonStatistics | null>(() => frozen ? {
+    seasonId: season.id, snapshot: true, stats: season.stats ?? {},
+  } : null);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    if (frozen) return;
+    let current = true;
+    void api<SeasonStatistics>("admin/statistics?seasonId=" + season.id)
+      .then((result) => { if (current) setData(result); })
+      .catch((e) => { if (current) setError(e.message); });
+    return () => { current = false; };
+  }, [season.id, frozen]);
   return (
     <div className="beta-overlay">
       <Dialog
@@ -50,17 +64,14 @@ function Statistics({
           </Button>
         </header>
         <p>Historique en lecture seule · chiffres agrégés uniquement.</p>
+        {error && <Notice error={error} />}
         {!season.stats_snapshot_at && !season.purged_at ? (
           <p>Le snapshot sera disponible à la clôture de la saison.</p>
         ) : (
           <AdminStatistics
             season={season}
-            loading={false}
-            data={{
-              seasonId: season.id,
-              snapshot: true,
-              stats: season.stats ?? {},
-            }}
+            loading={!data && !error}
+            data={data}
           />
         )}
       </Dialog>
@@ -82,8 +93,7 @@ function SeasonEditor({
   superAdmin: boolean;
   defaults?: { open: string; close: string };
 }) {
-  const [test] = useState(!!season?.is_test),
-    [busy, setBusy] = useState(false),
+  const [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
     [dirty, setDirty] = useState(false),
     [year, setYear] = useState(() => season?.year ?? new Date().getFullYear());
@@ -133,7 +143,7 @@ function SeasonEditor({
             {
               ...v,
               name: v.name,
-              is_test: test,
+              is_test: false,
               year: Number(v.year ?? year),
               registrations_open: v.registrations_open === "on",
             },
@@ -154,8 +164,7 @@ function SeasonEditor({
           value={season?.name}
           maxLength={100}
         />
-        {!test && (
-          <>
+        <>
             <label className="field">
               <span>Année</span>
               <Input
@@ -178,16 +187,8 @@ function SeasonEditor({
               />
             ))}
           </>
-        )}
       </div>
-      {test ? (
-        <p className="small muted">
-          Accessible aux administrateurs uniquement lorsqu’elle est active.
-          Aucun calendrier public ni purge automatique.
-        </p>
-      ) : (
-        <>
-          <Check
+      <Check
             name="registrations_open"
             label="Autoriser les inscriptions"
             checked={season?.registrations_open ?? true}
@@ -196,8 +197,6 @@ function SeasonEditor({
             Heures en {zone}. L’activation est manuelle et indépendante de
             l’ouverture de la carte.
           </p>
-        </>
-      )}
       <Notice error={error} />
       <Button className="primary" disabled={busy}>
         {busy ? "Enregistrement…" : "Enregistrer"}
@@ -263,7 +262,6 @@ export default function SeasonManager({
             <thead>
               <tr>
                 <th>Saison</th>
-                <th>Type</th>
                 <th>État</th>
                 <th className="season-period">Période</th>
                 <th className="season-summary">Synthèse</th>
@@ -281,12 +279,7 @@ export default function SeasonManager({
                         <strong>
                           {s.active && <CircleCheck size={16} />} {s.name}
                         </strong>
-                        {!s.is_test && <small>{s.year}</small>}
-                      </td>
-                      <td>
-                        <span className="beta-status">
-                          {s.is_test ? "TEST" : "REAL"}
-                        </span>
+                        <small>{s.year}</small>
                       </td>
                       <td>
                         <span
@@ -298,9 +291,7 @@ export default function SeasonManager({
                         </span>
                       </td>
                       <td className="season-period">
-                        {s.is_test
-                          ? "Sans calendrier public"
-                          : `${date(s.opens_at)} → ${date(s.closes_at)}`}
+                        {`${date(s.opens_at)} → ${date(s.closes_at)}`}
                       </td>
                       <td className="season-summary">
                         {ended && s.stats?.houses !== undefined
@@ -310,9 +301,7 @@ export default function SeasonManager({
                       <td>
                         <div className="beta-actions season-row-actions">
                           {critical &&
-                            !ended &&
-                            !s.purged_at &&
-                            !s.archived && (
+                            !s.purged_at && !s.archived && (
                               <AsyncButton
                                 onClick={async () => {
                                   const action = s.active
@@ -334,7 +323,6 @@ export default function SeasonManager({
                             </Button>
                           )}
                           {critical &&
-                            !s.is_test &&
                             ended &&
                             !s.active &&
                             !s.purged_at && (
@@ -377,7 +365,7 @@ export default function SeasonManager({
                     </tr>
                     {!ended && expanded === s.id && (
                       <tr className="season-settings-row">
-                        <td colSpan={6}>
+                        <td colSpan={5}>
                           <SeasonEditor
                             season={s}
                             zone={zone}

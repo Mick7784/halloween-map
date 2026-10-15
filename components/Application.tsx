@@ -102,19 +102,15 @@ export default function Application({
     };
   }, [refresh]);
   useEffect(() => {
-    // Revalidate the actual opening moment; the server is authoritative.
-    if (
-      !state ||
-      state.publicMapOpen ||
-      ["CLOSED", "ARCHIVED"].includes(state.state ?? "")
-    )
-      return;
-    const opening = state.season?.is_test
-      ? state.nextOpening
-      : (state.season?.opens_at ?? state.nextOpening);
-    if (!opening) return;
-    const remaining = Date.parse(opening) - (Date.now() + clockOffset);
-    if (!Number.isFinite(remaining) || remaining <= 0) return;
+    // Revalidate each calendar boundary against the authoritative server.
+    if (!state) return;
+    const serverNow = Date.now() + clockOffset;
+    const boundaries = [state.season?.registrations_open_at,
+      state.season?.opens_at, state.season?.closes_at, state.nextOpening]
+      .filter((value): value is string => typeof value === "string")
+      .map(Date.parse).filter((value) => Number.isFinite(value) && value > serverNow);
+    if (!boundaries.length) return;
+    const remaining = Math.min(...boundaries) - serverNow;
     const timer = window.setTimeout(
       () => void refresh().catch((e) => setError(e.message)),
       Math.min(remaining + 150, 2147483647),
@@ -201,7 +197,8 @@ export default function Application({
 
   const effectiveNow = now + clockOffset;
   const closed =
-    !!state?.season && effectiveNow >= +new Date(state.season.closes_at);
+    !!state?.season && !state.earlyAccess &&
+    effectiveNow >= +new Date(state.season.closes_at);
   const liveState = state
     ? {
         ...state,
@@ -218,8 +215,12 @@ export default function Application({
       }
     : null;
   const automaticMap = state?.state === "MAP_OPEN" && !state.season?.is_test;
+  const publicWindow = !!state?.season &&
+    effectiveNow >= +new Date(state.season.opens_at) &&
+    effectiveNow < +new Date(state.season.closes_at);
   const canShowMap =
-    !!user && !!state?.mapAccessible && (view === "map" || automaticMap);
+    !!state?.mapAccessible && (state.earlyAccess || publicWindow) &&
+    (view === "map" || automaticMap);
   let content: React.ReactNode;
   if (!state)
     content = (
@@ -338,19 +339,16 @@ export default function Application({
       </main>
     );
   else
-    content =
-      !user && view === "map" ? (
-        <Login destination="/" />
-      ) : (
-        <PublicMap
-          refresh={refresh}
-          state={liveState!}
-          mapStyle={mapStyle}
-          now={effectiveNow}
-          showMap={canShowMap}
-          user={user}
-        />
-      );
+    content = (
+      <PublicMap
+        refresh={refresh}
+        state={liveState!}
+        mapStyle={mapStyle}
+        now={effectiveNow}
+        showMap={canShowMap}
+        user={user}
+      />
+    );
   if (
     (((view === "home" || view === "map") && !canShowMap) ||
       (["account", "participant"].includes(view) && user)) &&
@@ -378,7 +376,7 @@ export default function Application({
     <div
       className={
         "application " +
-        ((view === "map" || view === "home") && user && state?.mapAccessible
+        ((view === "map" || view === "home") && canShowMap
           ? "map-app"
           : "") +
         (view === "admin" && user?.permissions.includes("admin.access")

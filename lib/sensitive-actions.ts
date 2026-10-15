@@ -31,7 +31,7 @@ export function sensitiveAction(
       },
       activateSeason: {
         message:
-          "Activer cette saison et désactiver la saison actuellement active. Une saison TEST reste réservée à l’administration.",
+          "Activer cette saison et désactiver la saison actuellement active.",
       },
       deactivateSeason: {
         message:

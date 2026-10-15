@@ -320,8 +320,9 @@ test("new house uses shared form, searchable owner and refreshed validated list;
   await page
     .getByRole("row")
     .filter({ hasText: "Maison Alice" })
-    .getByRole("button", { name: "Gérer" })
+    .getByLabel("Actions pour Maison Alice")
     .click();
+  await page.getByRole('button',{name:'Voir la fiche',exact:true}).click();
   await expect(
     page.getByRole("button", { name: "Valider", exact: true }),
   ).toHaveCount(0);

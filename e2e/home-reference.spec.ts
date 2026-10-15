@@ -500,7 +500,7 @@ for (const width of [360, 390, 1440]) {
   for (const mode of [
     "preparation",
     "closed",
-    "legacy-preview",
+    "super-preview",
     "draft",
     "next-real",
   ]) {
@@ -520,15 +520,16 @@ for (const width of [360, 390, 1440]) {
                 },
                 state: "CLOSED",
               }
-            : mode === "legacy-preview"
+            : mode === "super-preview"
               ? {
                   season: {
                     ...state.season,
-                    is_test: true,
-                    opens_at: "2000-01-01T00:00:00Z",
+                    is_test: false,
+                    opens_at: opening,
                     closes_at: "2201-01-01T00:00:00Z",
                   },
-                  state: "MAP_OPEN",
+                  state: "COUNTDOWN",
+                  earlyAccess: true,
                   mapAccessible: true,
                   nextOpening: opening,
                   count: 2,
@@ -538,17 +539,17 @@ for (const width of [360, 390, 1440]) {
                 : { state: "PREPARATION" };
       await arrange(
         page,
-        mode === "legacy-preview" ? "admin" : "member",
+        mode === "super-preview" ? "admin" : "member",
         alternate,
       );
       const clock = page.getByLabel("Temps restant avant l’ouverture", {
         exact: true,
       });
       await expect(clock).toHaveCount(
-        ["legacy-preview", "draft", "next-real"].includes(mode) ? 1 : 0,
+        ["super-preview", "draft", "next-real"].includes(mode) ? 1 : 0,
       );
-      if (mode === "legacy-preview") {
-        await expect(page.locator(".home-houses")).toContainText("de test");
+      if (mode === "super-preview") {
+        await expect(page.locator(".home-houses")).toContainText("référencées");
         await expect(
           page.getByRole("link", { name: "Accéder à la carte" }),
         ).toHaveAttribute("href", "/map");

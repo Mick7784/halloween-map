@@ -393,8 +393,6 @@ test("reexamining a refused house opens moderation without implicitly validating
     .getByRole("navigation")
     .getByRole("button", { name: "Maisons", exact: true })
     .click();
-  await page.getByRole("button", { name: "Gérer", exact: true }).click();
-  await page.getByRole("tab", { name: "Modération" }).click();
   await page.getByRole("button", { name: "Réexaminer", exact: true }).click();
   await expect(
     page.getByRole("button", { name: "Valider la maison", exact: true }),

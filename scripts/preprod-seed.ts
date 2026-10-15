@@ -192,42 +192,6 @@ export async function seedPreproduction(
     }
   }
   await houses(String(real.id));
-  // Seed historical compatibility data only in the disposable, guarded fixture DB.
-  await db().query(
-    "INSERT INTO seasons(instance_id,year,name,is_test,registrations_open,registrations_open_at,opens_at,closes_at,purge_at) VALUES($1,2026,$2,true,true,'2000-01-01T00:00Z','2000-01-01T00:00Z','2201-01-01T00:00Z','2201-01-02T00:00Z')",
-    [admin.instance_id, "UX mobile — TEST administrateurs"],
-  );
-  const test = (
-    await db().query(
-      "SELECT id FROM seasons WHERE instance_id=$1 AND is_test",
-      [admin.instance_id],
-    )
-  ).rows[0];
-  await adminAction(admin, {
-    action: "deactivateSeason",
-    current_password: configuration.PREPROD_ADMIN_PASSWORD,
-    id: real.id,
-    payload: "DÉSACTIVER",
-  });
-  await adminAction(admin, {
-    action: "activateSeason",
-    current_password: configuration.PREPROD_ADMIN_PASSWORD,
-    id: test.id,
-    payload: "ACTIVER",
-  });
-  await houses(String(test.id));
-  await adminAction(admin, {
-    action: "deactivateSeason",
-    current_password: configuration.PREPROD_ADMIN_PASSWORD,
-    id: test.id,
-    payload: "DÉSACTIVER",
-  });
-  await adminAction(admin, {
-    action: "activateSeason",
-    current_password: configuration.PREPROD_ADMIN_PASSWORD,
-    id: real.id,
-    payload: "ACTIVER",
-  });
   await db().query(
     "UPDATE instances SET config=config || $1::jsonb WHERE id=$2",
     [JSON.stringify({ preprodFixture: marker }), admin.instance_id],

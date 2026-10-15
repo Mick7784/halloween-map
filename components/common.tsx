@@ -47,6 +47,7 @@ export type PublicState = {
     | (Pick<Season, "id" | "year" | "registrations_open"> & {
         is_test?: boolean;
         opens_at: string;
+        registrations_open_at?: string;
         closes_at: string;
         purge_at: string;
         route_end_at?: string;
@@ -257,10 +258,12 @@ export function AsyncButton({
   children,
   onClick,
   danger = false,
+  className = "",
 }: {
   children: React.ReactNode;
   onClick: () => Promise<void>;
   danger?: boolean;
+  className?: string;
 }) {
   const [busy, setBusy] = useState(false),
     [error, setError] = useState("");
@@ -268,7 +271,7 @@ export function AsyncButton({
     <>
       <Button
         type="button"
-        className={danger ? "danger" : ""}
+        className={[className, danger ? "danger" : ""].filter(Boolean).join(" ")}
         disabled={busy}
         onClick={async () => {
           setBusy(true);
