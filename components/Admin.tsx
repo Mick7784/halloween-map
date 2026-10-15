@@ -1109,7 +1109,6 @@ export default function Admin({
                     <option key={s.id} value={s.id}>
                       {s.name ?? "Halloween " + s.year}
                       {s.active ? " · ACTIVE" : ""}
-                      {s.active ? " · ACTIVE" : ""}
                     </option>
                   ))}
                 </Select>
