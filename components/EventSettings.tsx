@@ -11,10 +11,12 @@ export default function EventSettings({
   instance,
   mapStyle,
   save,
+  onSeason,
 }: {
   instance: Instance;
   mapStyle: string;
   save: (p: unknown) => Promise<unknown>;
+  onSeason?: () => void;
 }) {
   const [latitude, setLatitude] = useState(instance.latitude),
     [longitude, setLongitude] = useState(instance.longitude),
@@ -183,6 +185,11 @@ export default function EventSettings({
             prochaine édition. Le calendrier de la saison reste configurable
             séparément.
           </p>
+          {onSeason && (
+            <Button type="button" onClick={onSeason}>
+              Modifier la saison en cours
+            </Button>
+          )}
           {[
             ["open", "Ouverture", String(instance.config.defaultOpen)],
             ["close", "Fermeture", String(instance.config.defaultClose)],

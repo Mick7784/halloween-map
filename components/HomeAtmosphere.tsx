@@ -43,6 +43,8 @@ export default function HomeAtmosphere({ motionAllowed = true }: { motionAllowed
     let baseline: Tilt | null = null;
     let subscribed = false;
     let frame = 0;
+    let lastFrameAt = 0;
+    let idleTimeout: number | null = null;
     let disposed = false;
     let depthReady = false;
     let loadStarted = false;
@@ -66,34 +68,56 @@ export default function HomeAtmosphere({ motionAllowed = true }: { motionAllowed
 
     const reset = () => {
       if (frame) window.cancelAnimationFrame(frame);
+      if (idleTimeout !== null) window.clearTimeout(idleTimeout);
+      idleTimeout = null;
       frame = 0;
+      lastFrameAt = 0;
       baseline = null;
       target.x = target.y = drawn.x = drawn.y = 0;
       setOffsets(0, 0);
       art.removeAttribute("data-home-motion");
     };
 
-    const animate = () => {
+    const animate = (now: number) => {
       frame = 0;
       if (!enabled()) {
         reset();
         return;
       }
-      drawn.x += (target.x - drawn.x) * 0.18;
-      drawn.y += (target.y - drawn.y) * 0.18;
+      // Time-based inertia: the result does not depend on a 60/90/120 Hz display.
+      const elapsed = lastFrameAt ? clamp(now - lastFrameAt, 1, 50) : 16.67;
+      lastFrameAt = now;
+      const easing = 1 - Math.exp(-elapsed / 140);
+      drawn.x += (target.x - drawn.x) * easing;
+      drawn.y += (target.y - drawn.y) * easing;
       setOffsets(drawn.x, drawn.y);
       if (
-        Math.abs(target.x - drawn.x) > 0.006 ||
-        Math.abs(target.y - drawn.y) > 0.006
+        Math.abs(target.x - drawn.x) > 0.004 ||
+        Math.abs(target.y - drawn.y) > 0.004
       ) {
         frame = window.requestAnimationFrame(animate);
+      } else {
+        lastFrameAt = 0;
       }
+    };
+
+    const requestFrame = () => {
+      if (!frame) {
+        lastFrameAt = 0;
+        frame = window.requestAnimationFrame(animate);
+      }
+    };
+
+    const easeToNeutral = () => {
+      idleTimeout = null;
+      target.x = target.y = 0;
+      if (depthReady) requestFrame();
     };
 
     const activate = () => {
       if (disposed || !enabled() || !baseline || !depthReady) return;
       art.setAttribute("data-home-motion", "active");
-      if (!frame) frame = window.requestAnimationFrame(animate);
+      requestFrame();
     };
 
     const loadDepth = () => {
@@ -132,9 +156,19 @@ export default function HomeAtmosphere({ motionAllowed = true }: { motionAllowed
 
       // Relative tilt only; cap every displacement. The user can still read
       // the central title, clock and authentication controls without motion.
-      target.x = clamp((event.gamma - baseline.x) / 18, -1, 1);
-      target.y = clamp((event.beta - baseline.y) / 18, -1, 1);
-      if (depthReady && !frame) frame = window.requestAnimationFrame(animate);
+      const incomingX = clamp((event.gamma - baseline.x) / 18, -1, 1);
+      const incomingY = clamp((event.beta - baseline.y) / 18, -1, 1);
+      // Reject small sensor noise; larger tilts use a low-pass filter.
+      if (Math.abs(incomingX - target.x) >= 0.035)
+        target.x += (incomingX - target.x) * 0.35;
+      if (Math.abs(incomingY - target.y) >= 0.035)
+        target.y += (incomingY - target.y) * 0.35;
+
+      // Browsers may stop delivering readings while held still. Ease the
+      // illustration home instead of leaving it offset indefinitely.
+      if (idleTimeout !== null) window.clearTimeout(idleTimeout);
+      idleTimeout = window.setTimeout(easeToNeutral, 1100);
+      if (depthReady) requestFrame();
     };
 
     const reconcile = () => {
