@@ -1076,6 +1076,7 @@ test("shared visual editor produces the saved format and real TLS SMTP accepts i
   await expect(kinds.locator("option")).toHaveCount(6);
   await kinds.selectOption("HOUSE_REFUSED");
   const editor = page.getByRole("textbox", { name: "Message", exact: true });
+  await expect(editor).toHaveAttribute("contenteditable", "true");
   await editor.fill("Précision du refus");
   await editor.evaluate((el) => {
     const r = document.createRange();

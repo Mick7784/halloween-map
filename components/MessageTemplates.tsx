@@ -77,6 +77,7 @@ export default function MessageTemplates({ user }: { user: User }) {
         <span>Type de message</span>
         <Select
           value={kind}
+          disabled={!models}
           onChange={(e) => {
             if (
               dirty &&
