@@ -1,4 +1,4 @@
-# Ouverture publique — vérifications V0.9.6
+# Ouverture publique — vérifications de l'installation réelle
 
 Checklist d'exploitation pour Halloween Map. À réaliser sur **l'instance réelle**, avec une saison REAL correctement paramétrée, avant d'autoriser les visites publiques. Ce document ne vaut ni audit de sécurité ni validation juridique.
 
@@ -21,6 +21,8 @@ Checklist d'exploitation pour Halloween Map. À réaliser sur **l'instance réel
 
 ## 3. Carte et parcours réels
 
+- [ ] Sur S26 Ultra avec Chrome, comparer le décor en onglet et dans la PWA installée : démarrage à froid, fermeture/réouverture, arrière-plan, verrouillage/déverrouillage et perte/retour du réseau. Vérifier la version affichée dans les deux modes ; le signalement d'absence de mouvement en mode installé n'est pas considéré comme résolu sans cet essai réel.
+- [ ] Vérifier le décor statique si les capteurs sont bloqués/absents ou si la réduction des animations est activée ; aucune demande d'autorisation ne doit être ajoutée pour l'illustration.
 - [ ] Tester iPhone Safari et Android Chrome, téléphone en portrait et paysage, GPS accordé/refusé, précision dégradée, retour en arrière-plan et reprise.
 - [ ] Tester la flèche facultative d'orientation lorsqu'elle est prise en charge, sinon le marqueur GPS classique.
 - [ ] Vérifier le point sur des maisons réelles puis une maison en pause/fermée, les horaires, une collecte sans réseau et le retour du réseau.
