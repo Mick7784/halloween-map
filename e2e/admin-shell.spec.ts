@@ -281,6 +281,18 @@ test("settings location change requires impact preview and deliberate confirmati
   });
 });
 
+
+test("V0.9.7 dates defaults link to the current season while preserving navigation", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await arrange(page);
+  await page.goto("/admin");
+  const nav = page.getByRole("navigation", { name: "Navigation administration" });
+  await nav.getByRole("button", { name: "Paramètres", exact: true }).click();
+  await page.getByText("Valeurs proposées pour les futures saisons").click();
+  await page.getByRole("button", { name: "Modifier la saison en cours" }).click();
+  await expect(page.locator(".beta-page-title h1")).toHaveText("Saison");
+});
+
 test("mobile administration exposes only read-only statistics in tabs", async ({
   page,
 }) => {
