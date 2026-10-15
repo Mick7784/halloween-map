@@ -49,6 +49,7 @@ export default function HomeAtmosphere({ motionAllowed = true }: { motionAllowed
     let depthReady = false;
     let loadStarted = false;
     let depthLoading = false;
+    let retryAfterLoad = false;
     let pageActive = true;
 
     const enabled = () =>
@@ -134,10 +135,16 @@ export default function HomeAtmosphere({ motionAllowed = true }: { motionAllowed
         await plane.decode();
       })).then(() => {
         depthLoading = false;
+        retryAfterLoad = false;
         depthReady = true;
         activate();
       }).catch(() => {
         depthLoading = false;
+        if (retryAfterLoad) {
+          retryAfterLoad = false;
+          loadStarted = false;
+          baseline = null;
+        }
         // Failed or unavailable optional assets leave the static master.
         // Retry only after a resume or network recovery, never on every sample.
       });
@@ -204,12 +211,16 @@ export default function HomeAtmosphere({ motionAllowed = true }: { motionAllowed
       subscribed = false;
       art.removeAttribute("data-home-sensor");
       reset();
-      if (!depthReady && !depthLoading) loadStarted = false;
+      if (!depthReady) {
+        if (depthLoading) retryAfterLoad = true;
+        else loadStarted = false;
+      }
       reconcile();
     };
     const recoverImages = () => {
-      if (!depthReady && !depthLoading && enabled()) {
-        loadStarted = false;
+      if (!depthReady && enabled()) {
+        if (depthLoading) retryAfterLoad = true;
+        else loadStarted = false;
         // The next valid measurement re-anchors and retries optional images.
         baseline = null;
       }

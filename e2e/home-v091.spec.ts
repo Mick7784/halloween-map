@@ -263,6 +263,45 @@ test("V0.9.8 failed depth images retry on network recovery, never on every senso
   expect(await art.evaluate((node) => parseFloat(node.style.getPropertyValue("--depth-near-x")))).toBeGreaterThan(0.5);
 });
 
+for (const recovery of ["focus", "online"] as const) {
+  test(`V0.9.8 ${recovery} during a pending image survives its late failure`, async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.emulateMedia({ reducedMotion: "no-preference" });
+    await passiveSensor(page);
+    let attempts = 0;
+    let failFirst!: () => void;
+    const delayedFailure = new Promise<void>((resolve) => { failFirst = resolve; });
+    await page.route("**/art/home-v091-mid.webp", async (route) => {
+      attempts++;
+      if (attempts === 1) {
+        await delayedFailure;
+        await route.abort();
+      } else await route.continue();
+    });
+    await enter(page);
+    const art = page.locator(".home-art");
+    await expect(art).toHaveAttribute("data-home-sensor", "listening");
+    await emit(page, 35, 10);
+    await expect.poll(() => attempts).toBe(1);
+    await page.evaluate((event) => window.dispatchEvent(new Event(event)), recovery);
+    await emit(page, 35, 10);
+    expect(attempts).toBe(1); // A pending load is never duplicated.
+    const failed = page.waitForEvent("requestfailed", (request) => request.url().endsWith("/home-v091-mid.webp"));
+    failFirst();
+    await failed;
+    // No second focus/network event is needed when the pending load rejects.
+    await expect.poll(async () => {
+      await emit(page, 35, 10);
+      return attempts;
+    }).toBe(2);
+    await expect(art).toHaveAttribute("data-home-motion", "active");
+    await emit(page, 55, 40);
+    await page.clock.runFor(420);
+    expect(await art.evaluate((node) => parseFloat(node.style.getPropertyValue("--depth-near-x")))).toBeGreaterThan(0.5);
+    expect(attempts).toBe(2);
+  });
+}
+
 test("V0.9.1 desktop and mobile landscape always remain still", async ({ page }) => {
   await passiveSensor(page);
   const depthRequests: string[] = [];
