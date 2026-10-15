@@ -1,84 +1,97 @@
 <div align="center">
 
-![Logo officiel de Halloween Map](public/pwa/icon-512.png)
+<img src="artwork/branding/halloween-map-wordmark.svg" alt="Halloween Map — logo officiel by DomotiK Studio" width="680" />
 
-# Halloween Map 🎃
+<br />
 
-**La carte participative qui transforme Halloween en balade de quartier.**
+<img src="public/pwa/icon-512.png" alt="Icône officielle de l'application Halloween Map : citrouille en forme de repère de carte" width="132" />
 
-Une application web conçue pour découvrir les maisons qui participent à Halloween, préparer sa sortie et suivre sa collecte de bonbons, tout en laissant aux habitants le contrôle de leur participation.
+### Une carte. Des maisons. Une nuit d'Halloween à partager. 🎃
 
-**Un projet imaginé et développé par [DomotiK Studio](https://domotik-studio.fr/).**
+**Halloween Map** permet aux habitants de signaler leur maison et aux familles de découvrir les participations autour d'elles, pour une balade et une collecte de bonbons à leur rythme.
 
-[Découvrir Halloween Map](https://halloween-map.domotik-studio.fr/) · [Fonctionnement](#comment-ça-marche) · [Fonctionnalités](#ce-que-propose-halloween-map) · [Participer au projet](#contribuer)
+**Une application de [DomotiK Studio](https://domotik-studio.fr/)**, dans le même écosystème que **LinKs**, avec sa propre identité orange, violet et nuit d'Halloween.
+
+[Découvrir l'application](https://halloween-map.domotik-studio.fr/) · [Comment ça marche](#comment-ça-marche) · [Fonctionnalités](#les-fonctionnalités) · [Vie privée](#respect-de-la-vie-privée)
 
 </div>
 
 ---
 
-## Une Halloween Map, pour tout le quartier
+## Halloween, maison après maison
 
-Le soir d’Halloween, on connaît rarement toutes les maisons qui jouent le jeu. Halloween Map permet aux habitants de signaler leur participation et aux familles de découvrir les lieux accueillants sur une carte dédiée à leur événement.
+Halloween Map est une **carte participative et une application web installable (PWA)**. Les habitants peuvent proposer leur maison, indiquer leurs horaires et leurs activités, puis signaler une pause, une fermeture ou une rupture de bonbons.
 
-L’objectif n’est pas de transformer la fête en course ni de collecter des données de déplacement, mais de **faciliter la rencontre, la découverte des décorations et la tournée des bonbons**.
+Les visiteurs connectés découvrent les maisons disponibles pendant la période d'ouverture de la carte et préparent librement leur balade. **Il n'y a pas d'itinéraire imposé, de guidage vocal ni de rassemblement organisé par l'application.**
 
-![Ambiance nocturne de Halloween Map](public/art/home-reference-v2.webp)
+![Ambiance nocturne de Halloween Map](public/art/home-v091-shared.webp)
 
 ## Comment ça marche
 
-**Pour les habitants :** créez votre compte, proposez une maison, indiquez son emplacement, ses horaires, ses activités et son niveau de frayeur. Une équipe organisatrice examine les propositions avant publication. En cas de rupture de bonbons ou de changement de programme, la maison peut être mise en pause ou fermée.
+**🏠 Pour les habitants** — Créer un compte, inscrire sa maison, préciser les horaires, les animations éventuelles et les indications pratiques. La maison est soumise à validation. Son propriétaire peut ensuite mettre à jour sa disponibilité, y compris lorsque les bonbons sont épuisés.
 
-**Pour les visiteurs :** connectez-vous quand la saison ouvre, découvrez les maisons disponibles et préparez votre balade. Pendant la collecte, la carte suit votre position si vous l’autorisez et vous permet de marquer les visites effectuées. L’ordre reste libre : chacun choisit son aventure.
+**🍬 Pour les visiteurs** — Se connecter lorsque la carte est accessible, consulter les maisons participantes et préparer une sélection. Pendant la collecte, chacun décide de son chemin, peut utiliser sa position GPS et marquer les visites effectuées. Le récapitulatif rassemble la progression et les informations de la collecte.
 
-**Pour les organisateurs :** une administration sur ordinateur permet de suivre les participations, modérer les maisons, gérer les saisons, configurer les informations de l’événement et consulter des statistiques agrégées.
+**🛠️ Pour l'administration** — Valider les maisons, gérer les comptes et les autorisations, paramétrer les saisons et leurs dates, administrer les communications et consulter des statistiques agrégées. Le back-office complet s'utilise sur ordinateur ; sur mobile, l'administration propose uniquement des statistiques en lecture seule.
 
-## Ce que propose Halloween Map
+## Les fonctionnalités
 
-| Fonctionnalité | Dans l’application |
-|---|---|
-| 🏠 **Maisons participantes** | Carte des maisons validées avec horaires, activités et disponibilité |
-| 🍬 **Collecte libre** | Sélection de maisons, visites déclarées, distance parcourue et récapitulatif |
-| 🎭 **Frayeur adaptée** | Indication des maisons capables d’adapter leur mise en scène à l’âge ou à la sensibilité des visiteurs |
-| 🧭 **Localisation facultative** | Position GPS et indication d’orientation sur certains appareils, sans guidage vocal |
-| 🕯️ **Saisons** | Événements réels, saisons de test, dates d’ouverture et fermeture configurables |
-| 📬 **Communications** | Emails de compte, notifications et campagnes administrées avec un éditeur HTML sécurisé |
-| 📱 **Application installable** | Expérience PWA sur Android, iPhone et ordinateur |
-| 🛡️ **Modération** | Validation, refus et gestion de la visibilité et des disponibilités |
-| 📊 **Statistiques** | Indicateurs agrégés pour les organisateurs, sans historique complet du tracé GPS |
+| | Fonctionnalité | Ce qu'elle apporte |
+|:--:|---|---|
+| 🗺️ | **Carte participative** | Maisons validées, horaires, activités et disponibilité |
+| 🎭 | **Frissons adaptés** | Identification des maisons pouvant adapter leur mise en scène à l'âge ou à la sensibilité des visiteurs |
+| 🍬 | **Collecte libre** | Sélection personnelle de maisons, visites déclarées et suivi de progression |
+| 📍 | **Géolocalisation facultative** | Position sur la carte, proximité des maisons et orientation sur certains appareils compatibles |
+| 📆 | **Saisons** | Préparation, activation et ouverture de la carte selon un calendrier défini |
+| 🏠 | **Gestion des maisons** | Inscription, modération, pause, fermeture et état des bonbons |
+| ✉️ | **Communications** | Emails de compte, notifications, campagnes et éditeur HTML sécurisé |
+| 📊 | **Statistiques** | Indicateurs et données agrégées destinés à l'administration |
+| 📱 | **Application installable** | PWA sur Android, iPhone et ordinateur, sans passage obligé par une boutique d'applications |
 
-L’application est proposée comme **web app installable (PWA)** : il n’est pas nécessaire de la télécharger depuis une boutique d’applications.
+## Une identité dans l'écosystème DomotiK Studio
+
+Le logo **Halloween Map** reprend la signature des applications **DomotiK Studio** : typographie forte, une lettre-symbole immédiatement reconnaissable et un dégradé de couleur propre à chaque univers.
+
+Ici, le **O de Halloween** reprend la **citrouille en forme de repère GPS** de l'icône officielle. Le mot **Map** adopte un dégradé orange-violet, tandis que l'icône conserve son village nocturne, sa lune et sa carte.
+
+Le logo de présentation et l'icône d'application ont des rôles distincts : l'un signe le projet et ses supports ; l'autre identifie l'application sur l'écran d'accueil et dans le navigateur.
+
+<div align="center">
+
+<img src="artwork/branding/halloween-map-wordmark.svg" alt="Signature Halloween Map by DomotiK Studio" width="440" />
+
+</div>
 
 ## Respect de la vie privée
 
-La carte et les parcours sont accessibles aux personnes connectées pendant la période autorisée. Les habitants peuvent gérer leur participation et leur compte. Les données des maisons sont liées à une saison et soumises à une purge planifiée ; les comptes et quelques indicateurs agrégés sont gérés séparément.
+La carte et les fonctionnalités de collecte sont réservées aux utilisateurs connectés pendant les périodes autorisées. La géolocalisation est facultative ; Halloween Map n'est **pas** un service de suivi en direct des déplacements des visiteurs.
 
-La reprise d’une collecte peut utiliser un stockage local temporaire sur l’appareil. La position GPS sert au fonctionnement du parcours, mais l’application ne constitue pas un service de suivi en direct d’utilisateurs.
+Les données des participations sont liées aux saisons et soumises à des règles de conservation et de purge. La reprise d'une collecte peut s'appuyer sur un stockage temporaire de l'appareil. Les informations détaillées figurent dans la [politique de confidentialité](https://halloween-map.domotik-studio.fr/privacy).
 
-Les informations relatives au traitement et à la conservation des données sont détaillées dans les [pages publiques de confidentialité](https://halloween-map.domotik-studio.fr/privacy). **L’exploitant doit compléter et publier ses coordonnées et durées de conservation avant l’ouverture publique.**
+**Avant l'ouverture publique**, l'exploitant doit compléter et publier les coordonnées, mentions légales et durées de conservation correspondant à son instance.
 
-## Une expérience évolutive
+## État du projet
 
-Halloween Map privilégie une identité nocturne, élégante et lisible. L’interface publique fonctionne sur mobile et sur ordinateur ; l’administration complète est réservée aux écrans d’ordinateur, tandis que la version mobile de l’administration affiche uniquement des statistiques en lecture seule.
+Halloween Map est actuellement proposé en **Beta**. La version du code figure dans [VERSION](VERSION) et ses évolutions dans le [CHANGELOG](CHANGELOG.md).
 
-La version actuelle est indiquée dans le fichier [VERSION](VERSION). Le projet est diffusé en **Beta** ; les envois d’emails, la géolocalisation et les conditions réelles de couverture réseau doivent être vérifiés avant chaque ouverture d’événement.
+Le fonctionnement réel des emails, de la géolocalisation, des smartphones et de la sauvegarde doit être vérifié sur l'instance hébergée avant une ouverture au public.
 
-## Contribuer
+## Documentation et contribution
 
-Vous souhaitez signaler un bug, proposer une amélioration ou contribuer à la traduction et au code ? Les [issues GitHub](https://github.com/Mick7784/halloween-map/issues) et les [pull requests](https://github.com/Mick7784/halloween-map/pulls) sont ouvertes aux contributions pertinentes.
-
-Pour les personnes qui hébergent ou maintiennent une instance, les informations détaillées sont séparées de cette présentation :
+Pour les personnes souhaitant installer ou maintenir Halloween Map :
 
 - [Installation, déploiement et exploitation](docs/OPERATIONS.md)
-- [Saisons et fonctionnement métier](docs/seasons.md)
-- [Préparation de l’ouverture publique](docs/GO-LIVE.md)
+- [Saisons et règles de fonctionnement](docs/seasons.md)
+- [Checklist avant l'ouverture publique](docs/GO-LIVE.md)
 - [Historique des versions](CHANGELOG.md)
+- [Signaler un problème ou proposer une amélioration](https://github.com/Mick7784/halloween-map/issues)
 
 ---
 
 <div align="center">
 
-**Halloween Map — Une nuit à partager.** 🎃
+**Halloween Map — Une nuit à partager.**
 
-*Créé avec passion par DomotiK Studio.*
+*Une création DomotiK Studio.*
 
 </div>
