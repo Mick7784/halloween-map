@@ -35,7 +35,7 @@ export async function reportCollection(
         p.id,
       ])
     ).rows[0];
-    if (!s || s.purged_at || s.archived || (s.is_test && !adminAccount(user)))
+    if (!s || s.is_test || s.purged_at || s.archived)
       throw new HttpError(409, "La saison n’est plus accessible");
     const accessible =
       i?.active_season_id === s.id &&
