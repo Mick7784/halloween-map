@@ -135,6 +135,6 @@ test("V0.9 no season, closed and historic TEST never invent a fictitious opening
     season: { ...guestState.season, is_test: true, opens_at: "2000-01-01T00:00:00Z", closes_at: "2201-01-01T00:00:00Z" },
   } }));
   await page.reload();
-  await expect(page.locator(".home-preview-label")).toHaveText("Prévisualisation TEST");
+  await expect(page.locator(".home-preview-label")).toHaveCount(0);
   await expect(page.locator(".home-clock")).toHaveCount(0);
 });

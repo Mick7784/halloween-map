@@ -47,6 +47,7 @@ export type PublicState = {
     | (Pick<Season, "id" | "year" | "registrations_open"> & {
         is_test?: boolean;
         opens_at: string;
+        registrations_open_at?: string;
         closes_at: string;
         purge_at: string;
         route_end_at?: string;

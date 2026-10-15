@@ -183,7 +183,10 @@ export default function Admin({
     return () => media.removeEventListener("change", update);
   }, []);
   useEffect(() => {
-    if (mobileView && has(user, "stats.read")) setSection("statistics");
+    if (mobileView) {
+      if (has(user, "stats.read")) setSection("statistics");
+      else if (has(user, "participants.read")) setSection("houses");
+    }
   }, [mobileView, user]);
   const seasonStorageKey =
     "halloween.admin.season." + state.instance?.id + "." + user.id;
@@ -342,10 +345,13 @@ export default function Admin({
     await refresh();
   }
   async function startCreate() {
+    const targetSeasonId = activeSeasonId || seasonId;
+    currentSeason.current = targetSeasonId;
+    setSeasonId(targetSeasonId);
     const available = await api<ManagedUser[]>(
-      "admin/eligibleOwners?seasonId=" + seasonId,
+      "admin/eligibleOwners?seasonId=" + targetSeasonId,
     );
-    if (currentSeason.current !== seasonId) return;
+    if (currentSeason.current !== targetSeasonId) return;
     setOwners(available);
     setOwnerId("");
     setOwnerSearch("");
@@ -920,7 +926,22 @@ export default function Admin({
   if (mobileView) {
     return (
       <main className="admin-beta admin-mobile-view" data-theme={theme}>
-        {has(user, "stats.read") ? (
+        <nav aria-label="Administration mobile">
+          {has(user, "stats.read") && <Button onClick={() => setSection("statistics")}>Statistiques</Button>}
+          {has(user, "participants.read") && <Button onClick={() => setSection("houses")}>Gérer les maisons</Button>}
+        </nav>
+        {section === "houses" && has(user, "participants.read") ? (
+          <section className="beta-card">
+            <h1>Maisons</h1>
+            <label>Saison du back-office
+              <Select value={seasonId} onChange={(event) => setSeasonId(event.target.value)}>
+                {seasons.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </Select>
+            </label>
+            {error && <Notice error={error} />}
+            {table(list)}
+          </section>
+        ) : has(user, "stats.read") ? (
           <>
             <AdminMobileStats
               data={loadedView === viewKey ? statistics : null}

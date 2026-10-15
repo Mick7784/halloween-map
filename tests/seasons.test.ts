@@ -71,6 +71,10 @@ const acceptance = {
 async function testSeason(name = "Essais") {
   return (await legacyTestSeason(admin.instance_id, name)) as unknown as Season;
 }
+async function preparedSeason(name='Préparée') {
+ await service.adminAction(admin,{action:'season',payload:{...realDefinition,name}});
+ return (await db().query('SELECT * FROM seasons WHERE name=$1',[name])).rows[0] as unknown as Season;
+}
 async function activate(s: Season, u = admin) {
   return service.adminAction(u, {
     action: "activateSeason",
@@ -211,173 +215,69 @@ for (const mode of ["ABSOLUTE", "RELATIVE"] as const) {
   });
 }
 
-it("rejects new TEST through creation, setup or conversion while preserving historical TEST", async () => {
-  const historical = await testSeason("Historique à conserver");
-  await expect(
-    service.adminAction(admin, {
-      action: "season",
-      payload: { name: "Nouvelle TEST", is_test: true },
-    }),
-  ).rejects.toMatchObject({ status: 400 });
-  await expect(
-    service.adminAction(admin, {
-      action: "season",
-      id: real.id,
-      payload: { ...realDefinition, is_test: true },
-    }),
-  ).rejects.toMatchObject({ status: 400 });
-  await expect(
-    service.setup({
-      token: "season-test-key",
-      instance: {
-        public_name: "Test",
-        territory: "Rennes",
-        postal_code: "35000",
-        country: "France",
-        timezone: "Europe/Paris",
-        latitude: 48.1,
-        longitude: -1.67,
-        zoom: 14,
-      },
-      admin: {
-        display_name: "Admin",
-        email: "other@example.invalid",
-        password: "test-password-1234",
-      },
-      season: { ...realDefinition, is_test: true },
-    }),
-  ).rejects.toMatchObject({ status: 400 });
-  await service.adminAction(admin, {
-    action: "season",
-    id: historical.id,
-    payload: { name: "Historique renommé", is_test: true },
-  });
-  expect(
-    (
-      await db().query("SELECT name,is_test FROM seasons WHERE id=$1", [
-        historical.id,
-      ])
-    ).rows[0],
-  ).toMatchObject({ name: "Historique renommé", is_test: true });
-  expect((await db().query("SELECT id FROM seasons")).rows).toHaveLength(2);
+it("rejects TEST creation, conversion, activation and editing while retaining historical rows", async () => {
+ const old=await testSeason();
+ for (const input of [
+  {action:'season',payload:{...realDefinition,is_test:true}},
+  {action:'season',id:real.id,payload:{...realDefinition,is_test:true}},
+  {action:'season',id:old.id,payload:{...realDefinition}},
+  {action:'activateSeason',id:old.id,payload:'ACTIVER'},
+ ]) await expect(service.adminAction(admin,input)).rejects.toThrow();
+ expect((await db().query('SELECT id FROM seasons')).rows).toHaveLength(2);
+ expect((await service.adminRead(admin,'seasons') as Season[]).map(s=>s.id)).toEqual([real.id]);
+ await expect(db().query('UPDATE instances SET active_season_id=$1',[old.id])).rejects.toThrow();
 });
 
-it("uses one pointer for REAL/TEST, serializes competing activations, and rejects ADMIN critical actions", async () => {
-  const a = await testSeason("A"),
-    b = await testSeason("B");
-  expect((await service.instance())?.active_season_id).toBe(real.id);
-  expect(seasonLabel(a)).toBe("DÉSACTIVÉE");
-  await Promise.all([activate(a), activate(b)]);
-  expect([a.id, b.id]).toContain((await service.instance())?.active_season_id);
-  const rows = (await service.adminRead(admin, "seasons")) as Season[];
-  expect(rows.filter((s) => s.active)).toHaveLength(1);
-  await activate(real);
-  expect((await service.instance())?.active_season_id).toBe(real.id);
-  await expect(
-    activate(a, { ...admin, role_name: "ADMIN" }),
-  ).rejects.toMatchObject({ status: 403 });
-  await expect(
-    service.adminAction(
-      { ...admin, role_name: "ADMIN" },
-      { action: "season", payload: { name: "Forbidden", is_test: true } },
-    ),
-  ).rejects.toMatchObject({ status: 403 });
-  await expect(
-    service.deleteSeason(admin, real.id, real.name),
-  ).rejects.toMatchObject({ status: 409 });
-  await service.adminAction(admin, {
-    action: "deactivateSeason",
-    id: real.id,
-    payload: "DÉSACTIVER",
-  });
-  expect((await service.instance())?.active_season_id).toBeNull();
-  const globalUser = await directAccount("Sans saison active");
-  expect(globalUser.account_status).toBe("ACTIVE");
-  expect(globalUser.email).toMatch(/^test-[a-f0-9]{32}@example[.]invalid$/);
-  const waiting = await service.publicState(undefined, ordinary);
-  expect(waiting.season?.id).toBe(real.id);
-  expect(waiting.state).toBe("PREPARATION");
-  expect(waiting.mapAccessible).toBe(false);
-  expect(waiting.houses).toEqual([]);
-  const registration = await service.createParticipation(ordinary, {
-    house: houseDefinition,
-    acceptance,
-  });
-  expect(registration).toMatchObject({ ok: true });
-  expect((await service.ownHouse(ordinary))?.season_id).toBe(real.id);
-  expect(
-    ((await service.adminRead(admin, "dashboard")) as { season: unknown })
-      .season,
-  ).toBeNull();
+it("serializes real activations, preserves global accounts and denies registration without activation", async () => {
+ const a=await preparedSeason('A'),b=await preparedSeason('B');
+ await Promise.all([activate(a),activate(b)]);
+ expect([a.id,b.id]).toContain((await service.instance())?.active_season_id);
+ expect((await service.adminRead(admin,'seasons') as Season[]).filter(s=>s.active)).toHaveLength(1);
+ await expect(activate(real,{...admin,role_name:'ADMIN'})).rejects.toMatchObject({status:403});
+ await activate(real);
+ await service.adminAction(admin,{action:'deactivateSeason',id:real.id,payload:'DÉSACTIVER'});
+ expect((await directAccount('Permanent')).account_status).toBe('ACTIVE');
+ for(const u of [null,ordinary,admin,{...admin,role_name:'ADMIN'}]) {
+  const state=await service.publicState(undefined,u);
+  expect(state.season).toBeNull(); expect(state.mapAccessible).toBe(false);
+  expect(state.houses).toEqual([]); expect(state.routeCandidates).toEqual([]);
+ }
+ await expect(service.createParticipation(ordinary,{house:houseDefinition,acceptance})).rejects.toMatchObject({status:403});
 });
-it("allows staff to prepare a real season with houses before public activation", async () => {
-  await service.adminAction(admin, {
-    action: "deactivateSeason",
-    id: real.id,
-    payload: "DÉSACTIVER",
-  });
-  const created = await createHouse(ordinary, real);
-  expect(created.review_status).toBe("VALIDATED");
-  const staff = await service.publicState(undefined, {
-    ...admin,
-    role_name: "ADMIN",
-  });
-  expect(staff.mapAccessible).toBe(true);
-  expect(staff.houses?.map((h) => h.id)).toContain(created.id);
-  const visitor = await service.publicState(undefined, ordinary);
-  expect(visitor.mapAccessible).toBe(false);
-  expect(visitor.houses).toEqual([]);
-  const lateParticipant = await directAccount("Inscription avant activation");
-  const registration = await service.createParticipation(lateParticipant, {
-    house: houseDefinition,
-    acceptance,
-  });
-  expect(registration).toMatchObject({ ok: true });
-  expect((await service.ownHouse(lateParticipant))?.season_id).toBe(real.id);
-  expect(
-    (await service.publicState(undefined, lateParticipant)).houses,
-  ).toEqual([]);
+
+it("prepares houses before activation without exposing their data or allowing public registration", async () => {
+ await service.adminAction(admin,{action:'deactivateSeason',id:real.id,payload:'DÉSACTIVER'});
+ const h=await createHouse(ordinary,real);
+ expect(h.season_id).toBe(real.id); expect(h.review_status).toBe('VALIDATED');
+ for(const u of [null,ordinary,admin,{...admin,role_name:'ADMIN'}]) {
+  const state=await service.publicState(undefined,u);
+  expect(state.mapAccessible).toBe(false);expect(state.houses).toEqual([]);
+  expect(JSON.stringify(state)).not.toContain(h.address);
+ }
+ const late=await directAccount('Sans activation');
+ await expect(service.createParticipation(late,{house:houseDefinition,acceptance})).rejects.toMatchObject({status:403});
 });
-it("keeps admin preview independent of public activation and closes public access by time", async () => {
-  const staff = { ...admin, role_name: "ADMIN" };
-  await service.adminAction(admin, {
-    action: "deactivateSeason",
-    id: real.id,
-    payload: "DÉSACTIVER",
-  });
-  for (const manager of [admin, staff]) {
-    const preview = await service.publicState(undefined, manager);
-    expect(preview.season?.id).toBe(real.id);
-    expect(preview.mapAccessible).toBe(true);
-    expect(preview.collectionAccessible).toBe(true);
-    expect(preview.publicMapOpen).toBe(false);
+
+it("checks every public boundary for USER, ADMIN, SUPER_ADMIN and anonymous visitors", async () => {
+ await createHouse(ordinary,real);
+ for(const time of [
+  '2026-09-30T23:59:59.999Z','2026-10-01T00:00Z',
+  '2026-10-31T15:59:59.999Z','2026-10-31T16:00Z',
+  '2026-10-31T22:59:59.999Z','2026-10-31T23:00Z','2026-11-01T12:00Z',
+ ]) {
+  vi.setSystemTime(new Date(time));
+  const publicOpen=+new Date(time)>=+new Date(real.opens_at)&&+new Date(time)<+new Date(real.closes_at);
+  for(const u of [null,ordinary,{...admin,role_name:'ADMIN'},admin]) {
+   const state=await service.publicState(undefined,u);
+   expect(state.mapAccessible).toBe(publicOpen||u===admin);
+   expect(state.publicMapOpen).toBe(publicOpen);
+   expect(state.season?.registrations_open).toBe(+new Date(time)>=+new Date(real.registrations_open_at)&&+new Date(time)<+new Date(real.closes_at));
+   if(!publicOpen&&u!==admin) {expect(state.houses).toEqual([]);expect(state.routeCandidates).toEqual([]);}
   }
-  let member = await service.publicState(undefined, ordinary);
-  expect(member.state).toBe("PREPARATION");
-  expect(member.mapAccessible).toBe(false);
-  expect(member.houses).toEqual([]);
-  await activate(real);
-  member = await service.publicState(undefined, ordinary);
-  expect(member.state).toBe("COUNTDOWN");
-  expect(member.mapAccessible).toBe(false);
-  expect((await service.publicState(undefined, staff)).mapAccessible).toBe(
-    true,
-  );
-  vi.setSystemTime(new Date(real.opens_at));
-  member = await service.publicState(undefined, ordinary);
-  expect(member.state).toBe("MAP_OPEN");
-  expect(member.publicMapOpen).toBe(true);
-  expect(member.mapAccessible).toBe(true);
-  vi.setSystemTime(new Date(real.closes_at));
-  member = await service.publicState(undefined, ordinary);
-  expect(member.mapAccessible).toBe(false);
-  expect(member.state).toBe("CLOSED");
-  const archived = await service.publicState(undefined, staff);
-  expect(archived.mapAccessible).toBe(true);
-  expect(archived.collectionAccessible).toBe(false);
-  expect(archived.state).toBe("CLOSED");
-  expect(archived.routeCandidates).toEqual([]);
+  expect((await service.instance())?.active_season_id).toBe(real.id);
+ }
 });
+
 it("requires activation even after the opening time and withholds every house payload until then", async () => {
   const house = await createHouse(ordinary, real);
   await service.adminAction(admin, {
@@ -403,129 +303,37 @@ it("requires activation even after the opening time and withholds every house pa
   expect(opened.houses?.map((h) => h.id)).toContain(house.id);
 });
 
-it("exposes only the next REAL opening while preserving legacy TEST preview and public isolation", async () => {
-  const legacy = await testSeason();
-  await activate(legacy);
-  const owner = await directAccount();
-  const house = await createHouse(owner, legacy);
-  for (const user of [
-    null,
-    ordinary,
-    admin,
-    { ...admin, role_name: "ADMIN" },
-  ]) {
-    const state = await service.publicState(undefined, user);
-    expect(new Date(String(state.nextOpening)).toISOString()).toBe(
-      new Date(real.opens_at).toISOString(),
-    );
-    expect(state.publicMapOpen).toBe(false);
-    if (user?.permissions.includes("admin.access")) {
-      expect(state.season?.id).toBe(legacy.id);
-      expect(state.mapAccessible).toBe(true);
-      expect(state.houses?.map((h) => h.id)).toContain(house.id);
-    } else {
-      expect(state.season).toBeNull();
-      expect(state.mapAccessible).toBe(false);
-      expect(state.houses).toEqual([]);
-      expect(state.routeCandidates).toEqual([]);
-      expect(JSON.stringify(state)).not.toContain(house.address);
-    }
-  }
-  expect(
-    (
-      await db().query("SELECT active_season_id FROM instances WHERE id=$1", [
-        admin.instance_id,
-      ])
-    ).rows[0].active_season_id,
-  ).toBe(legacy.id);
+it("never exposes or activates historical TEST rows for any role", async () => {
+ const legacy=await testSeason();
+ await expect(activate(legacy)).rejects.toMatchObject({status:400});
+ for(const u of [null,ordinary,admin,{...admin,role_name:'ADMIN'}]) {
+  const state=await service.publicState(undefined,u);
+  expect(state.season?.id).toBe(real.id);
+  expect(JSON.stringify(state)).not.toContain(legacy.id);
+ }
 });
-it("does not leak TEST to USER, while ADMIN/Super Admin use the same houses, route and availability APIs", async () => {
-  const s = await testSeason();
-  await activate(s);
-  const owner = await directAccount();
-  const h = await createHouse(owner, s);
-  expect(h.review_status).toBe("VALIDATED");
-  for (const u of [null, ordinary, owner]) {
-    const publicState = await service.publicState(undefined, u);
-    expect(publicState.season).toBeNull();
-    expect(publicState.houses).toEqual([]);
-    expect(publicState.routeCandidates).toEqual([]);
-    expect(publicState.mapAccessible).toBe(false);
-    expect(JSON.stringify(publicState)).not.toContain(h.address);
+
+it("allows only SUPER_ADMIN routes before and after public hours without inflating event totals", async () => {
+ const h=await createHouse(ordinary,real);
+ const input={acceptance,start:'2026-10-31T17:00:00.000Z',end:'2026-10-31T19:00:00.000Z',origin:{latitude:48.1,longitude:-1.67},activities:[]};
+ for(const time of ['2026-10-07T12:00Z','2026-11-01T12:00Z']) {
+  vi.setSystemTime(new Date(time));const now=new Date();
+  for(const u of [ordinary,{...admin,role_name:'ADMIN'}]) {
+   await expect(service.route(input,{now},u)).rejects.toMatchObject({status:403});
+   await expect(service.discoveryDistances(u,{origin:input.origin},{now})).rejects.toMatchObject({status:403});
   }
-  expect(await service.ownHouse(owner)).toBeNull();
-  await expect(
-    service.createParticipation(owner, { house: houseDefinition, acceptance }),
-  ).rejects.toMatchObject({ status: 403 });
-  vi.setSystemTime(new Date(houseDefinition.starts_at));
-  const now = new Date(),
-    input = {
-      acceptance,
-      start: now.toISOString(),
-      end: new Date(+now + 3600000).toISOString(),
-      origin: { latitude: 48.1, longitude: -1.67 },
-      activities: [],
-    };
-  await expect(service.route(input, { now }, ordinary)).rejects.toMatchObject({
-    status: 403,
-  });
-  for (const u of [admin, { ...admin, role_name: "ADMIN" }]) {
-    const state = await service.publicState(undefined, u);
-    expect(state.mapAccessible).toBe(true);
-    expect(state.houses?.map((h) => h.id)).toEqual([h.id]);
-    const route = await service.route(input, { now }, u);
-    expect(route.stops).toHaveLength(1);
-    expect(
-      (
-        await service.routeAvailability(
-          u,
-          {
-            instanceId: admin.instance_id,
-            seasonId: s.id,
-            mode: "COLLECTION",
-            end: input.end,
-            activities: [],
-            steps: [
-              { id: h.id, arrival: input.start, departure: input.end, key: "" },
-            ],
-          },
-          { now },
-        )
-      ).valid,
-    ).toBe(true);
-  }
-  await service.adminAction(admin, {
-    action: "houseActivity",
-    id: h.id,
-    seasonId: s.id,
-    payload: { action: "end" },
-  });
-  expect((await service.publicState(undefined, admin)).houses).toEqual([]);
-  await service.adminAction(admin, {
-    action: "houseActivity",
-    id: h.id,
-    seasonId: s.id,
-    payload: { action: "resume" },
-  });
-  await service.adminAction(admin, {
-    action: "houseActivity",
-    id: h.id,
-    seasonId: s.id,
-    payload: { action: "candy", available: false },
-  });
-  expect(
-    (await service.publicState(undefined, admin)).houses?.[0].activities,
-  ).toEqual(["DECORATION"]);
-  await service.adminAction(admin, {
-    action: "visibility",
-    id: h.id,
-    seasonId: s.id,
-    payload: "HIDDEN",
-  });
-  expect((await service.publicState(undefined, admin)).houses).toEqual([]);
+  const result=await service.route(input,{now},admin);expect(result.stops.map(s=>s.house.id)).toEqual([h.id]);
+  expect((await service.routeAvailability(admin,{instanceId:admin.instance_id,seasonId:real.id,mode:'COLLECTION',end:input.end,activities:[],steps:[{id:h.id,arrival:input.start,departure:input.end,key:''}]},{now})).valid).toBe(true);
+  await reportCollection(admin,{id:randomUUID(),seasonId:real.id,event:'finish',planned:1,visited:1},await createSession(admin.id));
+ }
+ const row=(await db().query('SELECT routes_count,stats FROM seasons WHERE id=$1',[real.id])).rows[0];
+ expect(row.routes_count).toBe(0);expect((row.stats as Record<string,number>).collections_started).toBeUndefined();
+ await service.adminAction(admin,{action:'deactivateSeason',id:real.id,payload:'DÉSACTIVER'});
+ await expect(service.route(input,{now:new Date()},admin)).rejects.toMatchObject({status:403});
 });
-it("keeps accounts/passwords/session on TEST deletion and reuses one account in different seasons", async () => {
-  const s = await testSeason();
+
+it("keeps accounts/passwords/session on edition deletion and reuses one account in different seasons", async () => {
+  const s = await preparedSeason();
   await activate(s);
   const owner = await directAccount();
   expect(owner.email).toMatch(/^test-[a-f0-9]{32}@example\.invalid$/);
@@ -553,6 +361,7 @@ it("keeps accounts/passwords/session on TEST deletion and reuses one account in 
   ).toHaveLength(2);
   // Staff may now prepare houses on inactive seasons without exposing them publicly.
   const another = await directAccount("Other");
+  await service.adminAction(admin,{action:'deactivateSeason',id:real.id,payload:'DÉSACTIVER'});
   const inactiveHouse = await createHouse(another, s);
   expect(inactiveHouse.season_id).toBe(s.id);
   expect((await service.publicState(undefined, ordinary)).houses).toEqual([]);
@@ -599,7 +408,7 @@ it("keeps several planned REAL seasons inactive and dashboard tied to active rat
     });
   const rows = (await service.adminRead(admin, "seasons")) as Season[];
   expect(rows.filter((s) => seasonLabel(s) === "PLANIFIÉE")).toHaveLength(2);
-  const s = await testSeason();
+  const s = await preparedSeason();
   await activate(s);
   await createHouse(ordinary, s);
   const d = (await service.adminRead(
@@ -678,7 +487,7 @@ it("enforces REAL opening/closing, takes anonymous snapshot, purges details, fre
   expect((await service.publicState(undefined, ordinary)).mapAccessible).toBe(
     false,
   );
-  expect((await service.instance())?.active_season_id).toBeNull();
+  expect((await service.instance())?.active_season_id).toBe(real.id);
   const frozen = (
     await db().query("SELECT * FROM seasons WHERE id=$1", [real.id])
   ).rows[0];
@@ -688,23 +497,8 @@ it("enforces REAL opening/closing, takes anonymous snapshot, purges details, fre
     participants: 1,
     ...(live as object),
   });
-  for (const action of ["reviewHouse", "visibility", "deleteHouse"])
-    await expect(
-      service.adminAction(admin, {
-        action,
-        id: h.id,
-        seasonId: real.id,
-        payload: action === "visibility" ? "HIDDEN" : { status: "REFUSED" },
-      }),
-    ).rejects.toMatchObject({ status: 403 });
-  await expect(activate(real)).rejects.toMatchObject({ status: 400 });
-  await expect(
-    service.adminAction(admin, {
-      action: "season",
-      id: real.id,
-      payload: realDefinition,
-    }),
-  ).rejects.toMatchObject({ status: 400 });
+  await service.adminAction(admin,{action:'reviewHouse',id:h.id,seasonId:real.id,payload:{status:'VALIDATED'}});
+  await activate(real);
   vi.setSystemTime(new Date(real.purge_at));
   await service.tick();
   await service.tick();
@@ -744,44 +538,18 @@ it("enforces REAL opening/closing, takes anonymous snapshot, purges details, fre
     (await db().query("SELECT * FROM seasons WHERE id=$1", [real.id])).rows,
   ).toEqual([]);
 });
-it("does not auto-purge TEST, blocks USER reports and deduplicates across session renewal", async () => {
-  const s = await testSeason();
-  await activate(s);
-  const id = randomUUID(),
-    session = await createSession(admin.id),
-    report = { id, seasonId: s.id, event: "start", planned: 2 };
-  await reportCollection(admin, report, session);
-  await expect(
-    reportCollection(ordinary, report, await createSession(ordinary.id)),
-  ).rejects.toMatchObject({ status: 409 });
-  await reportCollection(
-    admin,
-    { ...report, event: "finish" },
-    await createSession(admin.id),
-  );
-  expect(
-    (await db().query("SELECT stats FROM seasons WHERE id=$1", [s.id])).rows[0]
-      .stats,
-  ).toMatchObject({ collections_started: 1, collections_finished: 1 });
-  await db().query(
-    "UPDATE seasons SET purge_at='2026-10-06T00:00Z',closes_at='2026-10-05T00:00Z' WHERE id=$1",
-    [s.id],
-  );
-  await service.tick();
-  expect((await service.publicState(undefined, admin)).mapAccessible).toBe(
-    true,
-  );
-  expect((await service.instance())?.active_season_id).toBe(s.id);
-  await service.adminAction(admin, {
-    action: "deactivateSeason",
-    id: s.id,
-    payload: "DÉSACTIVER",
-  });
-  await service.deleteSeason(admin, s.id, s.name);
-  expect((await db().query("SELECT * FROM collection_reports")).rows).toEqual(
-    [],
-  );
+it("retains historical TEST rows inert and deduplicates public collection reports across session renewal", async () => {
+ const old=await testSeason();
+ await expect(reportCollection(admin,{id:randomUUID(),seasonId:old.id,event:'start',planned:2},await createSession(admin.id))).rejects.toMatchObject({status:409});
+ vi.setSystemTime(new Date('2026-10-31T18:00Z'));
+ const report={id:randomUUID(),seasonId:real.id,event:'start',planned:2};
+ await reportCollection(ordinary,report,await createSession(ordinary.id));
+ await reportCollection(ordinary,{...report,event:'finish'},await createSession(ordinary.id));
+ await reportCollection(ordinary,{...report,event:'finish'},await createSession(ordinary.id));
+ expect((await db().query('SELECT stats FROM seasons WHERE id=$1',[real.id])).rows[0].stats).toMatchObject({collections_started:1,collections_finished:1});
+ await service.tick();expect((await db().query('SELECT purged_at FROM seasons WHERE id=$1',[old.id])).rows[0].purged_at).toBeNull();
 });
+
 it("accepts a pending anonymous completion after REAL closing, but never after privacy purge", async () => {
   vi.setSystemTime(new Date("2026-10-31T18:00Z"));
   const session = await createSession(ordinary.id),
@@ -883,7 +651,7 @@ it("upgrades V0.6.4 without losing identities/houses or changing REAL active; mi
 });
 
 it("statistics follows the consulted season, including inactive data and empty REAL, without fabricated collection totals", async () => {
-  const s = await testSeason();
+  const s = await preparedSeason();
   await activate(s);
   await createHouse(ordinary, s);
   const expected = {
@@ -1047,49 +815,12 @@ it("resubmits an owner-edited refusal while admin edits preserve moderation", as
     ).rows[0].review_status,
   ).toBe("VALIDATED");
 });
-it("preserves entered TEST hours on creation and editing without changing REAL bounds", async () => {
-  const s = await testSeason();
-  await activate(s);
-  const house = await createHouse(ordinary, s);
-  expect(new Date(String(house.starts_at)).toISOString()).toBe(
-    "2026-10-31T17:00:00.000Z",
-  );
-  expect(new Date(String(house.ends_at)).toISOString()).toBe(
-    "2026-10-31T22:00:00.000Z",
-  );
-  await service.updateHouse(
-    admin,
-    String(house.id),
-    {
-      ...houseDefinition,
-      starts_at: "2026-10-07T15:00Z",
-      ends_at: "2026-10-07T16:00Z",
-    },
-    true,
-  );
-  expect(
-    new Date(
-      String(
-        (
-          await db().query("SELECT ends_at FROM participations WHERE id=$1", [
-            house.id,
-          ])
-        ).rows[0].ends_at,
-      ),
-    ).toISOString(),
-  ).toBe("2026-10-07T16:00:00.000Z");
-  await activate(real);
-  await expect(
-    service.createParticipation(ordinary, {
-      house: {
-        ...houseDefinition,
-        starts_at: "2026-10-07T15:00Z",
-        ends_at: "2026-10-07T16:00Z",
-      },
-      acceptance,
-    }),
-  ).rejects.toMatchObject({ status: 400 });
+it("enforces real house date bounds for both public and BO creation/editing", async () => {
+ const h=await createHouse(ordinary,real);
+ await expect(service.updateHouse(admin,String(h.id),{...houseDefinition,starts_at:'2026-10-07T15:00Z',ends_at:'2026-10-07T16:00Z'},true)).rejects.toMatchObject({status:400});
+ expect(new Date(String((await db().query('SELECT starts_at FROM participations WHERE id=$1',[h.id])).rows[0].starts_at)).toISOString()).toBe('2026-10-31T17:00:00.000Z');
 });
+
 it("provides explicit season/global/all audit scopes without crossing instances", async () => {
   const s = await testSeason();
   await service.audit(db(), admin.instance_id, admin, "global.fixture");
@@ -1225,7 +956,7 @@ it("blocks TEST campaign creation, test and retry; cancels legacy queued TEST me
     { status: "CANCELLED" },
     { status: "CANCELLED" },
   ]);
-  expect((await campaignAdmin(admin, s.id)).campaigns).toHaveLength(1);
+  await expect(campaignAdmin(admin, s.id)).rejects.toMatchObject({status:404});
   expect((await campaignAdmin(admin, real.id)).campaigns).toHaveLength(0);
   await expect(campaignAdmin(ordinary, s.id)).rejects.toMatchObject({
     status: 403,
@@ -1267,3 +998,24 @@ const adminUserAction = (user: User | null, input: unknown) =>
     current_password: "test-password-1234",
     ...(input as Record<string, unknown>),
   });
+
+it("attaches BO creations to active season, then requires context among multiple waiting editions",async()=>{
+ const next=await preparedSeason();await createHouse(ordinary,next);expect((await db().query('SELECT season_id FROM participations WHERE user_id=$1',[ordinary.id])).rows[0].season_id).toBe(real.id);
+ await service.adminAction(admin,{action:'deactivateSeason',id:real.id,payload:'DÉSACTIVER'});
+ const owner=await directAccount('Contexte');await createHouse(owner,next);
+ expect((await db().query('SELECT season_id FROM participations WHERE user_id=$1',[owner.id])).rows[0].season_id).toBe(next.id);
+ await expect(service.adminAction(admin,{action:'createHouse',payload:{userId:admin.id,participation:{house:houseDefinition,acceptance}}})).rejects.toMatchObject({status:409});
+});
+it("refreshes final anonymous statistics at purge after late BO changes and keeps accounts/history",async()=>{
+ const h=await createHouse(ordinary,real);vi.setSystemTime(new Date(real.closes_at));await service.tick();
+ await service.adminAction(admin,{action:'reviewHouse',seasonId:real.id,id:h.id,payload:{status:'REFUSED',reason_code:'ADDRESS'}});
+ const late=await directAccount('Après clôture');await createHouse(late,real);
+ await service.adminAction(admin,{action:'visibility',seasonId:real.id,id:h.id,payload:'HIDDEN'});
+ expect((await service.adminRead(admin,'statistics',real.id) as {stats:Record<string,number>}).stats).toMatchObject({houses:2,approved:1,refused:1});
+ vi.setSystemTime(new Date(real.purge_at));await service.tick();await service.tick();
+ const row=(await db().query('SELECT * FROM seasons WHERE id=$1',[real.id])).rows[0];
+ expect(row.stats).toMatchObject({houses:2,approved:1,refused:1,participants:2,candy:2,decoration:2});
+ expect((await db().query('SELECT id FROM users WHERE id=$1',[ordinary.id])).rows).toHaveLength(1);
+ expect((await db().query('SELECT year FROM participation_history WHERE user_id=$1',[ordinary.id])).rows).toEqual([{year:2026}]);
+ await expect(service.adminAction(admin,{action:'visibility',seasonId:real.id,id:h.id,payload:'VISIBLE'})).rejects.toMatchObject({status:403});
+});

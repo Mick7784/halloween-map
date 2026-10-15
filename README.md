@@ -14,7 +14,7 @@
 
 **Halloween Map**, une application de **[DomotiK Studio](https://domotik-studio.fr/)** dans le même écosystème que LinKs, est une **carte participative et une application web installable (PWA)**. Les habitants peuvent proposer leur maison, indiquer leurs horaires et leurs activités, puis signaler une pause, une fermeture ou une rupture de bonbons.
 
-Les visiteurs connectés découvrent les maisons disponibles pendant la période d'ouverture de la carte et préparent librement leur balade. **Il n'y a pas d'itinéraire imposé, de guidage vocal ni de rassemblement organisé par l'application.**
+Les visiteurs découvrent les maisons disponibles pendant la période d'ouverture de la carte ; un compte permet de préparer librement sa balade. **Il n'y a pas d'itinéraire imposé, de guidage vocal ni de rassemblement organisé par l'application.**
 
 ![Ambiance nocturne de Halloween Map](public/art/home-v091-shared.webp)
 
@@ -24,7 +24,11 @@ Les visiteurs connectés découvrent les maisons disponibles pendant la période
 
 **🍬 Pour les visiteurs** — Se connecter lorsque la carte est accessible, consulter les maisons participantes et préparer une sélection. Pendant la collecte, chacun décide de son chemin, peut utiliser sa position GPS et marquer les visites effectuées. Le récapitulatif rassemble la progression et les informations de la collecte.
 
-**🛠️ Pour l'administration** — Valider les maisons, gérer les comptes et les autorisations, paramétrer les saisons et leurs dates, administrer les communications et consulter des statistiques agrégées. Le back-office complet s'utilise sur ordinateur ; sur mobile, l'administration propose uniquement des statistiques en lecture seule.
+**🛠️ Pour l'administration** — Valider les maisons, gérer les comptes et les autorisations, paramétrer les saisons et leurs dates, administrer les communications et consulter des statistiques agrégées. Le back-office complet s'utilise sur ordinateur ; sur mobile, les statistiques et les actions de gestion des maisons sont accessibles selon les permissions.
+
+Une seule saison est activée manuellement. Sans saison active, les comptes et la connexion restent disponibles, mais aucune inscription de maison ni carte publique n'est accessible. L'inscription publique exige aussi l'ouverture de sa période. Le Super Admin peut préparer la vraie carte et les parcours hors horaires publics tant que la saison reste active ; les autres comptes attendent les horaires officiels.
+
+Les maisons créées depuis l'administration sont rattachées à la saison active, ou à une saison en attente explicitement consultée en l'absence d'active. La clôture publique ne désactive pas la saison. À la purge, les détails personnels saisonniers sont supprimés et les statistiques finales anonymes conservées, avec les comptes et les années de participation validée selon la politique de confidentialité. Les anciennes données TEST sont conservées pour compatibilité, sans activation ni sélection dans l'application.
 
 ## Les fonctionnalités
 

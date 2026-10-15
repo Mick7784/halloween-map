@@ -102,17 +102,15 @@ export default function Application({
     };
   }, [refresh]);
   useEffect(() => {
-    // Revalidate the actual opening moment; the server is authoritative.
-    if (
-      !state ||
-      state.publicMapOpen ||
-      ["CLOSED", "ARCHIVED"].includes(state.state ?? "")
-    )
-      return;
-    const opening = state.season?.opens_at ?? state.nextOpening;
-    if (!opening) return;
-    const remaining = Date.parse(opening) - (Date.now() + clockOffset);
-    if (!Number.isFinite(remaining) || remaining <= 0) return;
+    // Revalidate each calendar boundary against the authoritative server.
+    if (!state) return;
+    const serverNow = Date.now() + clockOffset;
+    const boundaries = [state.season?.registrations_open_at,
+      state.season?.opens_at, state.season?.closes_at, state.nextOpening]
+      .filter((value): value is string => typeof value === "string")
+      .map(Date.parse).filter((value) => Number.isFinite(value) && value > serverNow);
+    if (!boundaries.length) return;
+    const remaining = Math.min(...boundaries) - serverNow;
     const timer = window.setTimeout(
       () => void refresh().catch((e) => setError(e.message)),
       Math.min(remaining + 150, 2147483647),

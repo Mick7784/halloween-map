@@ -42,7 +42,6 @@ import {
   setupSchema,
   houseSchema,
   seasonSchema,
-  testSeasonDefinition,
   instanceSchema,
   credentials,
   routeSchema,
@@ -204,13 +203,6 @@ async function insertSeason(
   return rows[0] as unknown as Season;
 }
 function seasonDates(data: z.infer<typeof seasonSchema>, zone: string) {
-  if (data.is_test)
-    return {
-      opens: "2000-01-01T00:00:00.000Z",
-      closes: "2201-01-01T00:00:00.000Z",
-      registrations: "2000-01-01T00:00:00.000Z",
-      purge: "2201-01-02T00:00:00.000Z",
-    };
   try {
     const opens = localISO(data.opens_at, zone),
       closes = localISO(data.closes_at, zone);
@@ -535,12 +527,10 @@ export async function publicState(
       ? {
           id: s.id,
           is_test: s.is_test,
-          route_end_at: s.is_test
-            ? new Date(+now + 3 * 3600000).toISOString()
-            : undefined,
           year: s.year,
           purge_at: s.purge_at,
           opens_at: s.opens_at,
+          registrations_open_at: s.registrations_open_at,
           closes_at: s.closes_at,
           registrations_open:
             !!s.active &&
@@ -705,13 +695,25 @@ export async function createParticipation(
         user.instance_id,
       ])
     ).rows[0] as unknown as Instance;
-    const registrationSeason = management
-      ? null
-      : await applicationSeason(i, user, c);
+    let registrationSeason: Season | null;
+    if (management) {
+      if (i.active_season_id) {
+        registrationSeason = await applicationSeason(i, management.actor, c);
+      } else {
+        const candidates = (await c.query(
+          "SELECT * FROM seasons WHERE instance_id=$1 AND NOT is_test AND NOT archived AND purged_at IS NULL AND closes_at>now() ORDER BY opens_at",
+          [i.id],
+        )).rows as unknown as Season[];
+        registrationSeason = candidates.find((s) => s.id === management.seasonId) ??
+          (candidates.length === 1 ? candidates[0] : null);
+        if (candidates.length > 1 && !registrationSeason)
+          throw new HttpError(409, "Sélectionnez la saison à préparer");
+      }
+    } else registrationSeason = await applicationSeason(i, user, c);
     const ss = (
       await c.query(
         "SELECT * FROM seasons WHERE id=$1 AND instance_id=$2 FOR UPDATE",
-        [management?.seasonId ?? registrationSeason?.id ?? null, i.id],
+        [registrationSeason?.id ?? null, i.id],
       )
     ).rows[0] as unknown as Season;
     if (!ss)
@@ -726,13 +728,7 @@ export async function createParticipation(
           +new Date() >= +new Date(ss.closes_at)))
     )
       throw new HttpError(403, "Inscriptions fermées");
-    if (management?.seasonId && management.seasonId !== ss.id)
-      throw new HttpError(409, "La saison sélectionnée a changé");
-    if (ss.is_test && !management)
-      throw new HttpError(
-        403,
-        "Les maisons TEST se créent depuis le back-office",
-      );
+    if (ss.is_test) throw new HttpError(403, "Saison historique en lecture seule");
     if (ss.archived || ss.purged_at || (!management && seasonFinished(ss)))
       throw new HttpError(403, "Saison terminée");
     const a = await validateAcceptance(c, i.id, raw.acceptance);
@@ -1490,6 +1486,15 @@ export async function adminAction(user: User | null, input: unknown) {
   }
   if (data.action === "createHouse") {
     requirePermission(u, "participants.edit");
+    if (!data.seasonId) {
+      const i = (await instance())!;
+      const candidates = await db().query(
+        "SELECT id FROM seasons WHERE instance_id=$1 AND NOT is_test AND NOT archived AND purged_at IS NULL AND closes_at>now()",
+        [u.instance_id],
+      );
+      if (!i.active_season_id && candidates.rows.length > 1)
+        throw new HttpError(409, "Sélectionnez la saison à préparer");
+    }
     const context = await selectedSeason(u, data.seasonId);
     if (!context) throw new HttpError(404, "Saison introuvable");
     const payload = z
@@ -1709,14 +1714,7 @@ export async function adminAction(user: User | null, input: unknown) {
   }
   if (data.action === "season") {
     requirePermission(u, "season.manage");
-    const p = seasonSchema.parse(testSeasonDefinition(data.payload));
-    if (p.is_test && u.role_name !== "SUPER_ADMIN")
-      throw new HttpError(403, "Super Admin requis pour le mode TEST");
-    if (p.is_test && !data.id)
-      throw new HttpError(
-        400,
-        "Créez une saison réelle ; les saisons TEST historiques restent conservées.",
-      );
+    const p = seasonSchema.parse(data.payload);
     const i = (await instance())!;
     return transaction(async (c) => {
       await c.query("SELECT id FROM instances WHERE id=$1 FOR UPDATE", [i.id]);
@@ -1732,26 +1730,6 @@ export async function adminAction(user: User | null, input: unknown) {
             400,
             "Une saison purgée ne peut pas être réouverte",
           );
-        if (Boolean(s.is_test) !== p.is_test) {
-          if (p.is_test)
-            throw new HttpError(
-              400,
-              "Une saison réelle ne peut pas devenir une saison TEST.",
-            );
-          if (u.role_name !== "SUPER_ADMIN")
-            throw new HttpError(403, "Super Admin requis");
-          const used = (
-            await c.query(
-              "SELECT id FROM seasons WHERE id=$1 AND (routes_count>0 OR EXISTS(SELECT 1 FROM participations WHERE season_id=$1) OR EXISTS(SELECT 1 FROM email_campaigns WHERE season_id=$1) OR EXISTS(SELECT 1 FROM instances WHERE active_season_id=$1))",
-              [s.id],
-            )
-          ).rows[0];
-          if (used)
-            throw new HttpError(
-              409,
-              "Le mode d’une saison utilisée ne peut pas être changé",
-            );
-        }
         const { opens, closes, registrations, purge } = seasonDates(
           p,
           i.timezone,

@@ -33,8 +33,8 @@ async function arrange(page: Page, role = "SUPER_ADMIN") {
     {
       ...base,
       id: testId,
-      name: "Essais octobre",
-      is_test: true,
+      name: "Édition préparée",
+      is_test: false,
       active: false,
     },
     {
@@ -177,7 +177,7 @@ async function arrange(page: Page, role = "SUPER_ADMIN") {
     mutations,
     paths,
     activateTest: () => {
-      seasons = seasons.map((s) => ({ ...s, active: s.id === testId }));
+      seasons = seasons.map((s) => ({ ...s, active: false }));
     },
   };
 }
@@ -199,7 +199,7 @@ test("compact season list, creation of a real draft, and dark/light appearance",
   await expect(rows).toHaveCount(4);
   await expect(rows.nth(0)).toContainText("Halloween 2026");
   await expect(rows.nth(1)).toContainText("Halloween 2027");
-  await expect(rows.nth(2)).toContainText("Essais octobre");
+  await expect(rows.nth(2)).toContainText("Édition préparée");
   await expect(rows.nth(3)).toContainText("Halloween 2025");
   await expect(page.locator(".season-editor")).toHaveCount(0);
   await expect(page.getByText("Mode démo", { exact: true })).toHaveCount(0);
@@ -240,7 +240,7 @@ test("compact season list, creation of a real draft, and dark/light appearance",
     "Halloween préparation",
   );
   const createdRow = rows.filter({ hasText: "Halloween préparation" });
-  await expect(createdRow).toContainText("REAL");
+  await expect(createdRow).toContainText("PLANIFIÉE");
   await expect(
     createdRow.getByRole("button", { name: "Activer", exact: true }),
   ).toBeVisible();
@@ -254,13 +254,13 @@ test("compact season list, creation of a real draft, and dark/light appearance",
     }),
   ]);
 });
-test("TEST activation replaces REAL, dashboard follows active, deactivation leaves an empty dashboard", async ({
+test("Prepared edition activation replaces current edition, dashboard follows active, deactivation leaves an empty dashboard", async ({
   page,
 }) => {
   const { mutations } = await arrange(page);
   await page.goto("/admin");
   await openSeasons(page);
-  const row = page.locator("tr").filter({ hasText: "Essais octobre" });
+  const row = page.locator("tr").filter({ hasText: "Édition préparée" });
   page.once("dialog", (d) => d.accept());
   await row.getByRole("button", { name: "Activer", exact: true }).click();
   await page
@@ -272,7 +272,7 @@ test("TEST activation replaces REAL, dashboard follows active, deactivation leav
     .getByRole("button", { name: "Confirmer", exact: true })
     .click();
   await expect(page.locator(".beta-context")).toContainText(
-    "Saison active : Essais octobre",
+    "Saison active : Édition préparée",
   );
   await expect(page.locator(".season-active")).toHaveCount(1);
   await page
@@ -281,7 +281,7 @@ test("TEST activation replaces REAL, dashboard follows active, deactivation leav
     .click();
   await expect(
     page.locator(".beta-kpis article").filter({ hasText: "Maisons validées" }),
-  ).toContainText("5");
+  ).toContainText("24");
   await expect(page.getByLabel("Saison du back-office")).toHaveCount(0);
   await openSeasons(page);
   page.once("dialog", (d) => d.accept());
@@ -354,7 +354,7 @@ test("normal USER cannot render the TEST map or a demo entry", async ({
   await page.goto("/map");
   await expect(page.locator(".map-experience")).toHaveCount(0);
   await expect(page.getByText("Mode démo", { exact: true })).toHaveCount(0);
-  await expect(page.getByText("Essais octobre", { exact: true })).toHaveCount(
+  await expect(page.getByText("Édition préparée", { exact: true })).toHaveCount(
     0,
   );
 });

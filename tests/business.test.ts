@@ -386,7 +386,7 @@ describe("V0.4 privacy, roles, demo and recovery", () => {
     expect(
       (await service.publicState(context, participant)).houses,
     ).toHaveLength(1);
-    expect((await service.publicState(context, null)).houses).toEqual([]);
+    expect((await service.publicState(context, null)).houses).toHaveLength(1);
   });
   it("deletes only the selected house with strong confirmation and retains its account", async () => {
     await expect(
@@ -2081,20 +2081,10 @@ describe("back office phase one", () => {
       "dashboard",
       season.id,
     )) as unknown as { pending: number; users: number };
-    const testMetrics = (await service.adminRead(
-      admin,
-      "dashboard",
-      testId,
-    )) as unknown as { pending: number; users: number; routes: number };
     expect(realMetrics.pending).toBe(1);
     expect(realMetrics.users).toBeGreaterThan(0);
-    expect(testMetrics).toMatchObject({ pending: 1, users: 1, routes: 0 });
-    expect(await service.adminRead(admin, "houses", testId)).toEqual([]);
-    expect(await service.adminRead(admin, "audit", testId)).not.toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ target_label: house.name }),
-      ]),
-    );
+    for(const section of ['houses','audit'])
+      await expect(service.adminRead(admin,section,testId)).rejects.toMatchObject({status:404});
     expect(await service.adminRead(admin, "audit", season.id)).toEqual(
       expect.arrayContaining([
         expect.objectContaining({

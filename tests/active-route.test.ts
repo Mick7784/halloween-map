@@ -75,6 +75,14 @@ const saved: StoredRoute = {
   },
 };
 describe("local active route", () => {
+  it("restores post-Halloween preparations only in an authorized preview and still enforces expiry and identity", () => {
+    const now = +new Date("2026-11-01T12:00Z");
+    const raw = JSON.stringify({ ...saved, expiresAt: "2026-11-01T18:00:00Z" });
+    expect(restoreRoute(raw, identity, now)).toBeNull();
+    expect(restoreRoute(raw, identity, now, true)?.phase).toBe("calculated");
+    expect(restoreRoute(raw, { ...identity, ownerId: "other" }, now, true)).toBeNull();
+    expect(restoreRoute(raw, identity, +new Date("2026-11-01T18:00Z"), true)).toBeNull();
+  });
   it("restores the complete active route and rejects obsolete identity, expiry, formats and corrupt data", () => {
     const now = +new Date("2026-10-31T18:30Z");
     expect(restoreRoute(JSON.stringify(saved), identity, now)).toEqual({

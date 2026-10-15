@@ -110,7 +110,6 @@ export function can(user: User | null, permission: string) {
 }
 export function seasonFinished(s: Season, now = new Date()) {
   return (
-    !s.is_test &&
     (!!s.archived || !!s.purged_at || +now >= +new Date(s.closes_at))
   );
 }
@@ -122,8 +121,7 @@ export function seasonLabel(s: Season, now = new Date()) {
 export function seasonState(s: Season | null, now = new Date()) {
   if (!s) return "PREPARATION";
   if (s.purged_at || s.archived || seasonFinished(s, now)) return "CLOSED";
-  if (!s.active) return "PREPARATION";
-  if (s.is_test) return "MAP_OPEN";
+  if (!s.active || s.is_test) return "PREPARATION";
   if (+now < +new Date(s.opens_at)) return "COUNTDOWN";
   return "MAP_OPEN";
 }
@@ -153,7 +151,7 @@ export function earlyMapAccess(
   user: User | null,
   now = new Date(),
 ) {
-  return !!s && !!s.active && !s.archived && !s.purged_at &&
+  return !!s && !s.is_test && !!s.active && !s.archived && !s.purged_at &&
     user?.role_name === "SUPER_ADMIN" && !mapAccessible(s, now);
 }
 export function memberMapAccessible(

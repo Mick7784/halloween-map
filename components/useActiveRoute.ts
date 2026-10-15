@@ -149,7 +149,7 @@ export default function useActiveRoute({
       storageError = "";
     try {
       const raw = localStorage.getItem(ACTIVE_ROUTE_KEY);
-      saved = restoreRoute(raw, { ownerId, instanceId, seasonId }, Date.now());
+      saved = restoreRoute(raw, { ownerId, instanceId, seasonId }, Date.now(), previewMode);
       if (raw && !saved) clearStoredRoute();
     } catch {
       storageError = "La sauvegarde locale est indisponible sur cet appareil.";
@@ -173,7 +173,7 @@ export default function useActiveRoute({
         : {}),
     });
     return bumpRevision;
-  }, [ownerId, instanceId, seasonId, identityKey, bumpRevision]);
+  }, [ownerId, instanceId, seasonId, identityKey, bumpRevision, previewMode]);
   useEffect(() => {
     if (!state.ready || state.identityKey !== identityKey) return;
     if (state.phase === "preparation" || !state.parameters || !state.result) {

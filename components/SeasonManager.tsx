@@ -2,9 +2,9 @@
 import { ActionCancelled } from "./AdminConfirmation";
 import { Dialog, Button, DataTable, Input } from "./ui";
 import useDraftGuard, { confirmDraftNavigation } from "./useDraftGuard";
-import AdminStatistics from "./AdminStatistics";
+import AdminStatistics, { type SeasonStatistics } from "./AdminStatistics";
 import { DateTime } from "luxon";
-import { Fragment, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { ChevronDown, ChevronUp, CircleCheck, Plus, X } from "lucide-react";
 import {
   seasonFinished,
@@ -20,6 +20,7 @@ import {
   localDate,
   values,
   has,
+  api,
 } from "./common";
 
 type Action = (action: string, payload: unknown, id?: string) => Promise<void>;
@@ -30,6 +31,19 @@ function Statistics({
   season: Season;
   onClose: () => void;
 }) {
+  const frozen = !!(season.purged_at || season.archived);
+  const [data, setData] = useState<SeasonStatistics | null>(() => frozen ? {
+    seasonId: season.id, snapshot: true, stats: season.stats ?? {},
+  } : null);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    if (frozen) return;
+    let current = true;
+    void api<SeasonStatistics>("admin/statistics?seasonId=" + season.id)
+      .then((result) => { if (current) setData(result); })
+      .catch((e) => { if (current) setError(e.message); });
+    return () => { current = false; };
+  }, [season.id, frozen]);
   return (
     <div className="beta-overlay">
       <Dialog
@@ -50,17 +64,14 @@ function Statistics({
           </Button>
         </header>
         <p>Historique en lecture seule · chiffres agrégés uniquement.</p>
+        {error && <Notice error={error} />}
         {!season.stats_snapshot_at && !season.purged_at ? (
           <p>Le snapshot sera disponible à la clôture de la saison.</p>
         ) : (
           <AdminStatistics
             season={season}
-            loading={false}
-            data={{
-              seasonId: season.id,
-              snapshot: true,
-              stats: season.stats ?? {},
-            }}
+            loading={!data && !error}
+            data={data}
           />
         )}
       </Dialog>
@@ -290,7 +301,7 @@ export default function SeasonManager({
                       <td>
                         <div className="beta-actions season-row-actions">
                           {critical &&
-                            (s.active || (!ended && !s.purged_at && !s.archived)) && (
+                            !s.purged_at && !s.archived && (
                               <AsyncButton
                                 onClick={async () => {
                                   const action = s.active
