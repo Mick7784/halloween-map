@@ -26,7 +26,8 @@ export const instanceSchema = z.object({
 });
 export const seasonSchema = z.object({
   name: text(100).optional(),
-  is_test: z.boolean().default(false),
+  // Kept as a backwards-compatible payload field, but a TEST season can no longer be created.
+  is_test: z.literal(false).default(false),
   year: z.number().int().min(2020).max(2200),
   registrations_open_at: text(40).optional(),
   purge_at: text(40).optional(),
