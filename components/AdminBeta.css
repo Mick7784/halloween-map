@@ -450,6 +450,50 @@
 .beta-status.pending {
   color: var(--accent);
 }
+.house-review-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.house-review-status::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  flex: none;
+}
+.house-review-status.pending {
+  color: #e9a451;
+  background: rgba(233, 164, 81, .12);
+  border-color: rgba(233, 164, 81, .3);
+}
+.house-review-status.validated {
+  color: var(--success);
+  background: rgba(87, 185, 149, .12);
+  border-color: rgba(87, 185, 149, .3);
+}
+.house-review-status.refused {
+  color: #e38387;
+  background: rgba(227, 131, 135, .12);
+  border-color: rgba(227, 131, 135, .3);
+}
+.admin-beta[data-theme="light"] .house-review-status.pending {
+  color: #945008;
+}
+.admin-beta[data-theme="light"] .house-review-status.refused {
+  color: #a53238;
+}
+@media (prefers-color-scheme: light) {
+  .admin-beta[data-theme="system"] .house-review-status.pending { color: #945008; }
+  .admin-beta[data-theme="system"] .house-review-status.refused { color: #a53238; }
+}
 .beta-kpis {
   gap: 16px;
 }
