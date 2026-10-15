@@ -33,6 +33,7 @@ export async function applicationSeason(
   client: Database = db(),
   _now: Date = new Date(),
 ): Promise<Season | null> {
+  void _now;
   const { rows } = await client.query(
     `SELECT s.*, true active FROM seasons s
      WHERE s.id=$1 AND s.instance_id=$2 AND NOT s.is_test
