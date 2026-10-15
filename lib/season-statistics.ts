@@ -2,7 +2,7 @@ import { reportSchema } from "./collection-reports";
 import { transaction } from "./db";
 import { HttpError } from "./auth";
 import {
-  adminAccount,
+  earlyMapAccess,
   mapAccessible,
   type User,
   type Instance,
@@ -39,7 +39,7 @@ export async function reportCollection(
       throw new HttpError(409, "La saison n’est plus accessible");
     const accessible =
       i?.active_season_id === s.id &&
-      (mapAccessible({ ...s, active: true }) || (s.is_test && adminAccount(user)));
+      (mapAccessible({ ...s, active: true }) || earlyMapAccess({ ...s, active: true }, user));
     // A collection already started may finish after closing, until the privacy purge.
     // Only its numerical totals can change; house/configuration snapshots stay read-only.
     if (
