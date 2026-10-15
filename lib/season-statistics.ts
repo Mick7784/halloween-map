@@ -51,6 +51,10 @@ export async function reportCollection(
       )
     )
       throw new HttpError(409, "La saison n’est plus accessible");
+    // Simulated Super Admin collections outside public hours never count
+    // as real visits, but a real collection already started may still finish.
+    if (earlyMapAccess({ ...s, active: true }, user) && !previous?.started)
+      return { ok: true };
     await c.query(
       "INSERT INTO collection_reports(id,season_id) VALUES($1,$2) ON CONFLICT DO NOTHING",
       [p.id, s.id],
