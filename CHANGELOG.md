@@ -1,5 +1,12 @@
 # Changelog
 
+## V0.9.7
+
+- **Accueil mobile — parallaxe adoucie** : filtrage des petites variations des capteurs, inertie fondée sur le temps écoulé entre images (comportement cohérent selon le taux de rafraîchissement), et retour progressif au neutre quand les mesures s'arrêtent. Aucune demande de permission supplémentaire ; l'effet reste facultatif et le fond statique demeure le repli.
+- **Administration — dates de saison** : depuis les valeurs proposées pour les prochaines éditions dans Paramètres, accès direct à la gestion de la saison réelle selon l'autorisation `season.read`, avec avertissement en présence de modifications non enregistrées.
+- **Périmètre préservé** : illustration et cadrage de l'accueil, identité, carte, collecte, permissions et back-office mobile inchangés. Aucune migration ni modification du Compose de production.
+- **Contrôles navigateur** : nouveaux scénarios de lissage/retour au neutre et de navigation Paramètres → Saison. Fluidité sur appareils réels Chrome/Brave Android à confirmer après déploiement de test.
+
 ## V0.9.6
 
 - **Stabilisation des emails HTML** : correction des attributs `alt`/`title` échappés deux fois ; refus des liens sécurisés invisibles dans un conteneur masqué ; tests anti-régression.
