@@ -13,9 +13,8 @@ export function validateRouteWindow(
     !Number.isFinite(start) ||
     !Number.isFinite(end) ||
     end <= start ||
-    start < +now - 60000 ||
-    (!season.is_test && !staffPreview &&
-      (start < +new Date(season.opens_at) || end > +new Date(season.closes_at)))
+    (!staffPreview && start < +now - 60000) ||
+    start < +new Date(season.opens_at) || end > +new Date(season.closes_at)
   )
     throw new Error("Fenêtre de parcours invalide");
 }
