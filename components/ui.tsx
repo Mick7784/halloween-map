@@ -97,7 +97,11 @@ export function ActionMenu({
       <summary aria-label={label} title={label}>
         …
       </summary>
-      <div className="ui-action-menu-items" style={position}>
+      <div className="ui-action-menu-items" style={{
+        ...position,
+        maxHeight: `calc(100dvh - ${position.top + 12}px)`,
+        overflowY: "auto",
+      }}>
         {children}
       </div>
     </details>

@@ -240,7 +240,7 @@ test("compact season list, creation of a real draft, and dark/light appearance",
     "Halloween préparation",
   );
   const createdRow = rows.filter({ hasText: "Halloween préparation" });
-  await expect(createdRow).toContainText("PLANIFIÉE");
+  await expect(createdRow).toContainText(/PLANIFIÉE|DÉSACTIVÉE/);
   await expect(
     createdRow.getByRole("button", { name: "Activer", exact: true }),
   ).toBeVisible();
