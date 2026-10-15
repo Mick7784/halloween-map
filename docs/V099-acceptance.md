@@ -27,7 +27,7 @@ HTTPS (build et navigateur) était réussi.
 | BO rattache à active ou attente explicite | Défaillant | Active prioritaire sous verrou ; contexte BO conservé sans active ; ambiguïté sans contexte refusée |
 | Une maison / une saison, pas de reconduction | Implémenté | Création de participations séparées, aucune recopie automatique |
 | Snapshot agrégé complet | Partiel | Maisons, validations, participants, activités, routes, collectes couverts par tests |
-| Purge des détails, comptes et années conservés | Implémenté, à vérifier | Tests suppression participations/outbox/campagnes/reçus, comptes et années validées conservés |
+| Purge des détails, comptes et années conservés | Implémenté, à vérifier | Tests suppression participations/outbox/campagnes/reçus et audits historiques ; comptes et années validées conservés ; mutations sérialisées avec la purge, résultat de purge journalisé sans identité ni lien saisonnier |
 | Historique en lecture seule, purge ≠ suppression | Partiel | Statistiques de saison ; actions distinctes et confirmations ; refus réactivation après purge |
 | Statistiques finales actualisées après clôture | Partiel | Recalcul à la purge, lecture vivante avant purge, simulation SUPER_ADMIN exclue des compteurs |
 | Pastilles compactes accessibles orange/verte/rouge | Implémenté, non vérifié | Styles uniquement BO ; texte explicite de modération |
@@ -42,10 +42,22 @@ HTTPS (build et navigateur) était réussi.
 | Documentation, VERSION, tag, release | Absent | Release conditionnée à la recette complète et CI verte |
 | Recette environnement réel | Non réalisée | Les bases locales et CI sont jetables. Essais sur l'installation réelle de l'organisateur à effectuer avec la release. |
 
-## Résultats provisoires
+## Vérifications et condition de publication
 
 - Audit des dépendances de production : aucune vulnérabilité détectée.
 - Lint / TypeScript et build de production réussis pendant la reprise.
-- 281 tests unitaires réussis après ajout du cas de restauration de préparation.
-- Recette Playwright et CI finale en cours ; aucune autorisation de publication
-  ne doit être déduite de ces résultats provisoires.
+- 283 tests unitaires réussis, dont migration V0.9.8 → V0.9.9 et rejeu,
+  restauration de préparation après Halloween, frontières d'inscription,
+  conservation des années validées et effacement des audits historiques.
+- Scénarios navigateur ciblés réussis : actions contextuelles, création BO,
+  accès mobile, transitions inscription/ouverture/clôture sans rechargement.
+- La suite complète de 205 scénarios Playwright, les migrations PostgreSQL,
+  leur rejeu, les images Docker et le parcours HTTPS sont les portes de
+  publication du [workflow CI de la PR #44](https://github.com/Mick7784/halloween-map/pull/44/checks).
+  Le statut final et le SHA vérifié doivent être consultés sur cette PR.
+- Fusion uniquement après réussite de verify, docker et https-media sur le
+  dernier commit. Le workflow main revérifie puis publie l'image GHCR versionnée
+  et latest, contrôle VERSION/labels/digest, crée le tag et la release GitHub.
+- Aucune base de production n'est manipulée par la recette. Les essais sur
+  l'installation réelle et les appareils physiques restent à réaliser, comme
+  annoncé dans le changelog.

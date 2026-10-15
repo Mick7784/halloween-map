@@ -247,7 +247,12 @@ test("live APIs: active real season, phone session, reusable accounts, post-clos
         "UPDATE seasons SET purge_at=now()-interval '1 second' WHERE id=$1",
         [real.id],
       );
-      await page.request.get("/api/public");
+      const [lateVisibility] = await Promise.all([
+        post("admin", {action:"visibility",seasonId:real.id,id:h.id,payload:"HIDDEN"}),
+        page.request.get("/api/public"),
+      ]);
+      expect([200,403,404]).toContain(lateVisibility.status());
+      expect((await pool.query("SELECT id FROM audit_logs WHERE season_id=$1 OR target_id=ANY($2::uuid[])", [real.id,[real.id,h.id]])).rows).toEqual([]);
       const historical = (
         await (await page.request.get("/api/admin/seasons")).json()
       ).find((s: { id: string }) => s.id === real.id);

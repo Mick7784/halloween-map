@@ -304,7 +304,7 @@ export async function purgeSeason(
     // Recompute the final figures at purge so late administrative edits count.
     const stats = await statisticalSnapshot(c, s);
     await c.query(
-      "DELETE FROM audit_logs WHERE instance_id=$1 AND (season_id=$2 OR target_id IN(SELECT id FROM participations WHERE season_id=$2) OR target_id IN(SELECT id FROM email_campaigns WHERE season_id=$2))",
+      "DELETE FROM audit_logs WHERE instance_id=$1 AND (season_id=$2 OR target_id=$2 OR target_id IN(SELECT id FROM participations WHERE season_id=$2) OR target_id IN(SELECT id FROM email_campaigns WHERE season_id=$2))",
       [instanceId, s.id],
     );
     await c.query("DELETE FROM participations WHERE season_id=$1", [s.id]);
@@ -324,9 +324,8 @@ export async function purgeSeason(
     await audit(
       c,
       instanceId,
-      actor,
+      null,
       manual ? "season.purge.manual" : "season.purge.automatic",
-      s.id,
     );
     return { purged: true, stats };
   });
@@ -810,6 +809,7 @@ export async function updateHouse(
   if (admin) requirePermission(user, "participants.edit");
   const data = houseSchema.parse(input);
   return transaction(async (c) => {
+    await lockHouseSeason(c, user, id);
     const { rows } = await c.query(
       "SELECT * FROM participations WHERE id=$1 AND instance_id=$2 FOR UPDATE",
       [id, user.instance_id],
@@ -961,6 +961,7 @@ export async function participantAction(
   if (managedId && data.action === "delete")
     throw new HttpError(400, "Utilisez la suppression admin confirmée");
   return transaction(async (c) => {
+    await c.query("SELECT id FROM instances WHERE id=$1 FOR UPDATE", [user.instance_id]);
     const currentInstance = managedId ? null : await instance(c);
     const currentSeason = currentInstance
       ? await applicationSeason(currentInstance, user, c)
@@ -1445,6 +1446,19 @@ function redactSeason(s: Record<string, unknown>, user: User) {
   if (user.permissions.includes("season.manage")) return s;
   return { ...s, reminder_subject: "", reminder_body: "" };
 }
+// Serialize house writes with lifecycle operations before touching a house or its audit.
+// Purge takes the same instance lock, so a late mutation cannot recreate seasonal traces.
+async function lockHouseSeason(c: Database, user: User, id: string | undefined) {
+  await c.query("SELECT id FROM instances WHERE id=$1 FOR UPDATE", [user.instance_id]);
+  const s = (await c.query(
+    "SELECT s.* FROM seasons s JOIN participations h ON h.season_id=s.id AND h.instance_id=s.instance_id WHERE h.id=$1 AND s.instance_id=$2 FOR UPDATE OF s",
+    [id, user.instance_id],
+  )).rows[0] as unknown as Season | undefined;
+  if (!s) throw new HttpError(404, "Maison introuvable");
+  if (s.archived || s.purged_at || s.is_test)
+    throw new HttpError(403, "Saison en lecture seule");
+  return s;
+}
 export async function adminAction(user: User | null, input: unknown) {
   requirePermission(user, "admin.access");
   if (!user) throw new HttpError(401, "Connexion requise");
@@ -1591,6 +1605,7 @@ export async function adminAction(user: User | null, input: unknown) {
     if (payload.status === "REFUSED" && !payload.reason)
       throw new HttpError(400, "Précisez le motif du refus");
     return transaction(async (c) => {
+      await lockHouseSeason(c, u, data.id);
       const result = await c.query(
         "UPDATE participations SET review_status=$1,refusal_reason=$2 WHERE id=$3 AND instance_id=$4 RETURNING id",
         [
@@ -1614,19 +1629,22 @@ export async function adminAction(user: User | null, input: unknown) {
   if (data.action === "visibility") {
     requirePermission(u, "participants.edit");
     const status = z.enum(["VISIBLE", "HIDDEN"]).parse(data.payload);
-    const result = await db().query(
-      "UPDATE participations SET status=$1 WHERE id=$2 AND instance_id=$3 RETURNING id",
-      [status, data.id, u.instance_id],
-    );
-    if (!result.rows.length) throw new HttpError(404, "Maison introuvable");
-    await audit(
-      db(),
-      u.instance_id,
-      u,
-      "house." + status.toLowerCase(),
-      data.id,
-    );
-    return { ok: true };
+    return transaction(async (c) => {
+      await lockHouseSeason(c, u, data.id);
+      const result = await c.query(
+        "UPDATE participations SET status=$1 WHERE id=$2 AND instance_id=$3 RETURNING id",
+        [status, data.id, u.instance_id],
+      );
+      if (!result.rows.length) throw new HttpError(404, "Maison introuvable");
+      await audit(
+        c,
+        u.instance_id,
+        u,
+        "house." + status.toLowerCase(),
+        data.id,
+      );
+      return { ok: true };
+    });
   }
   if (data.action === "editHouse")
     return updateHouse(u, data.id!, data.payload, true);
@@ -1635,6 +1653,7 @@ export async function adminAction(user: User | null, input: unknown) {
     if (data.payload !== "SUPPRIMER LA MAISON")
       throw new HttpError(400, "Confirmation requise");
     return transaction(async (c) => {
+      const season = await lockHouseSeason(c, u, data.id);
       await c.query(
         "DELETE FROM audit_logs WHERE instance_id=$1 AND target_id=$2",
         [u.instance_id, data.id],
@@ -1650,7 +1669,7 @@ export async function adminAction(user: User | null, input: unknown) {
         u,
         "participant.deleted",
         undefined,
-        (await selectedSeason(u, data.seasonId, c))?.id,
+        season.id,
       );
       return { ok: true };
     });

@@ -1008,6 +1008,7 @@ it("attaches BO creations to active season, then requires context among multiple
 });
 it("refreshes final anonymous statistics at purge after late BO changes and keeps accounts/history",async()=>{
  const h=await createHouse(ordinary,real);vi.setSystemTime(new Date(real.closes_at));await service.tick();
+ await db().query("INSERT INTO audit_logs(instance_id,actor_id,action,target_id,season_id) VALUES($1,$2,'legacy.season',$3,NULL)",[admin.instance_id,ordinary.id,real.id]);
  await service.adminAction(admin,{action:'reviewHouse',seasonId:real.id,id:h.id,payload:{status:'REFUSED',reason_code:'ADDRESS'}});
  const late=await directAccount('Après clôture');await createHouse(late,real);
  await service.adminAction(admin,{action:'visibility',seasonId:real.id,id:h.id,payload:'HIDDEN'});
@@ -1017,6 +1018,8 @@ it("refreshes final anonymous statistics at purge after late BO changes and keep
  expect(row.stats).toMatchObject({houses:2,approved:1,refused:1,participants:2,candy:2,decoration:2});
  expect((await db().query('SELECT id FROM users WHERE id=$1',[ordinary.id])).rows).toHaveLength(1);
  expect((await db().query('SELECT year FROM participation_history WHERE user_id=$1',[ordinary.id])).rows).toEqual([{year:2026}]);
+ expect((await db().query('SELECT id FROM audit_logs WHERE season_id=$1 OR target_id=$1',[real.id])).rows).toEqual([]);
+ expect((await db().query("SELECT actor_id,target_id,season_id FROM audit_logs WHERE action='season.purge.automatic'")).rows).toEqual([{actor_id:null,target_id:null,season_id:null}]);
  await expect(service.adminAction(admin,{action:'visibility',seasonId:real.id,id:h.id,payload:'VISIBLE'})).rejects.toMatchObject({status:403});
 });
 
