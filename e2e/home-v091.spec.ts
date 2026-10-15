@@ -147,6 +147,41 @@ test("V0.9.1 portrait mobile tilts only artwork, smoothly and within bounds", as
   await expect(page.locator(".home-art-plane--near")).toBeHidden();
 });
 
+
+test("V0.9.7 mobile artwork filters sensor noise and returns smoothly to neutral", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  await passiveSensor(page);
+  await enter(page);
+  const art = page.locator(".home-art");
+  await emit(page, 35, 10);
+  await expect(art).toHaveAttribute("data-home-motion", "active");
+  // Repeated measurements settle on the same handheld tilt.
+  for (let i = 0; i < 12; i++) await emit(page, 55, 40);
+  await page.clock.runFor(500);
+  const settled = await art.evaluate((node) =>
+    parseFloat(node.style.getPropertyValue("--depth-near-x")),
+  );
+  expect(settled).toBeGreaterThan(3);
+  expect(settled).toBeLessThanOrEqual(8);
+
+  // A tiny noisy heading change should not make the scene jump.
+  await emit(page, 55, 40.2);
+  await page.clock.runFor(120);
+  const jitter = await art.evaluate((node) =>
+    parseFloat(node.style.getPropertyValue("--depth-near-x")),
+  );
+  expect(Math.abs(jitter - settled)).toBeLessThan(0.5);
+
+  // When readings stop, the artwork eases to rest without moving any UI.
+  await page.clock.runFor(2000);
+  const neutral = await art.evaluate((node) =>
+    parseFloat(node.style.getPropertyValue("--depth-near-x")),
+  );
+  expect(Math.abs(neutral)).toBeLessThan(0.2);
+  await expect(page.getByRole("button", { name: "Se connecter", exact: true })).toBeVisible();
+});
+
 test("V0.9.1 desktop and mobile landscape always remain still", async ({ page }) => {
   await passiveSensor(page);
   const depthRequests: string[] = [];
