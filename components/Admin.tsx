@@ -1254,6 +1254,10 @@ export default function Admin({
             mapStyle={mapStyle}
             user={user}
             refresh={refresh}
+            onSeason={has(user, "season.read") ? () => {
+              if (!confirmDraftNavigation()) return;
+              setSection("seasons");
+            } : undefined}
           />
         )}
         {section === "houses" && (
