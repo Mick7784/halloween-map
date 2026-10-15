@@ -1,18 +1,10 @@
 <div align="center">
 
-<img src="artwork/branding/halloween-map-wordmark.svg" alt="Halloween Map — logo officiel by DomotiK Studio" width="680" />
+<img src="artwork/branding/halloween-map-wordmark-official.webp" alt="Halloween Map — logo officiel by DomotiK Studio" width="470" />
 
-<br />
+**La carte participative pour profiter d’Halloween, maison après maison.** 🎃
 
-<img src="public/pwa/icon-512.png" alt="Icône officielle de l'application Halloween Map : citrouille en forme de repère de carte" width="132" />
-
-### Une carte. Des maisons. Une nuit d'Halloween à partager. 🎃
-
-**Halloween Map** permet aux habitants de signaler leur maison et aux familles de découvrir les participations autour d'elles, pour une balade et une collecte de bonbons à leur rythme.
-
-**Une application de [DomotiK Studio](https://domotik-studio.fr/)**, dans le même écosystème que **LinKs**, avec sa propre identité orange, violet et nuit d'Halloween.
-
-[Découvrir l'application](https://halloween-map.domotik-studio.fr/) · [Comment ça marche](#comment-ça-marche) · [Fonctionnalités](#les-fonctionnalités) · [Vie privée](#respect-de-la-vie-privée)
+[Découvrir l’application](https://halloween-map.domotik-studio.fr/) · [Fonctionnement](#comment-ça-marche) · [Fonctionnalités](#les-fonctionnalités) · [Vie privée](#respect-de-la-vie-privée)
 
 </div>
 
@@ -20,7 +12,7 @@
 
 ## Halloween, maison après maison
 
-Halloween Map est une **carte participative et une application web installable (PWA)**. Les habitants peuvent proposer leur maison, indiquer leurs horaires et leurs activités, puis signaler une pause, une fermeture ou une rupture de bonbons.
+**Halloween Map**, une application de **[DomotiK Studio](https://domotik-studio.fr/)** dans le même écosystème que LinKs, est une **carte participative et une application web installable (PWA)**. Les habitants peuvent proposer leur maison, indiquer leurs horaires et leurs activités, puis signaler une pause, une fermeture ou une rupture de bonbons.
 
 Les visiteurs connectés découvrent les maisons disponibles pendant la période d'ouverture de la carte et préparent librement leur balade. **Il n'y a pas d'itinéraire imposé, de guidage vocal ni de rassemblement organisé par l'application.**
 
@@ -54,11 +46,11 @@ Le logo **Halloween Map** reprend la signature des applications **DomotiK Studio
 
 Ici, le **O de Halloween** reprend la **citrouille en forme de repère GPS** de l'icône officielle. Le mot **Map** adopte un dégradé orange-violet, tandis que l'icône conserve son village nocturne, sa lune et sa carte.
 
-Le logo de présentation et l'icône d'application ont des rôles distincts : l'un signe le projet et ses supports ; l'autre identifie l'application sur l'écran d'accueil et dans le navigateur.
+Le logo de présentation et l’icône ont chacun leur rôle : le premier signe le projet, la seconde identifie l’application. Les deux visuels montrés dans ce README sont des **extraits des créations validées**, sans nouvelle interprétation graphique. Les fichiers PWA réellement déployés ne sont pas modifiés par cette mise à jour documentaire.
 
 <div align="center">
 
-<img src="artwork/branding/halloween-map-wordmark.svg" alt="Signature Halloween Map by DomotiK Studio" width="440" />
+<img src="artwork/branding/halloween-map-app-icon-official.webp" alt="Icône validée de Halloween Map : citrouille-repère orange sur une carte nocturne violette" width="150" />
 
 </div>
 
