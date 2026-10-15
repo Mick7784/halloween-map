@@ -187,8 +187,6 @@ function SeasonEditor({
             Heures en {zone}. L’activation est manuelle et indépendante de
             l’ouverture de la carte.
           </p>
-        </>
-      )}
       <Notice error={error} />
       <Button className="primary" disabled={busy}>
         {busy ? "Enregistrement…" : "Enregistrer"}
