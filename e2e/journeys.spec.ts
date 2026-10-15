@@ -147,7 +147,7 @@ test("admin hides a house publicly, retains it in administration, and restores i
     .getByRole("button", { name: "Maisons", exact: true })
     .click();
   const row = page.getByRole("row").filter({ hasText: "Maison 0" });
-  await row.getByRole('button',{name:'Actions pour Maison 0'}).click();
+  await row.getByLabel('Actions pour Maison 0').click();
   await page.getByRole('button',{name:'Voir la fiche',exact:true}).click();
   await page.getByRole("tab", { name: "Gestion" }).click();
   page.once("dialog", (dialog) => dialog.accept());
@@ -158,7 +158,7 @@ test("admin hides a house publicly, retains it in administration, and restores i
   await page.locator(".admin-inline-detail")
     .getByRole("button", { name: /Refermer la fiche/ }).click();
   await expect(row.getByText("Masquée", { exact: true })).toBeVisible();
-  await row.getByRole('button',{name:'Actions pour Maison 0'}).click();
+  await row.getByLabel('Actions pour Maison 0').click();
   await page.getByRole('button',{name:'Voir la fiche',exact:true}).click();
   const context = await browser.newContext({ baseURL: origin }),
     visitor = await context.newPage();

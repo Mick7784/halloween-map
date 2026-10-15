@@ -134,11 +134,18 @@ test("beta desktop exposes only useful navigation, pending moderation and normal
   await expect(pending.getByRole('button',{name:'Réafficher',exact:true})).toBeVisible();
   await pending.getByRole('button',{name:'Réafficher',exact:true}).click();
   await expect(pending.getByRole('button',{name:'Masquer',exact:true})).toBeVisible();
+  await pending.getByLabel('Actions pour Mr Test 1').click();
+  await page.getByRole('button',{name:'Voir la fiche',exact:true}).click();
+  await page.getByRole('tab',{name:'Modération'}).click();
+  await page.getByRole('button',{name:'Remettre en attente',exact:true}).click();
+  await page.getByRole('button',{name:/Refermer la fiche/}).click();
+  await pending.getByRole('button',{name:'Valider',exact:true}).click();
+  await expect(pending.locator('.house-review-status')).toHaveText('Validée');
 
   await page
     .getByRole("row")
     .filter({ hasText: "Mr Test 4" })
-    .getByRole('button',{name:'Actions pour Mr Test 4'})
+    .getByLabel('Actions pour Mr Test 4')
     .click();
   await page.getByRole('button',{name:'Voir la fiche',exact:true}).click();
   await page.getByRole("tab", { name: "Gestion" }).click();
@@ -161,6 +168,11 @@ test("beta desktop exposes only useful navigation, pending moderation and normal
     "data-theme",
     "light",
   );
+  await page.setViewportSize({width:390,height:844});
+  await page.getByRole('button',{name:'Gérer les maisons',exact:true}).click();
+  await page.getByLabel('Saison du back-office').selectOption(sid);
+  await page.getByRole('row').filter({hasText:'Mr Test 1'}).getByLabel('Actions pour Mr Test 1').click();
+  await expect(page.getByRole('button',{name:'Masquer',exact:true})).toBeVisible();
 });
 
 test("global direct accounts need neither a TEST season nor an email", async ({

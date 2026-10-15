@@ -1019,3 +1019,42 @@ it("refreshes final anonymous statistics at purge after late BO changes and keep
  expect((await db().query('SELECT year FROM participation_history WHERE user_id=$1',[ordinary.id])).rows).toEqual([{year:2026}]);
  await expect(service.adminAction(admin,{action:'visibility',seasonId:real.id,id:h.id,payload:'VISIBLE'})).rejects.toMatchObject({status:403});
 });
+
+it("enforces registration API boundaries and individual BO grants independently of public hours", async () => {
+ for(const [time, allowed] of [
+  ['2026-09-30T23:59:59.999Z',false],['2026-10-01T00:00:00.000Z',true],
+  ['2026-10-31T22:59:59.999Z',true],['2026-10-31T23:00:00.000Z',false],
+ ] as const) {
+  vi.setSystemTime(new Date(time));
+  const owner=await directAccount(time);
+  const request=service.createParticipation(owner,{house:houseDefinition,acceptance});
+  if(allowed) await expect(request).resolves.toEqual({ok:true});
+  else await expect(request).rejects.toMatchObject({status:403});
+ }
+ const h=await createHouse(ordinary,real);
+ const restricted={...admin,role_name:'ADMIN',permissions:['admin.access','participants.read','season.read']};
+ for(const [action,payload] of [['reviewHouse',{status:'VALIDATED'}],['visibility','HIDDEN'],['deleteHouse','SUPPRIMER LA MAISON']] as const)
+  await expect(service.adminAction(restricted,{action,id:h.id,seasonId:real.id,payload})).rejects.toMatchObject({status:403});
+});
+
+it("upgrades V098 legacy TEST activation without losing houses, accounts or real activation; V099 migration replay is harmless",async()=>{
+ const pg=new PGlite();
+ try {
+  for(const file of files.filter(f=>f<'014')) await pg.exec(await readFile('migrations/'+file,'utf8'));
+  await pg.exec(`INSERT INTO instances(public_name,territory,postal_code,country,latitude,longitude) VALUES('Compat','Rennes','35000','France',48.1,-1.67);
+   INSERT INTO seasons(instance_id,year,name,is_test,opens_at,closes_at,registrations_open_at,purge_at) SELECT id,2026,'Legacy',true,'2000-01-01','2201-01-01','2000-01-01','2201-01-02' FROM instances;
+   UPDATE instances SET active_season_id=(SELECT id FROM seasons);
+   INSERT INTO users(instance_id,email,display_name,password_hash,kind) SELECT id,'legacy@example.invalid','Legacy','KEEP_HASH','PARTICIPANT' FROM instances;
+   INSERT INTO participations(instance_id,season_id,user_id,name,address,latitude,longitude,activities,starts_at,ends_at,fear) SELECT i.id,s.id,u.id,'Keep house','Keep address',48.1,-1.67,ARRAY['CANDY'],'2026-10-31T17:00Z','2026-10-31T20:00Z',2 FROM instances i,seasons s,users u;`);
+  const sql=await readFile('migrations/014_active_real_season_post_close.sql','utf8');
+  await pg.exec(sql);await pg.exec(sql);
+  expect((await pg.query('SELECT active_season_id FROM instances')).rows).toEqual([{active_season_id:null}]);
+  expect((await pg.query('SELECT password_hash FROM users')).rows).toEqual([{password_hash:'KEEP_HASH'}]);
+  expect((await pg.query('SELECT address FROM participations')).rows).toEqual([{address:'Keep address'}]);
+  await expect(pg.exec('UPDATE instances SET active_season_id=(SELECT id FROM seasons)')).rejects.toThrow();
+  await pg.exec(`INSERT INTO seasons(instance_id,year,name,is_test,opens_at,closes_at,registrations_open_at,purge_at) SELECT id,2027,'Real',false,'2027-10-31','2027-11-01','2027-10-01','2027-11-02' FROM instances;
+   UPDATE instances SET active_season_id=(SELECT id FROM seasons WHERE NOT is_test);`);
+  const before=(await pg.query('SELECT active_season_id FROM instances')).rows;
+  await pg.exec(sql);expect((await pg.query('SELECT active_season_id FROM instances')).rows).toEqual(before);
+ } finally {await pg.close();}
+});
