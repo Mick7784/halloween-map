@@ -120,6 +120,7 @@ export default function Admin({
     [error, setError] = useState(""),
     [selected, setSelected] = useState<string | null>(null),
     [edit, setEdit] = useState(false),
+    [detailTab, setDetailTab] = useState<"info" | "moderation">("info"),
     [reason, setReason] = useState(""),
     [reasonCode, setReasonCode] = useState<RefusalCode>("OTHER"),
     [search, setSearch] = useState(""),
@@ -383,17 +384,34 @@ export default function Admin({
           : h.review_status === review)) &&
       (availability === "ALL" || open(h) === (availability === "OPEN")),
   );
-  function select(h: ManagedHouse, editing = false) {
+  function select(h: ManagedHouse, editing = false, tab: "info" | "moderation" = "info") {
     if (selected && !confirmDraftNavigation()) return;
-    if (selected === h.id && !editing) {
+    if (selected === h.id && !editing && tab === "info") {
       setSelected(null);
       setEdit(false);
       return;
     }
     setSelected(h.id);
     setEdit(editing);
-    setReexamining(false);
-    setReason(h.refusal_reason ?? "");
+    setDetailTab(tab);
+    setReexamining(tab === "moderation" && h.review_status === "REFUSED");
+    setReasonCode("OTHER");
+    setReason(tab === "moderation" ? "" : h.refusal_reason ?? "");
+  }
+  async function moderateNow(h: ManagedHouse) {
+    await api("admin", {
+      action: "reviewHouse", id: h.id, seasonId,
+      payload: { status: "VALIDATED" },
+    });
+    await reload();
+  }
+  async function toggleHouseVisibility(h: ManagedHouse) {
+    if (h.status !== "HIDDEN" && !window.confirm("Masquer cette maison de la carte ?")) return;
+    await api("admin", {
+      action: "visibility", id: h.id, seasonId,
+      payload: h.status === "HIDDEN" ? "VISIBLE" : "HIDDEN",
+    });
+    await reload();
   }
   function table(items: ManagedHouse[], moderation = false) {
     const sortedItems = items.slice().sort((a, b) => {
@@ -493,7 +511,9 @@ export default function Admin({
                   </td>
                   <td data-label="Adresse">{h.address}</td>
                   <td data-label="Modération">
-                    {reviews[h.review_status ?? "VALIDATED"]}
+                    <span className={"house-review-status " + (h.review_status ?? "VALIDATED").toLowerCase()}>
+                      {reviews[h.review_status ?? "VALIDATED"]}
+                    </span>
                     {h.status === "HIDDEN" && <small>Masquée</small>}
                   </td>
                   {moderation ? (
@@ -530,25 +550,38 @@ export default function Admin({
                   )}
                   <td data-label="Actions">
                     <div className="row-actions house-row-actions">
-                      <Button
-                        className="secondary desktop-row-action"
-                        onClick={() => select(h)}
-                      >
-                        {moderation ? "Voir / Modérer" : "Gérer"}
-                      </Button>
-                      {has(user, "participants.edit") &&
-                        selectedSeason &&
-                        !seasonFinished(selectedSeason) && (
-                          <Button
-                            className="desktop-row-action"
-                            aria-label={"Modifier " + h.name}
-                            onClick={() => select(h, true)}
-                          >
-                            Modifier
-                          </Button>
-                        )}
+                      {has(user, "participants.edit") && selectedSeason && !selectedSeason.archived && !selectedSeason.purged_at && (
+                        <>
+                          {h.review_status === "PENDING" && (
+                            <>
+                              <AsyncButton className="desktop-row-action" onClick={() => moderateNow(h)}>Valider</AsyncButton>
+                              <Button className="desktop-row-action" onClick={() => select(h, false, "moderation")}>Refuser</Button>
+                            </>
+                          )}
+                          {h.review_status === "REFUSED" && (
+                            <Button className="desktop-row-action" onClick={() => select(h, false, "moderation")}>Réexaminer</Button>
+                          )}
+                          {h.review_status === "VALIDATED" && (
+                            <>
+                              <Button className="desktop-row-action" aria-label={"Modifier " + h.name} onClick={() => select(h, true)}>Modifier</Button>
+                              <AsyncButton className="desktop-row-action" onClick={() => toggleHouseVisibility(h)}>
+                                {h.status === "HIDDEN" ? "Réafficher" : "Masquer"}
+                              </AsyncButton>
+                            </>
+                          )}
+                        </>
+                      )}
                       <ActionMenu label={"Actions pour " + h.name}>
                         <Button onClick={() => select(h)}>Voir la fiche</Button>
+                        {has(user, "participants.edit") && selectedSeason && !selectedSeason.archived && !selectedSeason.purged_at && h.review_status === "PENDING" && (
+                          <>
+                            <AsyncButton onClick={() => moderateNow(h)}>Valider</AsyncButton>
+                            <Button onClick={() => select(h, false, "moderation")}>Refuser avec motif</Button>
+                          </>
+                        )}
+                        {has(user, "participants.edit") && selectedSeason && !selectedSeason.archived && !selectedSeason.purged_at && h.review_status === "REFUSED" && (
+                          <Button onClick={() => select(h, false, "moderation")}>Réexaminer</Button>
+                        )}
                         {has(user, "users.read") && (
                           <Button
                             onClick={() => {
@@ -632,10 +665,10 @@ export default function Admin({
                   <tr className="admin-detail-row">
                     <td colSpan={moderation ? 5 : 7}>
                       <AdminInlineDetail
-                        key={h.id}
+                        key={h.id + ":" + detailTab}
                         title={current.name}
                         compactHeader
-                        initialTab="info"
+                        initialTab={detailTab}
                         onClose={() => {
                           setSelected(null);
                           setEdit(false);
