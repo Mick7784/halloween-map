@@ -330,6 +330,7 @@ function LinksEditor({
         disponibles.
       </p>
       <form
+        inert={busy}
         onChange={() => {
           setDirty(true);
           setDone(false);

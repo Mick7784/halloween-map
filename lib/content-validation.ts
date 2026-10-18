@@ -1,7 +1,21 @@
 import { HttpError } from "./auth";
+export const variables = [
+  "territory",
+  "season_year",
+  "registration_date",
+  "map_open_date",
+  "map_close_date",
+  "purge_date",
+  "house_count",
+  "user_name",
+  "event_name",
+] as const;
+export const publicContentVariables = variables.filter(
+  (v) => v !== "user_name",
+);
 export function sanitizeContent(
   value: string,
-  allowed: readonly string[] = [],
+  allowed: readonly string[] = publicContentVariables,
 ) {
   if (
     /<\/?[a-z!]|javascript\s*:|data\s*:|vbscript\s*:|[\u0000-\u0008\u000b\u000c\u000e-\u001f]/i.test(

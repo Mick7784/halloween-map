@@ -33,6 +33,29 @@ export type LegalDocument = {
   requires_reaccept: boolean;
   published_at: string | null;
 };
+export function publicLegalDocuments(
+  documents: Record<LegalKind, LegalDocument>,
+): Record<LegalKind, LegalDocument> {
+  return Object.fromEntries(
+    Object.entries(documents).map(([kind, d]) => [
+      kind,
+      {
+        id: d.id,
+        kind: d.kind,
+        version: d.version,
+        title: d.title,
+        body: d.body,
+        status: d.status,
+        active: d.active,
+        requires_reaccept: d.requires_reaccept,
+        published_at: d.published_at,
+        format: d.format,
+        content_json: d.content_json,
+        prepared: d.prepared,
+      },
+    ]),
+  ) as Record<LegalKind, LegalDocument>;
+}
 export async function initializeLegalDocuments(
   instanceId: string,
   client: Database = db(),

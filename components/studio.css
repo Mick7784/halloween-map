@@ -5,6 +5,24 @@
   --studio-muted: #536278;
   --studio-line: #cbd4df;
   --studio-accent: #076d96;
+  /* Resolve existing app controls against this module's selected theme. */
+  --bg: var(--studio-bg);
+  --surface: var(--studio-surface);
+  --text: var(--studio-text);
+  --muted: var(--studio-muted);
+  --line: var(--studio-line);
+  --accent: var(--studio-accent);
+  --hm-bg: var(--studio-bg);
+  --hm-surface: var(--studio-surface);
+  --hm-card: var(--studio-surface);
+  --hm-control: var(--studio-surface);
+  --hm-control-hover: var(--studio-bg);
+  --hm-input: var(--studio-surface);
+  --hm-text: var(--studio-text);
+  --hm-muted: var(--studio-muted);
+  --hm-line: var(--studio-line);
+  --hm-violet: var(--studio-accent);
+  --hm-amber: var(--studio-accent);
   color-scheme: light;
   background: var(--studio-bg);
   color: var(--studio-text);

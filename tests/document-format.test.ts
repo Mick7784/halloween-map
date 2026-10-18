@@ -119,6 +119,9 @@ describe("closed documentary grammar", () => {
       expect(() => validateDocument(doc(child))).toThrow();
   });
   it("allows an empty draft but keeps bounded complexity and size", () => {
+    expect(
+      documentHtml(doc(p("Un document long. ".repeat(4000)))).length,
+    ).toBeGreaterThan(60000);
     expect(documentText(validateDocument(doc({ type: "paragraph" })))).toBe("");
     expect(() => validateDocument(doc(p("x".repeat(500001))))).toThrow();
     let node: unknown = p();

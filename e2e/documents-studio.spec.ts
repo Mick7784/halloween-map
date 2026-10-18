@@ -80,13 +80,46 @@ test("live document API and editor: private drafts, offline retry, conflicts, pu
     await expect(studio.locator(".document-preview h2")).toHaveText(
       "Titre des consignes de test",
     );
+    await studio
+      .getByRole("combobox", { name: "Apparence", exact: true })
+      .selectOption("light");
+    expect(
+      await studio
+        .getByRole("heading", { name: "Contenus & documents", exact: true })
+        .evaluate((e) => getComputedStyle(e).color),
+    ).toBe("rgb(32, 43, 59)");
+    await studio.screenshot({
+      path: "test-results/studio/document-desktop-light.png",
+      animations: "disabled",
+    });
+    await studio
+      .getByRole("combobox", { name: "Apparence", exact: true })
+      .selectOption("dark");
+    expect(
+      await studio
+        .getByRole("heading", { name: "Contenus & documents", exact: true })
+        .evaluate((e) => getComputedStyle(e).color),
+    ).toBe("rgb(230, 235, 242)");
+    await studio.screenshot({
+      path: "test-results/studio/document-desktop-dark.png",
+      animations: "disabled",
+    });
     await studio.getByLabel("Format de l’aperçu").selectOption("mobile");
     expect(
       await studio
         .locator(".document-mobile")
         .evaluate((e) => e.getBoundingClientRect().width),
     ).toBeLessThanOrEqual(390);
+    await studio.screenshot({
+      path: "test-results/studio/document-mobile-preview.png",
+      animations: "disabled",
+    });
     await studio.getByRole("button", { name: "Rédiger", exact: true }).click();
+    await studio.locator(".document-toolbar").scrollIntoViewIfNeeded();
+    await page.screenshot({
+      path: "test-results/studio/editor-desktop.png",
+      animations: "disabled",
+    });
     await studio
       .getByRole("button", { name: "Enregistrer le brouillon" })
       .click();
@@ -182,6 +215,35 @@ test("live document API and editor: private drafts, offline retry, conflicts, pu
       format: "tiptap",
       body: "Mon texte local à préserver",
     });
+    expect(after.documents.GUIDELINES.created_by).toBeUndefined();
+    expect(after.documents.GUIDELINES.published_by).toBeUndefined();
+    const longDraft = await post("admin/content", {
+      action: "draft",
+      active_version: "2026.1",
+      document: {
+        kind: "NOTICE",
+        version: "2026.2",
+        title: "Long document de test",
+        body: "",
+        format: "tiptap",
+        content_json: {
+          type: "doc",
+          content: [
+            {
+              type: "paragraph",
+              content: [{ type: "text", text: "Document long. ".repeat(4000) }],
+            },
+          ],
+        },
+        requires_reaccept: false,
+        prepared: false,
+      },
+    });
+    expect(longDraft.status()).toBe(200);
+    expect(
+      (await (await page.request.get("/api/public")).json()).documents.NOTICE
+        .version,
+    ).toBe("2026.1");
     const anonymous = await browser.newContext({
       viewport: { width: 390, height: 844 },
     });
@@ -355,6 +417,11 @@ test("live reacceptance distinguishes TERMS from guidelines and survives a publi
         ).toBe(200);
       }
       await publish("2026.2", "2026.1");
+      // Reproduce the legacy bug: a version was written without acceptance.
+      await pool.query(
+        "UPDATE participations SET terms_version='2026.2',terms_accepted_at=NULL WHERE id=$1",
+        [house.id],
+      );
       const map = await (await phone.request.get("/api/public")).json();
       expect(map.houses.map((h: { id: string }) => h.id)).toContain(house.id);
       await phone.goto("/participant");
@@ -379,7 +446,7 @@ test("live reacceptance distinguishes TERMS from guidelines and survives a publi
             [house.id],
           )
         ).rows[0],
-      ).toEqual({ terms_version: null, terms_accepted_at: null });
+      ).toEqual({ terms_version: "2026.2", terms_accepted_at: null });
       await form.getByLabel(/J’accepte les conditions générales/).check();
       // New publication while the old version is still open must fail safely.
       await publish("2026.3", "2026.2");

@@ -1,7 +1,14 @@
 .document-copy {
+  font-family: Inter, Arial, sans-serif;
   line-height: 1.75;
   overflow-wrap: anywhere;
   font-size: 1rem;
+}
+body.hm-premium .document-copy h1,
+body.hm-premium .document-copy h2,
+body.hm-premium .document-copy h3 {
+  font-family: Inter, Arial, sans-serif;
+  font-weight: 700;
 }
 .document-copy > :first-child {
   margin-top: 0;

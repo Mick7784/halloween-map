@@ -9,9 +9,10 @@ import Editorial from "./Editorial";
 export default function AccountPolicy({ state }: { state: PublicState }) {
   const settings = publicPrivacySettings(state.privacy);
   const document = state.documents?.PRIVACY;
-  const configured = !!settings.policyBody;
-  const body =
-    settings.policyBody ?? document?.body ?? legalDefaults.PRIVACY.body;
+  const configured = !!settings.policyBody && document?.format !== "tiptap";
+  const body = configured
+    ? settings.policyBody!
+    : (document?.body ?? legalDefaults.PRIVACY.body);
   const published = document?.published_at
     ? DateTime.fromISO(document.published_at).setLocale("fr")
     : null;
@@ -29,7 +30,11 @@ export default function AccountPolicy({ state }: { state: PublicState }) {
             : ""}
         </p>
       )}
-      {!configured && document ? <DocumentView document={document} /> : <Editorial text={body} />}
+      {!configured && document ? (
+        <DocumentView document={document} />
+      ) : (
+        <Editorial text={body} />
+      )}
       <p>
         Après purge, seules vos années de participation validée sont conservées
         cinq ans et sont effacées avec le compte. La fréquentation repose sur

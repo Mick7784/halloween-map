@@ -1,5 +1,17 @@
 # Changelog
 
+## V0.9.10
+
+- **Contenus & documents** : nouvelle navigation en trois espaces, textes courts par contexte avec champs simples et aperçu, documents officiels dans un espace dédié, paramètres de liens/contact conservés.
+- **Éditeur documentaire** : Tiptap 3 structuré, titres H1 à H3, styles, couleur et surlignage, alignements, listes et tâches, citations, liens, tableaux, annulation/rétablissement, sommaire rétractable, compteurs et aperçu ordinateur/mobile. Aucun bouton IA sans service.
+- **Brouillons et versions** : sauvegarde distincte de la publication, révision attendue et conflits explicites, reprise après erreur réseau, comparaison et restauration dans une nouvelle version. Les versions publiées restent immuables ; anciens contenus Markdown et brouillons conservés.
+- **Publication** : contrôle de préparation et informations manquantes, comparaison définitive, analyse des participants concernés, confirmation explicite et journalisation durable. Un brouillon n'est jamais public. Les modèles initiaux restent signalés comme à vérifier ; aucune réécriture des CGU finales.
+- **Acceptations** : les bonnes pratiques n'enregistrent plus de version ni d'acceptation fictive des CGU. Une version historique sans horodatage ne vaut pas preuve. Réacceptation explicite avec actualisation des documents en session, refus des versions périmées et maintien des maisons sur la carte pendant la régularisation. CGU, consignes et informations RGPD restent distinctes.
+- **Données et sécurité** : migration 015 additive et rejouable, preuves indépendantes des journaux temporaires, conservation cinq ans avec purge et références anonymisées à la suppression du compte. JSON validé, HTML échappé, grammaire et palette fermées, liens sûrs, limites de taille/profondeur et métadonnées internes retirées des surfaces publiques.
+- **DomotiK Studio** : primitives locales de navigation, panneaux et sauvegarde ; thèmes clair/sombre/système isolés et compatibles avec les contrôles existants. Architecture documentée, sans dépendance directe à LinKs ni refonte des autres interfaces publiques.
+- **Validation et exploitation** : 303 tests unitaires/métier, parcours documentaires Playwright avec PostgreSQL réel, migration depuis 014 et rejeu, conflits, coupure réseau, longueurs, rendu mobile, permissions, sécurité et régressions comptes/maisons/saisons/collecte. Circuit CI, Docker, HTTPS et release existant conservé. Guide : [docs/content-documents-operations.md](docs/content-documents-operations.md). Aucune intervention sur le VPS.
+
+
 ## V0.9.9
 
 - **Saisons** : une seule saison réelle activée manuellement ; retrait du fonctionnement TEST, avec conservation des données historiques et migration compatible V0.9.8. Comptes et connexion disponibles sans saison. Les inscriptions publiques exigent une saison active et leur fenêtre autorisée ; carte publique uniquement aux horaires officiels.

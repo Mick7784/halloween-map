@@ -1,5 +1,9 @@
 "use client";
 import DocumentView from "./DocumentView";
+import {
+  requiresTermsAcceptance,
+  type TermsAcceptanceState,
+} from "../lib/legal-acceptance";
 import { Input, Button, Dialog } from "./ui";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
@@ -124,9 +128,10 @@ export default function ParticipationForm({
   useDraftGuard(touched && snapshot !== savedSnapshot);
   const acceptanceNeeded =
     !house ||
-    (documents?.TERMS?.requires_reaccept &&
-      (house as House & { terms_version?: string }).terms_version !==
-        documents.TERMS.version) ||
+    requiresTermsAcceptance(
+      documents?.TERMS,
+      house as House & TermsAcceptanceState,
+    ) ||
     (documents?.GUIDELINES?.requires_reaccept &&
       (house as House & { guidelines_version?: string }).guidelines_version !==
         documents.GUIDELINES.version);
@@ -134,11 +139,10 @@ export default function ParticipationForm({
     ...legalDefaults.GUIDELINES,
     version: "2026.1",
   };
-  const termsNeeded =
-    !!documents?.TERMS?.requires_reaccept &&
-    (!house ||
-      (house as House & { terms_version?: string }).terms_version !==
-        documents.TERMS.version);
+  const termsNeeded = requiresTermsAcceptance(
+    documents?.TERMS,
+    house as House & TermsAcceptanceState,
+  );
   function section(
     n: number,
     title: string,

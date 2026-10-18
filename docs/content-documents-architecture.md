@@ -93,7 +93,7 @@ suppression des nouvelles colonnes. Ne pas retirer 015 après usage du JSON.
 5. Suite complète, PostgreSQL et navigateur, vérification des régressions.
 6. Revue, changelog/version, PR verte, fusion et une seule release vérifiée.
 
-État : phases 0 à 4 terminées ; phase 5 en validation intégrale. Aucune release publiée pour ce chantier.
+État : phases 0 à 5 terminées ; phase 6 en cours pour V0.9.10. Fusion et publication conditionnées à la CI finale verte.
 
 ## Résultats intermédiaires et décisions finales
 
@@ -125,3 +125,13 @@ suppression des nouvelles colonnes. Ne pas retirer 015 après usage du JSON.
 - Aucun changement des textes légaux initiaux ni des workflows de livraison.
   Le projet marque historiquement ses releases Beta/prerelease ; ce marquage
   reste celui du workflow existant. La stabilité est vérifiée par les contrôles.
+
+## Validation finale avant livraison
+
+- 303 tests unitaires/métier verts ; lint, TypeScript, build et audit production verts.
+- 208 parcours navigateur couverts : 207 verts dans la passe globale PostgreSQL 17, puis rejeu vert des trois scénarios documentaires après correction du sélecteur de capture. La CI finale rejoue toute la suite sur la révision de livraison.
+- PostgreSQL 17 local isolé : base vierge, double migration et upgrade depuis 014 vérifiés ; les pertes de connexion de la base légère PGlite socket ont été écartées en testant sur le moteur réel.
+- Captures clair/sombre et aperçu mobile inspectées ; correction de l'héritage des variables de thème, limitée au module.
+- Dernière revue : rendu de confidentialité actif prioritaire après publication riche ; métadonnées d'auteurs privées ; références CGU sans date jamais considérées acceptées ; erreurs d'actualisation traitées ; formulaires verrouillés pendant sauvegarde.
+- CI de travail complète verte sur dbeaf657 (PostgreSQL, 208 parcours, Docker, HTTPS) ; validation finale exigée sur le nouveau commit versionné avant fusion.
+- Version choisie par le système existant : V0.9.10. Une seule release après fusion ; workflow inchangé, marquage Beta/prerelease conservé.

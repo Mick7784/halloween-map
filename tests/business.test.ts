@@ -1757,6 +1757,7 @@ describe("V0.3 content, legal versions and installation", () => {
         d.id,
       ]),
     ).rejects.toThrow();
+    await db().query("UPDATE participations SET terms_version='2026.2',terms_accepted_at=NULL WHERE id=$1", [house.id]);
     await expect(
       service.updateHouse(participant, house.id, houseData()),
     ).rejects.toThrow();

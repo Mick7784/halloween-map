@@ -1,4 +1,9 @@
 import { recordLegalAcceptance } from "./document-service";
+import { publicLegalDocuments } from "./legal-documents";
+import {
+  requiresTermsAcceptance,
+  type TermsAcceptanceState,
+} from "./legal-acceptance";
 import { applicationSeason, selectedSeason } from "./season-context";
 import {
   initializeLegalDocuments,
@@ -455,9 +460,15 @@ export async function publicState(
     }
   }
   if (s && canCollect && user)
-    upcoming = (await routeCandidates(
-      db(), i, s, earlyAccess ? s.opens_at : now, s.closes_at,
-    ))
+    upcoming = (
+      await routeCandidates(
+        db(),
+        i,
+        s,
+        earlyAccess ? s.opens_at : now,
+        s.closes_at,
+      )
+    )
       .filter(
         (h) =>
           h.status === "VISIBLE" &&
@@ -502,7 +513,7 @@ export async function publicState(
         }),
       ]),
     ),
-    documents: await legalState(i.id),
+    documents: publicLegalDocuments(await legalState(i.id)),
     privacy: publicPrivacySettings(i.config.privacy),
     projectLinks: publicProjectLinks(i.config.projectLinks, i.config.privacy),
     participation: publicParticipationSettings(i.config.participation),
@@ -700,11 +711,14 @@ export async function createParticipation(
       if (i.active_season_id) {
         registrationSeason = await applicationSeason(i, management.actor, c);
       } else {
-        const candidates = (await c.query(
-          "SELECT * FROM seasons WHERE instance_id=$1 AND NOT is_test AND NOT archived AND purged_at IS NULL AND closes_at>now() ORDER BY opens_at",
-          [i.id],
-        )).rows as unknown as Season[];
-        registrationSeason = candidates.find((s) => s.id === management.seasonId) ??
+        const candidates = (
+          await c.query(
+            "SELECT * FROM seasons WHERE instance_id=$1 AND NOT is_test AND NOT archived AND purged_at IS NULL AND closes_at>now() ORDER BY opens_at",
+            [i.id],
+          )
+        ).rows as unknown as Season[];
+        registrationSeason =
+          candidates.find((s) => s.id === management.seasonId) ??
           (candidates.length === 1 ? candidates[0] : null);
         if (candidates.length > 1 && !registrationSeason)
           throw new HttpError(409, "Sélectionnez la saison à préparer");
@@ -728,7 +742,8 @@ export async function createParticipation(
           +new Date() >= +new Date(ss.closes_at)))
     )
       throw new HttpError(403, "Inscriptions fermées");
-    if (ss.is_test) throw new HttpError(403, "Saison historique en lecture seule");
+    if (ss.is_test)
+      throw new HttpError(403, "Saison historique en lecture seule");
     if (ss.archived || ss.purged_at || (!management && seasonFinished(ss)))
       throw new HttpError(403, "Saison terminée");
     const a = await validateAcceptance(c, i.id, raw.acceptance, true);
@@ -865,9 +880,10 @@ export async function updateHouse(
       await c.query("SELECT id FROM instances WHERE id=$1 FOR UPDATE", [i.id]);
       const docs = await legalState(i.id, c);
       if (
-        (docs.TERMS.requires_reaccept &&
-          (old as House & { terms_version?: string }).terms_version !==
-            docs.TERMS.version) ||
+        requiresTermsAcceptance(
+          docs.TERMS,
+          old as House & TermsAcceptanceState,
+        ) ||
         (docs.GUIDELINES.requires_reaccept &&
           (old as House & { guidelines_version?: string })
             .guidelines_version !== docs.GUIDELINES.version)
@@ -876,7 +892,10 @@ export async function updateHouse(
           c,
           i.id,
           (input as { acceptance?: unknown }).acceptance,
-          !!docs.TERMS.requires_reaccept && (old as House & { terms_version?: string }).terms_version !== docs.TERMS.version,
+          requiresTermsAcceptance(
+            docs.TERMS,
+            old as House & TermsAcceptanceState,
+          ),
         );
         await c.query(
           "UPDATE participations SET terms_version=CASE WHEN $4 THEN $1 ELSE terms_version END,terms_accepted_at=CASE WHEN $4 THEN now() ELSE terms_accepted_at END,guidelines_version=$2,guidelines_accepted_at=now() WHERE id=$3",
@@ -966,7 +985,9 @@ export async function participantAction(
   if (managedId && data.action === "delete")
     throw new HttpError(400, "Utilisez la suppression admin confirmée");
   return transaction(async (c) => {
-    await c.query("SELECT id FROM instances WHERE id=$1 FOR UPDATE", [user.instance_id]);
+    await c.query("SELECT id FROM instances WHERE id=$1 FOR UPDATE", [
+      user.instance_id,
+    ]);
     const currentInstance = managedId ? null : await instance(c);
     const currentSeason = currentInstance
       ? await applicationSeason(currentInstance, user, c)
@@ -1015,10 +1036,7 @@ export async function participantAction(
       );
       return { deleted: true };
     }
-    if (
-      h.purged_at ||
-      (!managedId && +new Date() >= +new Date(h.closes_at))
-    )
+    if (h.purged_at || (!managedId && +new Date() >= +new Date(h.closes_at)))
       throw new HttpError(403, "Saison fermée");
     if (data.action === "deplete") {
       if (
@@ -1066,19 +1084,28 @@ export async function discoveryDistances(
   context: TimeContext = realTime(),
 ) {
   if (!user) throw new HttpError(401, "Connexion requise");
-  const { origin } = z.object({
-    origin: z.object({
-      longitude: z.number().finite().min(-180).max(180),
-      latitude: z.number().finite().min(-90).max(90),
-    }),
-  }).parse(input);
+  const { origin } = z
+    .object({
+      origin: z.object({
+        longitude: z.number().finite().min(-180).max(180),
+        latitude: z.number().finite().min(-90).max(90),
+      }),
+    })
+    .parse(input);
   const state = await publicState(context, user);
-  if (!("mapAccessible" in state) || !state.mapAccessible ||
-      !("houses" in state) || !Array.isArray(state.houses))
+  if (
+    !("mapAccessible" in state) ||
+    !state.mapAccessible ||
+    !("houses" in state) ||
+    !Array.isArray(state.houses)
+  )
     throw new HttpError(403, "La carte n'est pas accessible");
   const houses = state.houses;
   if (houses.length > 200)
-    throw new HttpError(422, "Trop de maisons : affinez les filtres pour consulter les distances.");
+    throw new HttpError(
+      422,
+      "Trop de maisons : affinez les filtres pour consulter les distances.",
+    );
   if (!houses.length) return { distances: {} };
   const distances = await createWalkingRouter().distancesFrom!(
     origin,
@@ -1202,7 +1229,10 @@ export async function route(
         "Les maisons ont changé. Vérifiez la sélection.",
       );
     // Super Admin simulations outside public hours must not inflate event statistics.
-    if (result.stops.length && !earlyMapAccess({ ...current, active: true }, user, context.now))
+    if (
+      result.stops.length &&
+      !earlyMapAccess({ ...current, active: true }, user, context.now)
+    )
       await c.query(
         "UPDATE seasons SET routes_count=routes_count+1 WHERE id=$1",
         [s.id],
@@ -1454,12 +1484,20 @@ function redactSeason(s: Record<string, unknown>, user: User) {
 }
 // Serialize house writes with lifecycle operations before touching a house or its audit.
 // Purge takes the same instance lock, so a late mutation cannot recreate seasonal traces.
-async function lockHouseSeason(c: Database, user: User, id: string | undefined) {
-  await c.query("SELECT id FROM instances WHERE id=$1 FOR UPDATE", [user.instance_id]);
-  const s = (await c.query(
-    "SELECT s.* FROM seasons s JOIN participations h ON h.season_id=s.id AND h.instance_id=s.instance_id WHERE h.id=$1 AND s.instance_id=$2 FOR UPDATE OF s",
-    [id, user.instance_id],
-  )).rows[0] as unknown as Season | undefined;
+async function lockHouseSeason(
+  c: Database,
+  user: User,
+  id: string | undefined,
+) {
+  await c.query("SELECT id FROM instances WHERE id=$1 FOR UPDATE", [
+    user.instance_id,
+  ]);
+  const s = (
+    await c.query(
+      "SELECT s.* FROM seasons s JOIN participations h ON h.season_id=s.id AND h.instance_id=s.instance_id WHERE h.id=$1 AND s.instance_id=$2 FOR UPDATE OF s",
+      [id, user.instance_id],
+    )
+  ).rows[0] as unknown as Season | undefined;
   if (!s) throw new HttpError(404, "Maison introuvable");
   if (s.archived || s.purged_at || s.is_test)
     throw new HttpError(403, "Saison en lecture seule");
@@ -1490,11 +1528,7 @@ export async function adminAction(user: User | null, input: unknown) {
     ].includes(data.action)
   ) {
     const context = await selectedSeason(u, data.seasonId);
-    if (
-      !context ||
-      context.purged_at ||
-      context.archived
-    )
+    if (!context || context.purged_at || context.archived)
       throw new HttpError(403, "Saison en lecture seule");
     const target = (
       await db().query(

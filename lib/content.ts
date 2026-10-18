@@ -6,26 +6,18 @@ export type {
   LegalDocument,
   LegalEvidence,
 } from "./legal-documents";
-import { sanitizeContent } from "./content-validation";
-export { sanitizeContent } from "./content-validation";
+import {
+  sanitizeContent,
+  variables,
+  publicContentVariables as publicVars,
+} from "./content-validation";
+export { sanitizeContent, variables } from "./content-validation";
 export { legalDefaults } from "./legal-defaults";
 import { z } from "zod";
 import { db, transaction, type Database } from "./db";
 import { HttpError, requirePermission } from "./auth";
 import type { User } from "./domain";
 import { publicProjectLinks } from "./project-links";
-export const variables = [
-  "territory",
-  "season_year",
-  "registration_date",
-  "map_open_date",
-  "map_close_date",
-  "purge_date",
-  "house_count",
-  "user_name",
-  "event_name",
-] as const;
-const publicVars = variables.filter((v) => v !== "user_name");
 export const contentDefaults: Record<
   string,
   { category: string; value: string; variables: readonly string[] }

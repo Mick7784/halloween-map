@@ -118,6 +118,17 @@ export default function DocumentWorkspace({
       setBusy(false);
     }
   }
+  async function refreshVersions() {
+    setError("");
+    setBusy(true);
+    try {
+      await reload();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
   function restore(d: LegalDocument) {
     if (
       dirty &&
@@ -192,7 +203,11 @@ export default function DocumentWorkspace({
         >
           Vérifier avant publication
         </Button>
-        <Button type="button" onClick={() => void reload()} disabled={busy}>
+        <Button
+          type="button"
+          onClick={() => void refreshVersions()}
+          disabled={busy}
+        >
           Actualiser les versions
         </Button>
       </div>
