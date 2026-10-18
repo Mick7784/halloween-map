@@ -69,7 +69,10 @@ export default function ParticipationForm({
   territory?: string;
   postalCode?: string;
 }) {
-  const [updatedDocuments, setUpdatedDocuments] = useState<Record<LegalKind, LegalDocument> | null>(null);
+  const [updatedDocuments, setUpdatedDocuments] = useState<Record<
+    LegalKind,
+    LegalDocument
+  > | null>(null);
   const documents = updatedDocuments ?? initialDocuments;
   const settings = publicParticipationSettings(source);
   const initial = useRef(initialHouseLocation(house));
@@ -121,18 +124,21 @@ export default function ParticipationForm({
   useDraftGuard(touched && snapshot !== savedSnapshot);
   const acceptanceNeeded =
     !house ||
-    (documents?.TERMS.requires_reaccept &&
+    (documents?.TERMS?.requires_reaccept &&
       (house as House & { terms_version?: string }).terms_version !==
         documents.TERMS.version) ||
-    (documents?.GUIDELINES.requires_reaccept &&
+    (documents?.GUIDELINES?.requires_reaccept &&
       (house as House & { guidelines_version?: string }).guidelines_version !==
         documents.GUIDELINES.version);
   const guidelinesDocument = documents?.GUIDELINES ?? {
     ...legalDefaults.GUIDELINES,
     version: "2026.1",
   };
-  const termsNeeded = !!documents?.TERMS.requires_reaccept &&
-    (!house || (house as House & { terms_version?: string }).terms_version !== documents.TERMS.version);
+  const termsNeeded =
+    !!documents?.TERMS?.requires_reaccept &&
+    (!house ||
+      (house as House & { terms_version?: string }).terms_version !==
+        documents.TERMS.version);
   function section(
     n: number,
     title: string,
@@ -155,15 +161,17 @@ export default function ParticipationForm({
     <form
       id="participation-form"
       className="participation-form"
-      onChangeCapture={() => setTouched(true)}
-      onClickCapture={() => setTouched(true)}
+      onChange={() => setTouched(true)}
+      onClick={() => setTouched(true)}
       onSubmit={async (e) => {
         e.preventDefault();
         setError("");
         setSaved(false);
         if (acceptanceNeeded && (!guidelines || (termsNeeded && !terms))) {
           setError(
-            termsNeeded ? "Lisez et acceptez explicitement les CGU, puis prenez connaissance des bonnes pratiques." : "Prenez connaissance des bonnes pratiques avant de participer.",
+            termsNeeded
+              ? "Lisez et acceptez explicitement les CGU, puis prenez connaissance des bonnes pratiques."
+              : "Prenez connaissance des bonnes pratiques avant de participer.",
           );
           return;
         }
@@ -187,16 +195,18 @@ export default function ParticipationForm({
             },
             { zone, opens, closes, isTest, settings },
           );
-          const acceptance = termsNeeded ? {
-            terms,
-            terms_version: documents!.TERMS.version,
-            guidelines,
-            guidelines_version: guidelinesDocument.version,
-          } : {
-            mode: "GUIDELINES_ONLY",
-            guidelines,
-            guidelines_version: guidelinesDocument.version,
-          };
+          const acceptance = termsNeeded
+            ? {
+                terms,
+                terms_version: documents!.TERMS.version,
+                guidelines,
+                guidelines_version: guidelinesDocument.version,
+              }
+            : {
+                mode: "GUIDELINES_ONLY",
+                guidelines,
+                guidelines_version: guidelinesDocument.version,
+              };
           await onSave(
             house
               ? { ...h, ...(acceptanceNeeded ? { acceptance } : {}) }
@@ -343,20 +353,60 @@ export default function ParticipationForm({
         )}
         {acceptanceNeeded && (
           <section className="participation-section participation-consent">
-            <Button type="button" onClick={async () => {
-              try {
-                const response = await fetch("/api/public", { cache: "no-store" });
-                if (!response.ok) throw Error("Actualisation impossible. Réessayez.");
-                const state = await response.json();
-                if (state.documents) { setUpdatedDocuments(state.documents); setGuidelines(false); setTerms(false); setError(""); }
-              } catch(e) { setError((e as Error).message); }
-            }}>Actualiser les documents à lire</Button>
-            {termsNeeded && <>
-              <p role="status">Les conditions ont évolué. Votre maison reste visible pendant la régularisation. Lisez la nouvelle version avant de confirmer.</p>
-              <details><summary>Lire les CGU · version {documents!.TERMS.version}</summary><DocumentView document={documents!.TERMS} /></details>
-              <label className="check"><Input type="checkbox" checked={terms} onChange={e => setTerms(e.target.checked)} /><span>J’accepte les conditions générales d’utilisation, version {documents!.TERMS.version}.</span></label>
-              <p className="small muted">Cette acceptation des CGU est distincte de la prise de connaissance des consignes et ne constitue pas un consentement général au traitement des données.</p>
-            </>}
+            <Button
+              type="button"
+              onClick={async () => {
+                try {
+                  const response = await fetch("/api/public", {
+                    cache: "no-store",
+                  });
+                  if (!response.ok)
+                    throw Error("Actualisation impossible. Réessayez.");
+                  const state = await response.json();
+                  if (state.documents) {
+                    setUpdatedDocuments(state.documents);
+                    setGuidelines(false);
+                    setTerms(false);
+                    setError("");
+                  }
+                } catch (e) {
+                  setError((e as Error).message);
+                }
+              }}
+            >
+              Actualiser les documents à lire
+            </Button>
+            {termsNeeded && (
+              <>
+                <p role="status">
+                  Les conditions ont évolué. Votre maison reste visible pendant
+                  la régularisation. Lisez la nouvelle version avant de
+                  confirmer.
+                </p>
+                <details>
+                  <summary>
+                    Lire les CGU · version {documents!.TERMS.version}
+                  </summary>
+                  <DocumentView document={documents!.TERMS} />
+                </details>
+                <label className="check">
+                  <Input
+                    type="checkbox"
+                    checked={terms}
+                    onChange={(e) => setTerms(e.target.checked)}
+                  />
+                  <span>
+                    J’accepte les conditions générales d’utilisation, version{" "}
+                    {documents!.TERMS.version}.
+                  </span>
+                </label>
+                <p className="small muted">
+                  Cette acceptation des CGU est distincte de la prise de
+                  connaissance des consignes et ne constitue pas un consentement
+                  général au traitement des données.
+                </p>
+              </>
+            )}
             <label className="check">
               <Input
                 type="checkbox"
@@ -391,7 +441,9 @@ export default function ParticipationForm({
         <Button
           className="primary"
           disabled={
-            busy || !location.confirmed || (!!acceptanceNeeded && (!guidelines || (termsNeeded && !terms)))
+            busy ||
+            !location.confirmed ||
+            (!!acceptanceNeeded && (!guidelines || (termsNeeded && !terms)))
           }
         >
           {house ? <Save size={18} /> : <Send size={18} />}{" "}

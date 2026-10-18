@@ -6,9 +6,9 @@ import { documentText, validateDocument } from "./document-format";
 import {
   legalState,
   legalDefaults,
-  sanitizeContent,
   type LegalDocument,
-} from "./content";
+} from "./legal-documents";
+import { sanitizeContent } from "./content-validation";
 
 const request = z.object({
   action: z.enum(["draft", "review", "publish"]),

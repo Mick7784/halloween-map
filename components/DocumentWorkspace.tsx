@@ -33,9 +33,9 @@ export default function DocumentWorkspace({
   reload: () => Promise<void>;
   onBack: () => void;
 }) {
-  const draft = documents.find((d) => d.status === "DRAFT");
+  const drafts = documents.filter((d) => d.status === "DRAFT");
   const [saved, setSaved] = useState<LegalDocument>(
-    draft ?? {
+    drafts[0] ?? {
       ...active,
       id: undefined,
       status: "DRAFT",
@@ -45,6 +45,7 @@ export default function DocumentWorkspace({
       requires_reaccept: false,
     },
   );
+  const draft = drafts.find((d) => d.id === saved.id);
   const [title, setTitle] = useState(saved.title),
     [version, setVersion] = useState(saved.version),
     [prepared, setPrepared] = useState(saved.prepared ?? false),
@@ -264,7 +265,41 @@ export default function DocumentWorkspace({
           )}
         </StudioPanel>
       )}
-      <div hidden={tab !== "edit"}>
+      {drafts.length > 1 && (
+        <label>
+          Brouillon à ouvrir
+          <Select
+            value={saved.id ?? ""}
+            disabled={busy}
+            onChange={(e) => {
+              if (
+                dirty &&
+                !window.confirm("Quitter ce brouillon sans enregistrer ?")
+              )
+                return;
+              const selected = drafts.find((d) => d.id === e.target.value);
+              if (!selected) return;
+              setSaved(selected);
+              setTitle(selected.title);
+              setVersion(selected.version);
+              setPrepared(selected.prepared ?? false);
+              setReaccept(selected.requires_reaccept);
+              setJson(selected.content_json ?? null);
+              setDirty(false);
+              setReview(null);
+              setTab("edit");
+              setEditorKey((n) => n + 1);
+            }}
+          >
+            {drafts.map((d) => (
+              <option key={d.id} value={d.id}>
+                {d.version} · {d.title}
+              </option>
+            ))}
+          </Select>
+        </label>
+      )}
+      <div hidden={tab !== "edit"} inert={busy}>
         <StudioPanel
           title="Préparer le document"
           description="Enregistrez librement votre travail. La confirmation de préparation est vérifiée avant publication."

@@ -1781,6 +1781,7 @@ describe("V0.3 content, legal versions and installation", () => {
       requires_reaccept: true, prepared: true,
     } };
     await expect(contentAction(null, input)).rejects.toThrow();
+    await expect(contentAction(participant, input)).rejects.toMatchObject({ status: 403 });
     const saved = await contentAction(admin, input) as { document: { id: string; revision: number } };
     const d = saved.document;
     expect((await legalState(admin.instance_id)).GUIDELINES.version).toBe("2026.1");

@@ -52,7 +52,9 @@ const blocks = [
 const inline = ["text", "hardBreak"];
 /** Closed grammar shared by API, preview and public renderer. No HTML input. */
 export function validateDocument(value: unknown): DocumentNode {
-  if (JSON.stringify(value ?? null).length > 500000)
+  if (
+    new TextEncoder().encode(JSON.stringify(value ?? null)).byteLength > 500000
+  )
     throw Error("Document trop volumineux (500 Ko maximum)");
   let count = 0;
   function node(raw: unknown, parent: string, depth: number): DocumentNode {

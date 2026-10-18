@@ -1,6 +1,13 @@
 import { documentAction } from "./document-service";
-import type { DocumentNode } from "./document-format";
-import { legalDefaults } from "./legal-defaults";
+import { legalState } from "./legal-documents";
+export { legalState, initializeLegalDocuments } from "./legal-documents";
+export type {
+  LegalKind,
+  LegalDocument,
+  LegalEvidence,
+} from "./legal-documents";
+import { sanitizeContent } from "./content-validation";
+export { sanitizeContent } from "./content-validation";
 export { legalDefaults } from "./legal-defaults";
 import { z } from "zod";
 import { db, transaction, type Database } from "./db";
@@ -107,55 +114,6 @@ export const contentDefaults: Record<
     },
   ]),
 );
-export type LegalKind = keyof typeof legalDefaults;
-export type LegalEvidence = {
-  id: string;
-  kind: LegalKind;
-  version: string;
-  action: string;
-  occurred_at: string;
-  expires_at: string;
-  user_id: string | null;
-  document_id: string | null;
-};
-export type LegalDocument = {
-  format?: "markdown" | "tiptap";
-  content_json?: DocumentNode | null;
-  revision?: number;
-  base_version?: string | null;
-  prepared?: boolean;
-  created_by?: string | null;
-  published_by?: string | null;
-  created_at?: string;
-  updated_at?: string;
-  id?: string;
-  kind: LegalKind;
-  version: string;
-  title: string;
-  body: string;
-  status: string;
-  active: boolean;
-  requires_reaccept: boolean;
-  published_at: string | null;
-};
-export function sanitizeContent(
-  value: string,
-  allowed: readonly string[] = publicVars,
-) {
-  if (
-    /<\/?[a-z!]|javascript\s*:|data\s*:|vbscript\s*:|[\u0000-\u0008\u000b\u000c\u000e-\u001f]/i.test(
-      value,
-    )
-  )
-    throw new HttpError(400, "HTML, scripts et liens non sûrs interdits");
-  for (const match of value.matchAll(/\{\{\s*([\w.]+)\s*\}\}/g))
-    if (!allowed.includes(match[1]))
-      throw new HttpError(400, "Variable non autorisée : " + match[1]);
-  for (const match of value.matchAll(/\]\(([^)]+)\)/g))
-    if (!/^(https?:\/\/|\/(?!\/)|mailto:)[^\s]*$/i.test(match[1]))
-      throw new HttpError(400, "Lien non autorisé");
-  return value.trim();
-}
 export function interpolate(
   value: string,
   vars: Record<string, string | number>,
@@ -180,41 +138,6 @@ export async function contentState(
       String(overrides.find((o) => o.key === key)?.value ?? v.value),
     ]),
   );
-}
-export async function initializeLegalDocuments(
-  instanceId: string,
-  client: Database = db(),
-) {
-  for (const [kind, d] of Object.entries(legalDefaults))
-    await client.query(
-      "INSERT INTO legal_documents(instance_id,kind,version,title,body,status,active,published_at) VALUES($1,$2,'2026.1',$3,$4,'PUBLISHED',true,now()) ON CONFLICT DO NOTHING",
-      [instanceId, kind, d.title, d.body],
-    );
-}
-export async function legalState(
-  instanceId: string,
-  client: Database = db(),
-): Promise<Record<LegalKind, LegalDocument>> {
-  const rows = (
-    await client.query(
-      "SELECT * FROM legal_documents WHERE instance_id=$1 AND active=true",
-      [instanceId],
-    )
-  ).rows;
-  return Object.fromEntries(
-    Object.entries(legalDefaults).map(([kind, d]) => [
-      kind,
-      rows.find((r) => r.kind === kind) ?? {
-        ...d,
-        kind,
-        version: "2026.1",
-        status: "PUBLISHED",
-        active: true,
-        requires_reaccept: false,
-        published_at: null,
-      },
-    ]),
-  ) as Record<LegalKind, LegalDocument>;
 }
 export async function contentAdmin(user: User | null) {
   const u = requirePermission(user, "admin.access");
@@ -256,7 +179,7 @@ export async function contentAction(user: User | null, input: unknown) {
     return documentAction(u, input);
   const p = z
     .object({
-      action: z.enum(["save", "reset", "draft", "publish", "links"]),
+      action: z.enum(["save", "reset", "links"]),
       links: z
         .object({
           bugEnabled: z.boolean(),
@@ -271,16 +194,6 @@ export async function contentAction(user: User | null, input: unknown) {
         .optional(),
       key: z.string().optional(),
       value: z.string().max(10000).optional(),
-      id: z.uuid().optional(),
-      document: z
-        .object({
-          kind: z.enum(["TERMS", "GUIDELINES", "PRIVACY", "NOTICE"]),
-          version: z.string().regex(/^[0-9]{4}\.[0-9]{1,3}$/),
-          title: z.string().trim().min(1).max(100),
-          body: z.string().min(1).max(10000),
-          requires_reaccept: z.boolean(),
-        })
-        .optional(),
     })
     .parse(input);
   if (p.action === "links") {

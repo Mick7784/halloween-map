@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { Pool } from "pg";
+import { hashPassword } from "../lib/auth";
 test.skip(
   !process.env.SEASON_E2E_DATABASE_URL,
   "Requires an explicitly disposable database",
@@ -240,6 +241,176 @@ test("live document API and editor: private drafts, offline retry, conflicts, pu
         )
       ).rows,
     ).toHaveLength(1);
+  } finally {
+    await pool.end();
+  }
+});
+
+test("live reacceptance distinguishes TERMS from guidelines and survives a publication during the user session", async ({
+  page,
+  browser,
+}) => {
+  const pool = new Pool({
+    connectionString: process.env.SEASON_E2E_DATABASE_URL,
+  });
+  const password = "document-acceptance-test-1234",
+    now = Date.now();
+  const post = (path: string, data: unknown) =>
+    page.request.post("/api/" + path, { headers: { origin }, data });
+  try {
+    await pool.query(
+      "TRUNCATE instances,bootstrap,setup_sessions,rate_limits RESTART IDENTITY CASCADE",
+    );
+    expect(
+      (
+        await post("setup", {
+          token: process.env.SETUP_TOKEN,
+          instance: {
+            public_name: "Test acceptations",
+            territory: "Rennes",
+            postal_code: "35000",
+            country: "France",
+            timezone: "Europe/Paris",
+            latitude: 48.1,
+            longitude: -1.67,
+            zoom: 14,
+          },
+          admin: {
+            display_name: "Équipe",
+            email: "acceptance-admin@example.invalid",
+            password,
+          },
+          season: {
+            year: new Date().getFullYear(),
+            registrations_open: true,
+            registrations_open_at: new Date(now - 7200000).toISOString(),
+            opens_at: new Date(now - 3600000).toISOString(),
+            closes_at: new Date(now + 86400000).toISOString(),
+            purge_at: new Date(now + 172800000).toISOString(),
+          },
+        })
+      ).status(),
+    ).toBe(200);
+    await pool.query(
+      "UPDATE instances SET active_season_id=(SELECT id FROM seasons LIMIT 1)",
+    );
+    const user = (
+      await pool.query(
+        "INSERT INTO users(instance_id,email,display_name,password_hash,kind,role_id,email_status,account_status) SELECT i.id,'acceptance-member@example.invalid','Camille',$1,'PARTICIPANT',r.id,'VERIFIED','ACTIVE' FROM instances i JOIN roles r ON r.instance_id=i.id AND r.name='USER' RETURNING id",
+        [await hashPassword(password)],
+      )
+    ).rows[0];
+    const house = (
+      await pool.query(
+        "INSERT INTO participations(instance_id,season_id,user_id,name,address,latitude,longitude,activities,starts_at,ends_at,fear,terms_version,guidelines_version,guidelines_accepted_at,review_status,status,activity,address_parts) SELECT i.id,s.id,$1,'Maison de test','12 Rue des Lanternes, 35000 Rennes',48.1,-1.67,ARRAY['CANDY'],now()-interval '20 minutes',now()+interval '2 hours',2,NULL,'2026.1',now(),'VALIDATED','VISIBLE','ACTIVE',$2::jsonb FROM instances i JOIN seasons s ON s.instance_id=i.id RETURNING id",
+        [
+          user.id,
+          JSON.stringify({
+            number: "12",
+            street: "Rue des Lanternes",
+            postalCode: "35000",
+            city: "Rennes",
+            cityCode: "35238",
+          }),
+        ],
+      )
+    ).rows[0];
+    const member = await browser.newContext();
+    try {
+      const phone = await member.newPage();
+      expect(
+        (
+          await phone.request.post("/api/login", {
+            headers: { origin },
+            data: { email: "acceptance-member@example.invalid", password },
+          })
+        ).status(),
+      ).toBe(200);
+      async function publish(version: string, base: string) {
+        const result = await post("admin/content", {
+          action: "draft",
+          active_version: base,
+          document: {
+            kind: "TERMS",
+            version,
+            title: "CGU de test uniquement",
+            body: "Document fictif pour tester une acceptation explicite.",
+            prepared: true,
+            requires_reaccept: true,
+          },
+        });
+        expect(result.status()).toBe(200);
+        const d = (await result.json()).document;
+        expect(
+          (
+            await post("admin/content", {
+              action: "publish",
+              id: d.id,
+              revision: d.revision,
+              active_version: base,
+              confirmed: true,
+              affected: 1,
+            })
+          ).status(),
+        ).toBe(200);
+      }
+      await publish("2026.2", "2026.1");
+      const map = await (await phone.request.get("/api/public")).json();
+      expect(map.houses.map((h: { id: string }) => h.id)).toContain(house.id);
+      await phone.goto("/participant");
+      const form = phone.locator("#participation-form");
+      await expect(form.getByText(/Les conditions ont évolué/)).toBeVisible();
+      await expect(
+        form.getByRole("button", { name: "Enregistrer les modifications" }),
+      ).toBeDisabled();
+      await form
+        .getByRole("checkbox", { name: /J’ai pris connaissance des/ })
+        .check();
+      await expect(
+        form.getByRole("checkbox", { name: /J’ai pris connaissance des/ }),
+      ).toBeChecked();
+      await expect(
+        form.getByRole("button", { name: "Enregistrer les modifications" }),
+      ).toBeDisabled();
+      expect(
+        (
+          await pool.query(
+            "SELECT terms_version,terms_accepted_at FROM participations WHERE id=$1",
+            [house.id],
+          )
+        ).rows[0],
+      ).toEqual({ terms_version: null, terms_accepted_at: null });
+      await form.getByLabel(/J’accepte les conditions générales/).check();
+      // New publication while the old version is still open must fail safely.
+      await publish("2026.3", "2026.2");
+      await form
+        .getByRole("button", { name: "Enregistrer les modifications" })
+        .click();
+      await expect(form.getByText(/Les documents ont changé/)).toBeVisible();
+      await form
+        .getByRole("button", { name: "Actualiser les documents à lire" })
+        .click();
+      await expect(
+        form.getByLabel(/J’accepte les conditions générales/),
+      ).not.toBeChecked();
+      await form.getByLabel(/J’accepte les conditions générales/).check();
+      await form.getByLabel(/J’ai pris connaissance des/).check();
+      await form
+        .getByRole("button", { name: "Enregistrer les modifications" })
+        .click();
+      await expect(form.getByText("Modifications enregistrées.")).toBeVisible();
+      const proof = (
+        await pool.query(
+          "SELECT kind,version,action FROM legal_events WHERE user_id=$1 AND kind='TERMS'",
+          [user.id],
+        )
+      ).rows;
+      expect(proof).toEqual([
+        { kind: "TERMS", version: "2026.3", action: "ACCEPTED" },
+      ]);
+    } finally {
+      await member.close();
+    }
   } finally {
     await pool.end();
   }

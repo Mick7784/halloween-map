@@ -93,4 +93,35 @@ suppression des nouvelles colonnes. Ne pas retirer 015 après usage du JSON.
 5. Suite complète, PostgreSQL et navigateur, vérification des régressions.
 6. Revue, changelog/version, PR verte, fusion et une seule release vérifiée.
 
-État : phase 0 terminée ; phase 1 en cours. Aucune release publiée pour ce chantier.
+État : phases 0 à 4 terminées ; phase 5 en validation intégrale. Aucune release publiée pour ce chantier.
+
+## Résultats intermédiaires et décisions finales
+
+- Base réelle confirmée : main `5b66bb03`, tag V0.9.9 ; dernière livraison verte.
+- Fondations : 294 tests verts avant le développement UI. Éditeur : tests des
+  commandes Tiptap réelles, aller-retour avec la grammaire serveur et nettoyage
+  du collage. Interface : tests des trois sections et des paramètres préservés.
+- Intégration : 300 tests verts, lint/TypeScript et build ; parcours navigateur
+  réel des conflits, coupure réseau, publication, mobile et restauration validé.
+- Régularisation : test réel de publication 2026.3 pendant la lecture 2026.2,
+  refus de la version périmée, actualisation sans perdre les champs maison,
+  nouvelle acceptation explicite et preuve uniquement de la version 2026.3.
+- Défauts révélés par les contrôles : fichiers temporaires Vitest bloqués par
+  l'environnement Windows (tests exécutés hors restriction), verrou npm incomplet
+  sur Linux (corrigé avec npm récent), couleur RGB sérialisée par le navigateur
+  (normalisation vers la palette), états sans document et premier clic d'une case
+  annulé par un rendu déclenché en capture (corrigés et retestés).
+- Frontières finales sans cycle : `legal-documents` (contrats/lecture historique),
+  `content-validation` (textes), `document-format` (grammaire/rendu purs),
+  `document-service` (transactions), `content` (façade et catalogue), composants UI.
+- Les anciennes lignes DRAFT ne sont pas supprimées ; un sélecteur permet de
+  reprendre plusieurs brouillons hérités. Les nouvelles créations évitent leur
+  multiplication. Le travail est verrouillé pendant la requête de sauvegarde.
+- Conservation : événements de publication et acceptation cinq ans, purge par
+  le worker existant ; suppression de compte rend les références de compte nulles.
+  Aucun identifiant de maison, adresse, IP ou copie de profil dans ces preuves.
+  Cette politique technique doit être décrite par l'exploitant dans ses textes ;
+  elle ne vaut pas validation juridique des documents.
+- Aucun changement des textes légaux initiaux ni des workflows de livraison.
+  Le projet marque historiquement ses releases Beta/prerelease ; ce marquage
+  reste celui du workflow existant. La stabilité est vérifiée par les contrôles.
