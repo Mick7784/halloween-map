@@ -73,7 +73,7 @@ export function validateDocument(value: unknown): DocumentNode {
         if (!m || Object.keys(m).some(k => !["type", "attrs"].includes(k))) throw Error("Style invalide");
         if (["bold", "italic", "underline", "strike"].includes(m.type) && !Object.keys(m.attrs ?? {}).length) return { type: m.type };
         if (m.type === "link") {
-          if (!safeDocumentLink(m.attrs?.href) || Object.keys(m.attrs ?? {}).some(k => !["href", "target", "rel", "class"].includes(k))) throw Error("Lien non sûr");
+          if (!safeDocumentLink(m.attrs?.href) || Object.keys(m.attrs ?? {}).some(k => !["href", "target", "rel", "class", "title"].includes(k))) throw Error("Lien non sûr");
           return { type: "link", attrs: { href: m.attrs.href } };
         }
         if (["textStyle", "highlight"].includes(m.type)) {
