@@ -108,6 +108,7 @@ export const contentDefaults: Record<
   ]),
 );
 export type LegalKind = keyof typeof legalDefaults;
+export type LegalEvidence = { id: string; kind: LegalKind; version: string; action: string; occurred_at: string; expires_at: string; user_id: string | null; document_id: string | null };
 export type LegalDocument = {
   format?: "markdown" | "tiptap";
   content_json?: DocumentNode | null;
@@ -225,6 +226,7 @@ export async function contentAdmin(user: User | null) {
       )
     ).rows,
     active: await legalState(u.instance_id),
+    evidence: (await db().query("SELECT id,kind,version,action,occurred_at,expires_at,user_id,document_id FROM legal_events WHERE instance_id=$1 ORDER BY occurred_at DESC LIMIT 500", [u.instance_id])).rows,
   };
 }
 export async function contentAction(user: User | null, input: unknown) {

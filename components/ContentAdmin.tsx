@@ -2,7 +2,7 @@
 import { useState } from "react";
 import useDraftGuard, { confirmDraftNavigation } from "./useDraftGuard";
 import { Button, Select } from "./ui";
-import type { LegalDocument, LegalKind } from "../lib/content";
+import type { LegalDocument, LegalKind, LegalEvidence } from "../lib/content";
 import { api, Field, Notice, values, Check } from "./common";
 import DocumentWorkspace from "./DocumentWorkspace";
 import { StudioShell, StudioNav, StudioPanel, SaveStatus } from "./Studio";
@@ -12,6 +12,7 @@ type Data = {
   values: Record<string, string>;
   documents: LegalDocument[];
   active: Record<LegalKind, LegalDocument>;
+  evidence?: LegalEvidence[];
 };
 const labels: Record<string, string> = {
  "home.eyebrow":"Nom de l’événement", "home.title":"Titre avant l’ouverture", "home.preparation":"Introduction de la prochaine édition",
@@ -30,7 +31,7 @@ export default function ContentAdmin({ data, reload }: { data: Data; reload: () 
   {id:"links",label:"Liens & contact",description:"Coordonnées et soutien"},
  ]}/>}>
  {section==="texts" ? <ApplicationTexts data={data} submit={action}/> : section==="links" ? <LinksEditor links={data.links} submit={action}/> : kind ?
- <DocumentWorkspace key={kind} active={data.active[kind]} documents={data.documents.filter(d=>d.kind===kind)} reload={reload} onBack={()=>setKind(null)}/> :
+ <DocumentWorkspace key={kind} active={data.active[kind]} documents={data.documents.filter(d=>d.kind===kind)} evidence={data.evidence?.filter(e=>e.kind===kind)} reload={reload} onBack={()=>setKind(null)}/> :
  <><h3>Documents officiels</h3><p>Préparez vos textes sans modifier leur version publique. La publication fait l’objet d’une vérification distincte.</p>
  <div className="studio-document-grid">{Object.entries(data.active).map(([k,d])=>{
   const draft=data.documents.find(v=>v.kind===k&&v.status==="DRAFT");

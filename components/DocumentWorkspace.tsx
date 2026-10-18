@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import type { LegalDocument } from "../lib/content";
+import type { LegalDocument, LegalEvidence } from "../lib/content";
 import { documentText, type DocumentNode } from "../lib/document-format";
 import { api, Notice } from "./common";
 import { Button, Select } from "./ui";
@@ -11,7 +11,7 @@ import { SaveStatus, StudioPanel, StudioEmpty } from "./Studio";
 
 type Review = { document: LegalDocument; previous: LegalDocument; affected: number; issues: string[]; visibility: string };
 function nextVersion(version: string) { const [year, n] = version.split("."); return `${year}.${Number(n) + 1}`; }
-export default function DocumentWorkspace({ active, documents, reload, onBack }: { active: LegalDocument; documents: LegalDocument[]; reload: () => Promise<void>; onBack: () => void }) {
+export default function DocumentWorkspace({ active, documents, evidence = [], reload, onBack }: { active: LegalDocument; documents: LegalDocument[]; evidence?: LegalEvidence[]; reload: () => Promise<void>; onBack: () => void }) {
   const draft = documents.find(d => d.status === "DRAFT");
   const [saved, setSaved] = useState<LegalDocument>(draft ?? { ...active, id: undefined, status: "DRAFT", active: false, version: nextVersion(active.version), prepared: false, requires_reaccept: false });
   const [title, setTitle] = useState(saved.title), [version, setVersion] = useState(saved.version), [prepared, setPrepared] = useState(saved.prepared ?? false), [reaccept, setReaccept] = useState(saved.requires_reaccept);
@@ -53,6 +53,9 @@ export default function DocumentWorkspace({ active, documents, reload, onBack }:
       <div className="studio-comparison"><div><h4>Votre travail</h4><DocumentView document={{ body: "", format: "tiptap", content_json: json }} /></div><div><h4>Brouillon enregistré · révision {draft.revision}</h4><DocumentView document={draft} /></div></div>
       <Button type="button" onClick={() => { setSaved(draft); setDirty(true); setReview(null); setTab("edit"); }}>Reprendre mon travail sur cette révision</Button>
       <p className="field-help">Cette action conserve votre texte local ; le prochain enregistrement remplacera le brouillon affiché à droite.</p>
+    </StudioPanel>}
+    {tab === "history" && <StudioPanel title="Traçabilité" description="Événements conservés cinq ans, indépendamment du journal métier et des maisons saisonnières. Les anciennes traces sont importées seulement si un horodatage réel existe.">
+      {!evidence.length ? <StudioEmpty>Aucun événement durable enregistré pour ce document.</StudioEmpty> : <details><summary>Consulter les événements récents ({evidence.length})</summary><ol>{evidence.map(event => <li key={event.id}>{new Date(event.occurred_at).toLocaleString("fr-FR")} · {event.action === "PUBLISHED" ? "Publication" : event.action === "ACCEPTED" ? "Acceptation des CGU" : "Prise de connaissance"} · {event.version} · {event.user_id ? "Compte " + event.user_id : "Compte supprimé"}</li>)}</ol></details>}
     </StudioPanel>}
     <div hidden={tab !== "edit"}>
       <StudioPanel title="Préparer le document" description="Enregistrez librement votre travail. La confirmation de préparation est vérifiée avant publication.">

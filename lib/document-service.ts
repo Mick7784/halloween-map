@@ -88,6 +88,6 @@ export async function documentAction(u: User, input: unknown) {
 export async function recordLegalAcceptance(c: Database, u: User, accepted: { terms: boolean; terms_version: string | null; guidelines_version: string }) {
   for (const kind of accepted.terms ? ["TERMS", "GUIDELINES"] : ["GUIDELINES"]) {
     const version = kind === "TERMS" ? accepted.terms_version : accepted.guidelines_version;
-    await c.query("INSERT INTO legal_events(instance_id,user_id,document_id,kind,version,action) SELECT $1,$2,(SELECT id FROM legal_documents WHERE instance_id=$1 AND kind=$3 AND version=$4 AND status='PUBLISHED'),$3,$4,$5", [u.instance_id, u.id, kind, version, kind === "TERMS" ? "ACCEPTED" : "ACKNOWLEDGED"]);
+    await c.query("INSERT INTO legal_events(instance_id,user_id,document_id,kind,version,action) SELECT $1,$2,(SELECT id FROM legal_documents WHERE instance_id=$1 AND kind=$3 AND version=$4 AND status='PUBLISHED'),$3,$4,$5 ON CONFLICT DO NOTHING", [u.instance_id, u.id, kind, version, kind === "TERMS" ? "ACCEPTED" : "ACKNOWLEDGED"]);
   }
 }

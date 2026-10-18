@@ -29,3 +29,14 @@ CREATE TABLE IF NOT EXISTS legal_events(
 );
 CREATE INDEX IF NOT EXISTS legal_events_retention ON legal_events(expires_at);
 CREATE INDEX IF NOT EXISTS legal_events_user ON legal_events(instance_id,user_id);
+CREATE UNIQUE INDEX IF NOT EXISTS legal_events_import_identity ON legal_events(instance_id,user_id,kind,version,action,occurred_at);
+-- Import only acceptance timestamps that already exist; never infer TERMS from
+-- a GUIDELINES_ONLY version field or reconstruct timestamps from audit logs.
+INSERT INTO legal_events(instance_id,user_id,document_id,kind,version,action,occurred_at,expires_at)
+SELECT DISTINCT p.instance_id,p.user_id,d.id,'TERMS',p.terms_version,'ACCEPTED',p.terms_accepted_at,p.terms_accepted_at+interval '5 years'
+FROM participations p LEFT JOIN legal_documents d ON d.instance_id=p.instance_id AND d.kind='TERMS' AND d.version=p.terms_version AND d.status='PUBLISHED'
+WHERE p.terms_accepted_at IS NOT NULL AND p.terms_version IS NOT NULL ON CONFLICT DO NOTHING;
+INSERT INTO legal_events(instance_id,user_id,document_id,kind,version,action,occurred_at,expires_at)
+SELECT DISTINCT p.instance_id,p.user_id,d.id,'GUIDELINES',p.guidelines_version,'ACKNOWLEDGED',p.guidelines_accepted_at,p.guidelines_accepted_at+interval '5 years'
+FROM participations p LEFT JOIN legal_documents d ON d.instance_id=p.instance_id AND d.kind='GUIDELINES' AND d.version=p.guidelines_version AND d.status='PUBLISHED'
+WHERE p.guidelines_accepted_at IS NOT NULL AND p.guidelines_version IS NOT NULL ON CONFLICT DO NOTHING;

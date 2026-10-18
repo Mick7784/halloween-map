@@ -876,7 +876,7 @@ export async function updateHouse(
           c,
           i.id,
           (input as { acceptance?: unknown }).acceptance,
-          true,
+          !!docs.TERMS.requires_reaccept && (old as House & { terms_version?: string }).terms_version !== docs.TERMS.version,
         );
         await c.query(
           "UPDATE participations SET terms_version=CASE WHEN $4 THEN $1 ELSE terms_version END,terms_accepted_at=CASE WHEN $4 THEN now() ELSE terms_accepted_at END,guidelines_version=$2,guidelines_accepted_at=now() WHERE id=$3",
@@ -1155,13 +1155,14 @@ export async function route(
   }
   // Recheck the database snapshot under a short consistency lock.
   await transaction(async (c) => {
-    await validateAcceptance(c, i.id, input.acceptance);
     const currentInstance = (
       await c.query(
         "SELECT active_season_id FROM instances WHERE id=$1 FOR UPDATE",
         [i.id],
       )
     ).rows[0];
+    const acknowledged = await validateAcceptance(c, i.id, input.acceptance);
+    await recordLegalAcceptance(c, user, acknowledged);
     const current = (
       await c.query(
         "SELECT * FROM seasons WHERE id=$1 AND instance_id=$2 FOR UPDATE",

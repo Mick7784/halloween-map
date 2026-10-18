@@ -706,6 +706,7 @@ describe("Seasons, privacy and participant activity", () => {
       acceptance: ack,
     });
     expect(await service.ownHouse(participant)).toMatchObject({
+      terms_version: null,
       terms_accepted_at: null,
       guidelines_version: "2026.1",
     });
@@ -1747,6 +1748,9 @@ describe("V0.3 content, legal versions and installation", () => {
     ).rows[0];
     await contentAction(admin, { action: "publish", id: d.id, revision: 1, active_version: "2026.1", affected: 1, confirmed: true });
     expect((await legalState(admin.instance_id)).TERMS.version).toBe("2026.2");
+    const stillVisible = await service.publicState(new Date("2026-10-31T18:00:00Z"), participant);
+    expect(stillVisible.houses?.map(h => h.id)).toContain(house.id);
+    await expect(service.updateHouse(participant, house.id, { ...houseData(), acceptance: { mode: "GUIDELINES_ONLY", guidelines: true, guidelines_version: "2026.1" } })).rejects.toMatchObject({ status: 409 });
     await expect(
       db().query("UPDATE legal_documents SET body=$1 WHERE id=$2", [
         "overwritten",
@@ -1761,6 +1765,7 @@ describe("V0.3 content, legal versions and installation", () => {
       acceptance: { ...acceptance(), terms_version: "2026.2" },
     });
     expect((await service.ownHouse(participant))?.terms_version).toBe("2026.2");
+    expect((await db().query("SELECT action,kind,version FROM legal_events WHERE user_id=$1 AND kind='TERMS'", [participant.id])).rows).toContainEqual({ action: "ACCEPTED", kind: "TERMS", version: "2026.2" });
     expect(
       (
         await db().query(
@@ -1803,6 +1808,24 @@ describe("V0.3 content, legal versions and installation", () => {
     expect(review.issues.length).toBeGreaterThan(0);
     await expect(contentAction(admin, { action: "publish", id: d.id, revision: 1, active_version: "2026.1", confirmed: true, affected: 0 })).rejects.toMatchObject({ status: 400 });
     expect((await legalState(admin.instance_id)).NOTICE.body).toBe(before);
+  });
+  it("replays the additive document migration and preserves real historical evidence", async () => {
+    const before = (await db().query("SELECT id,body,version FROM legal_documents ORDER BY id")).rows;
+    const original = await db().query("SELECT terms_accepted_at,guidelines_accepted_at FROM participations WHERE id=$1", [house.id]);
+    const sql = await readFile("migrations/015_document_studio.sql", "utf8");
+    for (let i = 0; i < 2; i++) { if (engine instanceof PGlite) await engine.exec(sql); else await engine.query(sql); }
+    expect((await db().query("SELECT id,body,version FROM legal_documents ORDER BY id")).rows).toEqual(before);
+    const proof = (await db().query("SELECT action,kind,occurred_at FROM legal_events WHERE user_id=$1 ORDER BY kind", [participant.id])).rows;
+    expect(proof).toHaveLength(2);
+    expect(proof.find(r => r.kind === "TERMS")?.occurred_at).toEqual(original.rows[0].terms_accepted_at);
+    expect(proof.find(r => r.kind === "GUIDELINES")?.occurred_at).toEqual(original.rows[0].guidelines_accepted_at);
+  });
+  it("keeps legal evidence through seasonal purge and anonymizes deleted account references", async () => {
+    expect((await db().query("SELECT id FROM legal_events WHERE user_id=$1", [participant.id])).rows).toHaveLength(2);
+    await db().query("DELETE FROM participations WHERE id=$1", [house.id]);
+    expect((await db().query("SELECT id FROM legal_events WHERE user_id=$1", [participant.id])).rows).toHaveLength(2);
+    await db().query("DELETE FROM users WHERE id=$1", [participant.id]);
+    expect((await db().query("SELECT user_id FROM legal_events WHERE action<>'PUBLISHED'")).rows).toEqual([{ user_id: null }, { user_id: null }]);
   });
   it("uses installable manifest/icons and never caches private API or navigation", async () => {
     const m = manifest();
