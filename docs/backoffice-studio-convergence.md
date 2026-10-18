@@ -132,3 +132,48 @@ Objectif : livraison en **une release Halloween Map vérifiée**, après mise en
 ## 7. Définition de terminé
 
 Une personne habituée au back-office LinKs **reconnaît immédiatement la même interface d'administration** dans Halloween Map : disposition des menus, shell, composants, densité, thèmes, commandes, animations et retours d'état. Seuls le logo officiel Halloween Map by DomotiK Studio, les titres et les outils spécifiques au produit changent. Un administrateur de Halloween Map retrouve **100 % de ses fonctions**, même réorganisées ou ergonomiquement modernisées, avec les mêmes capacités métier, données, droits et scénarios saisonniers. La matrice de conservation doit être entièrement validée. La suite de tests et la chaîne release sont vertes. Aucune intervention manuelle en production n'est imposée par une refonte de présentation.
+
+## 8. Protection du fonctionnement existant — exigence prioritaire
+
+**La qualité fonctionnelle de Halloween Map V0.9.10 constitue la référence, non une variable d'ajustement esthétique.** La convergence avec LinKs peut refondre la manière de naviguer et d'utiliser chaque outil, **pas** les règles, les résultats ni les garanties existantes.
+
+### Avant toute modification d'écran
+1. Fixer le commit de référence V0.9.10 et documenter l'état courant des API, permissions, comportements saisonniers, données et tests. Exécuter la suite existante avant la première modification.
+2. Pour chaque écran et chaque commande : inventorier les scénarios nominaux et limites, le ou les rôles autorisés, le contrat de lecture/écriture, les effets sur les données, l'usage saisonnier et les intégrations publiques.
+3. Consigner un tableau **avant → après** : entrée ancienne, nouvelle entrée, action, droits, états successifs et résultat métier attendu ; toute fonction inventoriée doit rester atteignable.
+4. Ajouter ou renforcer les tests de caractérisation **avant** de réécrire un parcours complexe, notamment quand les comportements ne sont couverts que partiellement par les tests existants.
+5. Classer le risque de chaque zone : faible (styles/présentation), moyen (navigation/gestion d'état) ou élevé (sauvegarde, calendrier, permissions, modération, actions sensibles, contrats de données).
+
+### Pendant la refonte
+- Préférer un changement de présentation/interaction à une modification du service métier. Conserver les mêmes API, schémas, validations, valeurs par défaut et effets tant qu'aucun besoin explicite n'a été validé.
+- Refuser les raccourcis qui supprimeraient des données, opérations secondaires ou contrôles de sécurité ; afficher les options peu fréquentes dans un contexte approprié plutôt que de les effacer.
+- Changer une fonction complexe en petites étapes : tests caractérisant l'état initial → adaptation d'interface → tests de parité → revue → étape suivante.
+- Ne jamais supprimer l'ancien code métier comme « inutile » sur la seule base d'une recherche d'appels dans l'UI ; contrôler historique, API, migration, worker et données réelles concernées.
+- Toute modification de logique métier imprévue doit être arrêtée, isolée et soumise à une décision spécifique. Aucun changement silencieux de politique métier dans un lot visuel.
+- Ne pas modifier le calendrier des saisons, les fuseaux/décalages, les règles d'ouverture des inscriptions, les rattachements aux saisons, la visibilité de la carte, les restrictions public/admin, ni la façon de traiter les changements d'heure.
+- Ne pas modifier l'authentification, les rôles, la sémantique des permissions, les vérifications côté serveur, la modération, ni les invariants de publication/acceptation juridique.
+- Éviter les migrations lors d'un travail d'interface ; si une migration s'avère véritablement nécessaire, faire un lot séparé avec tests PostgreSQL à partir de la version antérieure, sauvegarde et stratégie de retour arrière.
+
+### Scénarios métier à protéger explicitement
+
+| Domaine | Invariants / vérifications minimales |
+| --- | --- |
+| Saisons | Absence de saison, saison active, saison en préparation, archives, passage de saison, dates d'ouverture/fermeture, permissions et contexte consulté |
+| Carte publique | Visibilité conditionnée à une saison active, indépendamment du rôle de l'utilisateur ; aucun changement involontaire des données exposées |
+| Maisons | Inscription publique seulement dans une saison active et fenêtre ouverte ; capacité des administrateurs habilités de créer/éditer hors de ces contraintes ; rattachement automatique à la saison en préparation lorsque applicable |
+| Modération | États en attente/validé/refusé, actions et conséquences de chaque transition, listes/notifications, historique et contrôle de permissions |
+| Utilisateurs | Inscription, authentification, comptes et rôles, permissions, redirections, récupération et gestion des profils |
+| Communications | Campagnes, modèles, messages, validation, envois, historiques, dates, erreurs et absence d'envoi imprévu |
+| Statistiques | Identité des mesures, agrégations, périodes, fuseaux, sources et absence de compteurs redondants ou modifiés |
+| Parcours et collecte | Calculs, géométrie, visibilité des itinéraires, restauration et collecte sans changement des données |
+| Documents officiels | Brouillons, révisions/conflits 409, rendu riche, versions publiées immuables, comparaison, restauration, publication, réacceptations et conservation des preuves |
+| Maintenance | Migrations, worker, purge saisonnière, configuration, journaux et compatibilité des installations historiques |
+
+### Validation continue et critères d'arrêt
+- À chaque lot : lint/TypeScript, tests unitaires ciblés, tests API et end-to-end des parcours impactés ; reprendre les tests non couverts **avant** de considérer le lot terminé.
+- Avant fusion : suite complète Vitest/Playwright, parcours par rôle et saison, base PostgreSQL réelle (base vierge et migration depuis l'ancienne version), build/Docker/HTTPS existants et inspection de captures d'écran aux formats prévus.
+- Faire des parcours de bout en bout sur données de test réalistes, particulièrement les actions sensibles et les opérations multietapes, et comparer **les résultats métier avant/après**, pas seulement le rendu.
+- Test de non-altération de la page publique et des chemins d'accès à l'API depuis les clients historiques.
+- Si une régression, une perte de fonction, une variation de résultats, une faille d'accès ou une ambiguïté de migration apparaît : **ne pas fusionner, ne pas publier, corriger puis tout revalider**.
+- Pas de déclaration « zéro régression » sur la seule CI : conserver une recette documentée et des risques résiduels explicites. Publication unique seulement lorsque tous les critères sont atteints.
+
