@@ -1,20 +1,47 @@
 "use client";
-import useDraftGuard from "./useDraftGuard";
-import { Button, Select } from "./ui";
 import { useState } from "react";
-import type { LegalDocument, LegalKind } from "../lib/content";
-import { api, Field, Notice, AsyncButton, values, Check } from "./common";
-import Editorial from "./Editorial";
-import VisualEditor from "./VisualEditor";
+import useDraftGuard, { confirmDraftNavigation } from "./useDraftGuard";
+import { Button, Select } from "./ui";
+import type { LegalDocument, LegalKind, LegalEvidence } from "../lib/content";
+import { api, Field, Notice, values, Check } from "./common";
+import DocumentWorkspace from "./DocumentWorkspace";
+import { StudioShell, StudioNav, StudioPanel, SaveStatus } from "./Studio";
 type Data = {
   links?: import("../lib/project-links").ProjectLinks;
   catalog: Record<
     string,
-    { category: string; value: string; variables: string[] }
+    { category: string; value: string; variables: readonly string[] }
   >;
   values: Record<string, string>;
   documents: LegalDocument[];
   active: Record<LegalKind, LegalDocument>;
+  evidence?: LegalEvidence[];
+};
+const labels: Record<string, string> = {
+  "home.eyebrow": "Nom de l’événement",
+  "home.title": "Titre avant l’ouverture",
+  "home.preparation": "Introduction de la prochaine édition",
+  "home.subtitle": "Nombre de maisons",
+  "home.count": "Mention des inscriptions",
+  "home.house": "Maison (singulier)",
+  "home.houses": "Maisons (pluriel)",
+  "home.register": "Invitation à participer",
+  "home.final": "Message de participation",
+  "home.open": "Titre pendant l’événement",
+  "home.closed": "Titre après l’événement",
+  "home.closedBody": "Remerciements",
+  "home.empty": "Carte sans résultat",
+  "account.create": "Création du compte",
+  "account.verify": "Vérification du compte",
+  "account.activation": "Activation du compte",
+  "account.confirmation": "Confirmation du compte",
+  "participation.title": "Titre du formulaire",
+  "participation.intro": "Consignes d’inscription",
+  "participation.confirmation": "Confirmation de participation",
+  "privacy.title": "Titre de confidentialité",
+  "privacy.signup": "Confidentialité à l’inscription",
+  "privacy.account": "Conservation des données du compte",
+  "footer.signature": "Signature",
 };
 export default function ContentAdmin({
   data,
@@ -23,183 +50,263 @@ export default function ContentAdmin({
   data: Data;
   reload: () => Promise<void>;
 }) {
-  const [key, setKey] = useState(Object.keys(data.catalog)[0]),
-    [category, setCategory] = useState("Accueil"),
-    [value, setValue] = useState(data.values[key]),
-    [kind, setKind] = useState<LegalKind>("TERMS");
-  useDraftGuard(value !== data.values[key]);
+  const [section, setSection] = useState("texts"),
+    [kind, setKind] = useState<LegalKind | null>(null);
   async function action(p: unknown) {
     await api("admin/content", p);
     await reload();
   }
   return (
-    <div className="cms-layout">
-      <div className="tabs">
-        {[
-          "Accueil",
-          "Compte",
-          "Participation",
-          "Confidentialité",
-          "Interface",
-          "Documents",
-          "Liens & contact",
-        ].map((c) => (
-          <Button
-            key={c}
-            className={category === c ? "active" : ""}
-            onClick={() => {
-              if (
-                value !== data.values[key] &&
-                !window.confirm("Quitter ce texte sans enregistrer ?")
-              )
-                return;
-              setCategory(c);
-              const first = Object.entries(data.catalog).find(
-                ([, d]) => d.category === c,
-              )?.[0];
-              if (first) {
-                setKey(first);
-                setValue(data.values[first]);
-              }
-            }}
-          >
-            {c}
-          </Button>
-        ))}
-      </div>
-      {category === "Liens & contact" ? (
+    <StudioShell
+      navigation={
+        <StudioNav
+          current={section}
+          onSelect={(id) => {
+            if (confirmDraftNavigation()) {
+              setSection(id);
+              setKind(null);
+            }
+          }}
+          items={[
+            {
+              id: "texts",
+              label: "Textes de l’application",
+              description: "Accueil, compte et participation",
+            },
+            {
+              id: "documents",
+              label: "Documents officiels",
+              description: "Brouillons, versions et publications",
+            },
+            {
+              id: "links",
+              label: "Liens & contact",
+              description: "Coordonnées et soutien",
+            },
+          ]}
+        />
+      }
+    >
+      {section === "texts" ? (
+        <ApplicationTexts data={data} submit={action} />
+      ) : section === "links" ? (
         <LinksEditor links={data.links} submit={action} />
-      ) : category === "Documents" ? (
-        <section className="panel">
-          <h2>Documents versionnés</h2>
-          <label className="field">
-            <span>Document</span>
-            <Select
-              value={kind}
-              onChange={(e) => setKind(e.target.value as LegalKind)}
-            >
-              {Object.entries(data.active).map(([k, d]) => (
-                <option key={k} value={k}>
-                  {d.title}
-                </option>
-              ))}
-            </Select>
-          </label>
-          <p>
-            Version active : {data.active[kind].version}{" "}
-            {data.active[kind].requires_reaccept
-              ? "· Réacceptation requise"
-              : ""}
-          </p>
-          <details>
-            <summary>Lire la version active</summary>
-            <Editorial text={data.active[kind].body} />
-          </details>
-          <LegalDraft key={kind} current={data.active[kind]} submit={action} />
-          {data.documents
-            .filter((d) => d.kind === kind)
-            .map((d) => (
-              <article className="legal-version" key={d.id}>
-                <h3>
-                  {d.title} · {d.version}
-                </h3>
-                <p>
-                  {d.status === "DRAFT" ? "Brouillon" : "Publié"}{" "}
-                  {d.active && "· Actif"}{" "}
-                  {d.requires_reaccept && "· Réacceptation requise"}
-                </p>
-                <details>
-                  <summary>Aperçu</summary>
-                  <Editorial text={d.body} />
-                </details>
-                {d.status === "DRAFT" && (
-                  <LegalDraft current={d} submit={action} />
-                )}
-                {d.status === "DRAFT" && (
-                  <AsyncButton
-                    onClick={() => action({ action: "publish", id: d.id })}
-                  >
-                    Publier cette version
-                  </AsyncButton>
-                )}
-              </article>
-            ))}
-        </section>
+      ) : kind ? (
+        <DocumentWorkspace
+          key={kind}
+          active={data.active[kind]}
+          documents={data.documents.filter((d) => d.kind === kind)}
+          evidence={data.evidence?.filter((e) => e.kind === kind)}
+          reload={reload}
+          onBack={() => setKind(null)}
+        />
       ) : (
-        <section className="panel">
-          <label className="field">
-            <span>Contenu à modifier</span>
-            <Select
-              value={key}
-              onChange={(e) => {
-                if (
-                  value !== data.values[key] &&
-                  !window.confirm("Quitter ce texte sans enregistrer ?")
-                )
-                  return;
-                setKey(e.target.value);
-                setValue(data.values[e.target.value]);
-              }}
-            >
-              {Object.entries(data.catalog)
-                .filter(([, v]) => v.category === category)
-                .map(([k]) => (
-                  <option key={k} value={k}>
-                    {(
-                      {
-                        "home.preparation":
-                          "Introduction de la prochaine édition",
-                        "home.final": "Message de participation",
-                        "home.closedBody": "Fin de l’événement",
-                        "account.verify": "Vérification du compte",
-                        "account.activation": "Activation du compte",
-                        "account.confirmation": "Confirmation du compte",
-                        "participation.intro": "Consignes d’inscription",
-                        "participation.confirmation":
-                          "Confirmation de participation",
-                        "privacy.signup": "Confidentialité à l’inscription",
-                        "privacy.account": "Conservation des données du compte",
-                        "footer.signature": "Signature",
-                      } as Record<string, string>
-                    )[k] ?? k}
-                  </option>
-                ))}
-            </Select>
-          </label>
-          <p className="small muted">
-            Variables disponibles :{" "}
-            {data.catalog[key]?.variables
-              .map((v) => "{{" + v + "}}")
-              .join(" · ")}
+        <>
+          <h3>Documents officiels</h3>
+          <p>
+            Préparez vos textes sans modifier leur version publique. La
+            publication fait l’objet d’une vérification distincte.
           </p>
-          <VisualEditor
-            value={value ?? ""}
-            onChange={setValue}
-            variables={data.catalog[key]?.variables}
-            label="Texte"
-          />
-          <p className="small muted">
-            Utilisez la barre d’outils pour les titres, listes, liens et styles
-            de texte.
-          </p>
-          <div className="actions">
-            <AsyncButton onClick={() => action({ action: "save", key, value })}>
-              Enregistrer le contenu
-            </AsyncButton>
-            <AsyncButton
-              onClick={async () => {
-                await action({ action: "reset", key });
-                setValue(data.catalog[key].value);
-              }}
-            >
-              Rétablir le défaut
-            </AsyncButton>
+          <div className="studio-document-grid">
+            {Object.entries(data.active).map(([k, d]) => {
+              const draft = data.documents.find(
+                (v) => v.kind === k && v.status === "DRAFT",
+              );
+              return (
+                <StudioPanel key={k} title={d.title}>
+                  <p>Version active : {d.version}</p>
+                  <p>
+                    <span className="studio-badge">
+                      {d.prepared ? "Prêt à publier" : "Préparation à vérifier"}
+                    </span>
+                    {draft && (
+                      <span className="studio-badge">
+                        Brouillon {draft.version}
+                      </span>
+                    )}
+                  </p>
+                  <p className="field-help">
+                    {d.prepared
+                      ? "Informations de préparation confirmées par l’exploitant."
+                      : "Le modèle initial ou l’ancien document nécessite une vérification de l’exploitant."}
+                  </p>
+                  <div className="studio-actions">
+                    <Button
+                      type="button"
+                      onClick={() => setKind(k as LegalKind)}
+                    >
+                      {draft ? "Ouvrir le brouillon" : "Ouvrir le document"}
+                    </Button>
+                  </div>
+                </StudioPanel>
+              );
+            })}
           </div>
-          <h3>Aperçu</h3>
-          <Editorial text={value ?? ""} />
-        </section>
+        </>
       )}
-    </div>
+    </StudioShell>
+  );
+}
+function ApplicationTexts({
+  data,
+  submit,
+}: {
+  data: Data;
+  submit: (p: unknown) => Promise<void>;
+}) {
+  const [category, setCategory] = useState("Accueil"),
+    [key, setKey] = useState(Object.keys(data.catalog)[0]),
+    [value, setValue] = useState(
+      data.values[Object.keys(data.catalog)[0]] ?? "",
+    );
+  const [baseline, setBaseline] = useState(value),
+    [busy, setBusy] = useState(false),
+    [error, setError] = useState(""),
+    [done, setDone] = useState(false);
+  const dirty = value !== baseline;
+  useDraftGuard(dirty);
+  function choose(next: string) {
+    if (dirty && !window.confirm("Quitter ce texte sans enregistrer ?")) return;
+    setKey(next);
+    setValue(data.values[next]);
+    setBaseline(data.values[next]);
+    setError("");
+    setDone(false);
+  }
+  async function save(reset = false) {
+    setError("");
+    setBusy(true);
+    try {
+      const next = reset ? data.catalog[key].value : value;
+      await submit(
+        reset ? { action: "reset", key } : { action: "save", key, value },
+      );
+      setValue(next);
+      setBaseline(next);
+      setDone(true);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <StudioPanel
+      title="Textes de l’application"
+      description="Personnalisez les messages par contexte. Leur présentation suit le design de Halloween Map."
+    >
+      <label>
+        Contexte
+        <Select
+          value={category}
+          disabled={busy}
+          onChange={(e) => {
+            if (dirty && !window.confirm("Quitter ce texte sans enregistrer ?"))
+              return;
+            const c = e.target.value;
+            setCategory(c);
+            const first = Object.keys(data.catalog).find(
+              (k) => data.catalog[k].category === c,
+            )!;
+            setKey(first);
+            setValue(data.values[first]);
+            setBaseline(data.values[first]);
+            setDone(false);
+            setError("");
+          }}
+        >
+          {[
+            "Accueil",
+            "Compte",
+            "Participation",
+            "Confidentialité",
+            "Interface",
+          ].map((c) => (
+            <option key={c}>{c}</option>
+          ))}
+        </Select>
+      </label>
+      <label>
+        Texte à personnaliser
+        <Select
+          value={key}
+          disabled={busy}
+          onChange={(e) => choose(e.target.value)}
+        >
+          {Object.entries(data.catalog)
+            .filter(([, d]) => d.category === category)
+            .map(([k]) => (
+              <option key={k} value={k}>
+                {labels[k] ?? k}
+              </option>
+            ))}
+        </Select>
+      </label>
+      <p className="field-help">
+        Modifiez le message sans ajouter de mise en page. Les variables sont
+        remplacées par les informations de votre événement.
+      </p>
+      <label>
+        {labels[key] ?? "Texte"}
+        <textarea
+          value={value}
+          maxLength={10000}
+          disabled={busy}
+          onChange={(e) => {
+            setValue(e.target.value);
+            setDone(false);
+          }}
+        />
+      </label>
+      <details>
+        <summary>Variables disponibles</summary>
+        <p>
+          {data.catalog[key].variables.map((v) => "{{" + v + "}}").join(" · ")}
+        </p>
+      </details>
+      <Notice error={error} />
+      <div className="studio-actions">
+        <Button
+          type="button"
+          className="primary"
+          disabled={busy || !dirty}
+          onClick={() => void save()}
+        >
+          Enregistrer le texte
+        </Button>
+        <Button
+          type="button"
+          disabled={busy}
+          onClick={() => {
+            if (window.confirm("Rétablir le texte d’origine ?"))
+              void save(true);
+          }}
+        >
+          Rétablir le défaut
+        </Button>
+        <SaveStatus dirty={dirty} busy={busy} saved={done} />
+      </div>
+      <h4>Aperçu du texte</h4>
+      <div className="studio-text-preview">
+        {value.replace(
+          /\{\{\s*(\w+)\s*\}\}/g,
+          (_, v) =>
+            (
+              ({
+                event_name: "Halloween",
+                territory: "Votre commune",
+                season_year: "2026",
+                house_count: "12",
+                user_name: "Camille",
+                registration_date: "1 octobre",
+                map_open_date: "31 octobre",
+                map_close_date: "1 novembre",
+                purge_date: "8 novembre",
+              }) as Record<string, string>
+            )[v] ?? "{{" + v + "}}",
+        )}
+      </div>
+    </StudioPanel>
   );
 }
 function LinksEditor({
@@ -215,7 +322,7 @@ function LinksEditor({
     [dirty, setDirty] = useState(false);
   useDraftGuard(dirty);
   return (
-    <section className="panel">
+    <section className="studio-panel">
       <h2>Liens & contact</h2>
       <p className="small muted">
         Signaler un bug et contacter l’organisateur : menu utilisateur. Soutenir
@@ -223,6 +330,7 @@ function LinksEditor({
         disponibles.
       </p>
       <form
+        inert={busy}
         onChange={() => {
           setDirty(true);
           setDone(false);
@@ -299,84 +407,5 @@ function LinksEditor({
         </Button>
       </form>
     </section>
-  );
-}
-function LegalDraft({
-  current,
-  submit,
-}: {
-  current: LegalDocument;
-  submit: (p: unknown) => Promise<void>;
-}) {
-  const [body, setBody] = useState(current.body),
-    [dirty, setDirty] = useState(false),
-    [error, setError] = useState(""),
-    [busy, setBusy] = useState(false);
-  useDraftGuard(dirty);
-  return (
-    <details>
-      <summary>
-        {current.status === "DRAFT"
-          ? "Modifier ce brouillon"
-          : "Préparer une nouvelle version"}
-      </summary>
-      <form
-        onChange={() => setDirty(true)}
-        onSubmit={async (e) => {
-          e.preventDefault();
-          const v = values(e.currentTarget);
-          setBusy(true);
-          setError("");
-          try {
-            await submit({
-              action: "draft",
-              id: current.status === "DRAFT" ? current.id : undefined,
-              document: {
-                kind: current.kind,
-                version: v.version,
-                title: v.title,
-                body,
-                requires_reaccept: v.requires_reaccept === "on",
-              },
-            });
-            setDirty(false);
-          } catch (e) {
-            setError((e as Error).message);
-          } finally {
-            setBusy(false);
-          }
-        }}
-      >
-        <Field
-          name="version"
-          label="Version (ex. 2027.2)"
-          value={current.status === "DRAFT" ? current.version : undefined}
-        />
-        <Field name="title" label="Titre" value={current.title} />
-        <VisualEditor
-          value={body}
-          onChange={(value) => {
-            setBody(value);
-            setDirty(true);
-          }}
-          label="Document"
-        />
-        {["TERMS", "GUIDELINES"].includes(current.kind) && (
-          <Check
-            name="requires_reaccept"
-            label="Changement important : réacceptation requise"
-            checked={current.requires_reaccept}
-          />
-        )}
-        <Notice error={error} />
-        <Button className="primary" disabled={busy}>
-          {current.status === "DRAFT"
-            ? "Enregistrer le brouillon"
-            : "Créer le brouillon"}
-        </Button>
-      </form>
-      <h3>Aperçu du brouillon</h3>
-      <Editorial text={body} />
-    </details>
   );
 }

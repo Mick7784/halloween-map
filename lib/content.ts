@@ -1,22 +1,23 @@
-import { legalDefaults } from "./legal-defaults";
+import { documentAction } from "./document-service";
+import { legalState } from "./legal-documents";
+export { legalState, initializeLegalDocuments } from "./legal-documents";
+export type {
+  LegalKind,
+  LegalDocument,
+  LegalEvidence,
+} from "./legal-documents";
+import {
+  sanitizeContent,
+  variables,
+  publicContentVariables as publicVars,
+} from "./content-validation";
+export { sanitizeContent, variables } from "./content-validation";
 export { legalDefaults } from "./legal-defaults";
 import { z } from "zod";
 import { db, transaction, type Database } from "./db";
 import { HttpError, requirePermission } from "./auth";
 import type { User } from "./domain";
 import { publicProjectLinks } from "./project-links";
-export const variables = [
-  "territory",
-  "season_year",
-  "registration_date",
-  "map_open_date",
-  "map_close_date",
-  "purge_date",
-  "house_count",
-  "user_name",
-  "event_name",
-] as const;
-const publicVars = variables.filter((v) => v !== "user_name");
 export const contentDefaults: Record<
   string,
   { category: string; value: string; variables: readonly string[] }
@@ -105,36 +106,6 @@ export const contentDefaults: Record<
     },
   ]),
 );
-export type LegalKind = keyof typeof legalDefaults;
-export type LegalDocument = {
-  id?: string;
-  kind: LegalKind;
-  version: string;
-  title: string;
-  body: string;
-  status: string;
-  active: boolean;
-  requires_reaccept: boolean;
-  published_at: string | null;
-};
-export function sanitizeContent(
-  value: string,
-  allowed: readonly string[] = publicVars,
-) {
-  if (
-    /<\/?[a-z!]|javascript\s*:|data\s*:|vbscript\s*:|[\u0000-\u0008\u000b\u000c\u000e-\u001f]/i.test(
-      value,
-    )
-  )
-    throw new HttpError(400, "HTML, scripts et liens non sûrs interdits");
-  for (const match of value.matchAll(/\{\{\s*([\w.]+)\s*\}\}/g))
-    if (!allowed.includes(match[1]))
-      throw new HttpError(400, "Variable non autorisée : " + match[1]);
-  for (const match of value.matchAll(/\]\(([^)]+)\)/g))
-    if (!/^(https?:\/\/|\/(?!\/)|mailto:)[^\s]*$/i.test(match[1]))
-      throw new HttpError(400, "Lien non autorisé");
-  return value.trim();
-}
 export function interpolate(
   value: string,
   vars: Record<string, string | number>,
@@ -160,41 +131,6 @@ export async function contentState(
     ]),
   );
 }
-export async function initializeLegalDocuments(
-  instanceId: string,
-  client: Database = db(),
-) {
-  for (const [kind, d] of Object.entries(legalDefaults))
-    await client.query(
-      "INSERT INTO legal_documents(instance_id,kind,version,title,body,status,active,published_at) VALUES($1,$2,'2026.1',$3,$4,'PUBLISHED',true,now()) ON CONFLICT DO NOTHING",
-      [instanceId, kind, d.title, d.body],
-    );
-}
-export async function legalState(
-  instanceId: string,
-  client: Database = db(),
-): Promise<Record<LegalKind, LegalDocument>> {
-  const rows = (
-    await client.query(
-      "SELECT * FROM legal_documents WHERE instance_id=$1 AND active=true",
-      [instanceId],
-    )
-  ).rows;
-  return Object.fromEntries(
-    Object.entries(legalDefaults).map(([kind, d]) => [
-      kind,
-      rows.find((r) => r.kind === kind) ?? {
-        ...d,
-        kind,
-        version: "2026.1",
-        status: "PUBLISHED",
-        active: true,
-        requires_reaccept: false,
-        published_at: null,
-      },
-    ]),
-  ) as Record<LegalKind, LegalDocument>;
-}
 export async function contentAdmin(user: User | null) {
   const u = requirePermission(user, "admin.access");
   requirePermission(u, "content.manage");
@@ -204,23 +140,7 @@ export async function contentAdmin(user: User | null) {
     ])
   ).rows[0].config as Record<string, unknown>;
   return {
-    catalog: Object.fromEntries(
-      Object.entries(contentDefaults).filter(([key]) =>
-        [
-          "home.preparation",
-          "home.final",
-          "home.closedBody",
-          "account.verify",
-          "account.activation",
-          "account.confirmation",
-          "participation.intro",
-          "participation.confirmation",
-          "privacy.signup",
-          "privacy.account",
-          "footer.signature",
-        ].includes(key),
-      ),
-    ),
+    catalog: contentDefaults,
     links: publicProjectLinks(config.projectLinks, config.privacy),
     values: await contentState(u.instance_id),
     documents: (
@@ -230,14 +150,28 @@ export async function contentAdmin(user: User | null) {
       )
     ).rows,
     active: await legalState(u.instance_id),
+    evidence: (
+      await db().query(
+        "SELECT id,kind,version,action,occurred_at,expires_at,user_id,document_id FROM legal_events WHERE instance_id=$1 ORDER BY occurred_at DESC LIMIT 500",
+        [u.instance_id],
+      )
+    ).rows,
   };
 }
 export async function contentAction(user: User | null, input: unknown) {
   const u = requirePermission(user, "admin.access");
   requirePermission(u, "content.manage");
+  if (
+    input &&
+    typeof input === "object" &&
+    ["draft", "review", "publish"].includes(
+      String((input as { action?: unknown }).action),
+    )
+  )
+    return documentAction(u, input);
   const p = z
     .object({
-      action: z.enum(["save", "reset", "draft", "publish", "links"]),
+      action: z.enum(["save", "reset", "links"]),
       links: z
         .object({
           bugEnabled: z.boolean(),
@@ -252,16 +186,6 @@ export async function contentAction(user: User | null, input: unknown) {
         .optional(),
       key: z.string().optional(),
       value: z.string().max(10000).optional(),
-      id: z.uuid().optional(),
-      document: z
-        .object({
-          kind: z.enum(["TERMS", "GUIDELINES", "PRIVACY", "NOTICE"]),
-          version: z.string().regex(/^[0-9]{4}\.[0-9]{1,3}$/),
-          title: z.string().trim().min(1).max(100),
-          body: z.string().min(1).max(10000),
-          requires_reaccept: z.boolean(),
-        })
-        .optional(),
     })
     .parse(input);
   if (p.action === "links") {
@@ -308,91 +232,15 @@ export async function contentAction(user: User | null, input: unknown) {
       );
     });
     return { ok: true };
-  } else if (p.action === "draft") {
-    if (!p.document) throw new HttpError(400, "Document requis");
-    const d = p.document;
-    const current = (await legalState(u.instance_id))[d.kind];
-    const number = (v: string) =>
-      Number(v.split(".")[0]) * 1000 + Number(v.split(".")[1]);
-    if (number(d.version) <= number(current.version))
-      throw new HttpError(
-        400,
-        "Une nouvelle version doit suivre la version active",
-      );
-    if (p.id) {
-      const result = await db().query(
-        "UPDATE legal_documents SET kind=$1,version=$2,title=$3,body=$4,requires_reaccept=$5 WHERE id=$6 AND instance_id=$7 AND status='DRAFT' RETURNING id",
-        [
-          d.kind,
-          d.version,
-          sanitizeContent(d.title, []),
-          sanitizeContent(d.body, []),
-          d.requires_reaccept,
-          p.id,
-          u.instance_id,
-        ],
-      );
-      if (!result.rows.length)
-        throw new HttpError(400, "Brouillon introuvable");
-    } else
-      await db().query(
-        "INSERT INTO legal_documents(instance_id,kind,version,title,body,requires_reaccept) VALUES($1,$2,$3,$4,$5,$6)",
-        [
-          u.instance_id,
-          d.kind,
-          d.version,
-          sanitizeContent(d.title, []),
-          sanitizeContent(d.body, []),
-          d.requires_reaccept,
-        ],
-      );
-  } else
-    await transaction(async (c) => {
-      await c.query("SELECT id FROM instances WHERE id=$1 FOR UPDATE", [
-        u.instance_id,
-      ]);
-      const d = (
-        await c.query(
-          "SELECT * FROM legal_documents WHERE id=$1 AND instance_id=$2 AND status='DRAFT' FOR UPDATE",
-          [p.id, u.instance_id],
-        )
-      ).rows[0];
-      if (!d) throw new HttpError(400, "Brouillon introuvable");
-      const kind = d.kind as LegalKind;
-      // Materialize the accepted fallback before publishing its successor.
-      await c.query(
-        "INSERT INTO legal_documents(instance_id,kind,version,title,body,status,active,published_at) VALUES($1,$2,'2026.1',$3,$4,'PUBLISHED',false,now()) ON CONFLICT DO NOTHING",
-        [
-          u.instance_id,
-          kind,
-          legalDefaults[kind].title,
-          legalDefaults[kind].body,
-        ],
-      );
-      await c.query(
-        "UPDATE legal_documents SET active=false WHERE instance_id=$1 AND kind=$2 AND active=true",
-        [u.instance_id, kind],
-      );
-      await c.query(
-        "UPDATE legal_documents SET status='PUBLISHED',active=true,published_at=now() WHERE id=$1",
-        [d.id],
-      );
-      await c.query(
-        "INSERT INTO audit_logs(instance_id,actor_id,action,target_id) VALUES($1,$2,'content.publish',$3)",
-        [u.instance_id, u.id, d.id],
-      );
-    });
-  if (p.action !== "publish")
-    await db().query(
-      "INSERT INTO audit_logs(instance_id,actor_id,action,target_id) VALUES($1,$2,$3,$4)",
-      [u.instance_id, u.id, "content." + p.action, p.id ?? null],
-    );
-  return { ok: true };
+  }
+  throw new HttpError(400, "Action documentaire inconnue");
 }
+
 export async function validateAcceptance(
   client: Database,
   instanceId: string,
   input: unknown,
+  requireTerms = false,
 ) {
   if (
     input &&
@@ -412,11 +260,12 @@ export async function validateAcceptance(
         409,
         "Les bonnes pratiques ont changé. Relisez-les avant de confirmer.",
       );
-    // Keep the current TERMS version for compatibility, without recording consent.
+    if (requireTerms && docs.TERMS.requires_reaccept)
+      throw new HttpError(409, "Les CGU doivent être acceptées explicitement.");
     return {
       terms: false,
       guidelines: true,
-      terms_version: docs.TERMS.version,
+      terms_version: null,
       guidelines_version: acknowledged.guidelines_version,
     };
   }

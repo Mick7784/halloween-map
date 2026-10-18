@@ -1,4 +1,5 @@
 "use client";
+import DocumentView from "./DocumentView";
 import MapExperience from "./MapExperience";
 import PasswordRecovery from "./PasswordRecovery";
 import { Signup, Activation } from "./Account";
@@ -6,7 +7,6 @@ import UserMenu from "./UserMenu";
 import "./FloatingWindow.css";
 import PublicFooter from "./PublicFooter";
 
-import Editorial from "./Editorial";
 import { useDialogFocus } from "./useDialogFocus";
 import PublicBrand from "./PublicBrand";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -273,7 +273,8 @@ export default function Application({
                   .toFormat("dd LLLL yyyy")
               : ""}
           </p>
-          <Editorial text={d?.body ?? ""} />
+          {d && <DocumentView document={d} />}
+          {!d?.prepared && <p className="small muted">Document fourni à titre de modèle ou informations de préparation non confirmées par l’exploitant.</p>}
         </section>
       </main>
     );

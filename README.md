@@ -72,6 +72,8 @@ Pour les personnes souhaitant installer ou maintenir Halloween Map :
 
 - [Installation, déploiement et exploitation](docs/OPERATIONS.md)
 - [Saisons et règles de fonctionnement](docs/seasons.md)
+- [Contenus, documents, brouillons et publication](docs/content-documents-operations.md)
+- [Architecture documentaire et fondations DomotiK Studio](docs/content-documents-architecture.md)
 - [Checklist avant l'ouverture publique](docs/GO-LIVE.md)
 - [Historique des versions](CHANGELOG.md)
 - [Signaler un problème ou proposer une amélioration](https://github.com/Mick7784/halloween-map/issues)

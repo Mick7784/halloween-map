@@ -32,6 +32,7 @@ export async function measureAttendance(now = new Date()) {
   await db().query("DELETE FROM participation_history WHERE recorded_at<$1", [
     new Date(new Date(now).setFullYear(now.getFullYear() - 5)),
   ]);
+  await db().query("DELETE FROM legal_events WHERE expires_at < now()");
   await db().query("DELETE FROM audit_logs WHERE created_at<$1", [
     new Date(+now - 90 * 86400000),
   ]);
