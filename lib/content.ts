@@ -1,3 +1,5 @@
+import { documentAction } from "./document-service";
+import type { DocumentNode } from "./document-format";
 import { legalDefaults } from "./legal-defaults";
 export { legalDefaults } from "./legal-defaults";
 import { z } from "zod";
@@ -107,6 +109,15 @@ export const contentDefaults: Record<
 );
 export type LegalKind = keyof typeof legalDefaults;
 export type LegalDocument = {
+  format?: "markdown" | "tiptap";
+  content_json?: DocumentNode | null;
+  revision?: number;
+  base_version?: string | null;
+  prepared?: boolean;
+  created_by?: string | null;
+  published_by?: string | null;
+  created_at?: string;
+  updated_at?: string;
   id?: string;
   kind: LegalKind;
   version: string;
@@ -204,23 +215,7 @@ export async function contentAdmin(user: User | null) {
     ])
   ).rows[0].config as Record<string, unknown>;
   return {
-    catalog: Object.fromEntries(
-      Object.entries(contentDefaults).filter(([key]) =>
-        [
-          "home.preparation",
-          "home.final",
-          "home.closedBody",
-          "account.verify",
-          "account.activation",
-          "account.confirmation",
-          "participation.intro",
-          "participation.confirmation",
-          "privacy.signup",
-          "privacy.account",
-          "footer.signature",
-        ].includes(key),
-      ),
-    ),
+    catalog: contentDefaults,
     links: publicProjectLinks(config.projectLinks, config.privacy),
     values: await contentState(u.instance_id),
     documents: (
@@ -235,6 +230,7 @@ export async function contentAdmin(user: User | null) {
 export async function contentAction(user: User | null, input: unknown) {
   const u = requirePermission(user, "admin.access");
   requirePermission(u, "content.manage");
+  if (input && typeof input === "object" && ["draft", "review", "publish"].includes(String((input as { action?: unknown }).action))) return documentAction(u, input);
   const p = z
     .object({
       action: z.enum(["save", "reset", "draft", "publish", "links"]),
@@ -308,91 +304,15 @@ export async function contentAction(user: User | null, input: unknown) {
       );
     });
     return { ok: true };
-  } else if (p.action === "draft") {
-    if (!p.document) throw new HttpError(400, "Document requis");
-    const d = p.document;
-    const current = (await legalState(u.instance_id))[d.kind];
-    const number = (v: string) =>
-      Number(v.split(".")[0]) * 1000 + Number(v.split(".")[1]);
-    if (number(d.version) <= number(current.version))
-      throw new HttpError(
-        400,
-        "Une nouvelle version doit suivre la version active",
-      );
-    if (p.id) {
-      const result = await db().query(
-        "UPDATE legal_documents SET kind=$1,version=$2,title=$3,body=$4,requires_reaccept=$5 WHERE id=$6 AND instance_id=$7 AND status='DRAFT' RETURNING id",
-        [
-          d.kind,
-          d.version,
-          sanitizeContent(d.title, []),
-          sanitizeContent(d.body, []),
-          d.requires_reaccept,
-          p.id,
-          u.instance_id,
-        ],
-      );
-      if (!result.rows.length)
-        throw new HttpError(400, "Brouillon introuvable");
-    } else
-      await db().query(
-        "INSERT INTO legal_documents(instance_id,kind,version,title,body,requires_reaccept) VALUES($1,$2,$3,$4,$5,$6)",
-        [
-          u.instance_id,
-          d.kind,
-          d.version,
-          sanitizeContent(d.title, []),
-          sanitizeContent(d.body, []),
-          d.requires_reaccept,
-        ],
-      );
-  } else
-    await transaction(async (c) => {
-      await c.query("SELECT id FROM instances WHERE id=$1 FOR UPDATE", [
-        u.instance_id,
-      ]);
-      const d = (
-        await c.query(
-          "SELECT * FROM legal_documents WHERE id=$1 AND instance_id=$2 AND status='DRAFT' FOR UPDATE",
-          [p.id, u.instance_id],
-        )
-      ).rows[0];
-      if (!d) throw new HttpError(400, "Brouillon introuvable");
-      const kind = d.kind as LegalKind;
-      // Materialize the accepted fallback before publishing its successor.
-      await c.query(
-        "INSERT INTO legal_documents(instance_id,kind,version,title,body,status,active,published_at) VALUES($1,$2,'2026.1',$3,$4,'PUBLISHED',false,now()) ON CONFLICT DO NOTHING",
-        [
-          u.instance_id,
-          kind,
-          legalDefaults[kind].title,
-          legalDefaults[kind].body,
-        ],
-      );
-      await c.query(
-        "UPDATE legal_documents SET active=false WHERE instance_id=$1 AND kind=$2 AND active=true",
-        [u.instance_id, kind],
-      );
-      await c.query(
-        "UPDATE legal_documents SET status='PUBLISHED',active=true,published_at=now() WHERE id=$1",
-        [d.id],
-      );
-      await c.query(
-        "INSERT INTO audit_logs(instance_id,actor_id,action,target_id) VALUES($1,$2,'content.publish',$3)",
-        [u.instance_id, u.id, d.id],
-      );
-    });
-  if (p.action !== "publish")
-    await db().query(
-      "INSERT INTO audit_logs(instance_id,actor_id,action,target_id) VALUES($1,$2,$3,$4)",
-      [u.instance_id, u.id, "content." + p.action, p.id ?? null],
-    );
-  return { ok: true };
+  }
+  throw new HttpError(400, "Action documentaire inconnue");
 }
+
 export async function validateAcceptance(
   client: Database,
   instanceId: string,
   input: unknown,
+  requireTerms = false,
 ) {
   if (
     input &&
@@ -412,11 +332,11 @@ export async function validateAcceptance(
         409,
         "Les bonnes pratiques ont changé. Relisez-les avant de confirmer.",
       );
-    // Keep the current TERMS version for compatibility, without recording consent.
+    if (requireTerms && docs.TERMS.requires_reaccept) throw new HttpError(409, "Les CGU doivent être acceptées explicitement.");
     return {
       terms: false,
       guidelines: true,
-      terms_version: docs.TERMS.version,
+      terms_version: null,
       guidelines_version: acknowledged.guidelines_version,
     };
   }

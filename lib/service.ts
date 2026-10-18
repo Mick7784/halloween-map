@@ -1,3 +1,4 @@
+import { recordLegalAcceptance } from "./document-service";
 import { applicationSeason, selectedSeason } from "./season-context";
 import {
   initializeLegalDocuments,
@@ -412,7 +413,7 @@ async function routeCandidates(
   end: Date | string,
 ) {
   const { rows } = await client.query(
-    "SELECT * FROM participations WHERE instance_id=$1 AND season_id=$2 AND status='VISIBLE' AND review_status='VALIDATED' AND EXISTS(SELECT 1 FROM users u WHERE u.id=participations.user_id AND u.account_status='ACTIVE' AND (u.email_status='VERIFIED' OR participations.legacy_imported)) AND NOT EXISTS(SELECT 1 FROM legal_documents d WHERE d.instance_id=participations.instance_id AND d.active AND d.requires_reaccept AND ((d.kind='TERMS' AND participations.terms_version IS DISTINCT FROM d.version) OR (d.kind='GUIDELINES' AND participations.guidelines_version IS DISTINCT FROM d.version))) AND starts_at<$4 AND ends_at>$3",
+    "SELECT * FROM participations WHERE instance_id=$1 AND season_id=$2 AND status='VISIBLE' AND review_status='VALIDATED' AND EXISTS(SELECT 1 FROM users u WHERE u.id=participations.user_id AND u.account_status='ACTIVE' AND (u.email_status='VERIFIED' OR participations.legacy_imported)) AND starts_at<$4 AND ends_at>$3",
     [i.id, s.id, start, end],
   );
   return rows as unknown as House[];
@@ -437,13 +438,13 @@ export async function publicState(
   let closedHouseIds: string[] = [];
   if (s) {
     const { rows } = await db().query(
-      "SELECT count(*)::int n FROM participations WHERE instance_id=$1 AND season_id=$2 AND status=$3 AND review_status='VALIDATED' AND EXISTS(SELECT 1 FROM users u WHERE u.id=participations.user_id AND u.account_status='ACTIVE' AND (u.email_status='VERIFIED' OR participations.legacy_imported)) AND NOT EXISTS(SELECT 1 FROM legal_documents d WHERE d.instance_id=participations.instance_id AND d.active AND d.requires_reaccept AND ((d.kind='TERMS' AND participations.terms_version IS DISTINCT FROM d.version) OR (d.kind='GUIDELINES' AND participations.guidelines_version IS DISTINCT FROM d.version)))",
+      "SELECT count(*)::int n FROM participations WHERE instance_id=$1 AND season_id=$2 AND status=$3 AND review_status='VALIDATED' AND EXISTS(SELECT 1 FROM users u WHERE u.id=participations.user_id AND u.account_status='ACTIVE' AND (u.email_status='VERIFIED' OR participations.legacy_imported))",
       [i.id, s.id, "VISIBLE"],
     );
     count = Number(rows[0].n);
     if (canSeeMap) {
       const { rows } = await db().query(
-        "SELECT * FROM participations WHERE instance_id=$1 AND season_id=$2 AND status='VISIBLE' AND review_status='VALIDATED' AND EXISTS(SELECT 1 FROM users u WHERE u.id=participations.user_id AND u.account_status='ACTIVE' AND (u.email_status='VERIFIED' OR participations.legacy_imported)) AND NOT EXISTS(SELECT 1 FROM legal_documents d WHERE d.instance_id=participations.instance_id AND d.active AND d.requires_reaccept AND ((d.kind='TERMS' AND participations.terms_version IS DISTINCT FROM d.version) OR (d.kind='GUIDELINES' AND participations.guidelines_version IS DISTINCT FROM d.version))) AND ((($4::boolean) AND starts_at<$5 AND ends_at>$6) OR (NOT $4::boolean AND activity='ACTIVE' AND starts_at<=$3 AND ends_at>$3))",
+        "SELECT * FROM participations WHERE instance_id=$1 AND season_id=$2 AND status='VISIBLE' AND review_status='VALIDATED' AND EXISTS(SELECT 1 FROM users u WHERE u.id=participations.user_id AND u.account_status='ACTIVE' AND (u.email_status='VERIFIED' OR participations.legacy_imported)) AND ((($4::boolean) AND starts_at<$5 AND ends_at>$6) OR (NOT $4::boolean AND activity='ACTIVE' AND starts_at<=$3 AND ends_at>$3))",
         [i.id, s.id, now, earlyAccess, s.closes_at, s.opens_at],
       );
       houses = (rows as unknown as House[])
@@ -468,7 +469,7 @@ export async function publicState(
   if (s && canCollect && user) {
     closedHouseIds = (
       await db().query(
-        "SELECT id FROM participations WHERE instance_id=$1 AND season_id=$2 AND status='VISIBLE' AND review_status='VALIDATED' AND activity IN ('ENDED','PAUSED') AND ends_at>$3 AND EXISTS(SELECT 1 FROM users u WHERE u.id=participations.user_id AND u.account_status='ACTIVE' AND (u.email_status='VERIFIED' OR participations.legacy_imported)) AND NOT EXISTS(SELECT 1 FROM legal_documents d WHERE d.instance_id=participations.instance_id AND d.active AND d.requires_reaccept AND ((d.kind='TERMS' AND participations.terms_version IS DISTINCT FROM d.version) OR (d.kind='GUIDELINES' AND participations.guidelines_version IS DISTINCT FROM d.version)))",
+        "SELECT id FROM participations WHERE instance_id=$1 AND season_id=$2 AND status='VISIBLE' AND review_status='VALIDATED' AND activity IN ('ENDED','PAUSED') AND ends_at>$3 AND EXISTS(SELECT 1 FROM users u WHERE u.id=participations.user_id AND u.account_status='ACTIVE' AND (u.email_status='VERIFIED' OR participations.legacy_imported))",
         [i.id, s.id, now],
       )
     ).rows.map((row) => String(row.id));
@@ -730,7 +731,8 @@ export async function createParticipation(
     if (ss.is_test) throw new HttpError(403, "Saison historique en lecture seule");
     if (ss.archived || ss.purged_at || (!management && seasonFinished(ss)))
       throw new HttpError(403, "Saison terminée");
-    const a = await validateAcceptance(c, i.id, raw.acceptance);
+    const a = await validateAcceptance(c, i.id, raw.acceptance, true);
+    await recordLegalAcceptance(c, user, a);
     const h = raw.house;
     if (!h.position_confirmed)
       throw new HttpError(
@@ -860,6 +862,7 @@ export async function updateHouse(
           403,
           "Vérifiez votre email avant de modifier votre participation",
         );
+      await c.query("SELECT id FROM instances WHERE id=$1 FOR UPDATE", [i.id]);
       const docs = await legalState(i.id, c);
       if (
         (docs.TERMS.requires_reaccept &&
@@ -873,9 +876,10 @@ export async function updateHouse(
           c,
           i.id,
           (input as { acceptance?: unknown }).acceptance,
+          true,
         );
         await c.query(
-          "UPDATE participations SET terms_version=$1,terms_accepted_at=CASE WHEN $4 THEN now() ELSE NULL END,guidelines_version=$2,guidelines_accepted_at=now() WHERE id=$3",
+          "UPDATE participations SET terms_version=CASE WHEN $4 THEN $1 ELSE terms_version END,terms_accepted_at=CASE WHEN $4 THEN now() ELSE terms_accepted_at END,guidelines_version=$2,guidelines_accepted_at=now() WHERE id=$3",
           [
             acceptance.terms_version,
             acceptance.guidelines_version,
@@ -883,6 +887,7 @@ export async function updateHouse(
             acceptance.terms,
           ],
         );
+        await recordLegalAcceptance(c, user, acceptance);
       }
     }
     const [starts, ends] = houseDates(data, i, s);
@@ -1236,7 +1241,7 @@ export async function routeAvailability(
   const preview = earlyMapAccess(s, user, context.now);
   const houses = (
     await db().query(
-      "SELECT p.* FROM participations p WHERE p.instance_id=$1 AND p.season_id=$2 AND p.id=ANY($3::uuid[]) AND p.status='VISIBLE' AND p.review_status='VALIDATED' AND EXISTS(SELECT 1 FROM users u WHERE u.id=p.user_id AND u.account_status='ACTIVE' AND (u.email_status='VERIFIED' OR p.legacy_imported)) AND NOT EXISTS(SELECT 1 FROM legal_documents d WHERE d.instance_id=p.instance_id AND d.active AND d.requires_reaccept AND ((d.kind='TERMS' AND p.terms_version IS DISTINCT FROM d.version) OR (d.kind='GUIDELINES' AND p.guidelines_version IS DISTINCT FROM d.version)))",
+      "SELECT p.* FROM participations p WHERE p.instance_id=$1 AND p.season_id=$2 AND p.id=ANY($3::uuid[]) AND p.status='VISIBLE' AND p.review_status='VALIDATED' AND EXISTS(SELECT 1 FROM users u WHERE u.id=p.user_id AND u.account_status='ACTIVE' AND (u.email_status='VERIFIED' OR p.legacy_imported))",
       [i.id, s.id, input.steps.map((step) => step.id)],
     )
   ).rows as unknown as House[];
