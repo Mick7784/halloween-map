@@ -108,7 +108,16 @@ export const contentDefaults: Record<
   ]),
 );
 export type LegalKind = keyof typeof legalDefaults;
-export type LegalEvidence = { id: string; kind: LegalKind; version: string; action: string; occurred_at: string; expires_at: string; user_id: string | null; document_id: string | null };
+export type LegalEvidence = {
+  id: string;
+  kind: LegalKind;
+  version: string;
+  action: string;
+  occurred_at: string;
+  expires_at: string;
+  user_id: string | null;
+  document_id: string | null;
+};
 export type LegalDocument = {
   format?: "markdown" | "tiptap";
   content_json?: DocumentNode | null;
@@ -226,13 +235,25 @@ export async function contentAdmin(user: User | null) {
       )
     ).rows,
     active: await legalState(u.instance_id),
-    evidence: (await db().query("SELECT id,kind,version,action,occurred_at,expires_at,user_id,document_id FROM legal_events WHERE instance_id=$1 ORDER BY occurred_at DESC LIMIT 500", [u.instance_id])).rows,
+    evidence: (
+      await db().query(
+        "SELECT id,kind,version,action,occurred_at,expires_at,user_id,document_id FROM legal_events WHERE instance_id=$1 ORDER BY occurred_at DESC LIMIT 500",
+        [u.instance_id],
+      )
+    ).rows,
   };
 }
 export async function contentAction(user: User | null, input: unknown) {
   const u = requirePermission(user, "admin.access");
   requirePermission(u, "content.manage");
-  if (input && typeof input === "object" && ["draft", "review", "publish"].includes(String((input as { action?: unknown }).action))) return documentAction(u, input);
+  if (
+    input &&
+    typeof input === "object" &&
+    ["draft", "review", "publish"].includes(
+      String((input as { action?: unknown }).action),
+    )
+  )
+    return documentAction(u, input);
   const p = z
     .object({
       action: z.enum(["save", "reset", "draft", "publish", "links"]),
@@ -334,7 +355,8 @@ export async function validateAcceptance(
         409,
         "Les bonnes pratiques ont changé. Relisez-les avant de confirmer.",
       );
-    if (requireTerms && docs.TERMS.requires_reaccept) throw new HttpError(409, "Les CGU doivent être acceptées explicitement.");
+    if (requireTerms && docs.TERMS.requires_reaccept)
+      throw new HttpError(409, "Les CGU doivent être acceptées explicitement.");
     return {
       terms: false,
       guidelines: true,

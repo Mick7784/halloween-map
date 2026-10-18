@@ -12,18 +12,18 @@ VERSION avant la validation finale. Aucun accès VPS.
 
 ### Frontières existantes
 
-* `lib/content.ts` : catalogue, substitutions, permissions `admin.access` et
+- `lib/content.ts` : catalogue, substitutions, permissions `admin.access` et
   `content.manage`, brouillons et publications. Sessions et CSRF : route API
   commune et `lib/auth.ts`. Journal métier limité à 90 jours.
-* `VisualEditor` : Tiptap 3 aplati vers un sous-ensemble Markdown ; réutilisé
+- `VisualEditor` : Tiptap 3 aplati vers un sous-ensemble Markdown ; réutilisé
   ailleurs, notamment les messages. Le conserver pour ces usages.
-* `Editorial` : rendu React Markdown historique ; conserver exactement ce
+- `Editorial` : rendu React Markdown historique ; conserver exactement ce
   chemin pour les documents anciens. `editorial-format` sert aussi aux emails.
-* Migration 003 : versions publiées immuables, index de version active.
-* `service.ts` filtre les maisons sur les versions CGU/consignes. Le formulaire
+- Migration 003 : versions publiées immuables, index de version active.
+- `service.ts` filtre les maisons sur les versions CGU/consignes. Le formulaire
   n'envoie que GUIDELINES_ONLY mais enregistre actuellement une version CGU
   sans acceptation. Risque de disparition des maisons après publication.
-* `ParticipationForm` et `RoutePreparation` : prise de connaissance des consignes,
+- `ParticipationForm` et `RoutePreparation` : prise de connaissance des consignes,
   distincte des CGU. Les informations de confidentialité ne sont pas un consentement.
 
 ### Inventaire des textes
