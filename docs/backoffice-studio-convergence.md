@@ -12,7 +12,10 @@ Objectif : livraison en **une release Halloween Map vérifiée**, après mise en
 - **Branding obligatoire : utiliser le vrai logo Halloween Map conçu pour l'écosystème DomotiK Studio.** Source identifiée dans le dépôt : `artwork/branding/halloween-map-wordmark-official.webp` et, pour les petits usages, `artwork/branding/halloween-map-app-icon-official.webp`. Contrôler leur rendu réel et leurs contraintes de thème avant intégration ; rendre accessible l'asset du back-office via le mécanisme d'assets Next.js, sans modifier arbitrairement le fichier source. La sidebar actuelle affiche `PumpkinMark` via `components/Admin.tsx` : ce dessin générique doit être remplacé **dans le back-office** par le logo officiel, pas recréé en icône/emoji/texte. La signature officielle incluse dans le visuel doit rester intacte. Aucun changement du branding public sans demande séparée.
 - **Conserver 100 % des fonctionnalités et permissions de Halloween Map**, y compris les détails, paramètres, actions secondaires et scénarios rares : hors saison, saisons préparées, modération, documents, communication, preuves légales, et toutes les fonctions identifiées à l'audit. Aucune suppression, disparition d'accès ou dégradation de capacité sous couvert de simplification.
 - **Repenser si nécessaire l'interface et les parcours d'une fonction existante** (menus, regroupement, organisation des étapes, boutons, vues contextualisées, outils d'édition) pour les aligner sur la logique LinKs. Une refonte ergonomique peut aller au-delà des styles CSS, **mais le résultat métier, les données, les permissions et les garanties de sécurité doivent rester identiques** ; si une fonction risque de changer, valider explicitement avant de la modifier.
-- Reprendre les outils **transversaux** réellement existants dans LinKs (navigation, listes, tris, tableaux, pagination, graphiques, calendrier, confirmations, uploads et états) dans la même philosophie. Cela **n'impose pas** de recopier les modules métier propres à LinKs (Stories, campagnes promotionnelles, raccourcis) qui n'ont pas d'équivalent Halloween Map. En revanche, aucun équivalent générique utile ne doit être oublié.
+- **LinKs est une référence d'interface, pas une liste de fonctionnalités à importer.** Séparer strictement le design/UX, les primitives génériques et les fonctions métier. **Ne pas ajouter** une fonction de LinKs qui ne répond pas à un besoin démontré de Halloween Map.
+- Reprendre ou adapter les outils **transversaux uniquement lorsque leur usage est justifié par un écran ou parcours Halloween Map existant** : navigation, listes, tris, tableaux, pagination, graphiques, confirmations, gestion d'images ou états. Le calendrier de LinKs n'est réutilisé que s'il sert clairement des échéances/campagnes/saisons Halloween Map, pas pour reproduire un module LinKs. Aucun équivalent générique utile au besoin identifié ne doit être oublié.
+- **Exclus par défaut :** fonctions propres à la page de liens LinKs (liens sponsorisés ou promotionnels, Stories, raccourcis réseau social, codes promotionnels, redirections suivies, KPI de clics/CTR, bibliothèque/thèmes de la page publique LinKs, citations de footer, campagnes commerciales ou autres fonctions sans objet dans Halloween Map). Les modules Halloween Map conservent à la place leurs propres métiers et métriques.
+- **Aucun bouton factice, écran vide ajouté pour ressembler à LinKs, réglage sans effet, fausse statistique ni menu correspondant à une fonction LinKs non nécessaire.** La parité demandée concerne l'environnement graphique et la cohérence des interactions, pas la liste des entrées ni un volume artificiel de fonctionnalités.
 - Le menu principal reprend la disposition et les interactions de LinKs, mais reflète les **rubriques complètes de Halloween Map** ; navigation secondaire et menus contextuels autorisés seulement si la découverte de chaque fonction reste évidente et testable. Aucune fonction simplement cachée dans un sous-menu sans contrôle de découvrabilité.
 - Mode clair, sombre, système ; un seul sélecteur d'apparence cohérent dans l'administration.
 - États de chargement, succès, erreurs, désactivation, absence de données et brouillon cohérents ; focus et navigation clavier fiables.
@@ -107,6 +110,27 @@ Objectif : livraison en **une release Halloween Map vérifiée**, après mise en
 - Après PR entièrement verte : version **suivante déterminée par le workflow existant**, changelog, fusion main, image GHCR versionnée + latest, tag et GitHub Release vérifiés. Ne pas deviner/incrémenter VERSION au démarrage.
 - Déploiement VPS distinct : ne pas l'entreprendre dans ce chantier sans demande explicite.
 
+## 4 bis. Filtre explicite anti « copier-coller fonctionnel »
+
+Avant de retenir une fonctionnalité ou un composant de LinKs, appliquer cet ordre de décision :
+
+1. **Habillage / interaction partagée ?** Reprendre au plus près : shell, sidebar, topbar, typographie, palettes, marges, cartes, boutons, navigation, comportements et états.
+2. **Composant ou utilitaire générique servant à Halloween Map ?** Adapter à React et aux besoins réels des écrans existants, en conservant les contrats Halloween Map. Exemple : tableau triable pour les maisons, graphique accessible pour les métriques de saison, contrôles de dates pour ses communications.
+3. **Fonction métier LinKs sans besoin Halloween Map ?** **Ne pas l'implémenter, ne pas afficher son menu et ne pas introduire ses données**, même si elle est très aboutie dans LinKs.
+4. **Fonction métier Halloween Map sans équivalent LinKs ?** **La conserver intégralement**, réimaginer si utile son parcours et son emplacement, et appliquer les conventions d'interface LinKs ; ne pas la masquer ou la supprimer.
+
+| Exemple | Décision |
+| --- | --- |
+| Sidebar, toolbar, listes, formulaires, statuts et modales LinKs | **Même système visuel et comportement** |
+| Recherche/tri/pagination dans les maisons et utilisateurs | **Adapter la primitive générique aux contrats Halloween Map** |
+| Graphiques LinKs | **Réemployer la grammaire visuelle avec les seules vraies mesures Halloween Map** |
+| Calendrier promotionnel LinKs | **Pas de copie** ; recycler des patterns uniquement si une vraie vue calendrier d'Halloween Map en a besoin |
+| Liens suivis, campagnes promo, codes réduction et Stories LinKs | **Ne pas importer** |
+| Éditeur de thèmes de la page publique LinKs, bibliothèques de fonds et citations | **Ne pas importer**, sauf demande produit séparée ; thèmes d'administration partagés, eux, conservés |
+| Saisons, inscription de maisons, modération, parcours, consentements, emails et permissions Halloween Map | **Conserver et adapter l'ergonomie à LinKs** |
+
+**Recette supplémentaire :** chaque nouvel écran, entrée de navigation, paramètre, champ, composant fonctionnel ou statistique doit être justifié par une fonction métier existante de Halloween Map ou par une amélioration ergonomique explicitement validée ; éliminer tout ajout gratuit issu de LinKs. Inversement, aucune fonction antérieure de Halloween Map ne doit disparaître.
+
 ## 5. Matrice de réemploi LinKs → Halloween Map
 
 | Source LinKs | Transposition proposée | Exigence |
@@ -131,7 +155,7 @@ Objectif : livraison en **une release Halloween Map vérifiée**, après mise en
 
 ## 7. Définition de terminé
 
-Une personne habituée au back-office LinKs **reconnaît immédiatement la même interface d'administration** dans Halloween Map : disposition des menus, shell, composants, densité, thèmes, commandes, animations et retours d'état. Seuls le logo officiel Halloween Map by DomotiK Studio, les titres et les outils spécifiques au produit changent. Un administrateur de Halloween Map retrouve **100 % de ses fonctions**, même réorganisées ou ergonomiquement modernisées, avec les mêmes capacités métier, données, droits et scénarios saisonniers. La matrice de conservation doit être entièrement validée. La suite de tests et la chaîne release sont vertes. Aucune intervention manuelle en production n'est imposée par une refonte de présentation.
+Sans jamais recevoir des modules propres à LinKs qui ne servent pas Halloween Map, une personne habituée au back-office LinKs **reconnaît immédiatement la même interface d'administration** dans Halloween Map : disposition des menus, shell, composants, densité, thèmes, commandes, animations et retours d'état. Seuls le logo officiel Halloween Map by DomotiK Studio, les titres et les outils spécifiques au produit changent. Un administrateur de Halloween Map retrouve **100 % de ses fonctions**, même réorganisées ou ergonomiquement modernisées, avec les mêmes capacités métier, données, droits et scénarios saisonniers. La matrice de conservation doit être entièrement validée. La suite de tests et la chaîne release sont vertes. Aucune intervention manuelle en production n'est imposée par une refonte de présentation.
 
 ## 8. Protection du fonctionnement existant — exigence prioritaire
 
