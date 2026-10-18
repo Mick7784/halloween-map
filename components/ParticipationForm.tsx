@@ -1,4 +1,5 @@
 "use client";
+import DocumentView from "./DocumentView";
 import { Input, Button, Dialog } from "./ui";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
@@ -33,7 +34,6 @@ import {
   HouseTextField,
 } from "./HouseFields";
 import { Notice } from "./common";
-import Editorial from "./Editorial";
 import { legalDefaults } from "../lib/legal-defaults";
 import useDraftGuard from "./useDraftGuard";
 export default function ParticipationForm({
@@ -395,9 +395,7 @@ export default function ParticipationForm({
               <X />
             </Button>
             <h2 id="participation-guidelines-title">Bonnes pratiques</h2>
-            <Editorial
-              text={guidelinesDocument.body || legalDefaults.GUIDELINES.body}
-            />
+            <DocumentView document={guidelinesDocument} />
             <Button
               type="button"
               className="participation-guidelines-return"

@@ -1,3 +1,4 @@
+import DocumentView from "./DocumentView";
 import { DateTime } from "luxon";
 import { LockKeyhole } from "lucide-react";
 import { legalDefaults } from "../lib/legal-defaults";
@@ -28,7 +29,7 @@ export default function AccountPolicy({ state }: { state: PublicState }) {
             : ""}
         </p>
       )}
-      <Editorial text={body} />
+      {!configured && document ? <DocumentView document={document} /> : <Editorial text={body} />}
       <p>
         Après purge, seules vos années de participation validée sont conservées
         cinq ans et sont effacées avec le compte. La fréquentation repose sur

@@ -1,4 +1,5 @@
 "use client";
+import DocumentView from "./DocumentView";
 import { useState, useEffect, useRef, useMemo } from "react";
 import { DateTime } from "luxon";
 import {
@@ -16,7 +17,6 @@ import type { RouteParameters } from "../lib/active-route";
 import type { PublicState, PublicHouse } from "./common";
 import type { Activity } from "../lib/domain";
 import { Field, Notice, fears, values } from "./common";
-import Editorial from "./Editorial";
 import { selectableHouses } from "../lib/collection-view";
 import { gpsDistance } from "../lib/collection";
 import ManorMark from "./ManorMark";
@@ -393,7 +393,7 @@ export default function RoutePreparation({
               Quelques règles pour une soirée magique, sereine et respectueuse.
             </p>
             <div className="route-guidelines-scroll">
-              <Editorial text={guideline.body} />
+              <DocumentView document={guideline} />
             </div>
             <button
               className="primary"
