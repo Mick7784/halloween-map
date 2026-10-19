@@ -1,6 +1,6 @@
-/* DomotiK Studio admin shell skin — LinKs V1.312 visual contract.
- * Import after AdminBeta.css; scoped to the back-office only, never public UI.
- * The reusable tokens are independent of Halloween Map's business features.
+/* DomotiK Studio admin shell — LinKs V1.312 geometry and neutral surfaces.
+ * The actual branding belongs to Halloween Map: pumpkin orange and violet.
+ * Keep this skin scoped to admin; the public CSS remains unchanged.
  */
 .admin-beta {
   --bg: #171d27;
@@ -10,13 +10,18 @@
   --text: #e6ebf2;
   --muted: #a4b0c2;
   --line: #333e4e;
-  --accent: #64bbdb;
-  --accent-soft: #233c4b;
-  --purple: #b09ad8;
+  /* Existing Halloween Map brand hues from PremiumHome/PremiumApp. */
+  --hm-admin-orange: #ff9d45;
+  --hm-admin-violet: #b98cec;
+  --accent: var(--hm-admin-orange);
+  --accent-soft: #382b31;
+  --purple: var(--hm-admin-violet);
+  --brand-on-primary: #1e1419;
+  --brand-primary-hover: #ffc17a;
   --success: #8ad3ab;
   --warning: #e5bd7d;
   --danger: #f1a1ab;
-  --focus: #64bbdb;
+  --focus: var(--hm-admin-orange);
   --shadow: 0 2px 8px #00000008;
   --radius: 12px;
   color-scheme: dark;
@@ -29,13 +34,18 @@
   --text: #202b3b;
   --muted: #637187;
   --line: #e1e6ed;
-  --accent: #076d96;
-  --accent-soft: #e7f3f8;
-  --purple: #7951b5;
+  /* Accessible shades of the same Halloween Map palette for light mode. */
+  --hm-admin-orange: #ab470d;
+  --hm-admin-violet: #7540ad;
+  --accent: var(--hm-admin-orange);
+  --accent-soft: #fff1e5;
+  --purple: var(--hm-admin-violet);
+  --brand-on-primary: #ffffff;
+  --brand-primary-hover: #8d3b08;
   --success: #26734e;
   --warning: #926014;
   --danger: #b23a49;
-  --focus: #1689b8;
+  --focus: var(--hm-admin-orange);
   --shadow: 0 2px 8px #24344a04;
   color-scheme: light;
 }
@@ -48,13 +58,17 @@
     --text: #202b3b;
     --muted: #637187;
     --line: #e1e6ed;
-    --accent: #076d96;
-    --accent-soft: #e7f3f8;
-    --purple: #7951b5;
+    --hm-admin-orange: #ab470d;
+    --hm-admin-violet: #7540ad;
+    --accent: var(--hm-admin-orange);
+    --accent-soft: #fff1e5;
+    --purple: var(--hm-admin-violet);
+    --brand-on-primary: #ffffff;
+    --brand-primary-hover: #8d3b08;
     --success: #26734e;
     --warning: #926014;
     --danger: #b23a49;
-    --focus: #1689b8;
+    --focus: var(--hm-admin-orange);
     --shadow: 0 2px 8px #24344a04;
     color-scheme: light;
   }
@@ -85,15 +99,15 @@
   outline: 2px solid var(--focus);
   outline-offset: 3px;
 }
-.admin-beta .primary {
-  background: #087da9;
-  border-color: #087da9;
-  color: #ffffff;
+.application.admin-app .admin-beta button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--brand-on-primary);
 }
-.admin-beta .primary:hover {
-  background: #086b91;
-  border-color: #086b91;
-  color: #ffffff;
+.application.admin-app .admin-beta button.primary:hover {
+  background: var(--brand-primary-hover);
+  border-color: var(--brand-primary-hover);
+  color: var(--brand-on-primary);
 }
 .admin-beta .beta-sidebar nav button.is-current {
   background: var(--accent-soft);
@@ -182,7 +196,7 @@
   }
 }
 
-/* Studio metrics: reusable cards and comparative distributions in LinKs colors.
+/* Studio metrics: reusable cards and comparative distributions in Halloween Map colors.
  * Visual-only: numbers, source aggregations and seasonal semantics stay owned
  * by the consuming application.
  */

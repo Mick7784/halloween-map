@@ -648,7 +648,7 @@ test("V1.0 baseline: capture the V0.9.10 administration before replacing the she
   });
 });
 
-test("V1.0 branding uses the actual DomotiK Studio assets and LinKs admin palette", async ({
+test("V1.0 retains LinKs neutral shell with Halloween Map branded accents", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
@@ -672,10 +672,30 @@ test("V1.0 branding uses the actual DomotiK Studio assets and LinKs admin palett
   await expect.poll(() => page.locator(".admin-beta").evaluate(
     (node) => getComputedStyle(node).getPropertyValue("--bg").trim(),
   )).toBe("#171d27");
+  const accent = () => page.locator(".admin-beta").evaluate(
+    (node) => getComputedStyle(node).getPropertyValue("--accent").trim(),
+  );
+  await expect.poll(accent).toBe("#ff9d45");
+  const nav = page.getByRole("navigation", { name: "Navigation administration" });
+  await nav.getByRole("button", { name: "Maisons", exact: true }).click();
+  const current = nav.getByRole("button", { name: "Maisons", exact: true });
+  await expect(current).toHaveCSS("color", "rgb(255, 157, 69)");
+  const primary = page.locator(".beta-house-create button.primary");
+  await expect(primary).toHaveCSS("background-color", "rgb(255, 157, 69)");
+  await expect(primary).toHaveCSS("color", "rgb(30, 20, 25)");
   await page.getByLabel("Apparence", { exact: true }).selectOption("light");
   await expect.poll(() => page.locator(".admin-beta").evaluate(
     (node) => getComputedStyle(node).getPropertyValue("--bg").trim(),
   )).toBe("#f5f6f8");
+  await expect.poll(accent).toBe("#ab470d");
+  await expect(current).toHaveCSS("color", "rgb(171, 71, 13)");
+  await expect(primary).toHaveCSS("background-color", "rgb(171, 71, 13)");
+  await expect(primary).toHaveCSS("color", "rgb(255, 255, 255)");
+  await page.emulateMedia({ colorScheme: "light" });
+  await page.getByLabel("Apparence", { exact: true }).selectOption("system");
+  await expect(current).toHaveCSS("color", "rgb(171, 71, 13)");
+  await page.emulateMedia({ colorScheme: "dark" });
+  await expect(current).toHaveCSS("color", "rgb(255, 157, 69)");
   await page.getByRole("button", { name: "Réduire aux icônes" }).click();
   await expect(icon).toBeVisible();
   await expect(wordmark).toBeHidden();
