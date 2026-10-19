@@ -44,6 +44,8 @@ import Campaigns from "./Campaigns";
 import AdminActivity from "./AdminActivity";
 import AdminExistingPage from "./AdminExistingPage";
 import { houseAvailability } from "../lib/house-availability";
+import { visibleStudioNavigation } from "../lib/studio-navigation";
+import { halloweenAdminNavigation } from "../lib/halloween-admin-navigation";
 import "./AdminBeta.css";
 import { PumpkinMark } from "./PublicBrand";
 import MessageTemplates from "./MessageTemplates";
@@ -79,6 +81,19 @@ function dateLabel(value: string | Date, zone: string) {
     timeZone: zone,
   }).format(value instanceof Date ? value : new Date(value));
 }
+// Product icon bindings are presentation-only; the module/permission model is
+// a framework-independent DomotiK Studio navigation contract.
+const studioNavIcons = {
+  dashboard: LayoutDashboard,
+  houses: HouseIcon,
+  users: Users,
+  seasons: CalendarDays,
+  statistics: ChartColumn,
+  activity: Activity,
+  communications: Mail,
+  content: FileText,
+  settings: Settings,
+} as const;
 const reviews: Record<string, string> = {
   VALIDATED: "Validée",
   PENDING: "En attente",
@@ -1012,54 +1027,35 @@ export default function Admin({
           {!sidebarCollapsed && <span>Réduire le menu</span>}
         </Button>
         <nav aria-label="Navigation administration">
-          {(
-            [
-              ["Accueil", [
-                ["dashboard", "Tableau de bord", "stats.read", LayoutDashboard],
-              ]],
-              ["Gestion", [
-                ["houses", "Maisons", "participants.read", HouseIcon],
-                ["users", "Utilisateurs", "users.read", Users],
-                ["seasons", "Saison", "season.read", CalendarDays],
-              ]],
-              ["Suivi & communication", [
-                ["statistics", "Statistiques", "stats.read", ChartColumn],
-                ["activity", "Activité", "audit.read", Activity],
-                ["communications", "Communications", "communications.read", Mail],
-              ]],
-              ["Configuration", [
-                ["content", "Contenus & documents", "content.manage", FileText],
-                ["settings", "Paramètres", "settings.read", Settings],
-              ]],
-            ] as const
-          ).map(([group, links]) => {
-            const allowed = links.filter(([, , permission]) => has(user, permission));
-            if (!allowed.length) return null;
-            return (
-              <div className="beta-nav-group" key={group}>
-                <span className="beta-nav-heading">{group}</span>
-                {allowed.map(([id, title, , Icon]) => (
+          {visibleStudioNavigation(halloweenAdminNavigation, (permission) =>
+            has(user, permission),
+          ).map((group) => (
+            <div className="beta-nav-group" key={group.title}>
+              <span className="beta-nav-heading">{group.title}</span>
+              {group.items.map((item) => {
+                const Icon = studioNavIcons[item.icon];
+                return (
                   <Button
-                    key={id}
+                    key={item.id}
                     type="button"
-                    className={section === id ? "is-current" : ""}
-                    aria-label={title}
-                    title={sidebarCollapsed ? title : undefined}
-                    aria-current={section === id ? "page" : undefined}
+                    className={section === item.id ? "is-current" : ""}
+                    aria-label={item.title}
+                    title={sidebarCollapsed ? item.title : undefined}
+                    aria-current={section === item.id ? "page" : undefined}
                     onClick={() => {
                       if (!confirmDraftNavigation()) return;
                       setUserCreate(false);
-                      setSection(id);
+                      setSection(item.id);
                       setMenuOpen(false);
                     }}
                   >
                     <Icon size={18} />
-                    <span className="beta-nav-label">{title}</span>
+                    <span className="beta-nav-label">{item.title}</span>
                   </Button>
-                ))}
-              </div>
-            );
-          })}
+                );
+              })}
+            </div>
+          ))}
         </nav>
         <Link
           className="beta-public-link"
