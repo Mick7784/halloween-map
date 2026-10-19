@@ -3,7 +3,7 @@ import { test, expect, type Page } from "@playwright/test";
 const real = "30000000-0000-4000-8000-000000000001",
   other = "30000000-0000-4000-8000-000000000002",
   testId = "30000000-0000-4000-8000-000000000003";
-async function arrange(page: Page, role = "SUPER_ADMIN") {
+async function arrange(page: Page, role = "SUPER_ADMIN", granted?: readonly string[]) {
   const now = Date.now(),
     dates = {
       year: 2026,
@@ -38,7 +38,7 @@ async function arrange(page: Page, role = "SUPER_ADMIN") {
   ];
   const reviews: Record<string, string> = {};
   const mutations: { action: string; id?: string }[] = [];
-  const permissions = [
+  const defaultPermissions = [
     "admin.access",
     "stats.read",
     "audit.read",
@@ -55,6 +55,7 @@ async function arrange(page: Page, role = "SUPER_ADMIN") {
       ? ["roles.manage", "settings.read", "settings.manage"]
       : []),
   ];
+  const permissions = granted ? [...granted] : defaultPermissions;
   await page.route("**/api/**", async (route) => {
     const url = new URL(route.request().url()),
       path = url.pathname,
@@ -547,4 +548,66 @@ test("dashboard moderation link switches to the active season and refreshes afte
   await expect(
     page.locator(".beta-table-scroll tbody tr").first(),
   ).toContainText("Validée");
+});
+
+
+test("V1.0 baseline: a restricted ADMIN sees only granted modules and cannot mutate houses", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const { mutations } = await arrange(page, "ADMIN", [
+    "admin.access",
+    "participants.read",
+  ]);
+  await page.goto("/admin");
+  const nav = page.getByRole("navigation", {
+    name: "Navigation administration",
+  });
+  await expect(page.locator(".beta-page-title h1")).toHaveText("Maisons");
+  await expect(
+    nav.getByRole("button", { name: "Maisons", exact: true }),
+  ).toBeVisible();
+  for (const name of [
+    "Tableau de bord",
+    "Utilisateurs",
+    "Saison",
+    "Statistiques",
+    "Activité",
+    "Communications",
+    "Contenus & documents",
+    "Paramètres",
+  ]) {
+    await expect(nav.getByRole("button", { name, exact: true })).toHaveCount(0);
+  }
+  await expect(page.locator(".beta-house-create")).toHaveCount(0);
+  await expect(page.getByLabel("Saison du back-office")).toBeVisible();
+  await expect(page.locator(".beta-table-scroll")).toContainText(
+    "Jardin des lanternes",
+  );
+  expect(mutations).toEqual([]);
+});
+
+test("V1.0 baseline: capture the V0.9.10 administration before replacing the shell", async ({
+  page,
+}, testInfo) => {
+  await arrange(page);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/admin");
+  for (const theme of ["dark", "light"] as const) {
+    await page.getByLabel("Apparence", { exact: true }).selectOption(theme);
+    await expect(page.locator(".beta-kpis article")).toHaveCount(4);
+    await testInfo.attach(`v0910-desktop-${theme}.png`, {
+      body: await page.screenshot({ fullPage: true, animations: "disabled" }),
+      contentType: "image/png",
+    });
+  }
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.reload();
+  await expect(
+    page.getByRole("tab", { name: "Vue d’ensemble" }),
+  ).toBeVisible();
+  await testInfo.attach("v0910-mobile-dark.png", {
+    body: await page.screenshot({ fullPage: true, animations: "disabled" }),
+    contentType: "image/png",
+  });
 });
