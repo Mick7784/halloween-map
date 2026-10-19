@@ -1,7 +1,7 @@
 "use client";
 import useDraftGuard from "./useDraftGuard";
 import { Select, Input } from "./ui";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type SetStateAction } from "react";
 import type { User } from "../lib/domain";
 import {
   messageKinds,
@@ -57,6 +57,11 @@ export default function MessageTemplates({ user }: { user: User }) {
     }
     setResult(answer.message ?? "Modèle enregistré.");
   }
+  function updateTemplate(next: SetStateAction<MessageTemplate>) {
+    // A previous successful save/test is no longer the status of this draft.
+    setResult("");
+    setTemplate(next);
+  }
   let preview: ReturnType<typeof renderMessage> | null = null;
   let previewError = "";
   try {
@@ -77,7 +82,7 @@ export default function MessageTemplates({ user }: { user: User }) {
           <h2>Modèles des emails de service</h2>
           <p className="small muted">Personnalisez les messages automatiques et contrôlez leur rendu avant l’enregistrement.</p>
         </div>
-        {(template.html_body || !models || !manage) && (
+        {!result && (template.html_body || !models || !manage) && (
           <span className="studio-template-save-state" role="status" aria-live="polite">
             {!models ? "Chargement du modèle…" : !manage ? "Lecture seule" :
               dirty ? "Modifications non enregistrées" : "Modèle enregistré"}
@@ -118,7 +123,7 @@ export default function MessageTemplates({ user }: { user: User }) {
           disabled={!manage || !models}
           maxLength={150}
           onChange={(e) =>
-            setTemplate({ ...template, subject: e.target.value })
+            updateTemplate({ ...template, subject: e.target.value })
           }
         />
       </label>
@@ -133,13 +138,13 @@ export default function MessageTemplates({ user }: { user: User }) {
             key={kind}
             disabled={!manage || !models}
             value={template.html_body}
-            onChange={(html_body) => setTemplate((prev) => ({ ...prev, html_body }))}
+            onChange={(html_body) => updateTemplate((prev) => ({ ...prev, html_body }))}
             variables={messageVariables}
             requireSecureAction={["VERIFY", "INVITE", "RESET"].includes(kind)}
           />
           {manage && <Button type="button" onClick={() => {
             if (!window.confirm("Revenir au format simple ? Le brouillon HTML sera abandonné.")) return;
-            setTemplate({ ...template, html_body: null });
+            updateTemplate({ ...template, html_body: null });
           }}>Revenir à l’éditeur simple</Button>}
         </>
       ) : (
@@ -148,7 +153,7 @@ export default function MessageTemplates({ user }: { user: User }) {
             saveStatus={dirty ? "Modifications non enregistrées" : "Modèle enregistré"}
             disabled={!manage || !models}
             value={template.body}
-            onChange={(body) => setTemplate({ ...template, body })}
+            onChange={(body) => updateTemplate({ ...template, body })}
             variables={messageVariables}
             maxLength={5000}
           />
@@ -156,7 +161,7 @@ export default function MessageTemplates({ user }: { user: User }) {
             const action = ["VERIFY", "INVITE", "RESET"].includes(kind)
               ? '<p><a href="{{secure_action_url}}" style="display:inline-block;padding:14px;background-color:#ff922f;color:#17171e">Ouvrir mon compte</a></p>'
               : "";
-            setTemplate({ ...template,
+            updateTemplate({ ...template,
               html_body: '<!doctype html><html lang="fr"><body style="margin:0;background-color:#17171e;color:#ffffff;font-family:Arial,sans-serif">' +
                 '<table role="presentation" width="100%" cellpadding="20"><tbody><tr><td>' +
                 '<h1>Halloween Map</h1>' + editorialHtml(template.body) + action +
