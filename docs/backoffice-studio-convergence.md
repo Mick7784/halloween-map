@@ -20,7 +20,8 @@ Objectif : livrer une **bêta complète, installable et isolée**, puis la **ver
 - Mode clair, sombre, système ; un seul sélecteur d'apparence cohérent dans l'administration.
 - États de chargement, succès, erreurs, désactivation, absence de données et brouillon cohérents ; focus et navigation clavier fiables.
 - Même logique de composants et mêmes comportements ; pas nécessairement le même code, car LinKs est en HTML/JavaScript et Halloween Map en React/Next.js.
-- Respect de l'identité « Halloween Map by DomotiK Studio » et compatibilité avec la vision future d'un back-office multi-applications, **sans** fusion immédiate des authentifications, des bases, des API ou des déploiements.
+- **Décision architecturale permanente : back-office réutilisable mais administration indépendante pour chaque application.** LinKs, Halloween Map et les futurs projets conservent leur propre URL d'administration, authentification, utilisateurs, permissions, API, base, configuration, secrets, infrastructure, mises à jour et déploiements. Le socle visuel et les blocs génériques sont partagés ; **aucun portail d'administration central, SSO obligatoire, base partagée ni dépendance opérationnelle entre applications** ne fait partie de l'objectif.
+- Respecter l'identité « Halloween Map by DomotiK Studio » dans son propre back-office ; partager les outils, mais conserver les spécificités métier et l'autonomie de chaque produit.
 - Pas de nouvelle bibliothèque simplement pour copier un rendu ; mesurer l'intérêt par rapport aux dépendances déjà installées.
 
 ## 2. Inventaire vérifié au lancement
@@ -52,7 +53,7 @@ Objectif : livrer une **bêta complète, installable et isolée**, puis la **ver
 5. Préférer les métriques et modèles existants ; ne pas adapter les API ou ajouter des calculs métier pour rendre une visualisation plus séduisante. Décrire précisément chaque unité et dénominateur.
 6. Toutes les commandes doivent avoir une action réelle. Maintenir `aria-label`, `title`, raccourcis documentés, `aria-pressed`, focus visible, sorties clavier, `prefers-reduced-motion`, retours d'erreur explicites.
 7. Le champ saison active et la saison consultée ont des sémantiques distinctes : ne pas les fusionner ou les modifier par simplification de l'interface.
-8. Prévoir des composants exportables vers un futur socle partagé **seulement après validation** ; ne pas créer aujourd'hui de couplage fort avec le dépôt LinKs ni de dépendance distante obligatoire.
+8. Structurer les outils à vocation commune comme des **blocs fonctionnels réutilisables et versionnables** avec contrats documentés, en distinguant noyau générique, interface et adaptateurs métier. Extraire un module partagé lorsque son comportement est confirmé par des usages réels, sans couplage fort entre les déploiements ou les dépôts.
 
 ## 4. Ordre des lots : un lot validé avant de reprendre les mêmes fichiers
 
@@ -232,4 +233,33 @@ Sans jamais recevoir des modules propres à LinKs qui ne servent pas Halloween M
 - CI complète verte (tests unitaires/e2e, TypeScript, build, PostgreSQL/migrations, Docker, HTTPS) + recette visuelle et fonctionnelle manuelle en condition isolée.
 - Retours de la bêta traités et documentés, avec changements vérifiables ; notes de version, sauvegarde et modalités de rollback documentées.
 - Version V1.0 déclarée stable **uniquement** après ces validations. La bêta reste clairement annoncée comme non destinée à remplacer la production.
+
+## 10. Vision DomotiK Studio validée — bibliothèque de blocs, administrations indépendantes
+
+**Décision de produit du 19 octobre 2026.** Le back-office commun est un **socle logiciel et d'expérience**, pas une application centrale contrôlant toutes les autres. Chaque projet embarque/importe les blocs dont il a besoin, les adapte par configuration ou via des interfaces d'extension, et continue de fonctionner de façon autonome.
+
+### Architecture cible
+
+1. **Socle d'administration partagé** : tokens, thèmes, navigation, dispositions, boutons, champs, états, tableaux, modales, accessibilité et conventions. L'apparence commune est la référence LinKs ; les menus et le logo reflètent chaque produit.
+2. **Bibliothèque de blocs fonctionnels** : unités cohésives et spécialisées (éditeur riche, liste filtrable, visualisation de statistiques, média, calendrier, etc.). Un bloc expose un contrat stable (props/API, données d'entrée/sortie, évènements, états, permissions attendues comme capacités injectées), ses tests, versions et documentation. Il n'embarque pas une base, des comptes ou les règles juridiques d'une application particulière.
+3. **Adaptateurs par application** : conversion vers ses API/données existantes, contrôle d'autorisations côté serveur, persistence, validations, notifications et règles métier. Les adaptations spécifiques sont des couches externes au cœur du bloc, **pas** des forks divergents à maintenir.
+4. **Chaque produit est déployé séparément** : LinKs conserve son site et son back-office, Halloween Map aussi. Aucune dépendance réseau runtime envers un « back-office DomotiK central » ou une autre application. Les versions des blocs sont intégrées et épinglées dans chaque application, de sorte qu'une mise à jour de LinKs ne modifie pas spontanément Halloween Map.
+5. **Compatibilité des stacks** : LinKs utilise des scripts DOM/JS et Halloween Map React/Next.js. Extraire d'abord du code véritablement portable (modèles, validations génériques, fonctions pures, design tokens) ; les interfaces visuelles peuvent avoir des adaptateurs ou implémentations par framework avec contrat commun. Ne pas promettre de partager tel quel un composant React avec le rendu vanilla JS de LinKs.
+6. **Maintenance et évolutions** : améliorer d'abord la source d'un bloc, tester sa compatibilité dans les projets consommateurs, puis mettre à jour chaque application à son rythme. Versionner/documenter les ruptures de contrat et permettre une reprise ou un rollback indépendants.
+
+### Exemple — bloc d'édition de texte
+
+- **Partageable** : barre d'outils, commandes typographiques, contenu éditable, raccourcis, statuts, aperçu, contrat de changement/sauvegarde et extension optionnelle.
+- **Adaptation Halloween Map** : Tiptap existant, formats autorisés, validation de contenu, documents légaux immuables une fois publiés, révisions, conflits 409, publication, acceptation et réacceptation. Ces garanties restent du ressort des services de Halloween Map ; ne jamais les déplacer vers un noyau générique mal conçu.
+- **Adaptation LinKs** : contenu et interfaces existants sans lui imposer des documents juridiques, une publication à versions ou l'installation de Tiptap s'il n'en a pas besoin.
+- **Principe** : si les besoins éditoriaux sont vraiment différents, mutualiser le cœur utile et autoriser des capacités optionnelles ; éviter de forcer toutes les apps à porter la fonction la plus avancée.
+
+### Ce que cela impose au chantier Halloween Map V1.0
+
+- Le premier objectif reste **la refonte fiable du back-office Halloween Map** et la livraison `V1.0-beta.1` puis `V1.0`. Ne pas ajouter comme prérequis une migration complète de LinKs ou la création d'une plateforme partagée complexe.
+- À l'audit, marquer chaque partie comme : **bloc déjà générique**, **candidat à extraction**, **adaptateur métier**, ou **spécifique Halloween Map**.
+- Lors de la refonte, préférer des API de composants configurables, sans dépendances cachées à une saison ou à un module particulier. Préserver tous les comportements actuels avec tests de caractérisation.
+- Extraire/publier progressivement les blocs réellement stables vers une bibliothèque partagée distincte si les deux applications en bénéficient et si la compatibilité des stacks est maîtrisée. Le choix du dépôt, du packaging et du versionnement de cette bibliothèque sera pris lors de son implémentation ; il n'est pas imposé par ce document.
+- Ne pas faire d'un partage futur un point de défaillance : Halloween Map doit pouvoir démarrer, authentifier, éditer, publier et se mettre à jour même si LinKs est arrêté, inaccessible ou déployé sur une autre version.
+- **Critère final** : même philosophie et interface de back-office, blocs réutilisables quand c'est utile, aucune fonction LinKs inutile, aucune régression Halloween Map et **aucune administration centralisée**.
 
