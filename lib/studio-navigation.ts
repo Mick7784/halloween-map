@@ -13,12 +13,14 @@ export type StudioNavGroup<Id extends string = string, Icon extends string = str
   title: string;
   items: readonly StudioNavItem<Id, Icon>[];
 };
-export function visibleStudioNavigation<Item extends StudioNavItem>(
-  groups: readonly { title: string; items: readonly Item[] }[],
+export function visibleStudioNavigation<const Groups extends readonly StudioNavGroup[]>(
+  groups: Groups,
   allowed: (permission: string) => boolean,
-): { title: string; items: Item[] }[] {
+): { title: string; items: Groups[number]["items"][number][] }[] {
   return groups.flatMap((group) => {
-    const items = group.items.filter((item) => allowed(item.permission));
+    const items: Groups[number]["items"][number][] = group.items.filter(
+      (item) => allowed(item.permission),
+    );
     return items.length ? [{ title: group.title, items }] : [];
   });
 }
