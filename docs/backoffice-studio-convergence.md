@@ -58,6 +58,8 @@ Objectif : livrer une **bêta complète, installable et isolée**, puis la **ver
 ## 4. Ordre des lots : un lot validé avant de reprendre les mêmes fichiers
 
 ### Lot 0 — Audit, maquette et matrice de non-régression
+**Démarré le 19 octobre 2026.** Livrables initiaux réalisés par inspection du code : [inventaire et matrice des fonctionnalités](v1.0-lot0-fonctionnalites-et-regressions.md) (57 parcours), [contrat d'interface et catalogue initial des blocs](v1.0-lot0-contrat-interface.md). Référence V0.9.10 : [CI main verte](https://github.com/Mick7784/halloween-map/actions/runs/39152116080). **État : en cours, non validé pour passage au lot 1** ; restent les captures comparatives et la recette par rôles, dont l'exécution navigateur n'a pas été effectuée lors de ce premier audit documentaire.
+
 - Cartographier **tous** les écrans, menus, dialogues et actions de l'administration, avec droits requis et périmètres globaux/saisonniers. Établir une **matrice de conservation exhaustive** (fonction actuelle → nouvel emplacement → composants utilisés → rôle(s) habilité(s) → scénario e2e) signée avant d'entreprendre le redesign.
 - Comparer **écran à écran** l'administration LinKs et Halloween Map à plusieurs tailles en clair/sombre/système, y compris sidebar, topbar, carte, liste, formulaire, dialogue, menus, états de chargement, graphiques et mobile. Captures de référence obligatoires : c'est une **parité d'expérience visuelle** recherchée, pas seulement des couleurs proches.
 - Fixer les tokens, grille, densité, disposition du shell, couleurs sémantiques, contrôles et états.
