@@ -77,10 +77,12 @@ export default function MessageTemplates({ user }: { user: User }) {
           <h2>Modèles des emails de service</h2>
           <p className="small muted">Personnalisez les messages automatiques et contrôlez leur rendu avant l’enregistrement.</p>
         </div>
-        <span className="studio-template-save-state" role="status" aria-live="polite">
-          {!models ? "Chargement du modèle…" : !manage ? "Lecture seule" :
-            dirty ? "Modifications non enregistrées" : "Modèle enregistré"}
-        </span>
+        {(template.html_body || !models || !manage) && (
+          <span className="studio-template-save-state" role="status" aria-live="polite">
+            {!models ? "Chargement du modèle…" : !manage ? "Lecture seule" :
+              dirty ? "Modifications non enregistrées" : "Modèle enregistré"}
+          </span>
+        )}
       </div>
       <Notice error={error} />
       <div className="studio-mail-template-layout">
