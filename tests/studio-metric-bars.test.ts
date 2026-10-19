@@ -28,10 +28,13 @@ describe("StudioMetricBars reusable comparisons", () => {
     expect(html).toContain("width:100%");
     expect(html).toContain("Donnée non disponible");
     expect((html.match(/class="stats-track"/g) ?? [])).toHaveLength(2);
+    expect(html).toContain('data-measurement="measured"');
+    expect(html).toContain('data-measurement="unavailable"');
+    expect(html).toContain("Certaines valeurs ne sont pas disponibles.");
   });
   it("does not render misleading empty bars or a fabricated metric for all missing values", () => {
     const html = build([["Absent", null], ["Inconnu", undefined]]);
-    expect(html).toContain("<p class="); 
+    expect(html).toContain("<p class=");
     expect(html).toContain("Donnée non disponible");
     expect(html).not.toContain("stats-track");
     expect(html).not.toContain("Échelle relative");
@@ -42,5 +45,23 @@ describe("StudioMetricBars reusable comparisons", () => {
     expect(html).toContain("<strong>23</strong>");
     expect(html).not.toContain("stats-track");
     expect(html).not.toContain("Échelle relative");
+  });
+});
+
+describe("StudioMetricBars zero and invalid quantity semantics", () => {
+  it("uses a truthful all-zero note instead of inventing a maximum of one", () => {
+    const html = build([["Validées", 0], ["En attente", 0]]);
+    expect(html).toContain("Toutes les valeurs mesurées sont à 0.");
+    expect(html).not.toContain("Échelle relative : 0 à 1");
+    expect((html.match(/width:0%/g) ?? [])).toHaveLength(2);
+    expect(html).not.toContain("Certaines valeurs ne sont pas disponibles.");
+  });
+
+  it("excludes negative and nonfinite quantities from bar-scale comparisons", () => {
+    const html = build([["Valide", 4], ["Invalide", -2], ["Infini", Infinity]]);
+    expect(html).toContain("Échelle relative : 0 à 4 maisons.");
+    expect((html.match(/class="stats-track"/g) ?? [])).toHaveLength(1);
+    expect(html).not.toContain("<strong>-2</strong>");
+    expect(html).toContain("Certaines valeurs ne sont pas disponibles.");
   });
 });

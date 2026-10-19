@@ -20,10 +20,13 @@ export function StudioMetricBars({
   chart?: boolean;
   unit?: string;
 }) {
+  // A comparison bar starts at zero and represents non-negative quantities.
+  // Zero is measured; null, undefined, NaN, Infinity and negatives are not.
   const isMeasured = (value: number | null | undefined): value is number =>
-    typeof value === "number" && Number.isFinite(value);
+    typeof value === "number" && Number.isFinite(value) && value >= 0;
   const available = items.filter(([, value]) => isMeasured(value));
-  const maximum = Math.max(1, ...available.map(([, value]) => value ?? 0));
+  const maximum = Math.max(0, ...available.map(([, value]) => value ?? 0));
+  const denominator = maximum || 1;
   return (
     <section className="beta-card stats-chart studio-metric-bars" aria-label={title}>
       <h2>{title}</h2>
@@ -32,12 +35,12 @@ export function StudioMetricBars({
       ) : (
         <ul>
           {items.map(([label, value]) => (
-            <li key={label}>
+            <li key={label} data-measurement={isMeasured(value) ? "measured" : "unavailable"}>
               <span>{label}</span>
-              <strong>{formatValue(value)}</strong>
+              <strong>{isMeasured(value) ? formatValue(value) : unavailable}</strong>
               {chart && isMeasured(value) && (
                 <div className="stats-track" aria-hidden="true">
-                  <div style={{ width: `${Math.min(100, Math.max(0, (value / maximum) * 100))}%` }} />
+                  <div style={{ width: `${(value / denominator) * 100}%` }} />
                 </div>
               )}
             </li>
@@ -45,7 +48,14 @@ export function StudioMetricBars({
         </ul>
       )}
       {chart && available.length > 0 && (
-        <p className="small muted">Échelle relative : 0 à {maximum} {unit}.</p>
+        <p className="small muted studio-chart-note">
+          {maximum === 0
+            ? "Toutes les valeurs mesurées sont à 0."
+            : <>Échelle relative : 0 à {maximum} {unit}.</>}
+          {available.length !== items.length && (
+            <> Certaines valeurs ne sont pas disponibles.</>
+          )}
+        </p>
       )}
     </section>
   );

@@ -208,3 +208,46 @@
     transition: none;
   }
 }
+
+/* Distribution rows share LinKs' compact collection rhythm. Missing and
+ * measured-zero states remain distinct without inventing a colored bar.
+ */
+.admin-beta .studio-metric-bars {
+  min-width: 0;
+}
+.admin-beta .studio-metric-bars ul {
+  gap: 0;
+  margin: 0;
+}
+.admin-beta .studio-metric-bars li {
+  min-width: 0;
+  align-items: center;
+  padding: 11px 0;
+  border-bottom: 1px solid var(--line);
+  column-gap: 12px;
+  row-gap: 8px;
+}
+.admin-beta .studio-metric-bars li:last-child {
+  border-bottom: 0;
+}
+.admin-beta .studio-metric-bars li > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.admin-beta .studio-metric-bars li > strong {
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.admin-beta .studio-metric-bars li[data-measurement="unavailable"] > strong {
+  color: var(--muted);
+  font-weight: 500;
+  font-size: 12px;
+}
+.admin-beta .studio-metric-bars .stats-track {
+  height: 9px;
+  border-radius: 999px;
+}
+.admin-beta .studio-metric-bars .studio-chart-note {
+  margin: 12px 0 0;
+  font-size: 12px;
+}
