@@ -601,6 +601,7 @@ test("V1.0 baseline: capture the V0.9.10 administration before replacing the she
       contentType: "image/png",
     });
   }
+  await page.evaluate(() => localStorage.setItem("halloween.admin.theme", "dark"));
   await page.setViewportSize({ width: 390, height: 844 });
   await page.reload();
   await expect(
