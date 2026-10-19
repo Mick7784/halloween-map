@@ -80,26 +80,24 @@ test("live document API and editor: private drafts, offline retry, conflicts, pu
     await expect(studio.locator(".document-preview h2")).toHaveText(
       "Titre des consignes de test",
     );
-    await studio
-      .getByRole("combobox", { name: "Apparence", exact: true })
+    // The content block inherits the single admin-shell theme.
+    await expect(
+      page.getByRole("heading", { name: "Contenus & documents", exact: true }),
+    ).toHaveCount(1);
+    await expect(
+      page.getByRole("combobox", { name: "Apparence", exact: true }),
+    ).toHaveCount(1);
+    await page.getByRole("combobox", { name: "Apparence", exact: true })
       .selectOption("light");
-    expect(
-      await studio
-        .getByRole("heading", { name: "Contenus & documents", exact: true })
-        .evaluate((e) => getComputedStyle(e).color),
-    ).toBe("rgb(32, 43, 59)");
+    await expect(studio).toHaveCSS("color", "rgb(32, 43, 59)");
+    await expect(studio).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
     await studio.screenshot({
       path: "test-results/studio/document-desktop-light.png",
       animations: "disabled",
     });
-    await studio
-      .getByRole("combobox", { name: "Apparence", exact: true })
+    await page.getByRole("combobox", { name: "Apparence", exact: true })
       .selectOption("dark");
-    expect(
-      await studio
-        .getByRole("heading", { name: "Contenus & documents", exact: true })
-        .evaluate((e) => getComputedStyle(e).color),
-    ).toBe("rgb(230, 235, 242)");
+    await expect(studio).toHaveCSS("color", "rgb(230, 235, 242)");
     await studio.screenshot({
       path: "test-results/studio/document-desktop-dark.png",
       animations: "disabled",
