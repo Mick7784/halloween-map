@@ -405,3 +405,23 @@ test("V1.0 season filters search years and states without touching permissions o
   await expect(page.getByRole("button", { name: "Réglages de Halloween 2027" })).toContainText("Réglages");
   expect(mutations).toHaveLength(0);
 });
+
+test("V1.0 season row actions distinguish sensitive controls without hiding them", async ({
+  page,
+}) => {
+  const { mutations } = await arrange(page);
+  await page.goto("/admin");
+  await openSeasons(page);
+  const plannedActions = page.getByRole("group", { name: "Actions de Halloween 2027" });
+  await expect(plannedActions.getByRole("button", { name: "Activer", exact: true })).toBeVisible();
+  await expect(plannedActions.getByRole("button", { name: "Réglages de Halloween 2027" })).toBeVisible();
+  const plannedSensitive = plannedActions.getByRole("group", { name: "Actions sensibles" });
+  await expect(plannedSensitive.getByRole("button", { name: "Supprimer", exact: true })).toBeVisible();
+  const pastActions = page.getByRole("group", { name: "Actions de Halloween 2025" });
+  await expect(pastActions.getByRole("button", { name: "Voir les statistiques" })).toBeVisible();
+  await expect(pastActions.getByRole("group", { name: "Actions sensibles" })
+    .getByRole("button", { name: "Supprimer définitivement" })).toBeVisible();
+  await expect(page.getByRole("group", { name: "Actions de Halloween 2026" })
+    .getByRole("group", { name: "Actions sensibles" })).toHaveCount(0);
+  expect(mutations).toHaveLength(0);
+});

@@ -358,3 +358,30 @@
     flex: 1 1 100%;
   }
 }
+
+/* Studio row actions: keep dangerous actions discoverable, but separate them
+ * from everyday controls. Authorization and confirmations remain caller-owned.
+ */
+.admin-beta .studio-row-actions,
+.admin-beta .studio-row-actions-main,
+.admin-beta .studio-row-actions-sensitive {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.admin-beta .studio-row-actions {
+  min-width: 0;
+}
+.admin-beta .studio-row-actions-sensitive {
+  padding-left: 12px;
+  border-left: 1px solid var(--line);
+}
+@media (max-width: 700px) {
+  .admin-beta .studio-row-actions-sensitive {
+    width: 100%;
+    padding: 10px 0 0;
+    border-left: 0;
+    border-top: 1px solid var(--line);
+  }
+}

@@ -2,6 +2,7 @@
 import { ActionCancelled } from "./AdminConfirmation";
 import { Dialog, Button, DataTable, Input, Select } from "./ui";
 import StudioCollectionControls from "./StudioCollectionControls";
+import StudioRowActions from "./StudioRowActions";
 import { selectStudioCollection } from "../lib/studio-collection";
 import useDraftGuard, { confirmDraftNavigation } from "./useDraftGuard";
 import AdminStatistics, { type SeasonStatistics } from "./AdminStatistics";
@@ -346,7 +347,11 @@ export default function SeasonManager({
                           : "—"}
                       </td>
                       <td>
-                        <div className="beta-actions season-row-actions">
+                        <StudioRowActions
+                          label={`Actions de ${s.name}`}
+                          actions={
+                            <>
+
                           {critical &&
                             !s.purged_at && !s.archived && (
                               <AsyncButton
@@ -369,6 +374,29 @@ export default function SeasonManager({
                               Voir les statistiques
                             </Button>
                           )}
+
+                          {!ended && !s.purged_at && !s.archived && manage && (
+                            <Button
+                              aria-label={`Réglages de ${s.name}`}
+                              aria-expanded={expanded === s.id}
+                              onClick={() =>
+                                setExpanded(expanded === s.id ? null : s.id)
+                              }
+                            >
+                              {expanded === s.id ? (
+                                <ChevronUp size={17} aria-hidden="true" />
+                              ) : (
+                                <ChevronDown size={17} aria-hidden="true" />
+                              )}
+                              <span>Réglages</span>
+                            </Button>
+                          )}
+
+                            </>
+                          }
+                          sensitive={
+                            critical && !s.active ? (
+                              <>
                           {critical &&
                             ended &&
                             !s.active &&
@@ -392,23 +420,11 @@ export default function SeasonManager({
                               {ended ? "Supprimer définitivement" : "Supprimer"}
                             </AsyncButton>
                           )}
-                          {!ended && !s.purged_at && !s.archived && manage && (
-                            <Button
-                              aria-label={`Réglages de ${s.name}`}
-                              aria-expanded={expanded === s.id}
-                              onClick={() =>
-                                setExpanded(expanded === s.id ? null : s.id)
-                              }
-                            >
-                              {expanded === s.id ? (
-                                <ChevronUp size={17} aria-hidden="true" />
-                              ) : (
-                                <ChevronDown size={17} aria-hidden="true" />
-                              )}
-                              <span>Réglages</span>
-                            </Button>
-                          )}
-                        </div>
+
+                              </>
+                            ) : undefined
+                          }
+                        />
                       </td>
                     </tr>
                     {!ended && expanded === s.id && (
