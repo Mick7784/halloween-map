@@ -612,3 +612,36 @@ test("V1.0 baseline: capture the V0.9.10 administration before replacing the she
     contentType: "image/png",
   });
 });
+
+test("V1.0 branding uses the actual DomotiK Studio assets and LinKs admin palette", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await arrange(page);
+  await page.goto("/admin");
+  const brand = page.locator(".beta-logo");
+  const wordmark = brand.locator("img.beta-brand-wordmark");
+  const icon = brand.locator("img.beta-brand-icon");
+  await expect(wordmark).toHaveAttribute(
+    "src",
+    "/brand/halloween-map-wordmark-official.webp",
+  );
+  await expect(icon).toHaveAttribute(
+    "src",
+    "/brand/halloween-map-app-icon-official.webp",
+  );
+  await expect.poll(() => wordmark.evaluate((img: HTMLImageElement) =>
+    img.complete && img.naturalWidth > 0,
+  )).toBe(true);
+  await page.getByLabel("Apparence", { exact: true }).selectOption("dark");
+  await expect.poll(() => page.locator(".admin-beta").evaluate(
+    (node) => getComputedStyle(node).getPropertyValue("--bg").trim(),
+  )).toBe("#171d27");
+  await page.getByLabel("Apparence", { exact: true }).selectOption("light");
+  await expect.poll(() => page.locator(".admin-beta").evaluate(
+    (node) => getComputedStyle(node).getPropertyValue("--bg").trim(),
+  )).toBe("#f5f6f8");
+  await page.getByRole("button", { name: "Réduire aux icônes" }).click();
+  await expect(icon).toBeVisible();
+  await expect(wordmark).toBeHidden();
+});

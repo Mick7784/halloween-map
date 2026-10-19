@@ -1,6 +1,7 @@
 "use client";
 import { Fragment, useCallback, useEffect, useState, useRef } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { confirmDraftNavigation } from "./useDraftGuard";
 import {
   X,
@@ -47,7 +48,7 @@ import { houseAvailability } from "../lib/house-availability";
 import { visibleStudioNavigation } from "../lib/studio-navigation";
 import { halloweenAdminNavigation } from "../lib/halloween-admin-navigation";
 import "./AdminBeta.css";
-import { PumpkinMark } from "./PublicBrand";
+import "./AdminStudioSkin.css";
 import MessageTemplates from "./MessageTemplates";
 import RefusalPreview from "./RefusalPreview";
 import {
@@ -1002,12 +1003,25 @@ export default function Admin({
           rel="noreferrer"
           title="Halloween Map sur GitHub"
         >
-          <span className="admin-brand-mark">
-            <PumpkinMark />
+          <span className="beta-brand-media">
+            <Image
+              className="beta-brand-wordmark"
+              src="/brand/halloween-map-wordmark-official.webp"
+              alt="Halloween Map by DomotiK Studio"
+              width={196}
+              height={64}
+              unoptimized
+            />
+            <Image
+              className="beta-brand-icon"
+              src="/brand/halloween-map-app-icon-official.webp"
+              alt="Halloween Map"
+              width={42}
+              height={42}
+              unoptimized
+            />
           </span>
-          <span className="beta-logo-title">
-            Halloween Map<small>Administration</small>
-          </span>
+          <span className="beta-brand-subtitle">Administration</span>
         </a>
         <Button
           type="button"
