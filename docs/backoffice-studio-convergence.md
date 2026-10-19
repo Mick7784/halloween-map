@@ -2,7 +2,7 @@
 
 Statut : plan de chantier (aucun changement produit à ce stade).
 Point de départ : Halloween Map V0.9.10 / LinKs V1.312.
-Objectif : livraison en **une release Halloween Map vérifiée**, après mise en œuvre, sans altérer les fonctionnalités publiques ni les données existantes.
+Objectif : livrer une **bêta complète, installable et isolée**, puis la **version majeure stable V1.0** après tests et corrections, sans altérer les fonctionnalités publiques ni les données existantes.
 
 ## 1. Vision et critères
 
@@ -100,14 +100,16 @@ Objectif : livraison en **une release Halloween Map vérifiée**, après mise en
 - Préserver exactement les brouillons, révisions, conflits 409, versions immuables, relecture, publication et réacceptation, sans migration opportuniste.
 - Critère : cycle complet rédaction → sauvegarde → aperçu → contrôle → publication → acceptation inchangé.
 
-### Lot 6 — Nettoyage, tests, release unique
+### Lot 6 — Nettoyage et qualification de la bêta complète
 - Supprimer uniquement les styles/composants **prouvés** inutilisés après migration des appelants.
 - Contrôler responsive (mobile, tablette, desktop large), contraste, navigation clavier, thème système, états vides et chargements.
 - Rejouer lint, TypeScript, tests Vitest, Playwright, build, migrations, Docker/HTTPS suivant le workflow de Halloween Map.
 - Scénarios critiques : plusieurs rôles, plusieurs saisons, sans saison, saison en attente, participations et modération, campagnes, restauration et publication de documents, réacceptations, sauvegarde non publiée.
 - Passer **ligne par ligne la matrice de conservation** : chaque fonction doit avoir sa preuve d'accès et de fonctionnement après refonte ; aucun abandon silencieux. Comparaison visuelle des parties équivalentes à LinKs et vérification de l'identité officielle Halloween Map.
 - Relecture des captures avant/après ; aucune dégradation de la page publique.
-- Après PR entièrement verte : version **suivante déterminée par le workflow existant**, changelog, fusion main, image GHCR versionnée + latest, tag et GitHub Release vérifiés. Ne pas deviner/incrémenter VERSION au démarrage.
+- Après validation du chantier complet : préparer une **bêta déployable V1.0-beta.1** (ou itération beta.2 en cas de correction), avec changelog, image GHCR identifiable par tag et digest, et GitHub Release explicitement prerelease ; ne pas toucher à `latest` ni à la production lors de la publication bêta.
+- Après recette réelle de la bêta et corrections testées : préparer **V1.0 stable**, fusion contrôlée sur main, vérification version/image GHCR/tag/GitHub Release. `latest` est mis à jour uniquement pendant cette publication stable, jamais lors d'une bêta.
+- Ne pas changer VERSION prématurément ni deviner une version intermédiaire ; suivre une stratégie de versionnement explicite validée, avec contrôles CI dédiés.
 - Déploiement VPS distinct : ne pas l'entreprendre dans ce chantier sans demande explicite.
 
 ## 4 bis. Filtre explicite anti « copier-coller fonctionnel »
@@ -151,7 +153,7 @@ Avant de retenir une fonctionnalité ou un composant de LinKs, appliquer cet ord
 - Aucun changement API, schéma, sécurité ou modèle de données sans besoin démontré et lot/test distinct.
 - Tout écran modifié doit reposer sur les primitives adoptées, sans duplication CSS ou création d'un second design system.
 - **Viser la reproduction la plus fidèle possible de l'interface LinKs.** Documenter et justifier uniquement les différences indispensables aux fonctionnalités Halloween Map, à l'accessibilité ou aux contraintes React. Ne pas interpréter ce chantier comme une simple ressemblance esthétique.
-- PR conservée en brouillon jusqu'à validation du produit et de la CI ; **une seule release finale** pour cette refonte.
+- PR conservée en brouillon pendant le chantier ; **une release bêta complète pour essais puis une release V1.0 stable** après corrections et validation ; ne pas livrer des versions intermédiaires à chaque lot.
 
 ## 7. Définition de terminé
 
@@ -198,6 +200,36 @@ Sans jamais recevoir des modules propres à LinKs qui ne servent pas Halloween M
 - Avant fusion : suite complète Vitest/Playwright, parcours par rôle et saison, base PostgreSQL réelle (base vierge et migration depuis l'ancienne version), build/Docker/HTTPS existants et inspection de captures d'écran aux formats prévus.
 - Faire des parcours de bout en bout sur données de test réalistes, particulièrement les actions sensibles et les opérations multietapes, et comparer **les résultats métier avant/après**, pas seulement le rendu.
 - Test de non-altération de la page publique et des chemins d'accès à l'API depuis les clients historiques.
-- Si une régression, une perte de fonction, une variation de résultats, une faille d'accès ou une ambiguïté de migration apparaît : **ne pas fusionner, ne pas publier, corriger puis tout revalider**.
-- Pas de déclaration « zéro régression » sur la seule CI : conserver une recette documentée et des risques résiduels explicites. Publication unique seulement lorsque tous les critères sont atteints.
+- Si une régression, une perte de fonction, une variation de résultats, une faille d'accès ou une ambiguïté de migration apparaît : **ne pas publier la bêta, ne pas promouvoir en stable, corriger puis tout revalider**. Les défauts détectés par les essais bêta sont corrigés et retestés avant V1.0.
+- Pas de déclaration « zéro régression » sur la seule CI : conserver une recette documentée et des risques résiduels explicites. Une bêta n'est pas considérée comme une validation fonctionnelle finale ; ne publier V1.0 que lorsque les critères de stabilisation sont atteints.
+
+## 9. Stratégie de versions validée : bêta complète → V1.0 stable
+
+**Décision du 19 octobre 2026** : Halloween Map sort de la série V0.9.x pour cette refonte majeure et vise **V1.0** comme premier jalon stable. Il y aura **une bêta complète déployable** pour essais, puis **une release finale stable** après corrections. Éviter toute release publique de présentation à la fin de chaque lot technique.
+
+### Identifiants prévisionnels
+- Base en production servant de référence : **V0.9.10**.
+- Bêta candidate de la refonte : **V1.0-beta.1** ; si une autre bêta est nécessaire après correction, incrémenter `beta.2`, etc., **sans écraser le tag précédent**.
+- Release finale stable : **V1.0**.
+- Les identifiants sont une **cible de version**, pas une modification immédiate de `VERSION` ni une publication déjà effectuée. Avant la bêta, s'assurer que les tags visés n'existent pas déjà et ajuster en cas de collision, après examen.
+
+### Contraintes réelles du workflow observé avant développement
+
+**Le workflow actuel ne sait pas publier cette stratégie tel quel.** `.github/workflows/ci.yml` ne déclenche sa publication que pour `main` ; son validateur `VERSION` n'accepte pas `-beta.1` ; les images reçoivent toujours le tag `latest` ; les GitHub Releases créées portent toujours le suffixe Beta et `--prerelease`. De plus, `scripts/version.mjs` (fonction `nextVersion`) rejette actuellement `V1.0` comme entrée, ce qui empêcherait certaines opérations de versionnement ultérieures. Le workflow `preprod.yml` est lié à une ancienne branche spécifique : ne pas supposer qu'il publie notre bêta.
+
+**À réaliser et à tester avant toute publication :**
+1. Étudier les références à `VERSION`, aux regex, aux tags, au badge de version, au compose et aux scripts de tests pour prendre en charge un canal `beta` et un canal `stable`.
+2. Ajouter une publication bêta explicitement demandée et isolée (workflow manuel sur la branche/revision validée ou workflow dédié), avec validations complètes, tag GitHub `V1.0-beta.1`, GHCR `:V1.0-beta.1`, notes de version et drapeau **prerelease**. **Ne pas pousser `:latest`, ne pas déclencher un déploiement VPS et ne pas écraser une autre version publiée.**
+3. Vérifier la cohérence `VERSION` embarquée, commit source, tag Git, GHCR manifest/digest et GitHub Release de la bêta ; préparer instructions d'installation, sauvegarde, retour arrière applicatif et consignes de tests sur environnement isolé.
+4. Après retours de tests, intégrer les correctifs et relancer la suite complète ; seulement alors basculer sur `V1.0`, publier une release GitHub **stable** (sans `--prerelease` ni « Beta » dans le titre), image GHCR `:V1.0` et mise à jour `:latest`, vérifiés sur le même digest.
+5. Tester la logique de `scripts/version.mjs` et de la CI pour que `V1.0` soit une version valide lors des prochaines évolutions ; ne pas casser le parcours de mise à jour des versions historiques V0.9.x.
+6. Séparer strictement **publication de l'image** et **mise à jour de l'instance hébergée** : aucun déploiement de production n'est autorisé par cette décision. Les tests utilisateurs s'effectuent sur une instance isolée avec sauvegarde et base distincte.
+
+### Conditions de promotion de la bêta en stable
+- Ensemble de la refonte présent : même expérience d'administration que LinKs, vrai logo officiel Halloween Map, aucun module métier LinKs inutile.
+- Matrice d'inventaire Halloween Map complètement couverte ; tous les workflows et rôles accessibles.
+- Régression et sécurité : aucun défaut bloquant connu, vérifications d'API et de saisonnalité, publication juridique, modération, communications, statistiques, carte et parcours.
+- CI complète verte (tests unitaires/e2e, TypeScript, build, PostgreSQL/migrations, Docker, HTTPS) + recette visuelle et fonctionnelle manuelle en condition isolée.
+- Retours de la bêta traités et documentés, avec changements vérifiables ; notes de version, sauvegarde et modalités de rollback documentées.
+- Version V1.0 déclarée stable **uniquement** après ces validations. La bêta reste clairement annoncée comme non destinée à remplacer la production.
 
