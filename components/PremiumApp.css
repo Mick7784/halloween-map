@@ -69,7 +69,7 @@ body.hm-premium .application > footer .site-footer-links {
 body.hm-premium :is(
   .narrow > h1, .account-header h1, .participation-header h1,
   .visitor-house h1, .floating-header h2, .route-preparation h1,
-  .route-dialog h1, .beta-header h1
+  .route-dialog h1
 ) {
   font-family: var(--font-editorial);
   font-weight: 600;
@@ -241,80 +241,10 @@ body.hm-premium .collection-bottom-bar .collection-dense-steps .route-step {
   background-color: var(--hm-card);
   border-color: var(--hm-line);
 }
-/* Administration retains its light/dark/system setting and semantic states. */
-body.hm-premium .admin-beta {
-  --bg: var(--hm-bg);
-  --surface: var(--hm-surface);
-  --panel: var(--hm-surface);
-  --text: var(--hm-text);
-  --muted: var(--hm-muted);
-  --line: var(--hm-line);
-  --accent: var(--hm-amber);
-  --orange: var(--hm-amber);
-  --success: var(--hm-success);
-}
-body.hm-premium .admin-beta[data-theme="light"] {
-  color-scheme: light;
-  --hm-bg: #f5f2fa;
-  --hm-surface: #ffffff;
-  --hm-card: #f2edf8;
-  --hm-control: #ece6f5;
-  --hm-control-hover: #e3d9f1;
-  --hm-input: #ffffff;
-  --hm-text: #22172e;
-  --hm-muted: #675875;
-  --hm-line: #c5bad7;
-  --hm-violet: #754995;
-  --hm-amber: #96450f;
-  --hm-danger: #a32943;
-  --hm-danger-bg: #fff0f4;
-  --hm-success: #276a50;
-}
-@media (prefers-color-scheme: light) {
-  body.hm-premium .admin-beta[data-theme="system"] {
-    color-scheme: light;
-    --hm-bg: #f5f2fa;
-    --hm-surface: #ffffff;
-    --hm-card: #f2edf8;
-    --hm-control: #ece6f5;
-    --hm-control-hover: #e3d9f1;
-    --hm-input: #ffffff;
-    --hm-text: #22172e;
-    --hm-muted: #675875;
-    --hm-line: #c5bad7;
-    --hm-violet: #754995;
-    --hm-amber: #96450f;
-    --hm-danger: #a32943;
-    --hm-danger-bg: #fff0f4;
-    --hm-success: #276a50;
-  }
-}
-body.hm-premium .beta-sidebar nav button { background-color: var(--hm-surface); }
-body.hm-premium .beta-sidebar nav button.is-current {
-  background: color-mix(in srgb, var(--hm-amber) 14%, var(--hm-surface));
-  color: var(--hm-amber);
-  border-color: color-mix(in srgb, var(--hm-amber) 45%, var(--hm-line));
-}
-body.hm-premium :is(.beta-card, .beta-panel, .beta-stat, .beta-table-scroll) {
-  border-color: var(--hm-line);
-  border-radius: var(--hm-radius);
-}
-body.hm-premium .beta-sidebar { background: var(--hm-surface); }
-body.hm-premium .admin-beta .beta-logo .admin-brand-mark {
-  background: var(--hm-card);
-  color: var(--hm-amber);
-  border: 1px solid var(--hm-line);
-}
-body.hm-premium .application.admin-app .admin-beta button.danger {
-  color: var(--hm-danger);
-  background: var(--hm-danger-bg);
-  border-color: var(--hm-danger);
-}
-body.hm-premium .application.admin-app .admin-beta button.primary {
-  color: #211322;
-  background: linear-gradient(110deg, #ffb85e, #ff8735);
-  border-color: #ffb473;
-}
+/* The V1.0 administration now owns its independent LinKs-compatible skin in
+ * AdminStudioSkin.css. Public premium styles must not override admin tokens,
+ * buttons, navigation or theme state.
+ */
 @media (max-width: 759px) {
   body.hm-premium :is(.narrow, .account-dialog, .participation-dialog, .floating-window)
     :is(input, textarea, select):where(:not([type="checkbox"], [type="radio"], [type="range"], [type="color"])) {
