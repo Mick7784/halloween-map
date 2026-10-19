@@ -204,9 +204,15 @@ test("compact season list, creation of a real draft, and dark/light appearance",
   await expect(page.locator(".season-editor")).toHaveCount(0);
   await expect(page.getByText("Mode démo", { exact: true })).toHaveCount(0);
   await page.getByLabel("Apparence", { exact: true }).selectOption("dark");
+  // V1.0: the admin uses the LinKs design system, not the old premium
+  // public-app palette. Keep a concrete visual assertion in this journey.
+  await expect(page.locator(".admin-beta")).toHaveCSS(
+    "--surface",
+    "#202834",
+  );
   await expect(page.locator(".beta-sidebar nav button").first()).toHaveCSS(
     "background-color",
-    "rgb(14, 19, 40)",
+    "rgb(32, 40, 52)",
   );
   await page.screenshot({ path: "test-results/seasons-desktop-dark.png" });
   await page.getByLabel("Apparence", { exact: true }).selectOption("light");
