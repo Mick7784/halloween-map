@@ -7,8 +7,13 @@ const render = (count: number, filtered: boolean) =>
   renderToStaticMarkup(
     React.createElement(
       StudioCollectionControls,
-      { label: "Filtres fictifs", count, filtered, onReset: () => {} },
-      React.createElement("input", { "aria-label": "Recherche" }),
+      {
+        label: "Filtres fictifs",
+        count,
+        filtered,
+        onReset: () => {},
+        children: React.createElement("input", { "aria-label": "Recherche" }),
+      },
     ),
   );
 
