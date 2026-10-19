@@ -26,11 +26,13 @@ export default function AdminMobileStats({
   loading,
   zone,
   seasonName,
+  embedded = false,
 }: {
   data: SeasonStatistics | null;
   loading: boolean;
   zone: string;
   seasonName: string;
+  embedded?: boolean;
 }) {
   const [tab, setTab] = useState<Tab>("overview");
   const stats = data?.stats;
@@ -41,13 +43,17 @@ export default function AdminMobileStats({
   );
   return (
     <section className="admin-mobile-statistics">
-      <header className="admin-mobile-heading">
-        <div>
-          <p className="small muted">Halloween Map · Administration</p>
-          <h1>Statistiques</h1>
-          <p className="small muted">{seasonName} · Consultation uniquement</p>
-        </div>
-      </header>
+      {embedded ? (
+        <p className="small muted">{seasonName} · Consultation uniquement</p>
+      ) : (
+        <header className="admin-mobile-heading">
+          <div>
+            <p className="small muted">Halloween Map · Administration</p>
+            <h1>Statistiques</h1>
+            <p className="small muted">{seasonName} · Consultation uniquement</p>
+          </div>
+        </header>
+      )}
       {loading ? (
         <p role="status">Chargement des statistiques…</p>
       ) : !data || !stats ? (

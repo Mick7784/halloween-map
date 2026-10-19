@@ -294,28 +294,62 @@ test("V0.9.7 dates defaults link to the current season while preserving navigati
   await expect(page.locator(".beta-page-title h1")).toHaveText("Saison");
 });
 
-test("mobile administration exposes only read-only statistics in tabs", async ({
+test("V1.0 mobile shell exposes every authorized module and preserves compact statistics", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await arrange(page, "ADMIN");
   await page.goto("/admin");
-  await expect(page.getByRole("heading", { name: "Statistiques" })).toBeVisible();
+  await expect(page.locator(".beta-page-title h1")).toHaveText("Tableau de bord");
+  const toggle = page.getByRole("button", { name: "Ouvrir la navigation" });
+  await expect(toggle).toBeVisible();
+  await toggle.click();
+  const nav = page.getByRole("navigation", { name: "Navigation administration" });
+  for (const name of [
+    "Tableau de bord", "Maisons", "Utilisateurs", "Saison",
+    "Statistiques", "Activité", "Communications", "Contenus & documents",
+  ]) {
+    await expect(nav.getByRole("button", { name, exact: true })).toBeVisible();
+  }
+  await expect(nav.getByRole("button", { name: "Paramètres" })).toHaveCount(0);
+  await nav.getByRole("button", { name: "Statistiques" }).click();
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  await expect(page.locator(".beta-page-title h1")).toHaveText("Statistiques");
   await expect(page.getByRole("tab", { name: "Vue d’ensemble" })).toBeVisible();
   await expect(page.getByRole("tab", { name: "Maisons" })).toBeVisible();
   await expect(page.getByRole("tab", { name: "Collectes" })).toBeVisible();
   await expect(page.getByRole("tab", { name: "Fréquentation" })).toBeVisible();
-  await expect(page.locator(".beta-sidebar")).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Ouvrir la navigation" })).toHaveCount(0);
   await expect(page.getByText("Consultation uniquement")).toBeVisible();
   await page.getByRole("tab", { name: "Maisons" }).click();
   await expect(page.getByText("Bonbons", { exact: true })).toBeVisible();
   await page.getByRole("tab", { name: "Collectes" }).click();
   await expect(page.getByText("Taux de collectes terminées")).toBeVisible();
   await page.getByRole("tab", { name: "Fréquentation" }).click();
-  expect(
-    await page.evaluate(() => document.documentElement.scrollWidth),
-  ).toBeLessThanOrEqual(390);
+  await toggle.click();
+  await nav.getByRole("button", { name: "Saison", exact: true }).click();
+  await expect(page.locator(".season-table")).toBeVisible();
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth))
+    .toBeLessThanOrEqual(390);
+});
+
+test("V1.0 mobile restricts the menu to grants and respects house edit permissions", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const { mutations } = await arrange(page, "ADMIN", [
+    "admin.access", "participants.read",
+  ]);
+  await page.goto("/admin");
+  await expect(page.locator(".beta-page-title h1")).toHaveText("Maisons");
+  await page.getByRole("button", { name: "Ouvrir la navigation" }).click();
+  const nav = page.getByRole("navigation", { name: "Navigation administration" });
+  await expect(nav.getByRole("button", { name: "Maisons", exact: true })).toBeVisible();
+  await expect(nav.locator("button")).toHaveCount(1);
+  await nav.getByRole("button", { name: "Maisons", exact: true }).click();
+  await expect(page.locator(".beta-house-create")).toHaveCount(0);
+  await expect(page.locator(".beta-table-scroll")).toContainText("Jardin des lanternes");
+  expect(mutations).toEqual([]);
 });
 
 test("communications and activity follow the consulted season; TEST disables email actions", async ({
@@ -604,10 +638,11 @@ test("V1.0 baseline: capture the V0.9.10 administration before replacing the she
   await page.evaluate(() => localStorage.setItem("halloween.admin.theme", "dark"));
   await page.setViewportSize({ width: 390, height: 844 });
   await page.reload();
-  await expect(
-    page.getByRole("tab", { name: "Vue d’ensemble" }),
-  ).toBeVisible();
-  await testInfo.attach("v0910-mobile-dark.png", {
+  await page.getByRole("button", { name: "Ouvrir la navigation" }).click();
+  const nav = page.getByRole("navigation", { name: "Navigation administration" });
+  await nav.getByRole("button", { name: "Statistiques", exact: true }).click();
+  await expect(page.getByRole("tab", { name: "Vue d’ensemble" })).toBeVisible();
+  await testInfo.attach("v10-mobile-dark.png", {
     body: await page.screenshot({ fullPage: true, animations: "disabled" }),
     contentType: "image/png",
   });

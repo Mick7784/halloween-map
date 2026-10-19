@@ -163,3 +163,21 @@
     transition-duration: 0s;
   }
 }
+
+/* V1.0 mobile: one unified shell and navigation; keep the sidebar readable
+ * even when desktop's icon-only preference was previously saved.
+ */
+@media (max-width: 700px) {
+  .admin-beta .beta-sidebar {
+    width: min(288px, 88vw);
+  }
+  .admin-beta .beta-sidebar-collapse {
+    display: none;
+  }
+  .admin-beta .beta-header {
+    align-items: flex-start;
+  }
+  .admin-beta .beta-content {
+    overflow-x: hidden;
+  }
+}

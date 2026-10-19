@@ -198,12 +198,6 @@ export default function Admin({
     media.addEventListener("change", update);
     return () => media.removeEventListener("change", update);
   }, []);
-  useEffect(() => {
-    if (mobileView) {
-      if (has(user, "stats.read")) setSection("statistics");
-      else if (has(user, "participants.read")) setSection("houses");
-    }
-  }, [mobileView, user]);
   const seasonStorageKey =
     "halloween.admin.season." + state.instance?.id + "." + user.id;
   const reloadSeasons = useCallback(async () => {
@@ -939,46 +933,12 @@ export default function Admin({
       </div>
     );
   }
-  if (mobileView) {
-    return (
-      <main className="admin-beta admin-mobile-view" data-theme={theme}>
-        <nav aria-label="Administration mobile">
-          {has(user, "stats.read") && <Button onClick={() => setSection("statistics")}>Statistiques</Button>}
-          {has(user, "participants.read") && <Button onClick={() => setSection("houses")}>Gérer les maisons</Button>}
-        </nav>
-        {section === "houses" && has(user, "participants.read") ? (
-          <section className="beta-card">
-            <h1>Maisons</h1>
-            <label>Saison du back-office
-              <Select value={seasonId} onChange={(event) => setSeasonId(event.target.value)}>
-                {seasons.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-              </Select>
-            </label>
-            {error && <Notice error={error} />}
-            {table(list)}
-          </section>
-        ) : has(user, "stats.read") ? (
-          <>
-            <AdminMobileStats
-              data={loadedView === viewKey ? statistics : null}
-              loading={loading || loadedView !== viewKey}
-              zone={state.instance?.timezone ?? "Europe/Paris"}
-              seasonName={selectedSeason?.name ?? "Aucune saison"}
-            />
-            {error && <Notice error={error} />}
-          </>
-        ) : (
-          <section className="admin-mobile-statistics">
-            <h1>Statistiques</h1>
-            <p>Votre compte n’a pas accès aux statistiques.</p>
-          </section>
-        )}
-      </main>
-    );
-  }
+  // Preserve the desktop collapse preference; mobile navigation always opens
+  // expanded to expose every module allowed by the existing permission model.
+  const navCollapsed = sidebarCollapsed && !mobileView;
   return (
     <div
-      className={"admin-beta" + (sidebarCollapsed ? " sidebar-collapsed" : "")}
+      className={"admin-beta" + (navCollapsed ? " sidebar-collapsed" : "")}
       data-theme={theme}
     >
       {menuOpen && (
@@ -992,7 +952,7 @@ export default function Admin({
         className={
           "beta-sidebar" +
           (menuOpen ? " is-open" : "") +
-          (sidebarCollapsed ? " is-collapsed" : "")
+          (navCollapsed ? " is-collapsed" : "")
         }
         id="admin-navigation"
       >
@@ -1026,8 +986,8 @@ export default function Admin({
         <Button
           type="button"
           className="beta-sidebar-collapse"
-          title={sidebarCollapsed ? "Développer le menu" : "Réduire aux icônes"}
-          aria-label={sidebarCollapsed ? "Développer le menu" : "Réduire aux icônes"}
+          title={navCollapsed ? "Développer le menu" : "Réduire aux icônes"}
+          aria-label={navCollapsed ? "Développer le menu" : "Réduire aux icônes"}
           aria-expanded={!sidebarCollapsed}
           onClick={() => {
             const next = !sidebarCollapsed;
@@ -1037,8 +997,8 @@ export default function Admin({
             } catch {}
           }}
         >
-          {sidebarCollapsed ? <PanelLeftOpen size={19} /> : <PanelLeftClose size={19} />}
-          {!sidebarCollapsed && <span>Réduire le menu</span>}
+          {navCollapsed ? <PanelLeftOpen size={19} /> : <PanelLeftClose size={19} />}
+          {!navCollapsed && <span>Réduire le menu</span>}
         </Button>
         <nav aria-label="Navigation administration">
           {visibleStudioNavigation(halloweenAdminNavigation, (permission) =>
@@ -1054,7 +1014,7 @@ export default function Admin({
                     type="button"
                     className={section === item.id ? "is-current" : ""}
                     aria-label={item.title}
-                    title={sidebarCollapsed ? item.title : undefined}
+                    title={navCollapsed ? item.title : undefined}
                     aria-current={section === item.id ? "page" : undefined}
                     onClick={() => {
                       if (!confirmDraftNavigation()) return;
@@ -1074,7 +1034,7 @@ export default function Admin({
         <Link
           className="beta-public-link"
           href="/map"
-          title={sidebarCollapsed ? "Retour à la carte" : undefined}
+          title={navCollapsed ? "Retour à la carte" : undefined}
         >
           <ExternalLink size={17} />
           <span className="beta-public-label">Retour à Halloween Map</span>
@@ -1301,12 +1261,22 @@ export default function Admin({
           />
         )}
         {section === "statistics" && !error && (
-          <AdminStatistics
-            zone={state.instance?.timezone}
-            season={selectedSeason}
-            data={loadedView === viewKey ? statistics : null}
-            loading={!error && (loading || loadedView !== viewKey)}
-          />
+          mobileView ? (
+            <AdminMobileStats
+              embedded
+              data={loadedView === viewKey ? statistics : null}
+              loading={loading || loadedView !== viewKey}
+              zone={state.instance?.timezone ?? "Europe/Paris"}
+              seasonName={selectedSeason?.name ?? "Aucune saison"}
+            />
+          ) : (
+            <AdminStatistics
+              zone={state.instance?.timezone}
+              season={selectedSeason}
+              data={loadedView === viewKey ? statistics : null}
+              loading={loading || loadedView !== viewKey}
+            />
+          )
         )}
         {["content", "settings"].includes(section) && (
           <AdminExistingPage
