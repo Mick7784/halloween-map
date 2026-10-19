@@ -46,6 +46,7 @@ import AdminActivity from "./AdminActivity";
 import AdminExistingPage from "./AdminExistingPage";
 import { houseAvailability } from "../lib/house-availability";
 import { selectStudioCollection } from "../lib/studio-collection";
+import StudioCollectionControls from "./StudioCollectionControls";
 import { visibleStudioNavigation } from "../lib/studio-navigation";
 import { halloweenAdminNavigation } from "../lib/halloween-admin-navigation";
 import "./AdminBeta.css";
@@ -1333,6 +1334,17 @@ export default function Admin({
                 )}
               </div>
             )}
+            <StudioCollectionControls
+              label="Filtres des maisons"
+              count={list.length}
+              filtered={Boolean(search.trim()) || review !== "ALL" || availability !== "ALL"}
+              onReset={() => {
+                setSearch("");
+                setReview("ALL");
+                setAvailability("ALL");
+                setHousePage(1);
+              }}
+            >
             <div className="beta-filters">
               <Input
                 aria-label="Rechercher une maison"
@@ -1372,6 +1384,7 @@ export default function Admin({
                 <option value="CLOSED">Fermées</option>
               </Select>
             </div>
+            </StudioCollectionControls>
             {loadedView !== viewKey && loading ? (
               <p role="status">Chargement des maisons…</p>
             ) : (

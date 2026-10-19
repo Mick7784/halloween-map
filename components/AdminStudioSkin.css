@@ -251,3 +251,61 @@
   margin: 12px 0 0;
   font-size: 12px;
 }
+
+/* Studio shared list filters: one visual rhythm for houses and users.
+ * Domains keep their own search, status filters, actions and permissions.
+ */
+.admin-beta .studio-collection-controls {
+  display: grid;
+  gap: 12px;
+  padding: 14px 16px;
+  margin: 0 0 16px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  min-width: 0;
+}
+.admin-beta .studio-collection-fields {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+.admin-beta .studio-collection-fields > .beta-filters,
+.admin-beta .studio-collection-fields > .toolbar,
+.admin-beta .studio-collection-fields > .tabs {
+  margin: 0;
+}
+.admin-beta .studio-collection-fields :is(input, select) {
+  min-width: 0;
+}
+.admin-beta .studio-collection-summary {
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 10px;
+}
+.admin-beta .studio-collection-summary [role="status"] {
+  color: var(--muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.admin-beta .studio-collection-reset {
+  color: var(--accent);
+  font-size: 12px;
+  padding: 6px 10px;
+}
+.admin-beta .studio-collection-reset:disabled {
+  color: var(--muted);
+  opacity: .6;
+}
+@media (max-width: 700px) {
+  .admin-beta .studio-collection-controls {
+    padding: 12px;
+  }
+  .admin-beta .studio-collection-fields > .beta-filters input {
+    min-width: 100%;
+  }
+}

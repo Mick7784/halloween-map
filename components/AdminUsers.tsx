@@ -9,6 +9,7 @@ import { DateTime } from "luxon";
 import { type User, type House, defaultRoles } from "../lib/domain";
 import { permissionLabels } from "../lib/admin-presentation";
 import { selectStudioCollection } from "../lib/studio-collection";
+import StudioCollectionControls from "./StudioCollectionControls";
 import { api, Field, Notice, values, labels, AsyncButton } from "./common";
 import {
   Input,
@@ -169,6 +170,16 @@ export default function AdminUsers({
         Annuaire global des comptes · Participation à la saison active :{" "}
         {seasonName ?? "Aucune saison active"}
       </p>
+      <StudioCollectionControls
+        label="Filtres des utilisateurs"
+        count={list.length}
+        filtered={Boolean(search.trim()) || filter !== "ALL"}
+        onReset={() => {
+          setSearch("");
+          setFilter("ALL");
+          setPage(1);
+        }}
+      >
       <div className="toolbar">
         <Input
           aria-label="Rechercher un utilisateur"
@@ -199,6 +210,7 @@ export default function AdminUsers({
           </Button>
         ))}
       </div>
+      </StudioCollectionControls>
       <div className="table-wrap">
         <DataTable className="users-table">
           <thead>

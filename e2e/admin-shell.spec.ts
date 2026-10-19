@@ -680,3 +680,37 @@ test("V1.0 branding uses the actual DomotiK Studio assets and LinKs admin palett
   await expect(icon).toBeVisible();
   await expect(wordmark).toBeHidden();
 });
+
+test("V1.0 shared list controls reset local house and user filters without mutations", async ({
+  page,
+}) => {
+  const { mutations } = await arrange(page);
+  await page.goto("/admin");
+  const nav = page.getByRole("navigation", { name: "Navigation administration" });
+  await nav.getByRole("button", { name: "Maisons", exact: true }).click();
+  const houses = page.getByRole("group", { name: "Filtres des maisons" });
+  const houseReset = houses.getByRole("button", { name: "Effacer les filtres" });
+  await expect(houses.getByRole("status")).toHaveText("1 résultat");
+  await expect(houseReset).toBeDisabled();
+  await houses.getByLabel("Rechercher une maison").fill("introuvable");
+  await expect(houses.getByRole("status")).toHaveText("0 résultats");
+  await expect(page.getByText("Aucune maison ne correspond aux filtres.")).toBeVisible();
+  await houseReset.click();
+  await expect(houses.getByLabel("Rechercher une maison")).toHaveValue("");
+  await expect(houses.getByLabel("Statut")).toHaveValue("ALL");
+  await expect(houses.getByLabel("Disponibilité")).toHaveValue("ALL");
+  await expect(houses.getByRole("status")).toHaveText("1 résultat");
+  await expect(houseReset).toBeDisabled();
+  await nav.getByRole("button", { name: "Utilisateurs", exact: true }).click();
+  const directory = page.getByRole("group", { name: "Filtres des utilisateurs" });
+  const userReset = directory.getByRole("button", { name: "Effacer les filtres" });
+  await expect(userReset).toBeDisabled();
+  await directory.getByRole("button", { name: "Accès admin" }).click();
+  await expect(userReset).toBeEnabled();
+  await directory.getByLabel("Rechercher un utilisateur").fill("introuvable");
+  await userReset.click();
+  await expect(directory.getByLabel("Rechercher un utilisateur")).toHaveValue("");
+  await expect(directory.getByRole("button", { name: "Tous", exact: true })).toHaveClass(/active/);
+  await expect(userReset).toBeDisabled();
+  expect(mutations).toEqual([]);
+});
