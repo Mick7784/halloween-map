@@ -817,3 +817,61 @@ test("V1.0 activity filters use shared controls and reset server query without m
   await expect(reset).toBeDisabled();
   expect(mutations).toEqual([]);
 });
+
+test("V1.0 campaign list filters the consulted season without editing or sending", async ({
+  page,
+}) => {
+  const { mutations } = await arrange(page);
+  const base = {
+    season_id: real,
+    subject: "Préparez la fête",
+    body: "Bonjour",
+    audience: "ALL",
+    active: true,
+    schedule_mode: "ABSOLUTE",
+    anchor: "opens_at",
+    offset_days: 0,
+    scheduled_at: "2026-10-31T18:00:00.000Z",
+    recipients: 12,
+    sent: 0,
+    errors: 0,
+    pending: 12,
+  };
+  await page.route("**/api/admin/communications?*", (route) =>
+    route.fulfill({
+      json: {
+        smtpAvailable: true,
+        variables: [],
+        campaigns: [
+          { ...base, id: "campaign-1", name: "Invitation des familles", status: "DRAFT" },
+          { ...base, id: "campaign-2", name: "Rappel Halloween", subject: "Dernier rappel", status: "SCHEDULED" },
+          { ...base, id: "campaign-3", name: "Bilan de la soirée", status: "SENT" },
+          { ...base, id: "campaign-other", season_id: other, name: "Autre saison", status: "DRAFT" },
+        ],
+      },
+    }),
+  );
+  await page.goto("/admin");
+  await page.getByRole("navigation", { name: "Navigation administration" })
+    .getByRole("button", { name: "Communications", exact: true }).click();
+  const filters = page.getByRole("group", { name: "Filtres des campagnes" });
+  const search = filters.getByLabel("Rechercher une campagne");
+  const status = filters.getByLabel("Filtrer le statut des campagnes");
+  const reset = filters.getByRole("button", { name: "Effacer les filtres" });
+  await expect(filters.getByRole("status")).toHaveText("3 résultats");
+  await expect(page.locator(".studio-communications .campaign-row")).toHaveCount(3);
+  await expect(reset).toBeDisabled();
+  await status.selectOption("SCHEDULED");
+  await expect(filters.getByRole("status")).toHaveText("1 résultat");
+  await expect(page.locator(".studio-communications .campaign-row")).toContainText(["Rappel Halloween"]);
+  await search.fill("inconnue");
+  await expect(filters.getByRole("status")).toHaveText("0 résultats");
+  await expect(page.getByText("Aucune campagne ne correspond aux filtres.")).toBeVisible();
+  await reset.click();
+  await expect(search).toHaveValue("");
+  await expect(status).toHaveValue("ALL");
+  await expect(filters.getByRole("status")).toHaveText("3 résultats");
+  await expect(page.locator(".studio-communications .campaign-row")).toHaveCount(3);
+  await expect(page.getByRole("button", { name: "Nouvelle campagne" })).toBeVisible();
+  expect(mutations).toEqual([]);
+});

@@ -406,3 +406,40 @@
     display: none;
   }
 }
+
+/* Campaigns inherit the Studio layout but keep Halloween Map scheduling,
+ * send eligibility and HTML/editor workflows intact.
+ */
+.admin-beta .studio-communications {
+  min-width: 0;
+}
+.admin-beta .studio-campaign-filters {
+  align-items: center;
+}
+.admin-beta .studio-campaign-filters input {
+  flex: 1 1 240px;
+}
+.admin-beta .studio-campaign-filters select {
+  flex: 0 1 210px;
+}
+.admin-beta .studio-communications .campaign-row {
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+.admin-beta .studio-communications .campaign-row h3 {
+  margin-top: 0;
+}
+.admin-beta .studio-communications .campaign-row > div:first-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 700px) {
+  .admin-beta .studio-campaign-filters input,
+  .admin-beta .studio-campaign-filters select {
+    flex: 1 1 100%;
+  }
+}
