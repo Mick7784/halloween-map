@@ -18,6 +18,7 @@ import VisualEditor from "./VisualEditor";
 import EmailHtmlEditor from "./EmailHtmlEditor";
 import { editorialHtml } from "../lib/editorial-format";
 import { Button } from "./ui";
+import StudioMailPreview from "./StudioMailPreview";
 export default function MessageTemplates({ user }: { user: User }) {
   const [models, setModels] = useState<Record<
       MessageKind,
@@ -70,9 +71,20 @@ export default function MessageTemplates({ user }: { user: User }) {
     previewError = (e as Error).message;
   }
   return (
-    <section className="beta-card">
-      <h2>Modèles des emails de service</h2>
+    <section className="beta-card studio-mail-templates">
+      <div className="beta-card-title studio-mail-templates-heading">
+        <div>
+          <h2>Modèles des emails de service</h2>
+          <p className="small muted">Personnalisez les messages automatiques et contrôlez leur rendu avant l’enregistrement.</p>
+        </div>
+        <span className="studio-template-save-state" role="status" aria-live="polite">
+          {!models ? "Chargement du modèle…" : !manage ? "Lecture seule" :
+            dirty ? "Modifications non enregistrées" : "Modèle enregistré"}
+        </span>
+      </div>
       <Notice error={error} />
+      <div className="studio-mail-template-layout">
+        <section className="studio-mail-template-editor" aria-label="Édition du modèle">
       <label className="field">
         <span>Type de message</span>
         <Select
@@ -180,22 +192,18 @@ export default function MessageTemplates({ user }: { user: User }) {
         </p>
       )}
 
-      {previewError && <p role="alert" className="notice error">
-        Document HTML invalide : {previewError}
-      </p>}
-      {preview && (
-        <>
-          <details open>
-            <summary>Aperçu du véritable email envoyé</summary>
-            <iframe title="Aperçu du modèle" sandbox=""
-              srcDoc={preview.html} className="mail-frame" />
-          </details>
-          <details>
-            <summary>Texte brut</summary>
-            <pre className="mail-preview">{preview.text}</pre>
-          </details>
-        </>
-      )}
+        </section>
+        <StudioMailPreview
+          title="Aperçu du modèle"
+          frameTitle="Aperçu du modèle"
+          html={preview?.html}
+          text={preview?.text}
+          error={previewError}
+          htmlLabel="Aperçu du véritable email envoyé"
+          textLabel="Texte brut"
+          collapsibleHtml
+        />
+      </div>
     </section>
   );
 }

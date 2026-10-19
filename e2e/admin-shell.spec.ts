@@ -875,3 +875,39 @@ test("V1.0 campaign list filters the consulted season without editing or sending
   await expect(page.getByRole("button", { name: "Nouvelle campagne" })).toBeVisible();
   expect(mutations).toEqual([]);
 });
+
+test("V1.0 email templates retain live sandboxed preview and draft protection", async ({
+  page,
+}) => {
+  const { mutations } = await arrange(page);
+  const messagePosts: string[] = [];
+  page.on("request", (request) => {
+    if (request.method() === "POST" &&
+      (request.url().includes("/api/admin/templates") ||
+        request.url().includes("/api/admin/communications")))
+      messagePosts.push(request.url());
+  });
+  await page.goto("/admin");
+  await page.getByRole("navigation", { name: "Navigation administration" })
+    .getByRole("button", { name: "Communications", exact: true }).click();
+  const editor = page.getByRole("region", { name: "Édition du modèle" });
+  const preview = page.getByRole("region", { name: "Aperçu du modèle" });
+  await expect(editor.getByLabel("Type de message")).toHaveValue("VERIFY");
+  await expect(page.locator(".studio-template-save-state")).toHaveText("Modèle enregistré");
+  await expect(preview.getByTitle("Aperçu du modèle")).toHaveAttribute("sandbox", "");
+  await expect(preview.getByText("Aperçu du véritable email envoyé")).toBeVisible();
+  await expect(preview.getByText("Texte brut")).toBeVisible();
+  const original = await editor.getByLabel("Objet").inputValue();
+  await editor.getByLabel("Objet").fill("Brouillon de contrôle");
+  await expect(page.locator(".studio-template-save-state")).toHaveText("Modifications non enregistrées");
+  page.once("dialog", async (dialog) => { await dialog.dismiss(); });
+  await editor.getByLabel("Type de message").selectOption("INVITE");
+  await expect(editor.getByLabel("Type de message")).toHaveValue("VERIFY");
+  await editor.getByLabel("Objet").fill(original);
+  await expect(page.locator(".studio-template-save-state")).toHaveText("Modèle enregistré");
+  await editor.getByLabel("Type de message").selectOption("INVITE");
+  await expect(editor.getByLabel("Type de message")).toHaveValue("INVITE");
+  await expect(preview.getByTitle("Aperçu du modèle")).toHaveAttribute("sandbox", "");
+  expect(messagePosts).toHaveLength(0);
+  expect(mutations).toHaveLength(0);
+});

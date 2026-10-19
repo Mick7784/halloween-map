@@ -1,6 +1,7 @@
 "use client";
 import useDraftGuard from "./useDraftGuard";
 import StudioCollectionControls from "./StudioCollectionControls";
+import StudioMailPreview from "./StudioMailPreview";
 import { selectStudioCollection } from "../lib/studio-collection";
 import { Button, Dialog, Input, Select } from "./ui";
 import { X } from "lucide-react";
@@ -438,21 +439,14 @@ function CampaignForm({
             Enregistrer la campagne
           </Button>
         </form>
-        <h3>Aperçu</h3>
-        {htmlError && <p role="alert" className="notice error">
-          Document HTML invalide : {htmlError}
-        </p>}
-        {rendered && (
-          <>
-            <iframe title="Aperçu de l’email HTML" sandbox=""
-              srcDoc={rendered.html}
-              style={{ width: "100%", height: 480, border: 0 }} />
-            <details>
-              <summary>Version texte</summary>
-              <p className="mail-preview">{rendered.text}</p>
-            </details>
-          </>
-        )}
+        <StudioMailPreview
+          title="Aperçu de la campagne"
+          frameTitle="Aperçu de l’email HTML"
+          html={rendered?.html}
+          text={rendered?.text}
+          error={htmlError}
+          textLabel="Version texte"
+        />
       </Dialog>
     </div>
   );

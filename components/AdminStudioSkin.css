@@ -443,3 +443,110 @@
     flex: 1 1 100%;
   }
 }
+
+/* Service email templates: same Studio surfaces and spacing as campaigns,
+ * with live preview isolated from editing controls and the admin DOM.
+ */
+.admin-beta .studio-mail-templates-heading {
+  align-items: flex-start;
+}
+.admin-beta .studio-mail-templates-heading p {
+  margin: 6px 0 0;
+  max-width: 70ch;
+}
+.admin-beta .studio-template-save-state {
+  white-space: normal;
+  flex-shrink: 0;
+  padding: 5px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  background: var(--raised);
+  font-size: 12px;
+  font-weight: 600;
+}
+.admin-beta .studio-mail-template-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+.admin-beta .studio-mail-template-editor,
+.admin-beta .studio-mail-preview {
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.admin-beta .studio-mail-template-editor {
+  display: grid;
+  gap: 12px;
+}
+.admin-beta .studio-mail-template-editor > .field,
+.admin-beta .studio-mail-template-editor > p {
+  margin: 0;
+}
+.admin-beta .studio-mail-template-editor > .actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.admin-beta .studio-mail-preview-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+.admin-beta .studio-mail-preview h3 {
+  margin: 0;
+}
+.admin-beta .studio-mail-preview > details {
+  min-width: 0;
+  padding: 10px 0;
+  border-top: 1px solid var(--line);
+}
+.admin-beta .studio-mail-preview summary {
+  cursor: pointer;
+  color: var(--accent);
+  font-weight: 600;
+}
+.admin-beta .studio-mail-preview-frame {
+  display: block;
+  margin-top: 10px;
+  width: 100%;
+  height: 480px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+}
+.admin-beta .studio-mail-preview > .studio-mail-preview-frame {
+  margin-top: 0;
+}
+.admin-beta .studio-mail-preview .mail-preview {
+  margin: 12px 0 0;
+  max-height: 340px;
+  overflow: auto;
+  font-size: 12px;
+  line-height: 1.6;
+}
+@media (max-width: 1020px) {
+  .admin-beta .studio-mail-template-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 700px) {
+  .admin-beta .studio-mail-template-editor,
+  .admin-beta .studio-mail-preview {
+    padding: 12px;
+  }
+  .admin-beta .studio-mail-templates-heading {
+    flex-wrap: wrap;
+  }
+  .admin-beta .studio-mail-preview-frame {
+    height: 400px;
+  }
+}
