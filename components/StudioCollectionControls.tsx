@@ -17,7 +17,7 @@ export default function StudioCollectionControls({
   count: number;
   filtered: boolean;
   onReset: () => void;
-  children: ReactNode;
+  children?: ReactNode;
 }) {
   return (
     <div className="studio-collection-controls" role="group" aria-label={label}>
