@@ -8,6 +8,7 @@ import AdminInlineDetail from "./AdminInlineDetail";
 import { DateTime } from "luxon";
 import { type User, type House, defaultRoles } from "../lib/domain";
 import { permissionLabels } from "../lib/admin-presentation";
+import { selectStudioCollection } from "../lib/studio-collection";
 import { api, Field, Notice, values, labels, AsyncButton } from "./common";
 import {
   Input,
@@ -115,6 +116,7 @@ export default function AdminUsers({
     }
     setPage(1);
   }
+  const visible = selectStudioCollection(list, { page, pageSize });
   const current = users.find((u) => u.id === selected);
   function showUser(id: string, edit = false) {
     if (selected && !confirmDraftNavigation()) return;
@@ -222,13 +224,7 @@ export default function AdminUsers({
             </tr>
           </thead>
           <tbody>
-            {list
-              .slice(
-                (Math.min(page, Math.max(1, Math.ceil(list.length / pageSize))) - 1) *
-                  pageSize,
-                Math.min(page, Math.max(1, Math.ceil(list.length / pageSize))) * pageSize,
-              )
-              .map((u) => (
+            {visible.rows.map((u) => (
                 <Fragment key={u.id}>
                 <tr
                   className="admin-clickable-row"
@@ -560,8 +556,8 @@ export default function AdminUsers({
             </Select>
           </label>
           <Pagination
-            count={list.length}
-            page={Math.min(page, Math.max(1, Math.ceil(list.length / pageSize)))}
+            count={visible.total}
+            page={visible.page}
             pageSize={pageSize}
             onPage={setPage}
           />

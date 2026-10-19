@@ -45,6 +45,7 @@ import Campaigns from "./Campaigns";
 import AdminActivity from "./AdminActivity";
 import AdminExistingPage from "./AdminExistingPage";
 import { houseAvailability } from "../lib/house-availability";
+import { selectStudioCollection } from "../lib/studio-collection";
 import { visibleStudioNavigation } from "../lib/studio-navigation";
 import { halloweenAdminNavigation } from "../lib/halloween-admin-navigation";
 import "./AdminBeta.css";
@@ -431,22 +432,28 @@ export default function Admin({
     await reload();
   }
   function table(items: ManagedHouse[], moderation = false) {
-    const sortedItems = items.slice().sort((a, b) => {
-      const value = (h: ManagedHouse) =>
-        ({
-          name: h.name,
-          address: h.address,
-          status: h.review_status ?? "",
-          availability: availabilityLabel(h),
-          activities: h.activities.join(", "),
-          modification: String(h.updated_at ?? ""),
-          submission: String(h.submitted_at ?? ""),
-        })[houseSort] ?? h.name;
-      const diff = value(a).localeCompare(value(b), "fr", {
-        sensitivity: "base",
-        numeric: true,
-      });
-      return diff * (houseSortDirection === "asc" ? 1 : -1);
+    // Shared Studio collection engine keeps the existing column comparison,
+    // stable order and one-based paging, without changing business filters.
+    const visible = selectStudioCollection(items, {
+      compare: (a, b) => {
+        const value = (h: ManagedHouse) =>
+          ({
+            name: h.name,
+            address: h.address,
+            status: h.review_status ?? "",
+            availability: availabilityLabel(h),
+            activities: h.activities.join(", "),
+            modification: String(h.updated_at ?? ""),
+            submission: String(h.submitted_at ?? ""),
+          })[houseSort] ?? h.name;
+        return value(a).localeCompare(value(b), "fr", {
+          sensitivity: "base",
+          numeric: true,
+        });
+      },
+      direction: houseSortDirection,
+      page: housePage,
+      pageSize: housePageSize,
     });
     function sortHeader(id: string, label: string) {
       return (
@@ -488,18 +495,7 @@ export default function Admin({
             </tr>
           </thead>
           <tbody>
-            {sortedItems
-              .slice(
-                (Math.min(
-                  housePage,
-                  Math.max(1, Math.ceil(items.length / housePageSize)),
-                ) -
-                  1) *
-                  housePageSize,
-                Math.min(housePage, Math.max(1, Math.ceil(items.length / housePageSize))) *
-                  housePageSize,
-              )
-              .map((h) => (
+            {visible.rows.map((h) => (
                 <Fragment key={h.id}>
                 <tr
                   className="admin-clickable-row"
@@ -917,8 +913,8 @@ export default function Admin({
             </Select>
           </label>
           <Pagination
-            count={items.length}
-            page={Math.min(housePage, Math.max(1, Math.ceil(items.length / housePageSize)))}
+            count={visible.total}
+            page={visible.page}
             pageSize={housePageSize}
             onPage={setHousePage}
           />

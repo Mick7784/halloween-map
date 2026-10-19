@@ -58,6 +58,29 @@ describe("DomotiK Studio reusable collection selection", () => {
     ).toMatchObject({ total: 4, pages: 1, page: 1 });
   });
 
+  it("retains the preexisting full-list ordering when the shared engine paginates", () => {
+    const sorted = [
+      { id: "c", name: "Charlie" },
+      { id: "a", name: "Alpha" },
+      { id: "b", name: "Bravo" },
+    ];
+    const result = selectStudioCollection(sorted, { page: 2, pageSize: 2 });
+    expect(result.rows.map((r) => r.id)).toEqual(["b"]);
+    expect(result).toMatchObject({ total: 3, page: 2, pages: 2 });
+    expect(sorted.map((r) => r.id)).toEqual(["c", "a", "b"]);
+  });
+
+  it("sorts the entire result set before paging, as house tables did", () => {
+    const result = selectStudioCollection(rows, {
+      compare: (a, b) => a.name.localeCompare(b.name, "fr", { sensitivity: "base" }),
+      direction: "desc",
+      page: 2,
+      pageSize: 2,
+    });
+    expect(result.rows.map((r) => r.id)).toEqual(["d", "a"]);
+    expect(result).toMatchObject({ total: 4, page: 2, pages: 2 });
+  });
+
   it("keeps filtering, ordering and paging independent of one another", () => {
     const result = selectStudioCollection(rows, {
       query: "maison",
