@@ -1,6 +1,8 @@
 "use client";
 import { ActionCancelled } from "./AdminConfirmation";
-import { Dialog, Button, DataTable, Input } from "./ui";
+import { Dialog, Button, DataTable, Input, Select } from "./ui";
+import StudioCollectionControls from "./StudioCollectionControls";
+import { selectStudioCollection } from "../lib/studio-collection";
 import useDraftGuard, { confirmDraftNavigation } from "./useDraftGuard";
 import AdminStatistics, { type SeasonStatistics } from "./AdminStatistics";
 import { DateTime } from "luxon";
@@ -219,7 +221,9 @@ export default function SeasonManager({
 }) {
   const [expanded, setExpanded] = useState<string | null>(null),
     [creating, setCreating] = useState(false),
-    [statistics, setStatistics] = useState<Season | null>(null);
+    [statistics, setStatistics] = useState<Season | null>(null),
+    [query, setQuery] = useState(""),
+    [status, setStatus] = useState("ALL");
   const critical = user.role_name === "SUPER_ADMIN",
     manage = has(user, "season.manage");
   const rank = (s: Season) =>
@@ -232,6 +236,16 @@ export default function SeasonManager({
         +new Date(a.opens_at) - +new Date(b.opens_at) ||
         (a.name ?? "").localeCompare(b.name ?? ""),
     );
+  // A shared, stable collection selector owns text filtering; the existing
+  // season ordering and business states continue to belong to Halloween Map.
+  const visible = selectStudioCollection(
+    ordered.filter((s) => status === "ALL" || seasonLabel(s) === status),
+    {
+      query,
+      searchText: (s) => [s.name ?? "", String(s.year)],
+      pageSize: Math.max(1, ordered.length),
+    },
+  );
   const date = (v: Date | string) =>
     new Intl.DateTimeFormat("fr-FR", {
       dateStyle: "short",
@@ -252,10 +266,43 @@ export default function SeasonManager({
           </Button>
         )}
       </div>
+      {ordered.length > 0 && (
+        <StudioCollectionControls
+          label="Filtres des saisons"
+          count={visible.total}
+          filtered={Boolean(query.trim()) || status !== "ALL"}
+          onReset={() => {
+            setQuery("");
+            setStatus("ALL");
+          }}
+        >
+          <div className="beta-filters season-filters">
+            <Input
+              aria-label="Rechercher une saison"
+              placeholder="Nom ou année de saison…"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+            />
+            <Select
+              aria-label="Filtrer l’état des saisons"
+              value={status}
+              onChange={(event) => setStatus(event.target.value)}
+            >
+              <option value="ALL">Tous les états</option>
+              <option value="ACTIVE">Active</option>
+              <option value="PLANIFIÉE">Planifiée</option>
+              <option value="DÉSACTIVÉE">Désactivée</option>
+              <option value="TERMINÉE">Terminée</option>
+            </Select>
+          </div>
+        </StudioCollectionControls>
+      )}
       {!ordered.length ? (
         <p className="beta-empty">
           Aucune saison. Créez votre première saison.
         </p>
+      ) : !visible.total ? (
+        <p className="beta-empty">Aucune saison ne correspond aux filtres.</p>
       ) : (
         <div className="beta-table-scroll">
           <DataTable className="season-table">
@@ -269,7 +316,7 @@ export default function SeasonManager({
               </tr>
             </thead>
             <tbody>
-              {ordered.map((s) => {
+              {visible.rows.map((s) => {
                 const ended = seasonFinished(s),
                   label = seasonLabel(s);
                 return (
@@ -354,10 +401,11 @@ export default function SeasonManager({
                               }
                             >
                               {expanded === s.id ? (
-                                <ChevronUp size={17} />
+                                <ChevronUp size={17} aria-hidden="true" />
                               ) : (
-                                <ChevronDown size={17} />
+                                <ChevronDown size={17} aria-hidden="true" />
                               )}
+                              <span>Réglages</span>
                             </Button>
                           )}
                         </div>

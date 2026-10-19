@@ -323,3 +323,38 @@
     min-width: 100%;
   }
 }
+
+/* Season list: same Studio collection control and action rhythm as the user
+ * and house directories, with Halloween Map's own pumpkin/violet accents.
+ */
+.admin-beta .season-filters {
+  align-items: center;
+}
+.admin-beta .season-filters input {
+  flex: 1 1 220px;
+}
+.admin-beta .season-filters select {
+  flex: 0 1 200px;
+}
+.admin-beta .season-table .season-row-actions {
+  align-items: center;
+  gap: 8px;
+}
+.admin-beta .season-table .season-row-actions > button,
+.admin-beta .season-table .season-row-actions > .ui-button {
+  white-space: normal;
+}
+.admin-beta .season-table .season-row-actions button[aria-expanded] {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.admin-beta .season-active {
+  background: color-mix(in srgb, var(--accent) 8%, var(--surface));
+}
+@media (max-width: 700px) {
+  .admin-beta .season-filters input,
+  .admin-beta .season-filters select {
+    flex: 1 1 100%;
+  }
+}

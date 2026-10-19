@@ -372,3 +372,36 @@ test("normal USER cannot render the TEST map or a demo entry", async ({
     0,
   );
 });
+
+test("V1.0 season filters search years and states without touching permissions or data", async ({
+  page,
+}) => {
+  const { mutations } = await arrange(page);
+  await page.goto("/admin");
+  await openSeasons(page);
+  const filters = page.getByRole("group", { name: "Filtres des saisons" });
+  const search = filters.getByLabel("Rechercher une saison");
+  const status = filters.getByLabel("Filtrer l’état des saisons");
+  const reset = filters.getByRole("button", { name: "Effacer les filtres" });
+  await expect(filters.getByRole("status")).toHaveText("4 résultats");
+  await expect(reset).toBeDisabled();
+  await search.fill("2027");
+  await expect(filters.getByRole("status")).toHaveText("1 résultat");
+  await expect(page.locator(".season-table tbody > tr")).toHaveCount(1);
+  await expect(page.locator(".season-table")).toContainText("Halloween 2027");
+  await status.selectOption("ACTIVE");
+  await expect(filters.getByRole("status")).toHaveText("0 résultats");
+  await expect(page.getByText("Aucune saison ne correspond aux filtres.")).toBeVisible();
+  await reset.click();
+  await expect(search).toHaveValue("");
+  await expect(status).toHaveValue("ALL");
+  await expect(filters.getByRole("status")).toHaveText("4 résultats");
+  await expect(page.locator(".season-table tbody > tr")).toHaveCount(4);
+  await status.selectOption("TERMINÉE");
+  await expect(page.locator(".season-table tbody > tr")).toHaveCount(1);
+  await expect(page.locator(".season-table")).toContainText("Halloween 2025");
+  await expect(page.getByRole("button", { name: /Réglages de Halloween 2025/ })).toHaveCount(0);
+  await reset.click();
+  await expect(page.getByRole("button", { name: "Réglages de Halloween 2027" })).toContainText("Réglages");
+  expect(mutations).toHaveLength(0);
+});
