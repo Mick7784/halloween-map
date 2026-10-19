@@ -21,6 +21,22 @@ describe("StudioCollectionControls shared filters", () => {
     expect(html).toContain('aria-live="polite"');
     expect(html).not.toContain("disabled");
   });
+
+  it("can expose a page-only count without inventing a server total", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(StudioCollectionControls, {
+        label: "Journal d’activité",
+        count: 50,
+        summary: "50 événements sur cette page",
+        filtered: true,
+        onReset: () => {},
+      }),
+    );
+    expect(html).toContain("50 événements sur cette page");
+    expect(html).not.toContain("50 résultats");
+    expect(html).not.toContain("disabled");
+  });
+
   it("shows zero results and prevents reset when no filter is active", () => {
     const html = render(0, false);
     expect(html).toContain("0 résultats");

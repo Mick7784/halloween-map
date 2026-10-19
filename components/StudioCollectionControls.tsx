@@ -9,12 +9,14 @@ import { Button } from "./ui";
 export default function StudioCollectionControls({
   label,
   count,
+  summary,
   filtered,
   onReset,
   children,
 }: {
   label: string;
   count: number;
+  summary?: string;
   filtered: boolean;
   onReset: () => void;
   children?: ReactNode;
@@ -24,7 +26,7 @@ export default function StudioCollectionControls({
       <div className="studio-collection-fields">{children}</div>
       <div className="studio-collection-summary">
         <span role="status" aria-live="polite">
-          {count} {count === 1 ? "résultat" : "résultats"}
+          {summary ?? `${count} ${count === 1 ? "résultat" : "résultats"}`}
         </span>
         <Button
           type="button"

@@ -1,5 +1,6 @@
 "use client";
 import { Timeline } from "./ui";
+import StudioCollectionControls from "./StudioCollectionControls";
 import { Select, Input, Button } from "./ui";
 import { useEffect, useState } from "react";
 import { adminDate, type AdminAudit } from "./AdminDashboard";
@@ -65,6 +66,22 @@ export default function AdminActivity({
   return (
     <section className="beta-card">
       <h2>Activité</h2>
+      <StudioCollectionControls
+        label="Filtres de l’activité"
+        count={rows.length}
+        summary={loading ? "Chargement des événements…" :
+          `${rows.length} ${rows.length === 1 ? "événement" : "événements"} sur cette page`}
+        filtered={scope !== "season" || category !== "all" ||
+          Boolean(search.trim()) || Boolean(from) || Boolean(to)}
+        onReset={() => {
+          onScope("season");
+          setCategory("all");
+          setSearch("");
+          setFrom("");
+          setTo("");
+          setPage(0);
+        }}
+      >
       <div className="beta-filters">
         <label>
           Périmètre
@@ -84,6 +101,7 @@ export default function AdminActivity({
         <label>
           Catégorie
           <Select
+            aria-label="Catégorie de l’activité"
             value={category}
             onChange={(e) => {
               setCategory(e.target.value);
@@ -115,6 +133,7 @@ export default function AdminActivity({
         <label>
           Du
           <Input
+            aria-label="Début de période"
             type="datetime-local"
             value={from}
             onChange={(e) => {
@@ -126,6 +145,7 @@ export default function AdminActivity({
         <label>
           Au
           <Input
+            aria-label="Fin de période"
             type="datetime-local"
             value={to}
             onChange={(e) => {
@@ -135,6 +155,7 @@ export default function AdminActivity({
           />
         </label>
       </div>
+      </StudioCollectionControls>
       <Notice error={error} />
       {loading ? (
         <p role="status">Chargement de l’activité…</p>

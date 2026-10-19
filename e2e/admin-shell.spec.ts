@@ -766,3 +766,54 @@ test("V1.0 shared row actions preserve house/user menus and authorization", asyn
   await expect(account.locator("details.ui-action-menu > summary")).toBeVisible();
   expect(mutations).toEqual([]);
 });
+
+test("V1.0 activity filters use shared controls and reset server query without mutation", async ({
+  page,
+}) => {
+  const { mutations } = await arrange(page);
+  await page.goto("/admin");
+  const nav = page.getByRole("navigation", { name: "Navigation administration" });
+  await nav.getByRole("button", { name: "Activité", exact: true }).click();
+  const filters = page.getByRole("group", { name: "Filtres de l’activité" });
+  const reset = filters.getByRole("button", { name: "Effacer les filtres" });
+  await expect(filters.getByRole("status")).toHaveText("1 événement sur cette page");
+  await expect(reset).toBeDisabled();
+  await filters.getByLabel("Périmètre de l’activité").selectOption("global");
+  await filters.getByLabel("Catégorie de l’activité").selectOption("houses");
+  await filters.getByLabel("Début de période").fill("2026-10-01T12:00");
+  await filters.getByLabel("Fin de période").fill("2026-10-31T22:00");
+  await filters.getByLabel("Filtrer l’activité").fill("introuvable");
+  const filtered = page.waitForRequest((request) => {
+    const url = new URL(request.url());
+    return url.pathname === "/api/admin/audit" &&
+      url.searchParams.get("scope") === "global" &&
+      url.searchParams.get("category") === "houses" &&
+      url.searchParams.get("q") === "introuvable" &&
+      !!url.searchParams.get("from") &&
+      !!url.searchParams.get("to");
+  });
+  await filtered;
+  await expect(page.getByText("Aucune activité pour ces filtres.")).toBeVisible();
+  await expect(filters.getByRole("status")).toHaveText("0 événements sur cette page");
+  await expect(reset).toBeEnabled();
+  const restored = page.waitForRequest((request) => {
+    const url = new URL(request.url());
+    return url.pathname === "/api/admin/audit" &&
+      url.searchParams.get("scope") === "season" &&
+      url.searchParams.get("category") === "all" &&
+      url.searchParams.get("q") === "" &&
+      !url.searchParams.has("from") &&
+      !url.searchParams.has("to") &&
+      url.searchParams.get("page") === "0";
+  });
+  await reset.click();
+  await restored;
+  await expect(filters.getByLabel("Périmètre de l’activité")).toHaveValue("season");
+  await expect(filters.getByLabel("Catégorie de l’activité")).toHaveValue("all");
+  await expect(filters.getByLabel("Filtrer l’activité")).toHaveValue("");
+  await expect(filters.getByLabel("Début de période")).toHaveValue("");
+  await expect(filters.getByLabel("Fin de période")).toHaveValue("");
+  await expect(filters.getByRole("status")).toHaveText("1 événement sur cette page");
+  await expect(reset).toBeDisabled();
+  expect(mutations).toEqual([]);
+});
