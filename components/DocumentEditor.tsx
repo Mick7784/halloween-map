@@ -144,7 +144,7 @@ export default function DocumentEditor({
   return (
     <div className="document-editor" ref={host}>
       <div className="studio-actions">
-        <Button type="button" onClick={() => setPreview(!preview)}>
+        <Button type="button" aria-pressed={preview} onClick={() => setPreview(!preview)}>
           {preview ? "Rédiger" : "Aperçu fidèle"}
         </Button>
         {preview && (
