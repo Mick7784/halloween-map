@@ -29,4 +29,18 @@ describe("StudioRowActions context grouping", () => {
     expect(html).not.toContain("Actions sensibles");
     expect(html).toContain("Voir les statistiques");
   });
+
+  it("allows existing domain row layout classes without changing permissions", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(StudioRowActions, {
+        label: "Actions de Maison",
+        className: "row-actions house-row-actions",
+        actions: React.createElement("button", { type: "button" }, "Voir"),
+      }),
+    );
+    expect(html).toContain('class="studio-row-actions row-actions house-row-actions"');
+    expect(html).toContain('aria-label="Actions de Maison"');
+    expect(html).not.toContain("Actions sensibles");
+    expect(html).toContain(">Voir</button>");
+  });
 });

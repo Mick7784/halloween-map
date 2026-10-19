@@ -734,3 +734,35 @@ test("V1.0 shared list controls reset local house and user filters without mutat
   await expect(userReset).toBeDisabled();
   expect(mutations).toEqual([]);
 });
+
+test("V1.0 shared row actions preserve house/user menus and authorization", async ({
+  page,
+}) => {
+  const { mutations } = await arrange(page, "ADMIN");
+  await page.route("**/api/admin/users", (route) =>
+    route.fulfill({
+      json: [{
+        id: "account-1",
+        display_name: "Compte témoin",
+        email: "temoin@example.invalid",
+        role_name: "USER",
+        account_status: "ACTIVE",
+        email_status: "VERIFIED",
+        permissions: [],
+        participation: null,
+        communications: [],
+      }],
+    }),
+  );
+  await page.goto("/admin");
+  const nav = page.getByRole("navigation", { name: "Navigation administration" });
+  await nav.getByRole("button", { name: "Maisons", exact: true }).click();
+  const house = page.getByRole("group", { name: "Actions de Jardin des lanternes" });
+  await expect(house.locator("details.ui-action-menu > summary")).toBeVisible();
+  await expect(house.getByRole("button", { name: "Valider", exact: true }).first()).toBeVisible();
+  await nav.getByRole("button", { name: "Utilisateurs", exact: true }).click();
+  const account = page.getByRole("group", { name: "Actions de Compte témoin" });
+  await expect(account.getByRole("button", { name: "Voir la fiche de Compte témoin" })).toBeVisible();
+  await expect(account.locator("details.ui-action-menu > summary")).toBeVisible();
+  expect(mutations).toEqual([]);
+});

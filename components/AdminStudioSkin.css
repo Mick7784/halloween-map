@@ -385,3 +385,24 @@
     border-top: 1px solid var(--line);
   }
 }
+
+/* Shared row layout also wraps the historical house/user action menu.
+ * Desktop shortcuts and compact mobile-menu behavior remain unchanged.
+ */
+.admin-beta .studio-row-actions.row-actions {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+.admin-beta .studio-row-actions.row-actions > .studio-row-actions-main {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+@media (max-width: 700px) {
+  .admin-beta .studio-row-actions.row-actions > .studio-row-actions-main > button,
+  .admin-beta .studio-row-actions.row-actions > .studio-row-actions-main > a {
+    display: none;
+  }
+}

@@ -8,13 +8,15 @@ export default function StudioRowActions({
   label,
   actions,
   sensitive,
+  className = "",
 }: {
   label: string;
   actions: ReactNode;
   sensitive?: ReactNode;
+  className?: string;
 }) {
   return (
-    <div className="beta-actions season-row-actions studio-row-actions" role="group" aria-label={label}>
+    <div className={["studio-row-actions", className].filter(Boolean).join(" ")} role="group" aria-label={label}>
       <div className="studio-row-actions-main">{actions}</div>
       {sensitive && (
         <div className="studio-row-actions-sensitive" role="group" aria-label="Actions sensibles">

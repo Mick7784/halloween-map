@@ -349,6 +349,7 @@ export default function SeasonManager({
                       <td>
                         <StudioRowActions
                           label={`Actions de ${s.name}`}
+                          className="beta-actions season-row-actions"
                           actions={
                             <>
 

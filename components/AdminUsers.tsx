@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Fragment, useEffect, useMemo, useState } from "react";
 import useDraftGuard, { confirmDraftNavigation } from "./useDraftGuard";
 import AdminInlineDetail from "./AdminInlineDetail";
+import StudioRowActions from "./StudioRowActions";
 import { DateTime } from "luxon";
 import { type User, type House, defaultRoles } from "../lib/domain";
 import { permissionLabels } from "../lib/admin-presentation";
@@ -276,7 +277,11 @@ export default function AdminUsers({
                     {date(u.last_login_at)}
                   </td>
                   <td>
-                    <div className="row-actions">
+                    <StudioRowActions
+                      label={"Actions de " + u.display_name}
+                      className="row-actions"
+                      actions={
+                        <>
                       <Button
                         aria-label={"Voir la fiche de " + u.display_name}
                         onClick={() => showUser(u.id)}
@@ -375,7 +380,9 @@ export default function AdminUsers({
                           </>
                         )}
                       </ActionMenu>
-                    </div>
+                        </>
+                      }
+                    />
                   </td>
                 </tr>
                 {current?.id === u.id && (

@@ -31,6 +31,7 @@ import {
   type PublicState,
 } from "./common";
 import AdminUsers, { type ManagedUser } from "./AdminUsers";
+import StudioRowActions from "./StudioRowActions";
 import HouseForm from "./HouseForm";
 import SeasonManager from "./SeasonManager";
 import ParticipationForm from "./ParticipationForm";
@@ -560,7 +561,11 @@ export default function Admin({
                     </>
                   )}
                   <td data-label="Actions">
-                    <div className="row-actions house-row-actions">
+                    <StudioRowActions
+                      label={"Actions de " + h.name}
+                      className="row-actions house-row-actions"
+                      actions={
+                        <>
                       {has(user, "participants.edit") && selectedSeason && !selectedSeason.archived && !selectedSeason.purged_at && (
                         <>
                           {h.review_status === "PENDING" && (
@@ -669,7 +674,9 @@ export default function Admin({
                             </AsyncButton>
                           )}
                       </ActionMenu>
-                    </div>
+                        </>
+                      }
+                    />
                   </td>
                 </tr>
                 {current?.id === h.id && (
