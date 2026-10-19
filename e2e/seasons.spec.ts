@@ -332,25 +332,33 @@ test("history reads anonymous snapshot and exposes no edit/reactivation", async 
   await expect(dialog).toContainText("lecture seule");
   expect(paths).not.toContain("/api/admin/stats");
 });
-test("mobile administration is read-only statistics; season controls remain desktop-only", async ({
+test("V1.0 mobile preserves statistics tabs and exposes seasons according to admin role", async ({
   page,
 }) => {
   const { mutations } = await arrange(page, "ADMIN");
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/admin");
-  await expect(page.getByRole("heading", { name: "Statistiques" })).toBeVisible();
+  const toggle = page.getByRole("button", { name: "Ouvrir la navigation" });
+  const nav = page.getByRole("navigation", { name: "Navigation administration" });
+  await expect(page.locator(".beta-page-title h1")).toHaveText("Tableau de bord");
+  await toggle.click();
+  await nav.getByRole("button", { name: "Statistiques", exact: true }).click();
+  await expect(page.locator(".beta-page-title h1")).toHaveText("Statistiques");
   await expect(page.getByRole("tab", { name: "Vue d’ensemble" })).toBeVisible();
   await expect(page.getByRole("tab", { name: "Maisons" })).toBeVisible();
-  await expect(page.locator(".season-table")).toHaveCount(0);
-  await expect(page.locator(".beta-sidebar")).toHaveCount(0);
+  await page.getByRole("tab", { name: "Maisons" }).click();
+  await expect(page.locator(".admin-mobile-statistics")).toContainText("Bonbons");
+  await toggle.click();
+  await nav.getByRole("button", { name: "Saison", exact: true }).click();
+  await expect(page.locator(".season-table")).toBeVisible();
+  // SUPER_ADMIN-only destructive operations do not appear for an ADMIN.
   await expect(page.getByRole("button", { name: "Activer", exact: true })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Désactiver", exact: true })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Supprimer définitivement" })).toHaveCount(0);
-  await page.getByRole("tab", { name: "Maisons" }).click();
-  await expect(page.locator(".admin-mobile-statistics")).toContainText("Bonbons");
   expect(mutations).toHaveLength(0);
-  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
-  await page.screenshot({ path: "test-results/seasons-mobile-statistics-only.png" });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth))
+    .toBeLessThanOrEqual(390);
+  await page.screenshot({ path: "test-results/seasons-mobile-unified-admin.png" });
 });
 test("normal USER cannot render the TEST map or a demo entry", async ({
   page,
