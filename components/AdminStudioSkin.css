@@ -181,3 +181,30 @@
     overflow-x: hidden;
   }
 }
+
+/* Studio metrics: reusable cards and comparative distributions in LinKs colors.
+ * Visual-only: numbers, source aggregations and seasonal semantics stay owned
+ * by the consuming application.
+ */
+.admin-beta .studio-overview-kpi {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  transition: border-color 140ms ease, box-shadow 140ms ease;
+}
+.admin-beta .studio-overview-kpi:hover {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+}
+.admin-beta .studio-overview-kpi > div svg {
+  color: var(--accent);
+}
+.admin-beta .studio-metric-bars .stats-track {
+  background: var(--raised);
+}
+.admin-beta .studio-metric-bars .stats-track > div {
+  background: linear-gradient(90deg, var(--accent), var(--purple));
+}
+@media (prefers-reduced-motion: reduce) {
+  .admin-beta .studio-overview-kpi {
+    transition: none;
+  }
+}
