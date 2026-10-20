@@ -76,7 +76,20 @@ test("live document API and editor: private drafts, offline retry, conflicts, pu
     );
     await studio.getByLabel("Les informations sont complètes").check();
     await studio.getByLabel("Changement important").check();
+    // Shared Studio formatting controls expose their state without changing commands.
+    await expect(studio.getByRole("button", { name: "Aperçu fidèle" })).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
+    await expect(studio.getByRole("button", { name: "Gras", exact: true })).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
     await studio.getByRole("button", { name: "Aperçu fidèle" }).click();
+    await expect(studio.getByRole("button", { name: "Rédiger", exact: true })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
     await expect(studio.locator(".document-preview h2")).toHaveText(
       "Titre des consignes de test",
     );
