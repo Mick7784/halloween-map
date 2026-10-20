@@ -1,13 +1,11 @@
 name: Publish isolated V1.0 beta
 on:
-  push:
-    branches: [work/backoffice-studio-convergence]
-  workflow_dispatch:
+  workflow_call:
     inputs:
       version:
         description: "Prerelease version (must match VERSION)"
         required: true
-        default: "V1.0-beta.1"
+        type: string
 permissions:
   contents: read
 concurrency:
@@ -15,7 +13,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   beta:
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/work/backoffice-studio-convergence'
+    if: github.ref == 'refs/heads/work/backoffice-studio-convergence'
     runs-on: ubuntu-latest
     permissions:
       contents: write
