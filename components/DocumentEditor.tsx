@@ -360,11 +360,11 @@ export default function DocumentEditor({
             <input
               autoFocus
               value={link}
-              onChange={(e) => setLink(e.target.value)}
+              onChange={(e) => { setLink(e.target.value); setLinkError(""); }}
               placeholder="https://…"
             />
           </label>
-          <p role="alert">{linkError}</p>
+          {linkError && <p role="alert">{linkError}</p>}
           <Button
             type="button"
             onClick={() => {
