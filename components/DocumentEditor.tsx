@@ -72,6 +72,37 @@ export function cleanDocumentPaste(html: string): string {
   return dom.body.innerHTML;
 }
 
+/**
+ * Presentation-only formatting action. The caller owns editor commands,
+ * extensions and document-specific rules.
+ */
+export function StudioEditorTool({
+  editor,
+  label,
+  run,
+  active = false,
+  disabled = false,
+}: {
+  editor: Editor | null;
+  label: string;
+  run: (editor: Editor) => void;
+  active?: boolean;
+  disabled?: boolean;
+}) {
+  return (
+    <Button
+      type="button"
+      title={label}
+      aria-label={label}
+      aria-pressed={active}
+      disabled={!editor || disabled}
+      onClick={() => editor && run(editor)}
+    >
+      {label}
+    </Button>
+  );
+}
+
 export default function DocumentEditor({
   initial,
   onChange,
@@ -129,16 +160,13 @@ export default function DocumentEditor({
     disabled = false,
   ) {
     return (
-      <Button
-        type="button"
-        title={label}
-        aria-label={label}
-        aria-pressed={active}
-        disabled={!editor || disabled}
-        onClick={() => editor && run(editor)}
-      >
-        {label}
-      </Button>
+      <StudioEditorTool
+        editor={editor}
+        label={label}
+        run={run}
+        active={active}
+        disabled={disabled}
+      />
     );
   }
   return (
