@@ -1,21 +1,20 @@
 "use client";
-import type { Editor } from "@tiptap/react";
 import { Button } from "./ui";
 
 /**
  * Presentation-only formatting action. The caller owns editor commands,
- * extensions and document-specific rules.
+ * extensions and document-specific rules. The component has no Tiptap dependency.
  */
-export function StudioEditorTool({
+export function StudioEditorTool<TEditor>({
   editor,
   label,
   run,
   active = false,
   disabled = false,
 }: {
-  editor: Editor | null;
+  editor: TEditor | null;
   label: string;
-  run: (editor: Editor) => void;
+  run: (editor: TEditor) => void;
   active?: boolean;
   disabled?: boolean;
 }) {
