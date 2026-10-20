@@ -169,6 +169,7 @@ export default function DocumentEditor({
         <div
           className="document-toolbar"
           role="toolbar"
+          aria-orientation="horizontal"
           aria-label="Mise en forme du document"
         >
           {tool(
