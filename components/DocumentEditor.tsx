@@ -8,6 +8,7 @@ import { TextStyle, Color } from "@tiptap/extension-text-style";
 import TextAlign from "@tiptap/extension-text-align";
 import Highlight from "@tiptap/extension-highlight";
 import { Button, Select } from "./ui";
+import { StudioEditorTool } from "./StudioEditorTool";
 import DocumentView from "./DocumentView";
 import type { LegalDocument } from "../lib/content";
 import {
@@ -70,37 +71,6 @@ export function cleanDocumentPaste(html: string): string {
     }
   }
   return dom.body.innerHTML;
-}
-
-/**
- * Presentation-only formatting action. The caller owns editor commands,
- * extensions and document-specific rules.
- */
-export function StudioEditorTool({
-  editor,
-  label,
-  run,
-  active = false,
-  disabled = false,
-}: {
-  editor: Editor | null;
-  label: string;
-  run: (editor: Editor) => void;
-  active?: boolean;
-  disabled?: boolean;
-}) {
-  return (
-    <Button
-      type="button"
-      title={label}
-      aria-label={label}
-      aria-pressed={active}
-      disabled={!editor || disabled}
-      onClick={() => editor && run(editor)}
-    >
-      {label}
-    </Button>
-  );
 }
 
 export default function DocumentEditor({
