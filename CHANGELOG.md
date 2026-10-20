@@ -1,5 +1,13 @@
 # Changelog
 
+## V1.0-beta.1
+
+- **Administration Studio** : convergence visuelle et structurelle du back-office Halloween Map avec les primitives DomotiK Studio, en conservant ses couleurs, son administration et ses données indépendantes.
+- **Gestion quotidienne** : navigation, tableaux de bord, listes et actions contextuelles harmonisés pour les saisons, maisons, comptes, activités et campagnes.
+- **Contenus et documents** : éditeur riche, aperçu, brouillons, contrôle des conflits, publication vérifiée, historique et restauration ; composants de présentation réutilisables sans dépendance directe à LinKs.
+- **Sécurité et compatibilité** : conservation des permissions, des règles de saisons et d'inscriptions, de la confidentialité des brouillons et des mécanismes de réacceptation documentaire.
+- **Validation bêta** : tests unitaires et navigateur renforcés ; publication GHCR isolée sur le tag V1.0-beta.1, sans mise à jour de latest. Sauvegarder la base avant essai et valider la recette sur une instance de test.
+
 ## V0.9.10
 
 - **Contenus & documents** : nouvelle navigation en trois espaces, textes courts par contexte avec champs simples et aperçu, documents officiels dans un espace dédié, paramètres de liens/contact conservés.
