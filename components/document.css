@@ -109,6 +109,33 @@ body.hm-premium .document-copy h3 {
   min-height: 2rem;
   padding: 0.35rem 0.55rem;
 }
+.document-toolbar {
+  align-items: center;
+}
+.document-toolbar .document-toolbar-divider {
+  align-self: center;
+  display: inline-block;
+  width: 1px;
+  height: 1.35rem;
+  flex: 0 0 1px;
+  background: var(--studio-line, #536174);
+  margin: 0 0.25rem;
+}
+.document-toolbar .ui-button:has(svg) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2rem;
+  padding-inline: 0.4rem;
+}
+.document-toolbar .ui-button svg {
+  display: block;
+}
+@media (max-width: 600px) {
+  .document-toolbar .document-toolbar-divider {
+    margin: 0 0.1rem;
+  }
+}
 .document-toolbar [aria-pressed="true"] {
   background: var(--studio-accent, #076d96);
   color: white;
