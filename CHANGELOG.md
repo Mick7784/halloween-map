@@ -1,5 +1,12 @@
 # Changelog
 
+## V1.0-beta.2
+
+- **Éditeur de documents** : barre de mise en forme avec pictogrammes classiques de traitement de texte (historique, styles, listes, liens et tableaux), groupes séparés et commandes plus compactes.
+- **Accessibilité** : intitulés et infobulles conservés pour chaque commande, états actifs et désactivés préservés, alternative textuelle pour les actions personnalisées.
+- **Suivi de recette** : checklist de validation réelle du back-office et suivi de la correction du fond du logo officiel (ticket #47, non incluse dans cette bêta).
+- **Déploiement** : image GHCR versionnée et GitHub prerelease isolées, sans changement de `latest` ; sauvegarder PostgreSQL avant mise à jour.
+
 ## V1.0-beta.1
 
 - **Administration Studio** : convergence visuelle et structurelle du back-office Halloween Map avec les primitives DomotiK Studio, en conservant ses couleurs, son administration et ses données indépendantes.
