@@ -16,6 +16,20 @@ describe("StudioEditorTool shared formatting action", () => {
     expect(html).toContain('aria-label="Gras"');
     expect(html).toContain('aria-pressed="true"');
     expect(html).not.toContain("disabled");
+    expect(html).toContain("<svg");
+    expect(html).toContain('aria-hidden="true"');
+  });
+
+  it("keeps a text fallback for custom actions", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(StudioEditorTool, {
+        editor: { custom: true },
+        label: "Action personnalisée",
+        run: () => undefined,
+      }),
+    );
+    expect(html).toContain("Action personnalisée");
+    expect(html).not.toContain("<svg");
   });
 
   it("disables formatting when no editor is available", () => {
