@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       publish_beta:
-        description: 'Publish V1.0-beta.1 from the candidate branch after all checks pass'
+        description: 'Publish V1.0-beta.2 from the candidate branch after all checks pass'
         type: boolean
         required: true
         default: false
@@ -222,4 +222,4 @@ jobs:
       packages: write
     uses: ./.github/workflows/beta-release.yml
     with:
-      version: V1.0-beta.1
+      version: V1.0-beta.2
