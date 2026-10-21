@@ -182,6 +182,7 @@ export default function DocumentEditor({
             false,
             !editor?.can().redo(),
           )}
+          <span className="document-toolbar-divider" role="separator" aria-orientation="vertical" />
           <Select
             aria-label="Style de paragraphe"
             value={
@@ -206,6 +207,7 @@ export default function DocumentEditor({
             <option value="2">Titre 2</option>
             <option value="3">Titre 3</option>
           </Select>
+          <span className="document-toolbar-divider" role="separator" aria-orientation="vertical" />
           {tool(
             "Gras",
             (e) => e.chain().focus().toggleBold().run(),
@@ -226,6 +228,7 @@ export default function DocumentEditor({
             (e) => e.chain().focus().toggleStrike().run(),
             editor?.isActive("strike"),
           )}
+          <span className="document-toolbar-divider" role="separator" aria-orientation="vertical" />
           <Select
             aria-label="Couleur du texte"
             value={editor?.getAttributes("textStyle").color ?? ""}
@@ -258,6 +261,7 @@ export default function DocumentEditor({
               e.chain().focus().toggleHighlight({ color: "#fff4a3" }).run(),
             editor?.isActive("highlight"),
           )}
+          <span className="document-toolbar-divider" role="separator" aria-orientation="vertical" />
           <Select
             aria-label="Alignement"
             value={
@@ -280,6 +284,7 @@ export default function DocumentEditor({
               </option>
             ))}
           </Select>
+          <span className="document-toolbar-divider" role="separator" aria-orientation="vertical" />
           {tool(
             "Puces",
             (e) => e.chain().focus().toggleBulletList().run(),
@@ -303,6 +308,7 @@ export default function DocumentEditor({
           {tool("Séparateur", (e) =>
             e.chain().focus().setHorizontalRule().run(),
           )}
+          <span className="document-toolbar-divider" role="separator" aria-orientation="vertical" />
           {tool(
             "Lien",
             (e) => {
@@ -347,6 +353,7 @@ export default function DocumentEditor({
               )}
             </>
           )}
+          <span className="document-toolbar-divider" role="separator" aria-orientation="vertical" />
           {tool("Effacer la mise en forme", (e) =>
             e.chain().focus().unsetAllMarks().clearNodes().run(),
           )}
