@@ -1,7 +1,7 @@
 name: CI and release
 on:
   push:
-    branches: [main]
+    branches: [main, work/backoffice-studio-convergence]
   pull_request:
   workflow_dispatch:
     inputs:
@@ -215,7 +215,7 @@ jobs:
           gh release create "$VERSION" --verify-tag --title "Halloween Map $VERSION Beta" --notes-file release-notes.md --prerelease
 
   beta_publish:
-    if: github.event_name == 'workflow_dispatch' && inputs.publish_beta == true && github.ref == 'refs/heads/work/backoffice-studio-convergence'
+    if: (github.event_name == 'workflow_dispatch' && inputs.publish_beta == true || github.event_name == 'push' && github.event.head_commit.message == 'release(beta): publish isolated V1.0-beta.2') && github.ref == 'refs/heads/work/backoffice-studio-convergence'
     needs: [verify, docker, https-media]
     permissions:
       contents: write
