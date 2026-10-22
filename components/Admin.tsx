@@ -970,7 +970,7 @@ export default function Admin({
           <span className="beta-brand-media">
             <Image
               className="beta-brand-wordmark"
-              src="/brand/halloween-map-wordmark-official.webp"
+              src="/brand/halloween-map-wordmark-transparent.png"
               alt="Halloween Map by DomotiK Studio"
               width={196}
               height={64}
