@@ -168,9 +168,14 @@ test("beta desktop exposes only useful navigation, pending moderation and normal
     "data-theme",
     "light",
   );
-  await page.setViewportSize({width:390,height:844});
-  await page.getByRole('button',{name:'Gérer les maisons',exact:true}).click();
-  await page.getByLabel('Saison du back-office').selectOption(sid);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole("button", { name: "Ouvrir la navigation" }).click();
+  await page
+    .getByRole("navigation", { name: "Navigation administration" })
+    .getByRole("button", { name: "Maisons", exact: true })
+    .click();
+  await expect(page.locator(".beta-page-title h1")).toHaveText("Maisons");
+  await page.getByLabel("Saison du back-office").selectOption(sid);
   await page.getByRole('row').filter({hasText:'Mr Test 1'}).getByLabel('Actions pour Mr Test 1').click();
   await expect(page.getByRole('button',{name:'Masquer',exact:true})).toBeVisible();
 });

@@ -1,6 +1,6 @@
 "use client";
-import { useState, useEffect, type ReactNode } from "react";
-import { Button, Select } from "./ui";
+import { type ReactNode } from "react";
+import { Button } from "./ui";
 import "./studio.css";
 export function StudioShell({
   children,
@@ -9,34 +9,11 @@ export function StudioShell({
   children: ReactNode;
   navigation: ReactNode;
 }) {
-  const [theme, setTheme] = useState("system");
-  useEffect(() => {
-    const stored = localStorage.getItem("domotik-content-theme");
-    if (["light", "dark", "system"].includes(stored ?? "")) setTheme(stored!);
-  }, []);
   return (
-    <div className="studio-shell" data-theme={theme}>
-      <header className="studio-header">
-        <div>
-          <span className="studio-eyebrow">DomotiK Studio · Halloween Map</span>
-          <h2>Contenus & documents</h2>
-          <p>Les mots de votre événement, de la rédaction à la publication.</p>
-        </div>
-        <label>
-          Apparence
-          <Select
-            value={theme}
-            onChange={(e) => {
-              setTheme(e.target.value);
-              localStorage.setItem("domotik-content-theme", e.target.value);
-            }}
-          >
-            <option value="system">Système</option>
-            <option value="light">Clair</option>
-            <option value="dark">Sombre</option>
-          </Select>
-        </label>
-      </header>
+    <div className="studio-shell">
+      <p className="studio-intro">
+        Rédigez, gérez et publiez les contenus de Halloween Map.
+      </p>
       <div className="studio-layout">
         {navigation}
         <div className="studio-main">{children}</div>

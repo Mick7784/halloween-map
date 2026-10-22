@@ -1,0 +1,562 @@
+/* DomotiK Studio admin shell — LinKs V1.312 geometry and neutral surfaces.
+ * The actual branding belongs to Halloween Map: pumpkin orange and violet.
+ * Keep this skin scoped to admin; the public CSS remains unchanged.
+ */
+.admin-beta {
+  --bg: #171d27;
+  --surface: #202834;
+  --sidebar: #1c232e;
+  --raised: #283240;
+  --text: #e6ebf2;
+  --muted: #a4b0c2;
+  --line: #333e4e;
+  /* Existing Halloween Map brand hues from PremiumHome/PremiumApp. */
+  --hm-admin-orange: #ff9d45;
+  --hm-admin-violet: #b98cec;
+  --accent: var(--hm-admin-orange);
+  --accent-soft: #382b31;
+  --purple: var(--hm-admin-violet);
+  --brand-on-primary: #1e1419;
+  --brand-primary-hover: #ffc17a;
+  --success: #8ad3ab;
+  --warning: #e5bd7d;
+  --danger: #f1a1ab;
+  --focus: var(--hm-admin-orange);
+  --shadow: 0 2px 8px #00000008;
+  --radius: 12px;
+  color-scheme: dark;
+}
+.admin-beta[data-theme="light"] {
+  --bg: #f5f6f8;
+  --surface: #ffffff;
+  --sidebar: #fafbfc;
+  --raised: #f0f3f6;
+  --text: #202b3b;
+  --muted: #637187;
+  --line: #e1e6ed;
+  /* Accessible shades of the same Halloween Map palette for light mode. */
+  --hm-admin-orange: #ab470d;
+  --hm-admin-violet: #7540ad;
+  --accent: var(--hm-admin-orange);
+  --accent-soft: #fff1e5;
+  --purple: var(--hm-admin-violet);
+  --brand-on-primary: #ffffff;
+  --brand-primary-hover: #8d3b08;
+  --success: #26734e;
+  --warning: #926014;
+  --danger: #b23a49;
+  --focus: var(--hm-admin-orange);
+  --shadow: 0 2px 8px #24344a04;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: light) {
+  .admin-beta[data-theme="system"] {
+    --bg: #f5f6f8;
+    --surface: #ffffff;
+    --sidebar: #fafbfc;
+    --raised: #f0f3f6;
+    --text: #202b3b;
+    --muted: #637187;
+    --line: #e1e6ed;
+    --hm-admin-orange: #ab470d;
+    --hm-admin-violet: #7540ad;
+    --accent: var(--hm-admin-orange);
+    --accent-soft: #fff1e5;
+    --purple: var(--hm-admin-violet);
+    --brand-on-primary: #ffffff;
+    --brand-primary-hover: #8d3b08;
+    --success: #26734e;
+    --warning: #926014;
+    --danger: #b23a49;
+    --focus: var(--hm-admin-orange);
+    --shadow: 0 2px 8px #24344a04;
+    color-scheme: light;
+  }
+}
+.admin-beta .beta-sidebar {
+  background: var(--sidebar);
+}
+.admin-beta .beta-content {
+  background: var(--bg);
+}
+.admin-beta .beta-kpis article,
+.admin-beta .beta-card,
+.admin-beta .panel {
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+.admin-beta button,
+.admin-beta input,
+.admin-beta select,
+.admin-beta textarea {
+  border-radius: 8px;
+}
+.admin-beta button:focus-visible,
+.admin-beta a:focus-visible,
+.admin-beta input:focus-visible,
+.admin-beta textarea:focus-visible,
+.admin-beta select:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 3px;
+}
+.application.admin-app .admin-beta button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--brand-on-primary);
+}
+.application.admin-app .admin-beta button.primary:hover {
+  background: var(--brand-primary-hover);
+  border-color: var(--brand-primary-hover);
+  color: var(--brand-on-primary);
+}
+.admin-beta .beta-sidebar nav button.is-current {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.admin-beta .beta-sidebar nav button:hover {
+  background: var(--raised);
+}
+.admin-beta .beta-logo {
+  display: flex;
+  align-items: flex-start;
+  flex-direction: column;
+  gap: 4px;
+  padding: 4px 8px 0;
+  width: 100%;
+  min-width: 0;
+  color: var(--text);
+}
+.admin-beta .beta-brand-media {
+  display: block;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  line-height: 0;
+}
+.admin-beta .beta-brand-wordmark {
+  display: block;
+  width: min(196px, 100%);
+  height: 64px;
+  object-fit: contain;
+  object-position: left center;
+}
+/* Preserve the official white wordmark over a light sidebar without putting
+ * any rectangular matte back behind the transparent brand artwork. */
+.admin-beta[data-theme="light"] .beta-brand-wordmark {
+  filter: drop-shadow(0 1px 1px #202b3bdd) drop-shadow(0 0 1px #202b3b9c);
+}
+@media (prefers-color-scheme: light) {
+  .admin-beta[data-theme="system"] .beta-brand-wordmark {
+    filter: drop-shadow(0 1px 1px #202b3bdd) drop-shadow(0 0 1px #202b3b9c);
+  }
+}
+.admin-beta .beta-brand-icon {
+  display: none;
+  width: 42px;
+  height: 42px;
+  object-fit: contain;
+}
+.admin-beta .beta-brand-subtitle {
+  display: block;
+  border: 0;
+  margin: 0;
+  padding: 0;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.035em;
+}
+.admin-beta .beta-sidebar.is-collapsed .beta-logo {
+  padding: 0;
+  align-items: center;
+}
+.admin-beta .beta-sidebar.is-collapsed .beta-brand-wordmark,
+.admin-beta .beta-sidebar.is-collapsed .beta-brand-subtitle {
+  display: none;
+}
+.admin-beta .beta-sidebar.is-collapsed .beta-brand-icon {
+  display: block;
+}
+@media (prefers-reduced-motion: reduce) {
+  .admin-beta .beta-sidebar,
+  .admin-beta button,
+  .admin-beta a,
+  .admin-beta input,
+  .admin-beta select {
+    transition-duration: 0s;
+  }
+}
+
+/* V1.0 mobile: one unified shell and navigation; keep the sidebar readable
+ * even when desktop's icon-only preference was previously saved.
+ */
+@media (max-width: 700px) {
+  .admin-beta .beta-sidebar {
+    width: min(288px, 88vw);
+  }
+  .admin-beta .beta-sidebar-collapse {
+    display: none;
+  }
+  .admin-beta .beta-header {
+    align-items: flex-start;
+  }
+  .admin-beta .beta-content {
+    overflow-x: hidden;
+  }
+}
+
+/* Studio metrics: reusable cards and comparative distributions in Halloween Map colors.
+ * Visual-only: numbers, source aggregations and seasonal semantics stay owned
+ * by the consuming application.
+ */
+.admin-beta .studio-overview-kpi {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  transition: border-color 140ms ease, box-shadow 140ms ease;
+}
+.admin-beta .studio-overview-kpi:hover {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+}
+.admin-beta .studio-overview-kpi > div svg {
+  color: var(--accent);
+}
+.admin-beta .studio-metric-bars .stats-track {
+  background: var(--raised);
+}
+.admin-beta .studio-metric-bars .stats-track > div {
+  background: linear-gradient(90deg, var(--accent), var(--purple));
+}
+@media (prefers-reduced-motion: reduce) {
+  .admin-beta .studio-overview-kpi {
+    transition: none;
+  }
+}
+
+/* Distribution rows share LinKs' compact collection rhythm. Missing and
+ * measured-zero states remain distinct without inventing a colored bar.
+ */
+.admin-beta .studio-metric-bars {
+  min-width: 0;
+}
+.admin-beta .studio-metric-bars ul {
+  gap: 0;
+  margin: 0;
+}
+.admin-beta .studio-metric-bars li {
+  min-width: 0;
+  align-items: center;
+  padding: 11px 0;
+  border-bottom: 1px solid var(--line);
+  column-gap: 12px;
+  row-gap: 8px;
+}
+.admin-beta .studio-metric-bars li:last-child {
+  border-bottom: 0;
+}
+.admin-beta .studio-metric-bars li > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.admin-beta .studio-metric-bars li > strong {
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.admin-beta .studio-metric-bars li[data-measurement="unavailable"] > strong {
+  color: var(--muted);
+  font-weight: 500;
+  font-size: 12px;
+}
+.admin-beta .studio-metric-bars .stats-track {
+  height: 9px;
+  border-radius: 999px;
+}
+.admin-beta .studio-metric-bars .studio-chart-note {
+  margin: 12px 0 0;
+  font-size: 12px;
+}
+
+/* Studio shared list filters: one visual rhythm for houses and users.
+ * Domains keep their own search, status filters, actions and permissions.
+ */
+.admin-beta .studio-collection-controls {
+  display: grid;
+  gap: 12px;
+  padding: 14px 16px;
+  margin: 0 0 16px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  min-width: 0;
+}
+.admin-beta .studio-collection-fields {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+.admin-beta .studio-collection-fields > .beta-filters,
+.admin-beta .studio-collection-fields > .toolbar,
+.admin-beta .studio-collection-fields > .tabs {
+  margin: 0;
+}
+.admin-beta .studio-collection-fields :is(input, select) {
+  min-width: 0;
+}
+.admin-beta .studio-collection-summary {
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 10px;
+}
+.admin-beta .studio-collection-summary [role="status"] {
+  color: var(--muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.admin-beta .studio-collection-reset {
+  color: var(--accent);
+  font-size: 12px;
+  padding: 6px 10px;
+}
+.admin-beta .studio-collection-reset:disabled {
+  color: var(--muted);
+  opacity: .6;
+}
+@media (max-width: 700px) {
+  .admin-beta .studio-collection-controls {
+    padding: 12px;
+  }
+  .admin-beta .studio-collection-fields > .beta-filters input {
+    min-width: 100%;
+  }
+}
+
+/* Season list: same Studio collection control and action rhythm as the user
+ * and house directories, with Halloween Map's own pumpkin/violet accents.
+ */
+.admin-beta .season-filters {
+  align-items: center;
+}
+.admin-beta .season-filters input {
+  flex: 1 1 220px;
+}
+.admin-beta .season-filters select {
+  flex: 0 1 200px;
+}
+.admin-beta .season-table .season-row-actions {
+  align-items: center;
+  gap: 8px;
+}
+.admin-beta .season-table .season-row-actions > button,
+.admin-beta .season-table .season-row-actions > .ui-button {
+  white-space: normal;
+}
+.admin-beta .season-table .season-row-actions button[aria-expanded] {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.admin-beta .season-active {
+  background: color-mix(in srgb, var(--accent) 8%, var(--surface));
+}
+@media (max-width: 700px) {
+  .admin-beta .season-filters input,
+  .admin-beta .season-filters select {
+    flex: 1 1 100%;
+  }
+}
+
+/* Studio row actions: keep dangerous actions discoverable, but separate them
+ * from everyday controls. Authorization and confirmations remain caller-owned.
+ */
+.admin-beta .studio-row-actions,
+.admin-beta .studio-row-actions-main,
+.admin-beta .studio-row-actions-sensitive {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.admin-beta .studio-row-actions {
+  min-width: 0;
+}
+.admin-beta .studio-row-actions-sensitive {
+  padding-left: 12px;
+  border-left: 1px solid var(--line);
+}
+@media (max-width: 700px) {
+  .admin-beta .studio-row-actions-sensitive {
+    width: 100%;
+    padding: 10px 0 0;
+    border-left: 0;
+    border-top: 1px solid var(--line);
+  }
+}
+
+/* Shared row layout also wraps the historical house/user action menu.
+ * Desktop shortcuts and compact mobile-menu behavior remain unchanged.
+ */
+.admin-beta .studio-row-actions.row-actions {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+.admin-beta .studio-row-actions.row-actions > .studio-row-actions-main {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+@media (max-width: 700px) {
+  .admin-beta .studio-row-actions.row-actions > .studio-row-actions-main > button,
+  .admin-beta .studio-row-actions.row-actions > .studio-row-actions-main > a {
+    display: none;
+  }
+}
+
+/* Campaigns inherit the Studio layout but keep Halloween Map scheduling,
+ * send eligibility and HTML/editor workflows intact.
+ */
+.admin-beta .studio-communications {
+  min-width: 0;
+}
+.admin-beta .studio-campaign-filters {
+  align-items: center;
+}
+.admin-beta .studio-campaign-filters input {
+  flex: 1 1 240px;
+}
+.admin-beta .studio-campaign-filters select {
+  flex: 0 1 210px;
+}
+.admin-beta .studio-communications .campaign-row {
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+.admin-beta .studio-communications .campaign-row h3 {
+  margin-top: 0;
+}
+.admin-beta .studio-communications .campaign-row > div:first-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 700px) {
+  .admin-beta .studio-campaign-filters input,
+  .admin-beta .studio-campaign-filters select {
+    flex: 1 1 100%;
+  }
+}
+
+/* Service email templates: same Studio surfaces and spacing as campaigns,
+ * with live preview isolated from editing controls and the admin DOM.
+ */
+.admin-beta .studio-mail-templates-heading {
+  align-items: flex-start;
+}
+.admin-beta .studio-mail-templates-heading p {
+  margin: 6px 0 0;
+  max-width: 70ch;
+}
+.admin-beta .studio-template-save-state {
+  white-space: normal;
+  flex-shrink: 0;
+  padding: 5px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  background: var(--raised);
+  font-size: 12px;
+  font-weight: 600;
+}
+.admin-beta .studio-mail-template-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+.admin-beta .studio-mail-template-editor,
+.admin-beta .studio-mail-preview {
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.admin-beta .studio-mail-template-editor {
+  display: grid;
+  gap: 12px;
+}
+.admin-beta .studio-mail-template-editor > .field,
+.admin-beta .studio-mail-template-editor > p {
+  margin: 0;
+}
+.admin-beta .studio-mail-template-editor > .actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.admin-beta .studio-mail-preview-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+.admin-beta .studio-mail-preview h3 {
+  margin: 0;
+}
+.admin-beta .studio-mail-preview > details {
+  min-width: 0;
+  padding: 10px 0;
+  border-top: 1px solid var(--line);
+}
+.admin-beta .studio-mail-preview summary {
+  cursor: pointer;
+  color: var(--accent);
+  font-weight: 600;
+}
+.admin-beta .studio-mail-preview-frame {
+  display: block;
+  margin-top: 10px;
+  width: 100%;
+  height: 480px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+}
+.admin-beta .studio-mail-preview > .studio-mail-preview-frame {
+  margin-top: 0;
+}
+.admin-beta .studio-mail-preview .mail-preview {
+  margin: 12px 0 0;
+  max-height: 340px;
+  overflow: auto;
+  font-size: 12px;
+  line-height: 1.6;
+}
+@media (max-width: 1020px) {
+  .admin-beta .studio-mail-template-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 700px) {
+  .admin-beta .studio-mail-template-editor,
+  .admin-beta .studio-mail-preview {
+    padding: 12px;
+  }
+  .admin-beta .studio-mail-templates-heading {
+    flex-wrap: wrap;
+  }
+  .admin-beta .studio-mail-preview-frame {
+    height: 400px;
+  }
+}

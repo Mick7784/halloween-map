@@ -3,7 +3,7 @@ import { test, expect, type Page } from "@playwright/test";
 const real = "30000000-0000-4000-8000-000000000001",
   other = "30000000-0000-4000-8000-000000000002",
   testId = "30000000-0000-4000-8000-000000000003";
-async function arrange(page: Page, role = "SUPER_ADMIN") {
+async function arrange(page: Page, role = "SUPER_ADMIN", granted?: readonly string[]) {
   const now = Date.now(),
     dates = {
       year: 2026,
@@ -38,7 +38,7 @@ async function arrange(page: Page, role = "SUPER_ADMIN") {
   ];
   const reviews: Record<string, string> = {};
   const mutations: { action: string; id?: string }[] = [];
-  const permissions = [
+  const defaultPermissions = [
     "admin.access",
     "stats.read",
     "audit.read",
@@ -55,6 +55,7 @@ async function arrange(page: Page, role = "SUPER_ADMIN") {
       ? ["roles.manage", "settings.read", "settings.manage"]
       : []),
   ];
+  const permissions = granted ? [...granted] : defaultPermissions;
   await page.route("**/api/**", async (route) => {
     const url = new URL(route.request().url()),
       path = url.pathname,
@@ -293,28 +294,62 @@ test("V0.9.7 dates defaults link to the current season while preserving navigati
   await expect(page.locator(".beta-page-title h1")).toHaveText("Saison");
 });
 
-test("mobile administration exposes only read-only statistics in tabs", async ({
+test("V1.0 mobile shell exposes every authorized module and preserves compact statistics", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await arrange(page, "ADMIN");
   await page.goto("/admin");
-  await expect(page.getByRole("heading", { name: "Statistiques" })).toBeVisible();
+  await expect(page.locator(".beta-page-title h1")).toHaveText("Tableau de bord");
+  const toggle = page.getByRole("button", { name: "Ouvrir la navigation" });
+  await expect(toggle).toBeVisible();
+  await toggle.click();
+  const nav = page.getByRole("navigation", { name: "Navigation administration" });
+  for (const name of [
+    "Tableau de bord", "Maisons", "Utilisateurs", "Saison",
+    "Statistiques", "Activité", "Communications", "Contenus & documents",
+  ]) {
+    await expect(nav.getByRole("button", { name, exact: true })).toBeVisible();
+  }
+  await expect(nav.getByRole("button", { name: "Paramètres" })).toHaveCount(0);
+  await nav.getByRole("button", { name: "Statistiques" }).click();
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  await expect(page.locator(".beta-page-title h1")).toHaveText("Statistiques");
   await expect(page.getByRole("tab", { name: "Vue d’ensemble" })).toBeVisible();
   await expect(page.getByRole("tab", { name: "Maisons" })).toBeVisible();
   await expect(page.getByRole("tab", { name: "Collectes" })).toBeVisible();
   await expect(page.getByRole("tab", { name: "Fréquentation" })).toBeVisible();
-  await expect(page.locator(".beta-sidebar")).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Ouvrir la navigation" })).toHaveCount(0);
   await expect(page.getByText("Consultation uniquement")).toBeVisible();
   await page.getByRole("tab", { name: "Maisons" }).click();
   await expect(page.getByText("Bonbons", { exact: true })).toBeVisible();
   await page.getByRole("tab", { name: "Collectes" }).click();
   await expect(page.getByText("Taux de collectes terminées")).toBeVisible();
   await page.getByRole("tab", { name: "Fréquentation" }).click();
-  expect(
-    await page.evaluate(() => document.documentElement.scrollWidth),
-  ).toBeLessThanOrEqual(390);
+  await toggle.click();
+  await nav.getByRole("button", { name: "Saison", exact: true }).click();
+  await expect(page.locator(".season-table")).toBeVisible();
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth))
+    .toBeLessThanOrEqual(390);
+});
+
+test("V1.0 mobile restricts the menu to grants and respects house edit permissions", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const { mutations } = await arrange(page, "ADMIN", [
+    "admin.access", "participants.read",
+  ]);
+  await page.goto("/admin");
+  await expect(page.locator(".beta-page-title h1")).toHaveText("Maisons");
+  await page.getByRole("button", { name: "Ouvrir la navigation" }).click();
+  const nav = page.getByRole("navigation", { name: "Navigation administration" });
+  await expect(nav.getByRole("button", { name: "Maisons", exact: true })).toBeVisible();
+  await expect(nav.locator("button")).toHaveCount(1);
+  await nav.getByRole("button", { name: "Maisons", exact: true }).click();
+  await expect(page.locator(".beta-house-create")).toHaveCount(0);
+  await expect(page.locator(".beta-table-scroll")).toContainText("Jardin des lanternes");
+  expect(mutations).toEqual([]);
 });
 
 test("communications and activity follow the consulted season; TEST disables email actions", async ({
@@ -547,4 +582,335 @@ test("dashboard moderation link switches to the active season and refreshes afte
   await expect(
     page.locator(".beta-table-scroll tbody tr").first(),
   ).toContainText("Validée");
+});
+
+
+test("V1.0 baseline: a restricted ADMIN sees only granted modules and cannot mutate houses", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const { mutations } = await arrange(page, "ADMIN", [
+    "admin.access",
+    "participants.read",
+  ]);
+  await page.goto("/admin");
+  const nav = page.getByRole("navigation", {
+    name: "Navigation administration",
+  });
+  await expect(page.locator(".beta-page-title h1")).toHaveText("Maisons");
+  await expect(
+    nav.getByRole("button", { name: "Maisons", exact: true }),
+  ).toBeVisible();
+  for (const name of [
+    "Tableau de bord",
+    "Utilisateurs",
+    "Saison",
+    "Statistiques",
+    "Activité",
+    "Communications",
+    "Contenus & documents",
+    "Paramètres",
+  ]) {
+    await expect(nav.getByRole("button", { name, exact: true })).toHaveCount(0);
+  }
+  await expect(page.locator(".beta-house-create")).toHaveCount(0);
+  await expect(page.getByLabel("Saison du back-office")).toBeVisible();
+  await expect(page.locator(".beta-table-scroll")).toContainText(
+    "Jardin des lanternes",
+  );
+  expect(mutations).toEqual([]);
+});
+
+test("V1.0 baseline: capture the V0.9.10 administration before replacing the shell", async ({
+  page,
+}, testInfo) => {
+  await arrange(page);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/admin");
+  for (const theme of ["dark", "light"] as const) {
+    await page.getByLabel("Apparence", { exact: true }).selectOption(theme);
+    await expect(page.locator(".beta-kpis article")).toHaveCount(4);
+    await testInfo.attach(`v0910-desktop-${theme}.png`, {
+      body: await page.screenshot({ fullPage: true, animations: "disabled" }),
+      contentType: "image/png",
+    });
+  }
+  await page.evaluate(() => localStorage.setItem("halloween.admin.theme", "dark"));
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.reload();
+  await page.getByRole("button", { name: "Ouvrir la navigation" }).click();
+  const nav = page.getByRole("navigation", { name: "Navigation administration" });
+  await nav.getByRole("button", { name: "Statistiques", exact: true }).click();
+  await expect(page.getByRole("tab", { name: "Vue d’ensemble" })).toBeVisible();
+  await testInfo.attach("v10-mobile-dark.png", {
+    body: await page.screenshot({ fullPage: true, animations: "disabled" }),
+    contentType: "image/png",
+  });
+});
+
+test("V1.0 retains LinKs neutral shell with Halloween Map branded accents", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await arrange(page);
+  await page.goto("/admin");
+  const brand = page.locator(".beta-logo");
+  const wordmark = brand.locator("img.beta-brand-wordmark");
+  const icon = brand.locator("img.beta-brand-icon");
+  await expect(wordmark).toHaveAttribute(
+    "src",
+    "/brand/halloween-map-wordmark-transparent.png",
+  );
+  await expect(icon).toHaveAttribute(
+    "src",
+    "/brand/halloween-map-app-icon-official.webp",
+  );
+  await expect.poll(() => wordmark.evaluate((img: HTMLImageElement) =>
+    img.complete && img.naturalWidth > 0,
+  )).toBe(true);
+  await page.getByLabel("Apparence", { exact: true }).selectOption("dark");
+  await expect.poll(() => page.locator(".admin-beta").evaluate(
+    (node) => getComputedStyle(node).getPropertyValue("--bg").trim(),
+  )).toBe("#171d27");
+  const accent = () => page.locator(".admin-beta").evaluate(
+    (node) => getComputedStyle(node).getPropertyValue("--accent").trim(),
+  );
+  await expect.poll(accent).toBe("#ff9d45");
+  const nav = page.getByRole("navigation", { name: "Navigation administration" });
+  await nav.getByRole("button", { name: "Maisons", exact: true }).click();
+  const current = nav.getByRole("button", { name: "Maisons", exact: true });
+  await expect(current).toHaveCSS("color", "rgb(255, 157, 69)");
+  const primary = page.locator(".beta-house-create button.primary");
+  await expect(primary).toHaveCSS("background-color", "rgb(255, 157, 69)");
+  await expect(primary).toHaveCSS("color", "rgb(30, 20, 25)");
+  await page.getByLabel("Apparence", { exact: true }).selectOption("light");
+  await expect.poll(() => page.locator(".admin-beta").evaluate(
+    (node) => getComputedStyle(node).getPropertyValue("--bg").trim(),
+  )).toBe("#f5f6f8");
+  await expect.poll(accent).toBe("#ab470d");
+  await expect(wordmark).toHaveCSS("filter", /drop-shadow/);
+  await expect(current).toHaveCSS("color", "rgb(171, 71, 13)");
+  await expect(primary).toHaveCSS("background-color", "rgb(171, 71, 13)");
+  await expect(primary).toHaveCSS("color", "rgb(255, 255, 255)");
+  await page.emulateMedia({ colorScheme: "light" });
+  await page.getByLabel("Apparence", { exact: true }).selectOption("system");
+  await expect(current).toHaveCSS("color", "rgb(171, 71, 13)");
+  await page.emulateMedia({ colorScheme: "dark" });
+  await expect(current).toHaveCSS("color", "rgb(255, 157, 69)");
+  await page.getByRole("button", { name: "Réduire aux icônes" }).click();
+  await expect(icon).toBeVisible();
+  await expect(wordmark).toBeHidden();
+});
+
+test("V1.0 shared list controls reset local house and user filters without mutations", async ({
+  page,
+}) => {
+  const { mutations } = await arrange(page);
+  await page.goto("/admin");
+  const nav = page.getByRole("navigation", { name: "Navigation administration" });
+  await nav.getByRole("button", { name: "Maisons", exact: true }).click();
+  const houses = page.getByRole("group", { name: "Filtres des maisons" });
+  const houseReset = houses.getByRole("button", { name: "Effacer les filtres" });
+  await expect(houses.getByRole("status")).toHaveText("1 résultat");
+  await expect(houseReset).toBeDisabled();
+  await houses.getByLabel("Rechercher une maison").fill("introuvable");
+  await expect(houses.getByRole("status")).toHaveText("0 résultats");
+  await expect(page.getByText("Aucune maison ne correspond aux filtres.")).toBeVisible();
+  await houseReset.click();
+  await expect(houses.getByLabel("Rechercher une maison")).toHaveValue("");
+  await expect(houses.getByLabel("Statut")).toHaveValue("ALL");
+  await expect(houses.getByLabel("Disponibilité")).toHaveValue("ALL");
+  await expect(houses.getByRole("status")).toHaveText("1 résultat");
+  await expect(houseReset).toBeDisabled();
+  await nav.getByRole("button", { name: "Utilisateurs", exact: true }).click();
+  const directory = page.getByRole("group", { name: "Filtres des utilisateurs" });
+  const userReset = directory.getByRole("button", { name: "Effacer les filtres" });
+  await expect(userReset).toBeDisabled();
+  await directory.getByRole("button", { name: "Accès admin" }).click();
+  await expect(userReset).toBeEnabled();
+  await directory.getByLabel("Rechercher un utilisateur").fill("introuvable");
+  await userReset.click();
+  await expect(directory.getByLabel("Rechercher un utilisateur")).toHaveValue("");
+  await expect(directory.getByRole("button", { name: "Tous", exact: true })).toHaveClass(/active/);
+  await expect(userReset).toBeDisabled();
+  expect(mutations).toEqual([]);
+});
+
+test("V1.0 shared row actions preserve house/user menus and authorization", async ({
+  page,
+}) => {
+  const { mutations } = await arrange(page, "ADMIN");
+  await page.route("**/api/admin/users", (route) =>
+    route.fulfill({
+      json: [{
+        id: "account-1",
+        display_name: "Compte témoin",
+        email: "temoin@example.invalid",
+        role_name: "USER",
+        account_status: "ACTIVE",
+        email_status: "VERIFIED",
+        permissions: [],
+        participation: null,
+        communications: [],
+      }],
+    }),
+  );
+  await page.goto("/admin");
+  const nav = page.getByRole("navigation", { name: "Navigation administration" });
+  await nav.getByRole("button", { name: "Maisons", exact: true }).click();
+  const house = page.getByRole("group", { name: "Actions de Jardin des lanternes" });
+  await expect(house.locator("details.ui-action-menu > summary")).toBeVisible();
+  await expect(house.getByRole("button", { name: "Valider", exact: true }).first()).toBeVisible();
+  await nav.getByRole("button", { name: "Utilisateurs", exact: true }).click();
+  const account = page.getByRole("group", { name: "Actions de Compte témoin" });
+  await expect(account.getByRole("button", { name: "Voir la fiche de Compte témoin" })).toBeVisible();
+  await expect(account.locator("details.ui-action-menu > summary")).toBeVisible();
+  expect(mutations).toEqual([]);
+});
+
+test("V1.0 activity filters use shared controls and reset server query without mutation", async ({
+  page,
+}) => {
+  const { mutations } = await arrange(page);
+  await page.goto("/admin");
+  const nav = page.getByRole("navigation", { name: "Navigation administration" });
+  await nav.getByRole("button", { name: "Activité", exact: true }).click();
+  const filters = page.getByRole("group", { name: "Filtres de l’activité" });
+  const reset = filters.getByRole("button", { name: "Effacer les filtres" });
+  await expect(filters.getByRole("status")).toHaveText("1 événement sur cette page");
+  await expect(reset).toBeDisabled();
+  await filters.getByLabel("Périmètre de l’activité").selectOption("global");
+  await filters.getByLabel("Catégorie de l’activité").selectOption("houses");
+  await filters.getByLabel("Début de période").fill("2026-10-01T12:00");
+  await filters.getByLabel("Fin de période").fill("2026-10-31T22:00");
+  await filters.getByLabel("Filtrer l’activité").fill("introuvable");
+  const filtered = page.waitForRequest((request) => {
+    const url = new URL(request.url());
+    return url.pathname === "/api/admin/audit" &&
+      url.searchParams.get("scope") === "global" &&
+      url.searchParams.get("category") === "houses" &&
+      url.searchParams.get("q") === "introuvable" &&
+      !!url.searchParams.get("from") &&
+      !!url.searchParams.get("to");
+  });
+  await filtered;
+  await expect(page.getByText("Aucune activité pour ces filtres.")).toBeVisible();
+  await expect(filters.getByRole("status")).toHaveText("0 événements sur cette page");
+  await expect(reset).toBeEnabled();
+  const restored = page.waitForRequest((request) => {
+    const url = new URL(request.url());
+    return url.pathname === "/api/admin/audit" &&
+      url.searchParams.get("scope") === "season" &&
+      url.searchParams.get("category") === "all" &&
+      url.searchParams.get("q") === "" &&
+      !url.searchParams.has("from") &&
+      !url.searchParams.has("to") &&
+      url.searchParams.get("page") === "0";
+  });
+  await reset.click();
+  await restored;
+  await expect(filters.getByLabel("Périmètre de l’activité")).toHaveValue("season");
+  await expect(filters.getByLabel("Catégorie de l’activité")).toHaveValue("all");
+  await expect(filters.getByLabel("Filtrer l’activité")).toHaveValue("");
+  await expect(filters.getByLabel("Début de période")).toHaveValue("");
+  await expect(filters.getByLabel("Fin de période")).toHaveValue("");
+  await expect(filters.getByRole("status")).toHaveText("1 événement sur cette page");
+  await expect(reset).toBeDisabled();
+  expect(mutations).toEqual([]);
+});
+
+test("V1.0 campaign list filters the consulted season without editing or sending", async ({
+  page,
+}) => {
+  const { mutations } = await arrange(page);
+  const base = {
+    season_id: real,
+    subject: "Préparez la fête",
+    body: "Bonjour",
+    audience: "ALL",
+    active: true,
+    schedule_mode: "ABSOLUTE",
+    anchor: "opens_at",
+    offset_days: 0,
+    scheduled_at: "2026-10-31T18:00:00.000Z",
+    recipients: 12,
+    sent: 0,
+    errors: 0,
+    pending: 12,
+  };
+  await page.route("**/api/admin/communications?*", (route) =>
+    route.fulfill({
+      json: {
+        smtpAvailable: true,
+        variables: [],
+        campaigns: [
+          { ...base, id: "campaign-1", name: "Invitation des familles", status: "DRAFT" },
+          { ...base, id: "campaign-2", name: "Rappel Halloween", subject: "Dernier rappel", status: "SCHEDULED" },
+          { ...base, id: "campaign-3", name: "Bilan de la soirée", status: "SENT" },
+          { ...base, id: "campaign-other", season_id: other, name: "Autre saison", status: "DRAFT" },
+        ],
+      },
+    }),
+  );
+  await page.goto("/admin");
+  await page.getByRole("navigation", { name: "Navigation administration" })
+    .getByRole("button", { name: "Communications", exact: true }).click();
+  const filters = page.getByRole("group", { name: "Filtres des campagnes" });
+  const search = filters.getByLabel("Rechercher une campagne");
+  const status = filters.getByLabel("Filtrer le statut des campagnes");
+  const reset = filters.getByRole("button", { name: "Effacer les filtres" });
+  await expect(filters.getByRole("status")).toHaveText("3 résultats");
+  await expect(page.locator(".studio-communications .campaign-row")).toHaveCount(3);
+  await expect(reset).toBeDisabled();
+  await status.selectOption("SCHEDULED");
+  await expect(filters.getByRole("status")).toHaveText("1 résultat");
+  await expect(page.locator(".studio-communications .campaign-row")).toContainText(["Rappel Halloween"]);
+  await search.fill("inconnue");
+  await expect(filters.getByRole("status")).toHaveText("0 résultats");
+  await expect(page.getByText("Aucune campagne ne correspond aux filtres.")).toBeVisible();
+  await reset.click();
+  await expect(search).toHaveValue("");
+  await expect(status).toHaveValue("ALL");
+  await expect(filters.getByRole("status")).toHaveText("3 résultats");
+  await expect(page.locator(".studio-communications .campaign-row")).toHaveCount(3);
+  await expect(page.getByRole("button", { name: "Nouvelle campagne" })).toBeVisible();
+  expect(mutations).toEqual([]);
+});
+
+test("V1.0 email templates retain live sandboxed preview and draft protection", async ({
+  page,
+}) => {
+  const { mutations } = await arrange(page);
+  const messagePosts: string[] = [];
+  page.on("request", (request) => {
+    if (request.method() === "POST" &&
+      (request.url().includes("/api/admin/templates") ||
+        request.url().includes("/api/admin/communications")))
+      messagePosts.push(request.url());
+  });
+  await page.goto("/admin");
+  await page.getByRole("navigation", { name: "Navigation administration" })
+    .getByRole("button", { name: "Communications", exact: true }).click();
+  const editor = page.getByRole("region", { name: "Édition du modèle" });
+  const preview = page.getByRole("region", { name: "Aperçu du modèle" });
+  await expect(editor.getByLabel("Type de message")).toHaveValue("VERIFY");
+  // The simple editor owns its save state in .editor-footer, not role=status.
+  await expect(page.locator(".studio-template-save-state")).toHaveCount(0);
+  await expect(editor.locator(".editor-footer").getByText("Modèle enregistré", { exact: true })).toBeVisible();
+  await expect(preview.getByTitle("Aperçu du modèle")).toHaveAttribute("sandbox", "");
+  await expect(preview.getByText("Aperçu du véritable email envoyé")).toBeVisible();
+  await expect(preview.getByText("Texte brut")).toBeVisible();
+  const original = await editor.getByLabel("Objet").inputValue();
+  await editor.getByLabel("Objet").fill("Brouillon de contrôle");
+  await expect(editor.locator(".editor-footer").getByText("Modifications non enregistrées", { exact: true })).toBeVisible();
+  page.once("dialog", async (dialog) => { await dialog.dismiss(); });
+  await editor.getByLabel("Type de message").selectOption("INVITE");
+  await expect(editor.getByLabel("Type de message")).toHaveValue("VERIFY");
+  await editor.getByLabel("Objet").fill(original);
+  await expect(editor.locator(".editor-footer").getByText("Modèle enregistré", { exact: true })).toBeVisible();
+  await editor.getByLabel("Type de message").selectOption("INVITE");
+  await expect(editor.getByLabel("Type de message")).toHaveValue("INVITE");
+  await expect(preview.getByTitle("Aperçu du modèle")).toHaveAttribute("sandbox", "");
+  expect(messagePosts).toHaveLength(0);
+  expect(mutations).toHaveLength(0);
 });

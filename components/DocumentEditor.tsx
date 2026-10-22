@@ -8,6 +8,7 @@ import { TextStyle, Color } from "@tiptap/extension-text-style";
 import TextAlign from "@tiptap/extension-text-align";
 import Highlight from "@tiptap/extension-highlight";
 import { Button, Select } from "./ui";
+import { StudioEditorTool } from "./StudioEditorTool";
 import DocumentView from "./DocumentView";
 import type { LegalDocument } from "../lib/content";
 import {
@@ -129,22 +130,19 @@ export default function DocumentEditor({
     disabled = false,
   ) {
     return (
-      <Button
-        type="button"
-        title={label}
-        aria-label={label}
-        aria-pressed={active}
-        disabled={!editor || disabled}
-        onClick={() => editor && run(editor)}
-      >
-        {label}
-      </Button>
+      <StudioEditorTool
+        editor={editor}
+        label={label}
+        run={run}
+        active={active}
+        disabled={disabled}
+      />
     );
   }
   return (
     <div className="document-editor" ref={host}>
       <div className="studio-actions">
-        <Button type="button" onClick={() => setPreview(!preview)}>
+        <Button type="button" aria-pressed={preview} onClick={() => setPreview(!preview)}>
           {preview ? "Rédiger" : "Aperçu fidèle"}
         </Button>
         {preview && (
@@ -169,6 +167,7 @@ export default function DocumentEditor({
         <div
           className="document-toolbar"
           role="toolbar"
+          aria-orientation="horizontal"
           aria-label="Mise en forme du document"
         >
           {tool(
@@ -183,6 +182,7 @@ export default function DocumentEditor({
             false,
             !editor?.can().redo(),
           )}
+          <span className="document-toolbar-divider" role="separator" aria-orientation="vertical" />
           <Select
             aria-label="Style de paragraphe"
             value={
@@ -207,6 +207,7 @@ export default function DocumentEditor({
             <option value="2">Titre 2</option>
             <option value="3">Titre 3</option>
           </Select>
+          <span className="document-toolbar-divider" role="separator" aria-orientation="vertical" />
           {tool(
             "Gras",
             (e) => e.chain().focus().toggleBold().run(),
@@ -227,6 +228,7 @@ export default function DocumentEditor({
             (e) => e.chain().focus().toggleStrike().run(),
             editor?.isActive("strike"),
           )}
+          <span className="document-toolbar-divider" role="separator" aria-orientation="vertical" />
           <Select
             aria-label="Couleur du texte"
             value={editor?.getAttributes("textStyle").color ?? ""}
@@ -259,6 +261,7 @@ export default function DocumentEditor({
               e.chain().focus().toggleHighlight({ color: "#fff4a3" }).run(),
             editor?.isActive("highlight"),
           )}
+          <span className="document-toolbar-divider" role="separator" aria-orientation="vertical" />
           <Select
             aria-label="Alignement"
             value={
@@ -281,6 +284,7 @@ export default function DocumentEditor({
               </option>
             ))}
           </Select>
+          <span className="document-toolbar-divider" role="separator" aria-orientation="vertical" />
           {tool(
             "Puces",
             (e) => e.chain().focus().toggleBulletList().run(),
@@ -304,6 +308,7 @@ export default function DocumentEditor({
           {tool("Séparateur", (e) =>
             e.chain().focus().setHorizontalRule().run(),
           )}
+          <span className="document-toolbar-divider" role="separator" aria-orientation="vertical" />
           {tool(
             "Lien",
             (e) => {
@@ -348,6 +353,7 @@ export default function DocumentEditor({
               )}
             </>
           )}
+          <span className="document-toolbar-divider" role="separator" aria-orientation="vertical" />
           {tool("Effacer la mise en forme", (e) =>
             e.chain().focus().unsetAllMarks().clearNodes().run(),
           )}
@@ -360,11 +366,11 @@ export default function DocumentEditor({
             <input
               autoFocus
               value={link}
-              onChange={(e) => setLink(e.target.value)}
+              onChange={(e) => { setLink(e.target.value); setLinkError(""); }}
               placeholder="https://…"
             />
           </label>
-          <p role="alert">{linkError}</p>
+          {linkError && <p role="alert">{linkError}</p>}
           <Button
             type="button"
             onClick={() => {

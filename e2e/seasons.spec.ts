@@ -204,9 +204,15 @@ test("compact season list, creation of a real draft, and dark/light appearance",
   await expect(page.locator(".season-editor")).toHaveCount(0);
   await expect(page.getByText("Mode démo", { exact: true })).toHaveCount(0);
   await page.getByLabel("Apparence", { exact: true }).selectOption("dark");
+  // V1.0: the admin uses the LinKs design system, not the old premium
+  // public-app palette. Keep a concrete visual assertion in this journey.
+  await expect(page.locator(".admin-beta")).toHaveCSS(
+    "--surface",
+    "#202834",
+  );
   await expect(page.locator(".beta-sidebar nav button").first()).toHaveCSS(
     "background-color",
-    "rgb(14, 19, 40)",
+    "rgb(32, 40, 52)",
   );
   await page.screenshot({ path: "test-results/seasons-desktop-dark.png" });
   await page.getByLabel("Apparence", { exact: true }).selectOption("light");
@@ -326,25 +332,33 @@ test("history reads anonymous snapshot and exposes no edit/reactivation", async 
   await expect(dialog).toContainText("lecture seule");
   expect(paths).not.toContain("/api/admin/stats");
 });
-test("mobile administration is read-only statistics; season controls remain desktop-only", async ({
+test("V1.0 mobile preserves statistics tabs and exposes seasons according to admin role", async ({
   page,
 }) => {
   const { mutations } = await arrange(page, "ADMIN");
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/admin");
-  await expect(page.getByRole("heading", { name: "Statistiques" })).toBeVisible();
+  const toggle = page.getByRole("button", { name: "Ouvrir la navigation" });
+  const nav = page.getByRole("navigation", { name: "Navigation administration" });
+  await expect(page.locator(".beta-page-title h1")).toHaveText("Tableau de bord");
+  await toggle.click();
+  await nav.getByRole("button", { name: "Statistiques", exact: true }).click();
+  await expect(page.locator(".beta-page-title h1")).toHaveText("Statistiques");
   await expect(page.getByRole("tab", { name: "Vue d’ensemble" })).toBeVisible();
   await expect(page.getByRole("tab", { name: "Maisons" })).toBeVisible();
-  await expect(page.locator(".season-table")).toHaveCount(0);
-  await expect(page.locator(".beta-sidebar")).toHaveCount(0);
+  await page.getByRole("tab", { name: "Maisons" }).click();
+  await expect(page.locator(".admin-mobile-statistics")).toContainText("Bonbons");
+  await toggle.click();
+  await nav.getByRole("button", { name: "Saison", exact: true }).click();
+  await expect(page.locator(".season-table")).toBeVisible();
+  // SUPER_ADMIN-only destructive operations do not appear for an ADMIN.
   await expect(page.getByRole("button", { name: "Activer", exact: true })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Désactiver", exact: true })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Supprimer définitivement" })).toHaveCount(0);
-  await page.getByRole("tab", { name: "Maisons" }).click();
-  await expect(page.locator(".admin-mobile-statistics")).toContainText("Bonbons");
   expect(mutations).toHaveLength(0);
-  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
-  await page.screenshot({ path: "test-results/seasons-mobile-statistics-only.png" });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth))
+    .toBeLessThanOrEqual(390);
+  await page.screenshot({ path: "test-results/seasons-mobile-unified-admin.png" });
 });
 test("normal USER cannot render the TEST map or a demo entry", async ({
   page,
@@ -357,4 +371,57 @@ test("normal USER cannot render the TEST map or a demo entry", async ({
   await expect(page.getByText("Édition préparée", { exact: true })).toHaveCount(
     0,
   );
+});
+
+test("V1.0 season filters search years and states without touching permissions or data", async ({
+  page,
+}) => {
+  const { mutations } = await arrange(page);
+  await page.goto("/admin");
+  await openSeasons(page);
+  const filters = page.getByRole("group", { name: "Filtres des saisons" });
+  const search = filters.getByLabel("Rechercher une saison");
+  const status = filters.getByLabel("Filtrer l’état des saisons");
+  const reset = filters.getByRole("button", { name: "Effacer les filtres" });
+  await expect(filters.getByRole("status")).toHaveText("4 résultats");
+  await expect(reset).toBeDisabled();
+  await search.fill("2027");
+  await expect(filters.getByRole("status")).toHaveText("1 résultat");
+  await expect(page.locator(".season-table tbody > tr")).toHaveCount(1);
+  await expect(page.locator(".season-table")).toContainText("Halloween 2027");
+  await status.selectOption("ACTIVE");
+  await expect(filters.getByRole("status")).toHaveText("0 résultats");
+  await expect(page.getByText("Aucune saison ne correspond aux filtres.")).toBeVisible();
+  await reset.click();
+  await expect(search).toHaveValue("");
+  await expect(status).toHaveValue("ALL");
+  await expect(filters.getByRole("status")).toHaveText("4 résultats");
+  await expect(page.locator(".season-table tbody > tr")).toHaveCount(4);
+  await status.selectOption("TERMINÉE");
+  await expect(page.locator(".season-table tbody > tr")).toHaveCount(1);
+  await expect(page.locator(".season-table")).toContainText("Halloween 2025");
+  await expect(page.getByRole("button", { name: /Réglages de Halloween 2025/ })).toHaveCount(0);
+  await reset.click();
+  await expect(page.getByRole("button", { name: "Réglages de Halloween 2027" })).toContainText("Réglages");
+  expect(mutations).toHaveLength(0);
+});
+
+test("V1.0 season row actions distinguish sensitive controls without hiding them", async ({
+  page,
+}) => {
+  const { mutations } = await arrange(page);
+  await page.goto("/admin");
+  await openSeasons(page);
+  const plannedActions = page.getByRole("group", { name: "Actions de Halloween 2027" });
+  await expect(plannedActions.getByRole("button", { name: "Activer", exact: true })).toBeVisible();
+  await expect(plannedActions.getByRole("button", { name: "Réglages de Halloween 2027" })).toBeVisible();
+  const plannedSensitive = plannedActions.getByRole("group", { name: "Actions sensibles" });
+  await expect(plannedSensitive.getByRole("button", { name: "Supprimer", exact: true })).toBeVisible();
+  const pastActions = page.getByRole("group", { name: "Actions de Halloween 2025" });
+  await expect(pastActions.getByRole("button", { name: "Voir les statistiques" })).toBeVisible();
+  await expect(pastActions.getByRole("group", { name: "Actions sensibles" })
+    .getByRole("button", { name: "Supprimer définitivement" })).toBeVisible();
+  await expect(page.getByRole("group", { name: "Actions de Halloween 2026" })
+    .getByRole("group", { name: "Actions sensibles" })).toHaveCount(0);
+  expect(mutations).toHaveLength(0);
 });

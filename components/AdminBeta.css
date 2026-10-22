@@ -1010,17 +1010,10 @@
   }
 }
 
-/* V0.9.4 — read-only mobile monitoring, no administrative navigation. */
+/* V1.0 — mobile statistics keep their compact, read-only four-tab view,
+ * inside the same permission-aware administrative shell.
+ */
 @media (max-width: 700px) {
-  .admin-beta:not(.admin-mobile-view) {
-    visibility: hidden;
-  }
-  .admin-beta.admin-mobile-view {
-    display: block;
-    padding: 20px 14px 28px;
-    min-height: 100dvh;
-    overflow-x: hidden;
-  }
   .admin-mobile-statistics {
     max-width: 660px;
     margin: 0 auto;

@@ -1,6 +1,7 @@
 "use client";
 import { Fragment, useCallback, useEffect, useState, useRef } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { confirmDraftNavigation } from "./useDraftGuard";
 import {
   X,
@@ -30,6 +31,7 @@ import {
   type PublicState,
 } from "./common";
 import AdminUsers, { type ManagedUser } from "./AdminUsers";
+import StudioRowActions from "./StudioRowActions";
 import HouseForm from "./HouseForm";
 import SeasonManager from "./SeasonManager";
 import ParticipationForm from "./ParticipationForm";
@@ -44,8 +46,12 @@ import Campaigns from "./Campaigns";
 import AdminActivity from "./AdminActivity";
 import AdminExistingPage from "./AdminExistingPage";
 import { houseAvailability } from "../lib/house-availability";
+import { selectStudioCollection } from "../lib/studio-collection";
+import StudioCollectionControls from "./StudioCollectionControls";
+import { visibleStudioNavigation } from "../lib/studio-navigation";
+import { halloweenAdminNavigation } from "../lib/halloween-admin-navigation";
 import "./AdminBeta.css";
-import { PumpkinMark } from "./PublicBrand";
+import "./AdminStudioSkin.css";
 import MessageTemplates from "./MessageTemplates";
 import RefusalPreview from "./RefusalPreview";
 import {
@@ -79,6 +85,19 @@ function dateLabel(value: string | Date, zone: string) {
     timeZone: zone,
   }).format(value instanceof Date ? value : new Date(value));
 }
+// Product icon bindings are presentation-only; the module/permission model is
+// a framework-independent DomotiK Studio navigation contract.
+const studioNavIcons = {
+  dashboard: LayoutDashboard,
+  houses: HouseIcon,
+  users: Users,
+  seasons: CalendarDays,
+  statistics: ChartColumn,
+  activity: Activity,
+  communications: Mail,
+  content: FileText,
+  settings: Settings,
+} as const;
 const reviews: Record<string, string> = {
   VALIDATED: "Validée",
   PENDING: "En attente",
@@ -182,12 +201,6 @@ export default function Admin({
     media.addEventListener("change", update);
     return () => media.removeEventListener("change", update);
   }, []);
-  useEffect(() => {
-    if (mobileView) {
-      if (has(user, "stats.read")) setSection("statistics");
-      else if (has(user, "participants.read")) setSection("houses");
-    }
-  }, [mobileView, user]);
   const seasonStorageKey =
     "halloween.admin.season." + state.instance?.id + "." + user.id;
   const reloadSeasons = useCallback(async () => {
@@ -421,22 +434,28 @@ export default function Admin({
     await reload();
   }
   function table(items: ManagedHouse[], moderation = false) {
-    const sortedItems = items.slice().sort((a, b) => {
-      const value = (h: ManagedHouse) =>
-        ({
-          name: h.name,
-          address: h.address,
-          status: h.review_status ?? "",
-          availability: availabilityLabel(h),
-          activities: h.activities.join(", "),
-          modification: String(h.updated_at ?? ""),
-          submission: String(h.submitted_at ?? ""),
-        })[houseSort] ?? h.name;
-      const diff = value(a).localeCompare(value(b), "fr", {
-        sensitivity: "base",
-        numeric: true,
-      });
-      return diff * (houseSortDirection === "asc" ? 1 : -1);
+    // Shared Studio collection engine keeps the existing column comparison,
+    // stable order and one-based paging, without changing business filters.
+    const visible = selectStudioCollection(items, {
+      compare: (a, b) => {
+        const value = (h: ManagedHouse) =>
+          ({
+            name: h.name,
+            address: h.address,
+            status: h.review_status ?? "",
+            availability: availabilityLabel(h),
+            activities: h.activities.join(", "),
+            modification: String(h.updated_at ?? ""),
+            submission: String(h.submitted_at ?? ""),
+          })[houseSort] ?? h.name;
+        return value(a).localeCompare(value(b), "fr", {
+          sensitivity: "base",
+          numeric: true,
+        });
+      },
+      direction: houseSortDirection,
+      page: housePage,
+      pageSize: housePageSize,
     });
     function sortHeader(id: string, label: string) {
       return (
@@ -478,18 +497,7 @@ export default function Admin({
             </tr>
           </thead>
           <tbody>
-            {sortedItems
-              .slice(
-                (Math.min(
-                  housePage,
-                  Math.max(1, Math.ceil(items.length / housePageSize)),
-                ) -
-                  1) *
-                  housePageSize,
-                Math.min(housePage, Math.max(1, Math.ceil(items.length / housePageSize))) *
-                  housePageSize,
-              )
-              .map((h) => (
+            {visible.rows.map((h) => (
                 <Fragment key={h.id}>
                 <tr
                   className="admin-clickable-row"
@@ -553,7 +561,11 @@ export default function Admin({
                     </>
                   )}
                   <td data-label="Actions">
-                    <div className="row-actions house-row-actions">
+                    <StudioRowActions
+                      label={"Actions de " + h.name}
+                      className="row-actions house-row-actions"
+                      actions={
+                        <>
                       {has(user, "participants.edit") && selectedSeason && !selectedSeason.archived && !selectedSeason.purged_at && (
                         <>
                           {h.review_status === "PENDING" && (
@@ -662,7 +674,9 @@ export default function Admin({
                             </AsyncButton>
                           )}
                       </ActionMenu>
-                    </div>
+                        </>
+                      }
+                    />
                   </td>
                 </tr>
                 {current?.id === h.id && (
@@ -907,8 +921,8 @@ export default function Admin({
             </Select>
           </label>
           <Pagination
-            count={items.length}
-            page={Math.min(housePage, Math.max(1, Math.ceil(items.length / housePageSize)))}
+            count={visible.total}
+            page={visible.page}
             pageSize={housePageSize}
             onPage={setHousePage}
           />
@@ -923,46 +937,12 @@ export default function Admin({
       </div>
     );
   }
-  if (mobileView) {
-    return (
-      <main className="admin-beta admin-mobile-view" data-theme={theme}>
-        <nav aria-label="Administration mobile">
-          {has(user, "stats.read") && <Button onClick={() => setSection("statistics")}>Statistiques</Button>}
-          {has(user, "participants.read") && <Button onClick={() => setSection("houses")}>Gérer les maisons</Button>}
-        </nav>
-        {section === "houses" && has(user, "participants.read") ? (
-          <section className="beta-card">
-            <h1>Maisons</h1>
-            <label>Saison du back-office
-              <Select value={seasonId} onChange={(event) => setSeasonId(event.target.value)}>
-                {seasons.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-              </Select>
-            </label>
-            {error && <Notice error={error} />}
-            {table(list)}
-          </section>
-        ) : has(user, "stats.read") ? (
-          <>
-            <AdminMobileStats
-              data={loadedView === viewKey ? statistics : null}
-              loading={loading || loadedView !== viewKey}
-              zone={state.instance?.timezone ?? "Europe/Paris"}
-              seasonName={selectedSeason?.name ?? "Aucune saison"}
-            />
-            {error && <Notice error={error} />}
-          </>
-        ) : (
-          <section className="admin-mobile-statistics">
-            <h1>Statistiques</h1>
-            <p>Votre compte n’a pas accès aux statistiques.</p>
-          </section>
-        )}
-      </main>
-    );
-  }
+  // Preserve the desktop collapse preference; mobile navigation always opens
+  // expanded to expose every module allowed by the existing permission model.
+  const navCollapsed = sidebarCollapsed && !mobileView;
   return (
     <div
-      className={"admin-beta" + (sidebarCollapsed ? " sidebar-collapsed" : "")}
+      className={"admin-beta" + (navCollapsed ? " sidebar-collapsed" : "")}
       data-theme={theme}
     >
       {menuOpen && (
@@ -976,7 +956,7 @@ export default function Admin({
         className={
           "beta-sidebar" +
           (menuOpen ? " is-open" : "") +
-          (sidebarCollapsed ? " is-collapsed" : "")
+          (navCollapsed ? " is-collapsed" : "")
         }
         id="admin-navigation"
       >
@@ -987,18 +967,31 @@ export default function Admin({
           rel="noreferrer"
           title="Halloween Map sur GitHub"
         >
-          <span className="admin-brand-mark">
-            <PumpkinMark />
+          <span className="beta-brand-media">
+            <Image
+              className="beta-brand-wordmark"
+              src="/brand/halloween-map-wordmark-transparent.png"
+              alt="Halloween Map by DomotiK Studio"
+              width={196}
+              height={64}
+              unoptimized
+            />
+            <Image
+              className="beta-brand-icon"
+              src="/brand/halloween-map-app-icon-official.webp"
+              alt="Halloween Map"
+              width={42}
+              height={42}
+              unoptimized
+            />
           </span>
-          <span className="beta-logo-title">
-            Halloween Map<small>Administration</small>
-          </span>
+          <span className="beta-brand-subtitle">Administration</span>
         </a>
         <Button
           type="button"
           className="beta-sidebar-collapse"
-          title={sidebarCollapsed ? "Développer le menu" : "Réduire aux icônes"}
-          aria-label={sidebarCollapsed ? "Développer le menu" : "Réduire aux icônes"}
+          title={navCollapsed ? "Développer le menu" : "Réduire aux icônes"}
+          aria-label={navCollapsed ? "Développer le menu" : "Réduire aux icônes"}
           aria-expanded={!sidebarCollapsed}
           onClick={() => {
             const next = !sidebarCollapsed;
@@ -1008,63 +1001,44 @@ export default function Admin({
             } catch {}
           }}
         >
-          {sidebarCollapsed ? <PanelLeftOpen size={19} /> : <PanelLeftClose size={19} />}
-          {!sidebarCollapsed && <span>Réduire le menu</span>}
+          {navCollapsed ? <PanelLeftOpen size={19} /> : <PanelLeftClose size={19} />}
+          {!navCollapsed && <span>Réduire le menu</span>}
         </Button>
         <nav aria-label="Navigation administration">
-          {(
-            [
-              ["Accueil", [
-                ["dashboard", "Tableau de bord", "stats.read", LayoutDashboard],
-              ]],
-              ["Gestion", [
-                ["houses", "Maisons", "participants.read", HouseIcon],
-                ["users", "Utilisateurs", "users.read", Users],
-                ["seasons", "Saison", "season.read", CalendarDays],
-              ]],
-              ["Suivi & communication", [
-                ["statistics", "Statistiques", "stats.read", ChartColumn],
-                ["activity", "Activité", "audit.read", Activity],
-                ["communications", "Communications", "communications.read", Mail],
-              ]],
-              ["Configuration", [
-                ["content", "Contenus & documents", "content.manage", FileText],
-                ["settings", "Paramètres", "settings.read", Settings],
-              ]],
-            ] as const
-          ).map(([group, links]) => {
-            const allowed = links.filter(([, , permission]) => has(user, permission));
-            if (!allowed.length) return null;
-            return (
-              <div className="beta-nav-group" key={group}>
-                <span className="beta-nav-heading">{group}</span>
-                {allowed.map(([id, title, , Icon]) => (
+          {visibleStudioNavigation(halloweenAdminNavigation, (permission) =>
+            has(user, permission),
+          ).map((group) => (
+            <div className="beta-nav-group" key={group.title}>
+              <span className="beta-nav-heading">{group.title}</span>
+              {group.items.map((item) => {
+                const Icon = studioNavIcons[item.icon];
+                return (
                   <Button
-                    key={id}
+                    key={item.id}
                     type="button"
-                    className={section === id ? "is-current" : ""}
-                    aria-label={title}
-                    title={sidebarCollapsed ? title : undefined}
-                    aria-current={section === id ? "page" : undefined}
+                    className={section === item.id ? "is-current" : ""}
+                    aria-label={item.title}
+                    title={navCollapsed ? item.title : undefined}
+                    aria-current={section === item.id ? "page" : undefined}
                     onClick={() => {
                       if (!confirmDraftNavigation()) return;
                       setUserCreate(false);
-                      setSection(id);
+                      setSection(item.id);
                       setMenuOpen(false);
                     }}
                   >
                     <Icon size={18} />
-                    <span className="beta-nav-label">{title}</span>
+                    <span className="beta-nav-label">{item.title}</span>
                   </Button>
-                ))}
-              </div>
-            );
-          })}
+                );
+              })}
+            </div>
+          ))}
         </nav>
         <Link
           className="beta-public-link"
           href="/map"
-          title={sidebarCollapsed ? "Retour à la carte" : undefined}
+          title={navCollapsed ? "Retour à la carte" : undefined}
         >
           <ExternalLink size={17} />
           <span className="beta-public-label">Retour à Halloween Map</span>
@@ -1291,12 +1265,22 @@ export default function Admin({
           />
         )}
         {section === "statistics" && !error && (
-          <AdminStatistics
-            zone={state.instance?.timezone}
-            season={selectedSeason}
-            data={loadedView === viewKey ? statistics : null}
-            loading={!error && (loading || loadedView !== viewKey)}
-          />
+          mobileView ? (
+            <AdminMobileStats
+              embedded
+              data={loadedView === viewKey ? statistics : null}
+              loading={loading || loadedView !== viewKey}
+              zone={state.instance?.timezone ?? "Europe/Paris"}
+              seasonName={selectedSeason?.name ?? "Aucune saison"}
+            />
+          ) : (
+            <AdminStatistics
+              zone={state.instance?.timezone}
+              season={selectedSeason}
+              data={loadedView === viewKey ? statistics : null}
+              loading={loading || loadedView !== viewKey}
+            />
+          )
         )}
         {["content", "settings"].includes(section) && (
           <AdminExistingPage
@@ -1357,6 +1341,17 @@ export default function Admin({
                 )}
               </div>
             )}
+            <StudioCollectionControls
+              label="Filtres des maisons"
+              count={list.length}
+              filtered={Boolean(search.trim()) || review !== "ALL" || availability !== "ALL"}
+              onReset={() => {
+                setSearch("");
+                setReview("ALL");
+                setAvailability("ALL");
+                setHousePage(1);
+              }}
+            >
             <div className="beta-filters">
               <Input
                 aria-label="Rechercher une maison"
@@ -1396,6 +1391,7 @@ export default function Admin({
                 <option value="CLOSED">Fermées</option>
               </Select>
             </div>
+            </StudioCollectionControls>
             {loadedView !== viewKey && loading ? (
               <p role="status">Chargement des maisons…</p>
             ) : (

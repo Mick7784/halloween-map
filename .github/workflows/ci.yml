@@ -4,6 +4,12 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+    inputs:
+      publish_beta:
+        description: 'Publish V1.0-beta.3 from the candidate branch after all checks pass'
+        type: boolean
+        required: true
+        default: false
 permissions:
   contents: read
 concurrency:
@@ -146,8 +152,13 @@ jobs:
         id: version
         run: |
           version=$(tr -d '\r\n' < VERSION)
+          if [[ "$version" =~ -beta\.[1-9][0-9]*$ ]]; then
+            echo "Prerelease version: stable publishing is disabled."
+            echo 'publish=false' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           [[ "$version" =~ ^V[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]
-          grep -q "## $version" CHANGELOG.md
+          grep -Fqx "## $version" CHANGELOG.md
           echo "value=$version" >> "$GITHUB_OUTPUT"
           if git rev-parse "$version" >/dev/null 2>&1; then
             echo 'publish=false' >> "$GITHUB_OUTPUT"
@@ -202,3 +213,13 @@ jobs:
           git push origin "$VERSION"
           awk -v v="$VERSION" '$0 ~ "^## " v "([ —]|$)" {found=1;next} /^## / && found {exit} found {print}' CHANGELOG.md > release-notes.md
           gh release create "$VERSION" --verify-tag --title "Halloween Map $VERSION Beta" --notes-file release-notes.md --prerelease
+
+  beta_publish:
+    if: github.event_name == 'workflow_dispatch' && inputs.publish_beta == true && github.ref == 'refs/heads/work/backoffice-studio-convergence'
+    needs: [verify, docker, https-media]
+    permissions:
+      contents: write
+      packages: write
+    uses: ./.github/workflows/beta-release.yml
+    with:
+      version: V1.0-beta.3

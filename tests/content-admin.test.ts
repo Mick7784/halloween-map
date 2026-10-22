@@ -47,6 +47,10 @@ it("separates application texts, document cards and preserved contact controls",
       root.render(h(ContentAdmin, { data, reload: async () => {} })),
     );
     expect(host.querySelector("textarea")).toBeTruthy();
+    // The content block no longer owns a second header/theme control.
+    expect(host.querySelector(".studio-header")).toBeNull();
+    expect(host.querySelector(".studio-shell [data-theme]")).toBeNull();
+    expect(host.querySelector(".studio-shell select[aria-label='Apparence']")).toBeNull();
     expect(host.querySelector('[role="toolbar"]')).toBeNull();
     expect(
       host

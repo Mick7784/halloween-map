@@ -1,17 +1,14 @@
+/* Contents & documents consume the independent admin shell theme.
+ * Never create local dark/light theme state or override --bg/--surface:
+ * this module is a reusable content block, not a second back-office.
+ */
 .studio-shell {
-  --studio-bg: #f5f6f8;
-  --studio-surface: #fff;
-  --studio-text: #202b3b;
-  --studio-muted: #536278;
-  --studio-line: #cbd4df;
-  --studio-accent: #076d96;
-  /* Resolve existing app controls against this module's selected theme. */
-  --bg: var(--studio-bg);
-  --surface: var(--studio-surface);
-  --text: var(--studio-text);
-  --muted: var(--studio-muted);
-  --line: var(--studio-line);
-  --accent: var(--studio-accent);
+  --studio-bg: var(--bg);
+  --studio-surface: var(--surface);
+  --studio-text: var(--text);
+  --studio-muted: var(--muted);
+  --studio-line: var(--line);
+  --studio-accent: var(--accent);
   --hm-bg: var(--studio-bg);
   --hm-surface: var(--studio-surface);
   --hm-card: var(--studio-surface);
@@ -23,31 +20,16 @@
   --hm-line: var(--studio-line);
   --hm-violet: var(--studio-accent);
   --hm-amber: var(--studio-accent);
-  color-scheme: light;
-  background: var(--studio-bg);
+  color-scheme: inherit;
+  background: transparent;
   color: var(--studio-text);
-  border-radius: 16px;
-  padding: clamp(1rem, 2vw, 2rem);
+  border-radius: 0;
+  padding: 0;
 }
-.studio-shell[data-theme="dark"] {
-  --studio-bg: #171d27;
-  --studio-surface: #202834;
-  --studio-text: #e6ebf2;
-  --studio-muted: #b5bfce;
-  --studio-line: #465267;
-  --studio-accent: #64bbdb;
-  color-scheme: dark;
-}
-@media (prefers-color-scheme: dark) {
-  .studio-shell[data-theme="system"] {
-    --studio-bg: #171d27;
-    --studio-surface: #202834;
-    --studio-text: #e6ebf2;
-    --studio-muted: #b5bfce;
-    --studio-line: #465267;
-    --studio-accent: #64bbdb;
-    color-scheme: dark;
-  }
+.studio-intro {
+  margin: 0 0 1.2rem;
+  color: var(--studio-muted);
+  font-size: 0.86rem;
 }
 .studio-shell h2,
 .studio-shell h3,
@@ -57,27 +39,9 @@
 .studio-shell p {
   color: inherit;
 }
-.studio-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: start;
-  gap: 1.5rem;
-  margin-bottom: 1.8rem;
-}
-.studio-header h2 {
-  margin: 0.4rem 0;
-  font-family: inherit;
-  font-size: 1.6rem;
-}
-.studio-header p,
 .studio-section-head p {
   color: var(--studio-muted);
   margin: 0.4rem 0 1rem;
-}
-.studio-eyebrow {
-  font-size: 0.75rem;
-  color: var(--studio-muted);
-  letter-spacing: 0.05em;
 }
 .studio-layout {
   display: grid;
@@ -257,9 +221,6 @@
   }
 }
 @media (max-width: 650px) {
-  .studio-header {
-    flex-direction: column;
-  }
   .studio-nav {
     grid-template-columns: 1fr;
   }
@@ -268,6 +229,6 @@
     grid-template-columns: 1fr;
   }
   .studio-shell {
-    padding: 0.8rem;
+    padding: 0;
   }
 }

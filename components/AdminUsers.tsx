@@ -5,9 +5,12 @@ import Link from "next/link";
 import { Fragment, useEffect, useMemo, useState } from "react";
 import useDraftGuard, { confirmDraftNavigation } from "./useDraftGuard";
 import AdminInlineDetail from "./AdminInlineDetail";
+import StudioRowActions from "./StudioRowActions";
 import { DateTime } from "luxon";
 import { type User, type House, defaultRoles } from "../lib/domain";
 import { permissionLabels } from "../lib/admin-presentation";
+import { selectStudioCollection } from "../lib/studio-collection";
+import StudioCollectionControls from "./StudioCollectionControls";
 import { api, Field, Notice, values, labels, AsyncButton } from "./common";
 import {
   Input,
@@ -115,6 +118,7 @@ export default function AdminUsers({
     }
     setPage(1);
   }
+  const visible = selectStudioCollection(list, { page, pageSize });
   const current = users.find((u) => u.id === selected);
   function showUser(id: string, edit = false) {
     if (selected && !confirmDraftNavigation()) return;
@@ -167,6 +171,16 @@ export default function AdminUsers({
         Annuaire global des comptes · Participation à la saison active :{" "}
         {seasonName ?? "Aucune saison active"}
       </p>
+      <StudioCollectionControls
+        label="Filtres des utilisateurs"
+        count={list.length}
+        filtered={Boolean(search.trim()) || filter !== "ALL"}
+        onReset={() => {
+          setSearch("");
+          setFilter("ALL");
+          setPage(1);
+        }}
+      >
       <div className="toolbar">
         <Input
           aria-label="Rechercher un utilisateur"
@@ -197,6 +211,7 @@ export default function AdminUsers({
           </Button>
         ))}
       </div>
+      </StudioCollectionControls>
       <div className="table-wrap">
         <DataTable className="users-table">
           <thead>
@@ -222,13 +237,7 @@ export default function AdminUsers({
             </tr>
           </thead>
           <tbody>
-            {list
-              .slice(
-                (Math.min(page, Math.max(1, Math.ceil(list.length / pageSize))) - 1) *
-                  pageSize,
-                Math.min(page, Math.max(1, Math.ceil(list.length / pageSize))) * pageSize,
-              )
-              .map((u) => (
+            {visible.rows.map((u) => (
                 <Fragment key={u.id}>
                 <tr
                   className="admin-clickable-row"
@@ -268,7 +277,11 @@ export default function AdminUsers({
                     {date(u.last_login_at)}
                   </td>
                   <td>
-                    <div className="row-actions">
+                    <StudioRowActions
+                      label={"Actions de " + u.display_name}
+                      className="row-actions"
+                      actions={
+                        <>
                       <Button
                         aria-label={"Voir la fiche de " + u.display_name}
                         onClick={() => showUser(u.id)}
@@ -367,7 +380,9 @@ export default function AdminUsers({
                           </>
                         )}
                       </ActionMenu>
-                    </div>
+                        </>
+                      }
+                    />
                   </td>
                 </tr>
                 {current?.id === u.id && (
@@ -560,8 +575,8 @@ export default function AdminUsers({
             </Select>
           </label>
           <Pagination
-            count={list.length}
-            page={Math.min(page, Math.max(1, Math.ceil(list.length / pageSize)))}
+            count={visible.total}
+            page={visible.page}
             pageSize={pageSize}
             onPage={setPage}
           />

@@ -1,9 +1,9 @@
 import { MetricCard } from "./ui";
+import { StudioMetricBars } from "./StudioMetricBars";
 import type { Season } from "../lib/domain";
 import AttendanceChart from "./AttendanceChart";
 import {
   unavailableMetric as unavailable,
-  measured,
   formatCount,
   formatDistance,
   formatDuration,
@@ -18,43 +18,6 @@ export type SeasonStatistics = {
   snapshot: boolean;
   stats: Record<string, number | null | undefined>;
 };
-function Bars({
-  title,
-  items,
-  chart = true,
-}: {
-  title: string;
-  items: [string, number | null | undefined][];
-  chart?: boolean;
-}) {
-  const available = items.filter(([, value]) => measured(value));
-  const max = Math.max(1, ...available.map(([, value]) => value!));
-  return (
-    <section className="beta-card stats-chart" aria-label={title}>
-      <h2>{title}</h2>
-      {!available.length ? (
-        <p className="muted">{unavailable}</p>
-      ) : (
-        <ul>
-          {items.map(([label, value]) => (
-            <li key={label}>
-              <span>{label}</span>
-              <strong>{formatCount(value)}</strong>
-              {chart && measured(value) && (
-                <div className="stats-track" aria-hidden="true">
-                  <div style={{ width: `${(value / max) * 100}%` }} />
-                </div>
-              )}
-            </li>
-          ))}
-        </ul>
-      )}
-      {chart && available.length > 0 && (
-        <p className="small muted">Échelle relative : 0 à {max} maisons.</p>
-      )}
-    </section>
-  );
-}
 export default function AdminStatistics({
   data,
   season,
@@ -127,7 +90,10 @@ export default function AdminStatistics({
       <h2>Vue d’ensemble</h2>
       {cards(metrics)}
       <div className="stats-charts">
-        <Bars
+        <StudioMetricBars
+          formatValue={formatCount}
+          unavailable={unavailable}
+          unit="maisons"
           title="Activités des maisons"
           items={[
             ["Bonbons", s.candy],
@@ -135,7 +101,10 @@ export default function AdminStatistics({
             ["Mise en scène", s.acting],
           ]}
         />
-        <Bars
+        <StudioMetricBars
+          formatValue={formatCount}
+          unavailable={unavailable}
+          unit="maisons"
           title="État des maisons"
           items={[
             ["Validées", s.approved],
@@ -143,7 +112,10 @@ export default function AdminStatistics({
             ["Refusées", s.refused],
           ]}
         />
-        <Bars
+        <StudioMetricBars
+          formatValue={formatCount}
+          unavailable={unavailable}
+          unit="maisons"
           title="Parcours et collectes"
           chart={false}
           items={[

@@ -1,5 +1,8 @@
 "use client";
 import useDraftGuard from "./useDraftGuard";
+import StudioCollectionControls from "./StudioCollectionControls";
+import StudioMailPreview from "./StudioMailPreview";
+import { selectStudioCollection } from "../lib/studio-collection";
 import { Button, Dialog, Input, Select } from "./ui";
 import { X } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -56,6 +59,8 @@ export default function Campaigns({
   const [data, setData] = useState<Data | null>(null),
     [editing, setEditing] = useState<Campaign | null>(null),
     [creating, setCreating] = useState(false),
+    [search, setSearch] = useState(""),
+    [status, setStatus] = useState("ALL"),
     [error, setError] = useState("");
   async function reload() {
     setData(
@@ -77,6 +82,21 @@ export default function Campaigns({
     !seasonFinished(season) &&
     !season.archived &&
     !season.purged_at;
+  // Keep the server's per-season results and exact statuses. Collection tools
+  // operate only on the view; sending, scheduling and authorizations stay owned
+  // by the existing campaign handlers.
+  const seasonCampaigns = data?.campaigns.filter((c) => c.season_id === season.id) ?? [];
+  const statuses = [...new Set(seasonCampaigns.map((c) => c.status))].sort(
+    (a, b) => a.localeCompare(b, "fr"),
+  );
+  const visible = selectStudioCollection(
+    seasonCampaigns.filter((c) => status === "ALL" || c.status === status),
+    {
+      query: search,
+      searchText: (c) => [c.name, c.subject],
+      pageSize: Math.max(1, seasonCampaigns.length),
+    },
+  );
   async function act(p: Record<string, unknown>) {
     await api("admin/communications", { ...p, seasonId: season.id });
     await reload();
@@ -85,9 +105,9 @@ export default function Campaigns({
     setCreating(false);
   }
   return (
-    <section className="panel">
+    <section className="panel studio-communications">
       <div className="section-heading">
-        <h2>Communications</h2>
+        <h2>Campagnes de communication</h2>
         {manage && !season.purged_at && (
           <Button onClick={() => setCreating(true)}>Nouvelle campagne</Button>
         )}
@@ -99,7 +119,7 @@ export default function Campaigns({
         </p>
       )}
       {!data && !error && <p role="status">Chargement des communications…</p>}
-      {data && !data.campaigns.length && (
+      {data && !seasonCampaigns.length && (
         <p>Aucune campagne pour cette saison.</p>
       )}
       {data && !data.smtpAvailable && (
@@ -111,9 +131,40 @@ export default function Campaigns({
         Seuls les participants réels, actifs et dont l’email est vérifié
         reçoivent une campagne.
       </p>
-      {data?.campaigns
-        .filter((c) => c.season_id === season.id)
-        .map((c) => (
+      {data && seasonCampaigns.length > 0 && (
+        <StudioCollectionControls
+          label="Filtres des campagnes"
+          count={visible.total}
+          filtered={Boolean(search.trim()) || status !== "ALL"}
+          onReset={() => {
+            setSearch("");
+            setStatus("ALL");
+          }}
+        >
+          <div className="beta-filters studio-campaign-filters">
+            <Input
+              aria-label="Rechercher une campagne"
+              placeholder="Nom ou objet du message…"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+            />
+            <Select
+              aria-label="Filtrer le statut des campagnes"
+              value={status}
+              onChange={(event) => setStatus(event.target.value)}
+            >
+              <option value="ALL">Tous les statuts</option>
+              {statuses.map((value) => (
+                <option key={value} value={value}>{value}</option>
+              ))}
+            </Select>
+          </div>
+        </StudioCollectionControls>
+      )}
+      {data && seasonCampaigns.length > 0 && !visible.total && (
+        <p className="beta-empty">Aucune campagne ne correspond aux filtres.</p>
+      )}
+      {visible.rows.map((c) => (
           <article className="campaign-row" key={c.id}>
             <div>
               <h3>{c.name}</h3>
@@ -388,21 +439,14 @@ function CampaignForm({
             Enregistrer la campagne
           </Button>
         </form>
-        <h3>Aperçu</h3>
-        {htmlError && <p role="alert" className="notice error">
-          Document HTML invalide : {htmlError}
-        </p>}
-        {rendered && (
-          <>
-            <iframe title="Aperçu de l’email HTML" sandbox=""
-              srcDoc={rendered.html}
-              style={{ width: "100%", height: 480, border: 0 }} />
-            <details>
-              <summary>Version texte</summary>
-              <p className="mail-preview">{rendered.text}</p>
-            </details>
-          </>
-        )}
+        <StudioMailPreview
+          title="Aperçu de la campagne"
+          frameTitle="Aperçu de l’email HTML"
+          html={rendered?.html}
+          text={rendered?.text}
+          error={htmlError}
+          textLabel="Version texte"
+        />
       </Dialog>
     </div>
   );

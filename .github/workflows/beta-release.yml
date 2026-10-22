@@ -1,0 +1,76 @@
+name: Publish isolated V1.0 beta
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: "Prerelease version (must match VERSION)"
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: halloween-beta-publish
+  cancel-in-progress: false
+jobs:
+  beta:
+    if: github.ref == 'refs/heads/work/backoffice-studio-convergence'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Validate candidate branch, prerelease version and changelog
+        env:
+          REQUESTED_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          [[ "$REQUESTED_VERSION" =~ ^V[0-9]+\.[0-9]+-beta\.[1-9][0-9]*$ ]]
+          test "$(tr -d '\r\n' < VERSION)" = "$REQUESTED_VERSION"
+          grep -Fqx "## $REQUESTED_VERSION" CHANGELOG.md
+          if git rev-parse -q --verify "refs/tags/$REQUESTED_VERSION" >/dev/null; then
+            echo "Tag already exists"; exit 1
+          fi
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Publish beta image without latest
+        uses: docker/build-push-action@v6
+        id: image
+        with:
+          context: .
+          push: true
+          tags: ghcr.io/mick7784/halloween-map:${{ inputs.version }}
+          labels: |
+            org.opencontainers.image.version=${{ inputs.version }}
+            org.opencontainers.image.revision=${{ github.sha }}
+      - name: Verify immutable beta image
+        env:
+          VERSION: ${{ inputs.version }}
+          REVISION: ${{ github.sha }}
+          DIGEST: ${{ steps.image.outputs.digest }}
+        run: |
+          set -euo pipefail
+          image="ghcr.io/mick7784/halloween-map:$VERSION"
+          docker pull "$image"
+          test "$(docker run --rm --entrypoint cat "$image" VERSION | tr -d '\r\n')" = "$VERSION"
+          test "$(docker image inspect "$image" --format '{{ index .Config.Labels "org.opencontainers.image.version" }}')" = "$VERSION"
+          test "$(docker image inspect "$image" --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}')" = "$REVISION"
+          docker image inspect "$image" --format '{{json .RepoDigests}}' | grep -F "$DIGEST"
+      - name: Publish GitHub prerelease
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git tag -a "$VERSION" -m "Halloween Map $VERSION prerelease"
+          git push origin "$VERSION"
+          awk -v v="$VERSION" '$0 == "## " v {found=1;next} /^## / && found {exit} found {print}' CHANGELOG.md > release-notes.md
+          gh release create "$VERSION" --verify-tag --title "Halloween Map $VERSION" --notes-file release-notes.md --prerelease

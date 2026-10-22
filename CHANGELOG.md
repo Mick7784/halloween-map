@@ -1,5 +1,27 @@
 # Changelog
 
+## V1.0-beta.3
+
+- **Logo officiel transparent** : la sidebar du back-office utilise une déclinaison PNG RGBA du wordmark Halloween Map sans plaque rectangulaire sombre, avec la citrouille, les dégradés, la typographie et la signature « by DomotiK Studio » conservés. Le WebP original est préservé comme source.
+- **Lisibilité des thèmes** : ombrage discret du lettrage blanc en thème clair, sans ajouter de fond opaque ; comportement de la sidebar réduit/déployé et vue mobile inchangé.
+- **Contrôles de non-régression** : tests d'intégrité des fichiers de marque, transparence alpha, tests navigateur de la sidebar et CI complète (lint, unitaires, Playwright, HTTPS, Docker).
+- **Bêta isolée** : publication de `ghcr.io/mick7784/halloween-map:V1.0-beta.3` uniquement après les validations, sans modifier `latest`, `main` ou l'instance de production. Validation visuelle et recette métier réelles obligatoires avant la V1.0 stable.
+
+## V1.0-beta.2
+
+- **Éditeur de documents** : barre de mise en forme avec pictogrammes classiques de traitement de texte (historique, styles, listes, liens et tableaux), groupes séparés et commandes plus compactes.
+- **Accessibilité** : intitulés et infobulles conservés pour chaque commande, états actifs et désactivés préservés, alternative textuelle pour les actions personnalisées.
+- **Suivi de recette** : checklist de validation réelle du back-office et suivi de la correction du fond du logo officiel (ticket #47, non incluse dans cette bêta).
+- **Déploiement** : image GHCR versionnée et GitHub prerelease isolées, sans changement de `latest` ; sauvegarder PostgreSQL avant mise à jour.
+
+## V1.0-beta.1
+
+- **Administration Studio** : convergence visuelle et structurelle du back-office Halloween Map avec les primitives DomotiK Studio, en conservant ses couleurs, son administration et ses données indépendantes.
+- **Gestion quotidienne** : navigation, tableaux de bord, listes et actions contextuelles harmonisés pour les saisons, maisons, comptes, activités et campagnes.
+- **Contenus et documents** : éditeur riche, aperçu, brouillons, contrôle des conflits, publication vérifiée, historique et restauration ; composants de présentation réutilisables sans dépendance directe à LinKs.
+- **Sécurité et compatibilité** : conservation des permissions, des règles de saisons et d'inscriptions, de la confidentialité des brouillons et des mécanismes de réacceptation documentaire.
+- **Validation bêta** : tests unitaires et navigateur renforcés ; publication GHCR isolée sur le tag V1.0-beta.1, sans mise à jour de latest. Sauvegarder la base avant essai et valider la recette sur une instance de test.
+
 ## V0.9.10
 
 - **Contenus & documents** : nouvelle navigation en trois espaces, textes courts par contexte avec champs simples et aperçu, documents officiels dans un espace dédié, paramètres de liens/contact conservés.

@@ -243,6 +243,10 @@ for (const isTest of [false, true])
         .filter({ hasText: "Maisons inscrites" }),
     ).toContainText("0");
     await expect(
+      page.getByRole("region", { name: "Activités des maisons" })
+        .getByText("Toutes les valeurs mesurées sont à 0."),
+    ).toBeVisible();
+    await expect(
       page
         .locator(".stats-kpis article")
         .filter({ hasText: "Visites déclarées" }),

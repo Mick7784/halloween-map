@@ -91,13 +91,13 @@ export default function AdminDashboard({
               [metricLabels.participants, metrics.users, Users],
             ] as const
           ).map(([label, value, Icon]) => (
-            <article key={label}>
-              <div>
-                <span>{label}</span>
-                <Icon size={19} />
-              </div>
-              <strong>{formatCount(value)}</strong>
-            </article>
+            <MetricCard
+              key={label}
+              className="studio-overview-kpi"
+              label={label}
+              value={formatCount(value)}
+              icon={<Icon size={19} aria-hidden="true" />}
+            />
           ))}
         </div>
       )}
