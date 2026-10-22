@@ -38,6 +38,12 @@ def render() -> Image.Image:
     for y in range(height):
         for x in range(width):
             color = pix_in[x, y]
+            # The right-hand lower half belongs to the original matte, not
+            # the two-line logo or the small Studio signature. This region
+            # contains a purple codec/glow remnant in the source WebP.
+            if y >= int(height * 0.50) and x >= int(width * 0.68):
+                pix_out[x, y] = (0, 0, 0, 0)
+                continue
             signal = max(color[i] - background[i] for i in range(3))
             if signal <= 11:
                 pix_out[x, y] = (0, 0, 0, 0)
@@ -46,10 +52,9 @@ def render() -> Image.Image:
             if alpha < 6:
                 pix_out[x, y] = (0, 0, 0, 0)
                 continue
-            # Undo the navy backdrop in antialiased edge pixels to avoid halos.
-            a = alpha / 255
-            foreground = tuple(max(0, min(255, round((color[i] - (1 - a) * background[i]) / a))) for i in range(3))
-            pix_out[x, y] = (*foreground, alpha)
+            # Preserve the *original* pixel colours exactly, including warm
+            # orange and violet gradients. Only transparency is changed.
+            pix_out[x, y] = (*color, alpha)
     return result
 
 
