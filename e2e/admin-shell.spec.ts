@@ -659,7 +659,7 @@ test("V1.0 retains LinKs neutral shell with Halloween Map branded accents", asyn
   const icon = brand.locator("img.beta-brand-icon");
   await expect(wordmark).toHaveAttribute(
     "src",
-    "/brand/halloween-map-wordmark-official.webp",
+    "/brand/halloween-map-wordmark-transparent.png",
   );
   await expect(icon).toHaveAttribute(
     "src",
@@ -688,6 +688,7 @@ test("V1.0 retains LinKs neutral shell with Halloween Map branded accents", asyn
     (node) => getComputedStyle(node).getPropertyValue("--bg").trim(),
   )).toBe("#f5f6f8");
   await expect.poll(accent).toBe("#ab470d");
+  await expect(wordmark).toHaveCSS("filter", /drop-shadow/);
   await expect(current).toHaveCSS("color", "rgb(171, 71, 13)");
   await expect(primary).toHaveCSS("background-color", "rgb(171, 71, 13)");
   await expect(primary).toHaveCSS("color", "rgb(255, 255, 255)");
