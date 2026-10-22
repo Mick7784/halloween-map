@@ -1,5 +1,12 @@
 # Changelog
 
+## V1.0-beta.3
+
+- **Logo officiel transparent** : la sidebar du back-office utilise une déclinaison PNG RGBA du wordmark Halloween Map sans plaque rectangulaire sombre, avec la citrouille, les dégradés, la typographie et la signature « by DomotiK Studio » conservés. Le WebP original est préservé comme source.
+- **Lisibilité des thèmes** : ombrage discret du lettrage blanc en thème clair, sans ajouter de fond opaque ; comportement de la sidebar réduit/déployé et vue mobile inchangé.
+- **Contrôles de non-régression** : tests d'intégrité des fichiers de marque, transparence alpha, tests navigateur de la sidebar et CI complète (lint, unitaires, Playwright, HTTPS, Docker).
+- **Bêta isolée** : publication de `ghcr.io/mick7784/halloween-map:V1.0-beta.3` uniquement après les validations, sans modifier `latest`, `main` ou l'instance de production. Validation visuelle et recette métier réelles obligatoires avant la V1.0 stable.
+
 ## V1.0-beta.2
 
 - **Éditeur de documents** : barre de mise en forme avec pictogrammes classiques de traitement de texte (historique, styles, listes, liens et tableaux), groupes séparés et commandes plus compactes.
